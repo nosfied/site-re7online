@@ -428,14 +428,14 @@ test("campaign test send uses only recipient number and lets backend resolve var
   assert.ok(!pageSource.includes("Valor usado apenas no teste"));
 });
 
-test("campaign detail layout keeps status badge actions progress and lifecycle audience aligned", () => {
+test("campaign detail layout keeps status badge actions progress and pending audience aligned", () => {
   assert.ok(!pageSource.includes("<p className=\"text-[11px] uppercase tracking-wide text-white/60\">Situação</p>"));
   assert.ok(pageSource.includes("Rascunho — envio ainda não iniciado"));
   assert.ok(!pageSource.includes("Rascunho pronto — clique em Enviar para iniciar"));
   assert.ok(pageSource.includes("max-h-[300px] overflow-auto"));
   assert.ok(pageSource.includes("Destinatários do rascunho"));
   assert.ok(pageSource.includes("Destinatários agendados"));
-  assert.ok(pageSource.includes("Destinatários processados"));
+  assert.ok(!pageSource.includes("Destinatários processados"));
   assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.requested"));
   assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.duplicatesRemoved"));
   assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.blockedByReason.map"));
@@ -479,17 +479,18 @@ test("campaign admission denial preserves media already stored by another admitt
   assert.ok(!handler.includes("discardUnpersistedTemplateMedia"));
 });
 
-test("campaign detail leads with identity and keeps the audience visible across lifecycle states", () => {
+test("campaign detail leads with identity and shows audience only while pending", () => {
   const detailStart = pageSource.indexOf('{selectedCampaign ? (');
   const identity = pageSource.indexOf('<span className="text-white/70">Nome:</span>', detailStart);
   const totals = pageSource.indexOf('>Total</p>', detailStart);
   assert.ok(detailStart >= 0 && identity > detailStart && totals > identity);
   assert.ok(pageSource.includes('const campaignAudienceSummaryItems = useMemo'));
-  assert.ok(pageSource.includes('selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled"'));
+  assert.ok(pageSource.includes('selectedCampaign.status !== "draft" && selectedCampaign.status !== "scheduled"'));
   assert.ok(pageSource.includes('"Destinatários agendados"'));
-  assert.ok(pageSource.includes('"Destinatários processados"'));
+  assert.ok(pageSource.includes('"Destinatários do rascunho"'));
+  assert.ok(!pageSource.includes('"Destinatários processados"'));
   assert.ok(pageSource.includes("selectedCampaign.draftReview?.recipients ?? []"));
-  assert.ok(pageSource.includes("campaignResultItems.flatMap"));
+  assert.ok(!pageSource.includes("campaignResultItems.flatMap"));
   assert.ok(!pageSource.includes("Este tenant executa somente uma campanha ou lote por vez."));
 });
 

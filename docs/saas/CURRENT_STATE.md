@@ -68,11 +68,13 @@ A API manteve o contrato por fase: em `scheduled`, audiência ainda pendente em
 `draftReview.recipients`; em `completed`, os destinatários processados migram para
 `messagesMetaStatus`. A interface 708f mostrava nominalmente apenas
 `draftReview.recipients` no bloco exclusivo de rascunho, criando uma lacuna visual
-sem perda de dados. A correção candidata mantém audiência estática visível em
-rascunho/agendada e usa resultados reais após materialização; também coloca
-nome/modelo/datas no topo, remove o texto explicativo da fila do tenant e impede
-status cru em inglês. Até novo deploy e aceite, classificar como
-**CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**.
+sem perda de dados. O primeiro candidato manteve a audiência visível também após
+a conclusão, mas o owner rejeitou essa duplicação durante o aceite: campanhas já
+processadas possuem a fonte “Situação real por mensagem”. A correção revisada mostra
+o resumo somente em rascunho/agendada; depois do processamento, permanece apenas a
+situação real por mensagem. Nome/modelo/datas continuam no topo, o texto explicativo
+da fila do tenant foi removido e status cru em inglês permanece proibido. Estado:
+**REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**.
 
 Evidências privadas: 24 arquivos; índice SHA-256
 `0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8`.

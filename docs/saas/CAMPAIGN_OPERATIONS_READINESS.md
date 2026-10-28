@@ -496,14 +496,18 @@ campanha concluída aparentava audiência vazia mesmo contendo os dois resultado
 Contrato obrigatório da correção:
 
 1. rascunho e agendada exibem a audiência de `draftReview.recipients`;
-2. campanha processada exibe destinatários deduplicados de `messagesMetaStatus`;
+2. campanha processada não repete resumo de destinatários: usa exclusivamente a
+   seção “Situação real por mensagem”, alimentada por `messagesMetaStatus`;
 3. nome, modelo, atualização e criação aparecem antes dos demais detalhes;
 4. nenhum status interno cru, como `completed`, pode chegar à interface;
 5. remover a explicação sobre serialização por tenant das telas de campanha;
 6. a correção de apresentação não dispara novo envio nem altera o contrato da API.
 
-Estado: **CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**. A execução agendada está
-homologada; somente a apresentação transversal da audiência depende de deploy e
+O primeiro candidato foi ativado em `AWAITING_ACCEPTANCE` e passou nos itens de
+identidade, texto removido e localização, mas o owner rejeitou a duplicação do resumo
+em campanhas processadas. Ele não deve ser finalizado. Estado:
+**REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**. A execução agendada está
+homologada; somente o resumo de audiência enquanto pendente depende de novo deploy e
 aceite visual. Não repetir a campanha para comprovar os mesmos dados. Depois desse
 aceite, seguir para multilote e homologações específicas de clientes.
 

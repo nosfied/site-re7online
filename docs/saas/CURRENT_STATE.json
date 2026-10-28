@@ -1,6 +1,6 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-28T00:00:45Z",
+  "updatedAtUtc": "2026-10-28T01:46:44Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
@@ -302,7 +302,7 @@
         "retry": false,
         "buildDeployRestartOrSaveExecuted": false
       },
-      "nextAcceptance": "DEPLOY_AND_ACCEPT_CAMPAIGN_AUDIENCE_SUMMARY_FIX_THEN_MULTIBATCH_THEN_CLIENT_SPECIFIC",
+      "nextAcceptance": "DEPLOY_AND_ACCEPT_PENDING_ONLY_AUDIENCE_SUMMARY_FIX_THEN_MULTIBATCH_THEN_CLIENT_SPECIFIC",
       "uiAcceptance": {
         "source": "OWNER_MANUAL_PRODUCTION_INTERFACE_REPORT",
         "reportedDate": "2026-10-27",
@@ -354,16 +354,31 @@
         },
         "presentationContract": {
           "scheduledAudienceSource": "draftReview.recipients",
-          "completedAudienceSource": "messagesMetaStatus",
-          "gap": "UI_708F_ONLY_RENDERED_DRAFT_RECIPIENTS",
+          "completedAudienceSource": "messagesMetaStatus_rendered_only_in_real_message_status",
+          "gap": "UI_708F_DID_NOT_SHOW_SCHEDULED_AUDIENCE",
           "dataLoss": false,
-          "candidateState": "CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE"
+          "candidateState": "REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE",
+          "campaignAudienceSummaryStates": [
+            "draft",
+            "scheduled"
+          ],
+          "completedAudienceSummary": false
         },
         "evidenceFileCount": 24,
         "evidenceManifestSha256": "0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8",
         "collectorTeardownExitCode": 134,
         "collectorTeardownScope": "AFTER_JSON_SERIALIZATION_NO_NEW_QUERY",
-        "snapshotIsolation": "READ_ONLY_REPEATABLE_READ"
+        "snapshotIsolation": "READ_ONLY_REPEATABLE_READ",
+        "ownerAcceptanceFeedback": {
+          "releaseCandidate": "immutable-ef3a2128-vps-20261028T001820Z",
+          "outcome": "REJECTED_PROCESSED_AUDIENCE_DUPLICATION",
+          "passed": [
+            "IDENTITY_FIRST",
+            "TENANT_EXPLANATION_REMOVED",
+            "COMPLETED_LOCALIZED"
+          ],
+          "requiredChange": "SHOW_AUDIENCE_SUMMARY_ONLY_FOR_DRAFT_AND_SCHEDULED"
+        }
       }
     },
     "topology": "UNIFIED_API_FRONTEND_FIXED_CURRENT_WORKER_PRESERVED",
@@ -543,15 +558,20 @@
       "deploymentTarget": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
       "manualAcceptanceDate": "2026-10-27"
     },
-    "acceptanceBoundary": "IMAGE_VIDEO_DRAFT_RECONCILIATION_TERMINAL_PRESENTATION_AND_SCHEDULE_EXECUTION_PASS; SCHEDULED_COMPLETED_AUDIENCE_UI_FIX_PENDING_DEPLOY_ACCEPTANCE; MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE",
+    "acceptanceBoundary": "IMAGE_VIDEO_DRAFT_RECONCILIATION_TERMINAL_PRESENTATION_AND_SCHEDULE_EXECUTION_PASS; PENDING_ONLY_AUDIENCE_UI_FIX_PENDING_DEPLOY_ACCEPTANCE; MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE",
     "scheduledAudiencePresentation": {
-      "state": "CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE",
+      "state": "REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE",
       "scheduledSource": "draftReview.recipients",
-      "completedSource": "messagesMetaStatus",
+      "completedSource": "messagesMetaStatus_in_real_message_status_only",
       "recipientCountAudited": 2,
       "dataIntegrity": "PASS",
-      "uiPresentation": "FIX_PROPOSED_NOT_DEPLOYED",
-      "evidenceManifestSha256": "0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8"
+      "uiPresentation": "PENDING_ONLY_FIX_PROPOSED_NOT_DEPLOYED",
+      "evidenceManifestSha256": "0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8",
+      "summaryStates": [
+        "draft",
+        "scheduled"
+      ],
+      "completedSummary": false
     }
   },
   "tenantScopedMetaAppId": {

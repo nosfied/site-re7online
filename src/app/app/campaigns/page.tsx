@@ -1980,34 +1980,24 @@ export default function AppCampaignsPage() {
     [selectedCampaign?.messagesMetaStatus]
   );
   const campaignAudienceSummaryItems = useMemo(() => {
-    if (!selectedCampaign) return [];
-    if (selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled") {
-      const status = selectedCampaign.status === "scheduled" ? "Agendado" : "Incluído no rascunho";
-      const statusClass = selectedCampaign.status === "scheduled"
-        ? getStatusClasses("scheduled")
-        : getStatusClasses("draft");
-      return (selectedCampaign.draftReview?.recipients ?? []).map((recipient, index) => ({
-        key: `${recipient.phoneDisplay ?? recipient.identifierDisplay}-${index}`,
-        name: recipient.identifierDisplay || "Sem nome atual",
-        reference: recipient.phoneDisplay || recipient.identifierDisplay || "Referência indisponível",
-        status,
-        statusClass,
-      }));
+    if (
+      !selectedCampaign
+      || (selectedCampaign.status !== "draft" && selectedCampaign.status !== "scheduled")
+    ) {
+      return [];
     }
-    const seen = new Set<string>();
-    return campaignResultItems.flatMap((item, index) => {
-      const key = item.waId || item.phoneDisplay || item.leadId || String(index);
-      if (seen.has(key)) return [];
-      seen.add(key);
-      return [{
-        key,
-        name: item.contactName || "Sem nome atual",
-        reference: item.phoneDisplay || "Referência protegida",
-        status: getMetaStatusLabel(item.status),
-        statusClass: getMetaStatusClasses(item.status),
-      }];
-    });
-  }, [campaignResultItems, selectedCampaign]);
+    const status = selectedCampaign.status === "scheduled" ? "Agendado" : "Incluído no rascunho";
+    const statusClass = selectedCampaign.status === "scheduled"
+      ? getStatusClasses("scheduled")
+      : getStatusClasses("draft");
+    return (selectedCampaign.draftReview?.recipients ?? []).map((recipient, index) => ({
+      key: `${recipient.phoneDisplay ?? recipient.identifierDisplay}-${index}`,
+      name: recipient.identifierDisplay || "Sem nome atual",
+      reference: recipient.phoneDisplay || recipient.identifierDisplay || "Referência indisponível",
+      status,
+      statusClass,
+    }));
+  }, [selectedCampaign]);
   const hasRealCampaignResultItems = useMemo(
     () => campaignResultItems.some((item) => hasCampaignResultEvidence(item, selectedCampaign?.status)),
     [campaignResultItems, selectedCampaign?.status]
@@ -4839,11 +4829,9 @@ export default function AppCampaignsPage() {
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold">
-                          {selectedCampaign.status === "draft"
-                            ? "Destinatários do rascunho"
-                            : selectedCampaign.status === "scheduled"
-                              ? "Destinatários agendados"
-                              : "Destinatários processados"}
+                          {selectedCampaign.status === "scheduled"
+                            ? "Destinatários agendados"
+                            : "Destinatários do rascunho"}
                         </h3>
                         <span className="rounded-full border border-white/15 px-2 py-1 text-xs text-white/75">
                           {campaignAudienceSummaryItems.length} destinatário(s)
