@@ -31,8 +31,10 @@ fechado `bootstrap-legacy`:
   operacional autenticada; verifica composição/identidade, referências
   current/PM2 live/dump, grafo de releases, control plane copiado e writer lock;
   produz intenção condicional com todos os caminhos derivados, inclusive outputs
-  ainda pendentes que só podem ficar elegíveis após `DEPLOYED`, e comandos
-  literais sem glob, force ou prune;
+  ainda pendentes que só podem ficar elegíveis após `DEPLOYED`; uma
+  `RELEASE_RUNTIME` só entra na intenção quando já está
+  `RETIREMENT_READY`, fora de active, rollback, retorno transitivo e candidatas;
+  todos os comandos são literais, sem glob, force ou prune;
 - `execute` exige intenção e autorização externas autenticadas, mantém lock
   canônico e writer lock, recaptura `current`, PM2 live, dump e grafo sob esses
   locks antes do primeiro `ATTEMPT`, para na primeira falha, verifica ausência
@@ -56,6 +58,15 @@ nova só admite outra janela após regressão que reproduza o predicado nominal.
 refaz build, save, ativação ou comando já comprovado. Enquanto a review não for
 terminal, o piso de 12 GiB e a proibição de segunda candidata impedem que novas
 gerações acumulem custo de disco e processamento.
+
+Uma release instalada rejeitada ou superada não é resíduo derivado: ela permanece
+`RELEASE_RUNTIME`. Quando a fotografia autenticada comprovar que está fora de
+`current`, PM2 live/dump e dos grafos active, rollback, retorno transitivo e
+candidatas, o `prepare` inclui seu caminho literal sob a raiz canônica
+`releases`. O `execute` recaptura essas provas sob os dois locks antes do
+`ATTEMPT`; qualquer retorno ao grafo protegido impede o comando. O campo legado
+`remainingDerivedPaths` do recibo conserva o nome por compatibilidade, mas
+representa todos os caminhos retiráveis, inclusive `RELEASE_RUNTIME`.
 
 Na geração `immutable-708f018c-vps-20261027T152109Z`, a retirada autônoma V2
 concluiu os ordinais `8/9/10`: worktree e runtimes derivados de API/frontend foram
