@@ -67,15 +67,7 @@ pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
 lifecycle e fotografia operacional autenticados. A intenção resultante e seu
 hash integram a autorização de ativação; o executor frontend-only autentica ambos
 antes de selecionar o symlink. A preparação contém somente metadados, comandos e
-hashes, nunca cópia de runtime.
-
-Uma `RELEASE_RUNTIME` instalada só pode integrar comandos quando o estado
-recalculado no `prepare` for `RETIREMENT_READY`: fora de `current`, PM2
-live/dump, active, rollback, retorno transitivo e candidatas. O comando usa o
-caminho literal confinado à raiz autenticada `releases`; o `execute` recaptura
-o grafo sob deployment lock e writer lock e nega se a release voltar a ser
-protegida. Releases `ACTIVE_DEPENDENCY`, `ROLLBACK_DEPENDENCY` ou
-`CANDIDATE_PENDING_ACTIVATION` nunca entram na autorização.
+hashes, nunca cópia de runtime; `RELEASE_RUNTIME` só entra quando já estiver `RETIREMENT_READY` fora de todos os grafos protegidos.
 
 Exceção única e fechada: `immutable-123ba7bd-vps-20261026T200100Z` foi produzida
 antes desse contrato e está classificada como `LEGACY_PRE_CONTRACT`; ela nunca
