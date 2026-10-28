@@ -126,12 +126,12 @@ else: raise SystemExit(2)
         script = SOURCE.read_text()
         replacements = {
             "CONTROL_PLANE=b1689394feb27bb92487896dbee21f34e70b53d5": f"CONTROL_PLANE={self.control_sha}",
-            "TARGET=f16027874e91c86e5f818d0888e6d735b07a6eda": "TARGET=" + "a"*40,
-            "RELEASE=immutable-f1602787-vps-20261026T174702Z": f"RELEASE={self.release.name}",
-            "EXPECTED_PACKAGE=68eca577dee432888e3b3b0e659492efba668d4ce9bf3295225c22eb3ad11701": f"EXPECTED_PACKAGE={digest(self.package)}",
+            "TARGET=ef3a212862c9a1fd2c46a420df7095327f3c9d7f": "TARGET=" + "a"*40,
+            "RELEASE=immutable-ef3a2128-vps-20261028T001820Z": f"RELEASE={self.release.name}",
+            "EXPECTED_PACKAGE=3665323dfbdbd4233fd4a87034b3520f4077c7c3a934506c4aee40981c829af7": f"EXPECTED_PACKAGE={digest(self.package)}",
             "EXPECTED_PRODUCER=d248b9128688b429beec37902e78cacb4b45af4a074e287eed253bdf05c8b065": f"EXPECTED_PRODUCER={digest(producer)}",
             "EXPECTED_CONTROL=a8f71a51ea09e3746db75dd952f581650ac2f43a02ceecdff1a6c4ae5c4b40e6": f"EXPECTED_CONTROL={digest(control)}",
-            "RETURN_RELEASE=immutable-d436239e-vps-20261026T131821Z": f"RETURN_RELEASE={self.rollback.name}",
+            "RETURN_RELEASE=immutable-708f018c-vps-20261027T152109Z": f"RETURN_RELEASE={self.rollback.name}",
             "/usr/bin/timeout --signal=TERM --kill-after=5s 45s": "/usr/bin/timeout --signal=TERM --kill-after=.1s .3s",
         }
         for old, new in replacements.items():
@@ -252,10 +252,10 @@ class FrontendExecutorTest(unittest.TestCase):
             }
         )
         current = {
-            "TARGET": "f16027874e91c86e5f818d0888e6d735b07a6eda",
-            "RELEASE": "immutable-f1602787-vps-20261026T174702Z",
-            "EXPECTED_PACKAGE": "68eca577dee432888e3b3b0e659492efba668d4ce9bf3295225c22eb3ad11701",
-            "RETURN_RELEASE": "immutable-d436239e-vps-20261026T131821Z",
+            "TARGET": "ef3a212862c9a1fd2c46a420df7095327f3c9d7f",
+            "RELEASE": "immutable-ef3a2128-vps-20261028T001820Z",
+            "EXPECTED_PACKAGE": "3665323dfbdbd4233fd4a87034b3520f4077c7c3a934506c4aee40981c829af7",
+            "RETURN_RELEASE": "immutable-708f018c-vps-20261027T152109Z",
         }
         previous = {
             "TARGET": "d436239e13764b65642b37a4310082acd3a6a485",
