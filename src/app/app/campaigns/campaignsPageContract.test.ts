@@ -428,12 +428,14 @@ test("campaign test send uses only recipient number and lets backend resolve var
   assert.ok(!pageSource.includes("Valor usado apenas no teste"));
 });
 
-test("campaign detail layout keeps status badge actions progress and draft table aligned", () => {
+test("campaign detail layout keeps status badge actions progress and lifecycle audience aligned", () => {
   assert.ok(!pageSource.includes("<p className=\"text-[11px] uppercase tracking-wide text-white/60\">Situação</p>"));
   assert.ok(pageSource.includes("Rascunho — envio ainda não iniciado"));
   assert.ok(!pageSource.includes("Rascunho pronto — clique em Enviar para iniciar"));
   assert.ok(pageSource.includes("max-h-[300px] overflow-auto"));
-  assert.ok(pageSource.includes("Dado do rascunho"));
+  assert.ok(pageSource.includes("Destinatários do rascunho"));
+  assert.ok(pageSource.includes("Destinatários agendados"));
+  assert.ok(pageSource.includes("Destinatários processados"));
   assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.requested"));
   assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.duplicatesRemoved"));
   assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.blockedByReason.map"));
