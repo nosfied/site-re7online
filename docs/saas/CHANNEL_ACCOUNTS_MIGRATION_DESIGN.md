@@ -279,10 +279,9 @@ Runtime access:
 - outbound services should receive token only in memory;
 - logs from outbound services must keep current redaction behavior.
 
-Current Sprint 65B behavior:
+Current migration behavior:
 
 - `scripts/channel-accounts-backfill.ts` never prints token material.
-- If `CHANNEL_ACCOUNT_SECRET_KEY` is missing, token presence/hash is backfilled and reversible token material is reported as not encrypted.
 - Real backfill aborts by default when JSON contains token material and `CHANNEL_ACCOUNT_SECRET_KEY` is missing.
 - a materializacao real com secrets exige `CHANNEL_ACCOUNT_SECRET_KEY`; o fluxo
   nunca substitui ciphertext preservado por representacao somente hash.
@@ -307,7 +306,8 @@ Indexes needed:
 - unique account: `(clientId, channel, provider, channelAccountId)`;
 - lookup account: `(channel, provider, channelAccountId)`;
 - lookup alias: `(alias)` with join back to account;
-- collision prevention: an active alias must not resolve to multiple enabled accounts for the same `(channel, provider)`.
+- collision prevention: nenhuma identidade primaria ou alias pode resolver para
+  mais de um tenant, inclusive quando a conta conflitante está fora do lote.
 
 Collision policy:
 
@@ -452,10 +452,10 @@ Do not attempt another Messenger DB-first flip until the collected profile shows
 Implemented Sprint 65B scripts:
 
 ```bash
-npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json
-npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json
-npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --tenant re7online --dry-run --json
-npm run channel-accounts:shadow:compare -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --dry-run --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --tenant re7online --dry-run --json
+npm run channel-accounts:shadow:compare -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --json
 ```
 
 Requirements:
@@ -463,27 +463,49 @@ Requirements:
 - idempotent;
 - dry-run by default for pre-release;
 - filter by tenant;
-- do not modify `tenants.json`;
+- do not modify the authenticated historical source;
+- authenticate a separate private plan whose mandatory `sourceSha256` binds it
+  to exactly one historical source;
+- allow `cra-pr` only through a plan entry with
+  `provenance=OWNER_AUTHORIZED_DB_IDENTITY`;
 - preserve token status;
 - store secret hash for comparison;
 - store reversible secret material only in `ChannelAccountSecret.secretCiphertext` when `CHANNEL_ACCOUNT_SECRET_KEY` is configured;
 - abort real backfill with secrets when `CHANNEL_ACCOUNT_SECRET_KEY` is missing;
-- upsert aliases;
+- aliases and secrets on an existing account must match exactly; missing or
+  excess values deny the migration and require an explicit owner decision;
 - upsert metadata;
 - report only redacted summaries.
+
+O plano privado usa `schemaVersion=1`, `sourceSha256` obrigatório e um mapa
+`tenants`. Cada entrada contém `provenance` e exatamente uma conta
+`whatsapp/meta` completa. `status` e `tokenStatus` usam os enums fechados do
+runtime. A autenticação do plano repete as mesmas provas da fonte: caminho
+absoluto, arquivo regular privado, `O_NOFOLLOW`, SHA-256 exato e identidade
+estável durante toda a leitura.
 
 Report shape:
 
 - tenant key;
 - channel;
 - provider;
-- primary id;
+- SHA-256 da identidade primaria, nunca o ID completo;
 - alias count;
 - secret kind count;
-- encrypted secret kind count;
-- unencrypted secret kind count;
+- provenance e contagens sanitizadas;
 - action: `would_create`, `would_update`, `created`, `updated` ou `unchanged`;
   `Client` ausente nega o lote inteiro antes da primeira escrita.
+
+### Autoridades DB-first
+
+- `WaPhoneNumber` e `TenantMetaConfig`: identidade telefônica e credencial Meta;
+- `ChannelAccount`: gates tenant-scoped de runtime, automação, persistência,
+  outbound, AI e handoff;
+- `TenantOperationalConfig`: configuração funcional de chatbot, quota, AI e
+  comportamento do tenant.
+
+O plano de migração não desloca essas autoridades. Ele apenas materializa de
+forma auditável o estado de `ChannelAccount` antes do backfill funcional.
 
 ## Rollback
 

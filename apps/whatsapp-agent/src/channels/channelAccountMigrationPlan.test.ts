@@ -1,63 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { TenantConfig } from "../config/tenantConfig.js";
-import { buildChannelAccountMigrationPlan, sanitizedMigrationItem } from "./channelAccountMigrationPlan.js";
+import { buildChannelAccountMigrationPlan, sanitizedMigrationItem, type ChannelAccountPlanDocument, type ExistingMetaAccount } from "./channelAccountMigrationPlan.js";
 
-const flags = { enabled: true, automationEnabled: true, runtimeEnabled: true, inboundPersistenceEnabled: true, outboundEnabled: true, aiEnabled: false, handoffEnabled: true };
-function tenant(key: string, phone = "", withPlan = false): TenantConfig {
-  return { id: key, name: key, metaPhoneNumberId: phone, allowlist: [], handoffAttendantWaid: "", defaultLanguage: "pt_BR", ...(withPlan ? { channelAccounts: [{ id: `account-${key}`, tenantKey: key, channel: "whatsapp", provider: "meta", channelAccountId: phone, ...flags, status: "connected", tokenStatus: "configured" }] } : {}) };
+const sourceSha = "a".repeat(64);
+const flags = { enabled: true, automationEnabled: true, runtimeEnabled: true, inboundPersistenceEnabled: true, outboundEnabled: true, aiEnabled: false, handoffEnabled: true, status: "connected" as const, tokenStatus: "configured" as const };
+function tenant(key: string, phone = ""): TenantConfig { return { id: key, name: key, metaPhoneNumberId: phone, allowlist: [], handoffAttendantWaid: "", defaultLanguage: "pt_BR" }; }
+function account(key: string, phone: string) { return { id: `account-${key}`, tenantKey: key, channel: "whatsapp" as const, provider: "meta" as const, channelAccountId: phone, ...flags }; }
+function setup(tenants: Record<string, TenantConfig>, planned = Object.keys(tenants).filter((key) => tenants[key].metaPhoneNumberId)) {
+  const clients = [...new Set([...Object.keys(tenants), ...planned])].map((clientKey, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, clientKey }));
+  const planDocument: ChannelAccountPlanDocument = { schemaVersion: 1, sourceSha256: sourceSha, tenants: Object.fromEntries(planned.map((key) => [key, { provenance: "HISTORICAL_SOURCE", channelAccounts: [account(key, tenants[key]?.metaPhoneNumberId || `phone-${key}`)] }])) };
+  const existingMetaAccounts: ExistingMetaAccount[] = [];
+  return { tenants, planDocument, expectedSourceSha256: sourceSha, clients, phoneNumbers: clients.filter((client) => planDocument.tenants[client.clientKey]).map((client) => ({ clientId: client.id, phoneNumberId: planDocument.tenants[client.clientKey].channelAccounts[0].channelAccountId })), metaConfigs: [], existingMetaAccounts };
 }
-function input(tenants: Record<string, TenantConfig>) {
-  const clients = Object.keys(tenants).map((clientKey, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, clientKey }));
-  return { tenants, clients, phoneNumbers: clients.map((client, index) => ({ clientId: client.id, phoneNumberId: tenants[client.clientKey].metaPhoneNumberId || `unused-${index}` })).filter((row) => !row.phoneNumberId.startsWith("unused")), metaConfigs: [] };
-}
 
-test("mixed Meta and Web Session creates only authenticated Meta plan", () => {
-  const params = input({ meta: tenant("meta", "phone-meta", true), web: tenant("web") });
-  const plan = buildChannelAccountMigrationPlan(params);
-  assert.equal(plan.metaTenantCount, 1); assert.deepEqual(plan.webSessionOnlyTenants, ["web"]); assert.equal(plan.items[0].tenantKey, "meta");
-});
-
-test("seven Meta tenants without ChannelAccount contract are denied", () => {
-  const tenants = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`meta-${i}`, tenant(`meta-${i}`, `phone-${i}`)]));
-  assert.throws(() => buildChannelAccountMigrationPlan(input(tenants)), (error) => {
-    const message = (error as Error).message;
-    assert.equal((message.match(/CHANNEL_ACCOUNT_PLAN_INCOMPLETE/g) ?? []).length, 7);
-    return true;
-  });
-});
-
-test("Web Session-only tenant receives no Meta account", () => {
-  const plan = buildChannelAccountMigrationPlan(input({ web: tenant("web") }));
-  assert.equal(plan.items.length, 0); assert.equal(plan.webSessionOnlyCount, 1);
-});
-
-test("missing Client denies whole plan", () => {
-  const params = input({ one: tenant("one", "p1", true), two: tenant("two", "p2", true) }); params.clients.pop(); params.phoneNumbers.pop();
-  assert.throws(() => buildChannelAccountMigrationPlan(params), /CHANNEL_ACCOUNT_CLIENT_MISSING:two/);
-});
-
-test("divergent phone identity denies whole plan", () => {
-  const params = input({ meta: tenant("meta", "expected", true) }); params.phoneNumbers[0].phoneNumberId = "different";
-  assert.throws(() => buildChannelAccountMigrationPlan(params), /CHANNEL_ACCOUNT_PHONE_IDENTITY_MISMATCH/);
-});
-
-test("incomplete flags never receive silent defaults", () => {
-  const value = tenant("meta", "phone", true); delete (value.channelAccounts![0] as unknown as Record<string, unknown>).outboundEnabled;
-  assert.throws(() => buildChannelAccountMigrationPlan(input({ meta: value })), /CHANNEL_ACCOUNT_PLAN_INCOMPLETE/);
-});
-
-test("CRA without authenticated source is denied separately", () => {
-  assert.throws(() => buildChannelAccountMigrationPlan({ ...input({ web: tenant("web") }), selectedTenant: "cra-pr" }), /CRA_CHANNEL_ACCOUNT_SOURCE_UNRESOLVED/);
-});
-
-test("sanitized report contains neither complete identity nor secrets", () => {
-  const value = tenant("meta", "phone-secret", true); value.channelAccounts![0].pageAccessToken = "top-secret-token";
-  const plan = buildChannelAccountMigrationPlan(input({ meta: value })); const serialized = JSON.stringify(sanitizedMigrationItem(plan.items[0], "would_create"));
-  assert.equal(serialized.includes("phone-secret"), false); assert.equal(serialized.includes("top-secret-token"), false); assert.match(serialized, /identitySha256/);
-});
-
-test("unrelated Messenger and Instagram source accounts do not enter Meta plan", () => {
-  const value = tenant("meta", "phone", true); value.channelAccounts!.push({ id: "messenger", tenantKey: "meta", channel: "messenger", provider: "meta", channelAccountId: "page", enabled: true });
-  const plan = buildChannelAccountMigrationPlan(input({ meta: value })); assert.equal(plan.items.length, 1); assert.equal(plan.items[0].account.channel, "whatsapp");
-});
+test("mixed Meta and Web Session creates only explicit Meta plan", () => { const plan = buildChannelAccountMigrationPlan(setup({ meta: tenant("meta", "phone-meta"), web: tenant("web") })); assert.equal(plan.metaTenantCount, 1); assert.deepEqual(plan.webSessionOnlyTenants, ["web"]); });
+test("seven Meta tenants without plan are all denied", () => { const tenants = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`meta-${i}`, tenant(`meta-${i}`, `phone-${i}`)])); assert.throws(() => buildChannelAccountMigrationPlan(setup(tenants, [])), (error) => ((error as Error).message.match(/CHANNEL_ACCOUNT_PLAN_INCOMPLETE/g) ?? []).length === 7); });
+test("plan bound to wrong source SHA is denied", () => { const value = setup({ meta: tenant("meta", "phone") }); value.planDocument.sourceSha256 = "b".repeat(64); assert.throws(() => buildChannelAccountMigrationPlan(value), /CHANNEL_ACCOUNT_PLAN_SOURCE_SHA256_MISMATCH/); });
+test("plan exchanged between sources is denied", () => { const value = setup({ meta: tenant("meta", "phone") }); value.expectedSourceSha256 = "c".repeat(64); assert.throws(() => buildChannelAccountMigrationPlan(value), /CHANNEL_ACCOUNT_PLAN_SOURCE_SHA256_MISMATCH/); });
+test("CRA requires explicit owner-authorized DB provenance", () => { const value = setup({}, ["cra-pr"]); assert.throws(() => buildChannelAccountMigrationPlan(value), /CRA_CHANNEL_ACCOUNT_PROVENANCE_DENY/); value.planDocument.tenants["cra-pr"].provenance = "OWNER_AUTHORIZED_DB_IDENTITY"; assert.equal(buildChannelAccountMigrationPlan(value).items[0].tenantKey, "cra-pr"); });
+test("duplicate channelAccountId between tenants is denied", () => { const value = setup({ one: tenant("one", "shared"), two: tenant("two", "shared") }); value.planDocument.tenants.two.channelAccounts[0].channelAccountId = "shared"; assert.throws(() => buildChannelAccountMigrationPlan(value), /CHANNEL_ACCOUNT_GLOBAL_IDENTITY_COLLISION/); });
+test("alias colliding with another tenant is denied", () => { const value = setup({ one: tenant("one", "p1"), two: tenant("two", "p2") }); value.planDocument.tenants.one.channelAccounts[0].externalAccountIds = ["p2"]; assert.throws(() => buildChannelAccountMigrationPlan(value), /CHANNEL_ACCOUNT_GLOBAL_IDENTITY_COLLISION/); });
+test("global collision with account outside batch is denied", () => { const value = setup({ one: tenant("one", "p1") }); value.existingMetaAccounts.push({ clientId: "outside", clientKey: "outside", channelAccountId: "outside-primary", aliases: ["p1"] }); assert.throws(() => buildChannelAccountMigrationPlan(value), /CHANNEL_ACCOUNT_GLOBAL_IDENTITY_COLLISION/); });
+test("invalid status and tokenStatus are denied", () => { const status = setup({ meta: tenant("meta", "phone") }); (status.planDocument.tenants.meta.channelAccounts[0] as unknown as { status: string }).status = "raw"; assert.throws(() => buildChannelAccountMigrationPlan(status), /CHANNEL_ACCOUNT_STATUS_INVALID/); const token = setup({ meta: tenant("meta", "phone") }); (token.planDocument.tenants.meta.channelAccounts[0] as unknown as { tokenStatus: string }).tokenStatus = "raw"; assert.throws(() => buildChannelAccountMigrationPlan(token), /CHANNEL_ACCOUNT_TOKEN_STATUS_INVALID/); });
+test("sanitized report contains no full identity or secret", () => { const value = setup({ meta: tenant("meta", "phone-secret") }); value.planDocument.tenants.meta.channelAccounts[0].pageAccessToken = "top-secret"; const serialized = JSON.stringify(sanitizedMigrationItem(buildChannelAccountMigrationPlan(value).items[0], "would_create")); assert.equal(serialized.includes("phone-secret"), false); assert.equal(serialized.includes("top-secret"), false); });
