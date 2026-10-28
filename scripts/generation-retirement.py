@@ -61,7 +61,7 @@ LEGACY_123BA_BINDING = {
         "path": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/immutable-123ba7bd-vps-20261026T200100Z/index.sha256",
         "sha256": "a91323272cdcd3a91c207a18a953f11f93e346cf3bde1f976e3229829fa0e69b",
     },
-    "canonicalVerifierSha256": "3261183af30a7abd9c5a0d52339c952e1934a6e274fdadaf87b1f1729a72d6e2",
+    "canonicalVerifierSha256": "dc1aa8a3ad84518900f40b0db3cfe473c09a9d478abf4a7115762990519badcf",
     "contractOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-artifacts.private.json",
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
@@ -127,7 +127,7 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
             "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
         },
     },
-    "canonicalVerifierSha256": "3261183af30a7abd9c5a0d52339c952e1934a6e274fdadaf87b1f1729a72d6e2",
+    "canonicalVerifierSha256": "dc1aa8a3ad84518900f40b0db3cfe473c09a9d478abf4a7115762990519badcf",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
 }
@@ -141,11 +141,11 @@ LEGACY_RETENTION_BATCH = {
 }
 LEGACY_D436_F160_BINDINGS = {
     "immutable-d436239e-vps-20261026T131821Z": {
-        "descriptorSha256": "48217e3ddab9d5ea0813eb968c00a08b0cc453075110cd58efb7ea2d5ea98f2e", "role": "ROLLBACK_DEPENDENCY",
+        "descriptorSha256": "fbdb64da63d12d1a713781f89d9954582c26d6d16b0cff3fd305af46cd05eaad", "role": "ROLLBACK_DEPENDENCY",
         "targetCommit": "d436239e13764b65642b37a4310082acd3a6a485", "ordinals": (2, 6, 7),
     },
     "immutable-f1602787-vps-20261026T174702Z": {
-        "descriptorSha256": "da96d6a1bab8deb34bd1aa2ca718e461072af17fb9560d79f6379c5bbaa27a57", "role": "ACTIVE_DEPENDENCY",
+        "descriptorSha256": "0020ce15a6c6f3cb890f86a433d4624b99f779be05a47d78c0265fa4ec4bdeb7", "role": "ACTIVE_DEPENDENCY",
         "targetCommit": "f16027874e91c86e5f818d0888e6d735b07a6eda", "ordinals": (3, 8, 9),
         "overlayPath": "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z/frontend-runtime/.next/cache",
     },

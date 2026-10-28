@@ -36,7 +36,7 @@ for path in "${changed_files[@]}"; do
     apps/whatsapp-agent/src/*|apps/whatsapp-agent/src/**/*)
       mark_backend "$path" ;;
     apps/whatsapp-agent/package.json|apps/whatsapp-agent/package-lock.json|apps/whatsapp-agent/tsconfig.json|apps/whatsapp-agent/tsconfig.*.json|apps/whatsapp-agent/ecosystem.config.cjs)
-      mark_unknown "$path" ;;
+      mark_backend "$path" ;;
     apps/whatsapp-web-worker/src/*|apps/whatsapp-web-worker/src/**/*|apps/whatsapp-web-worker/package.json|apps/whatsapp-web-worker/package-lock.json|apps/whatsapp-web-worker/tsconfig.json|apps/whatsapp-web-worker/tsconfig.*.json)
       mark_worker "$path" ;;
     src/*|src/**/*|public/*|public/**/*|next.config.*|postcss.config.*|tailwind.config.*|components.json)

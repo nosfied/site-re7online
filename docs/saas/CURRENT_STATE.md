@@ -18,6 +18,11 @@ O plano de backfill permanece futuro e separado; este registro não autoriza ace
 à produção. Contrato detalhado em
 [WhatsApp Meta tenant runtime DB-first](WHATSAPP_META_TENANT_RUNTIME.md).
 
+O control plane em revisão admite autorização P00 privada e temporária que dispensa
+exclusivamente o piso estático de 12 GiB, sem relaxar capacity contract, reserva,
+inodes ou checkpoints. Ela ainda não foi usada e não autoriza build, deploy ou
+ativação; produção permanece inalterada.
+
 ## Implantação vigente — 28/10/2026
 
 Fonte: relatório do Codex local encaminhado pelo owner, com hashes das evidências

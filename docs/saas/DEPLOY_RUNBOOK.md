@@ -42,11 +42,11 @@ e `db="ok"`. Host administrativo ou `/health` do frontend não comprova a API.
 ### Gate de dívida e encerramento da geração
 
 Antes de criar a saída, o produtor exige pelo menos 12 GiB livres, todos os
-lifecycles anteriores terminais e seus reviews sem `RETENTION_DEBT`,
-`RETIREMENT_READY` ou `QUARANTINED`. Uma candidata pendente já existente impede
-outro build. Reviews v1 `PRESERVE` são dívida; somente v1 `SANITIZED` permanece
-compatível. Override v2 precisa declarar razão, bytes, responsável e expiração
-UTC futura.
+lifecycles anteriores terminais e reviews sem dívida. Excepcionalmente, documento
+privado P00, fechado, temporário e ligado a target/release/hash do capacity contract
+pode dispensar somente esse piso; orçamento real, pico, verificação, evidência,
+reserva, inodes e checkpoints continuam obrigatórios. Ele não autoriza build nem
+ativação. Candidata pendente, dívida ou review v1 `PRESERVE` continuam bloqueando.
 
 Antes mesmo do lock de build, a política versionada autenticada deve provar
 `--repo` dentro de `build-worktrees`, `--output` estritamente dentro de
