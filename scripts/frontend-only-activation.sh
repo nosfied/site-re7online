@@ -553,9 +553,19 @@ for name in sorted(names):
     if li!=di and not (li==1 and di is None and field(l[name],"exec_mode") in {"fork","fork_mode"}):
         raise SystemExit(f"DUMP_INSTANCES:{name}")
     allowed={"NODE_ENV","PORT","HOST","DATABASE_URL","APP_AUTH_SECRET","ADMIN_TOKEN","TEMPLATE_MEDIA_ROOT","CAMPAIGN_OPERATIONS_FILE","META_APP_ID","NEXT_PUBLIC_WHATSAPP_AGENT_API_BASE_URL"}
-    def env_hash(row):
+    def environment_value(row,key):
         env=row.get("pm2_env",{}) if isinstance(row.get("pm2_env"),dict) else {}
-        selected={key:env[key] for key in sorted(allowed) if key in env}
+        if key in row:
+            return True,row[key]
+        if key in env:
+            return True,env[key]
+        return False,None
+    def env_hash(row):
+        selected={}
+        for key in sorted(allowed):
+            present,value=environment_value(row,key)
+            if present:
+                selected[key]=value
         return hashlib.sha256(json.dumps(selected,sort_keys=True,separators=(",",":")).encode()).hexdigest()
     lh,dh=env_hash(l[name]),env_hash(d[name])
     if lh!=dh: raise SystemExit(f"DUMP_ENVIRONMENT:{name}")

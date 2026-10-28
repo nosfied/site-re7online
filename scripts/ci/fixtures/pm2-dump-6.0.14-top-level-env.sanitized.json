@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "incident": "PREFINAL_DUMP_ENVIRONMENT:re7-admin-front",
+  "live": [
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 1001,
+      "pm2_env": {
+        "pm_cwd": "/current/api",
+        "pm_exec_path": "/current/api/dist/index.js",
+        "args": null,
+        "node_args": [],
+        "namespace": "default",
+        "out_file": "/logs/api.out",
+        "error_file": "/logs/api.err",
+        "exec_mode": "fork_mode",
+        "instances": 1,
+        "NODE_ENV": "production",
+        "PORT": "3001",
+        "DATABASE_URL": "sanitized-database"
+      }
+    },
+    {
+      "name": "re7-admin-front",
+      "pid": 1002,
+      "pm2_env": {
+        "pm_cwd": "/current/frontend",
+        "pm_exec_path": "/current/frontend/node_modules/next/dist/bin/next",
+        "args": null,
+        "node_args": [],
+        "namespace": "default",
+        "out_file": "/logs/frontend.out",
+        "error_file": "/logs/frontend.err",
+        "exec_mode": "fork_mode",
+        "instances": 1,
+        "NODE_ENV": "production",
+        "PORT": "3000",
+        "NEXT_PUBLIC_WHATSAPP_AGENT_API_BASE_URL": "https://sanitized.invalid/agent-api"
+      }
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 1003,
+      "pm2_env": {
+        "pm_cwd": "/worker",
+        "pm_exec_path": "/worker/index.js",
+        "args": null,
+        "node_args": [],
+        "namespace": "default",
+        "out_file": "/logs/worker.out",
+        "error_file": "/logs/worker.err",
+        "exec_mode": "fork_mode",
+        "instances": 1,
+        "NODE_ENV": "production",
+        "PORT": "3002",
+        "HOST": "127.0.0.1"
+      }
+    }
+  ],
+  "dump": [
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 1001,
+      "NODE_ENV": "production",
+      "PORT": "3001",
+      "DATABASE_URL": "sanitized-database",
+      "pm2_env": {
+        "pm_cwd": "/current/api",
+        "pm_exec_path": "/current/api/dist/index.js",
+        "args": null,
+        "node_args": [],
+        "namespace": "default",
+        "out_file": "/logs/api.out",
+        "error_file": "/logs/api.err",
+        "exec_mode": "fork_mode"
+      }
+    },
+    {
+      "name": "re7-admin-front",
+      "pid": 1002,
+      "NODE_ENV": "production",
+      "PORT": "3000",
+      "NEXT_PUBLIC_WHATSAPP_AGENT_API_BASE_URL": "https://sanitized.invalid/agent-api",
+      "pm2_env": {
+        "pm_cwd": "/current/frontend",
+        "pm_exec_path": "/current/frontend/node_modules/next/dist/bin/next",
+        "args": null,
+        "node_args": [],
+        "namespace": "default",
+        "out_file": "/logs/frontend.out",
+        "error_file": "/logs/frontend.err",
+        "exec_mode": "fork_mode"
+      }
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 1003,
+      "NODE_ENV": "production",
+      "PORT": "3002",
+      "HOST": "127.0.0.1",
+      "pm2_env": {
+        "pm_cwd": "/worker",
+        "pm_exec_path": "/worker/index.js",
+        "args": null,
+        "node_args": [],
+        "namespace": "default",
+        "out_file": "/logs/worker.out",
+        "error_file": "/logs/worker.err",
+        "exec_mode": "fork_mode"
+      }
+    }
+  ]
+}

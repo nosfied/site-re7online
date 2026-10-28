@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import signal
 import socketserver
 import subprocess
@@ -17,10 +18,57 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "scripts/frontend-only-activation.sh"
 BASELINE_SHA = "931900e7fb7229ffd5983b5bbbf8223191108d3b09110655452a43e42f71e2d4"
+SANITIZED_PM2_DUMP_FIXTURE = ROOT / "scripts/ci/fixtures/pm2-dump-6.0.14-top-level-env.sanitized.json"
 
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run_embedded_dump_comparator(live: list[dict], dump: list[dict]):
+    source = SOURCE.read_text()
+    match = re.search(
+        r'/usr/bin/python3 - "\$live_file" "\$DUMP" "\$dump_validation" <<\'PY\'\n'
+        r'(?P<body>.*?)\nPY\n',
+        source,
+        re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError("embedded dump comparator not found")
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        live_path = root / "live.json"
+        dump_path = root / "dump.json"
+        output_path = root / "validation.json"
+        comparator = root / "comparator.py"
+        live_path.write_text(json.dumps(live) + "\n")
+        dump_path.write_text(json.dumps(dump) + "\n")
+        comparator.write_text(match.group("body") + "\n")
+        result = subprocess.run(
+            ["python3", "-B", str(comparator), str(live_path), str(dump_path), str(output_path)],
+            text=True,
+            capture_output=True,
+        )
+        output = json.loads(output_path.read_text()) if output_path.exists() else None
+        return result, output
+
+
+def pm2_row(name: str) -> dict:
+    return {
+        "name": name,
+        "pid": 100,
+        "pm2_env": {
+            "pm_cwd": f"/{name}",
+            "pm_exec_path": f"/{name}/index.js",
+            "args": None,
+            "node_args": [],
+            "namespace": "default",
+            "out_file": f"/logs/{name}.out",
+            "error_file": f"/logs/{name}.err",
+            "exec_mode": "fork_mode",
+            "instances": 1,
+        },
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -241,6 +289,59 @@ class FrontendExecutorTest(unittest.TestCase):
     def test_baseline_v7_is_explicitly_bound(self):
         self.assertEqual((ROOT/"scripts/ci/fixtures/a959-activation-v7.sha256").read_text().split()[0], BASELINE_SHA)
         self.assertIn(f"BASELINE_V7_SHA256={BASELINE_SHA}", SOURCE.read_text())
+
+    def test_pm2_dump_environment_uses_top_level_then_pm2_env_for_all_processes(self):
+        names = ("re7-whatsapp-agent", "re7-admin-front", "re7-whatsapp-web-worker")
+        live = [pm2_row(name) for name in names]
+        dump = [pm2_row(name) for name in names]
+        for index, (live_row, dump_row) in enumerate(zip(live, dump), 1):
+            value = f"value-{index}"
+            live_row["pm2_env"]["NODE_ENV"] = value
+            dump_row["NODE_ENV"] = value
+        result, output = run_embedded_dump_comparator(live, dump)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output["result"], "PM2_DUMP_VALID")
+        self.assertEqual(set(output["processes"]), set(names))
+
+    def test_pm2_dump_environment_preserves_false_empty_null_and_absence(self):
+        names = ("re7-whatsapp-agent", "re7-admin-front", "re7-whatsapp-web-worker")
+        live = [pm2_row(name) for name in names]
+        dump = [pm2_row(name) for name in names]
+        for live_row, dump_row in zip(live, dump):
+            live_row.update(HOST=False, PORT="", META_APP_ID=None, ADMIN_TOKEN=0)
+            live_row["pm2_env"].update(HOST=True, PORT="filled", META_APP_ID="filled", ADMIN_TOKEN=1)
+            dump_row.update(HOST=False, PORT="", META_APP_ID=None, ADMIN_TOKEN=0)
+            dump_row["pm2_env"].update(HOST="different", PORT="different", META_APP_ID="different", ADMIN_TOKEN=1)
+            # CAMPAIGN_OPERATIONS_FILE is intentionally absent from both locations.
+        result, output = run_embedded_dump_comparator(live, dump)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output["result"], "PM2_DUMP_VALID")
+
+    def test_pm2_dump_environment_real_value_difference_is_denied_for_every_process(self):
+        names = ("re7-whatsapp-agent", "re7-admin-front", "re7-whatsapp-web-worker")
+        for name in names:
+            with self.subTest(name=name):
+                live = [pm2_row(item) for item in names]
+                dump = [pm2_row(item) for item in names]
+                live_row = next(item for item in live if item["name"] == name)
+                dump_row = next(item for item in dump if item["name"] == name)
+                live_row["pm2_env"]["NODE_ENV"] = "production"
+                dump_row["NODE_ENV"] = "development"
+                result, output = run_embedded_dump_comparator(live, dump)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIsNone(output)
+                self.assertIn(f"DUMP_ENVIRONMENT:{name}", result.stderr)
+
+    def test_pm2_dump_environment_accepts_sanitized_incident_schema(self):
+        fixture = json.loads(SANITIZED_PM2_DUMP_FIXTURE.read_text())
+        self.assertEqual(fixture["incident"], "PREFINAL_DUMP_ENVIRONMENT:re7-admin-front")
+        result, output = run_embedded_dump_comparator(fixture["live"], fixture["dump"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output["result"], "PM2_DUMP_VALID")
+        self.assertEqual(
+            set(output["processes"]),
+            {"re7-whatsapp-agent", "re7-admin-front", "re7-whatsapp-web-worker"},
+        )
 
     def test_release_bindings_reject_the_previous_generation(self):
         source = SOURCE.read_text()

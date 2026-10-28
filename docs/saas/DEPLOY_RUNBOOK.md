@@ -312,6 +312,7 @@ Validar os três registros por identidade e ambiente permitido, preservando os
 valores brutos. No PM2 6.0.14, campos/aliases e variáveis permitidas podem ficar no
 topo do registro ou em `pm2_env`; consultar ambos sem inventar outros defaults:
 
+- ambiente permitido: propriedade presente no topo prevalece inclusive para `false`, `0`, vazio ou `null`; usar `pm2_env` só quando ausente, sem ampliar chaves, e negar divergência real;
 - `instances` ausente/nulo no processo vivo e ausente/nulo no dump são equivalentes,
   sem normalização; esse é o caso comprovado do worker;
 - `instances=1` no processo vivo e ausente/nulo no dump pode equivaler ao default 1
