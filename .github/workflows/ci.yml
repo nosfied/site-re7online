@@ -103,6 +103,13 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run build
+      - name: WhatsApp Meta tenant runtime DB-first regressions
+        run: >-
+          node --import tsx --test
+          src/config/authenticatedTenantJsonSource.test.ts
+          src/config/tenantOperationalConfig.test.ts
+          src/whatsapp/tenantMetaRuntimeConfig.test.ts
+          src/whatsapp/tenantMetaRuntimeContract.test.ts
 
   csv-critical:
     name: CSV recovery and tenant isolation
@@ -139,6 +146,8 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run db:deploy
+      - name: Tenant operational config backfill and retirement contracts
+        run: node --import tsx --test src/config/tenantOperationalConfigScripts.test.ts
       - name: Backend durable-operation and multi-tenant tests
         run: >-
           node --import tsx --test

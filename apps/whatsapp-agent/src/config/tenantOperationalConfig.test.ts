@@ -4,6 +4,9 @@ import {
   applyAiIntentQualificationToTenant,
   applyAiAssistantConfigToTenant,
   resolveAiAssistantConfigSettings,
+  saveAiAssistantConfigSettings,
+  resolveTenantBaseConfigSettings,
+  saveTenantBaseConfigSettings,
   resolveAiIntentQualificationSettings,
   resolveAutomationFlagsSettings,
   resolvePlanLimitsSettings,
@@ -26,6 +29,56 @@ import {
   isWhatsappTemplateCategoryAllowed,
   isWhatsappTransportEnabledForRouting,
 } from "./tenantOperationalConfig.js";
+
+test("tenant base config is DB-first and preserves unrelated config on partial writes", async () => {
+  const prisma = prismaWithMutableConfig({
+    independent: { keep: [false, null, "value"] },
+    baseConfig: {
+      allowlist: ["558499049614"],
+      handoffAttendantWaid: "558477777784",
+      defaultLanguage: "pt_BR",
+      disableAutoReply: false,
+    },
+  });
+  const resolved = await resolveTenantBaseConfigSettings({ prisma, clientId: "client-1" });
+  assert.equal(resolved.source, "db");
+  assert.deepEqual(resolved.settings.allowlist, ["558499049614"]);
+
+  await saveTenantBaseConfigSettings({
+    prisma,
+    clientId: "client-1",
+    settings: { disableAutoReply: true },
+  });
+  const after = await resolveTenantBaseConfigSettings({ prisma, clientId: "client-1" });
+  assert.equal(after.settings.disableAutoReply, true);
+  assert.deepEqual(after.settings.allowlist, ["558499049614"]);
+  const raw = await (prisma as any).tenantOperationalConfig.findUnique();
+  assert.deepEqual(raw.config.independent, { keep: [false, null, "value"] });
+});
+
+test("AI toggle partial writes preserve prompts and unrelated operational config", async () => {
+  const prisma = prismaWithMutableConfig({
+    independent: { keep: true },
+    aiAssistantConfig: {
+      aiAssistantEnabled: false,
+      aiAssistantFallbackToHandoff: true,
+      aiAssistantSystemPrompt: "prompt preservado",
+      aiBusinessContext: "contexto preservado",
+    },
+  });
+  await saveAiAssistantConfigSettings({
+    prisma,
+    clientId: "client-1",
+    settings: { aiAssistantEnabled: true },
+  });
+  const after = await resolveAiAssistantConfigSettings({ prisma, clientId: "client-1" });
+  assert.equal(after.settings.aiAssistantEnabled, true);
+  assert.equal(after.settings.aiAssistantFallbackToHandoff, true);
+  assert.equal(after.settings.aiAssistantSystemPrompt, "prompt preservado");
+  assert.equal(after.settings.aiBusinessContext, "contexto preservado");
+  const raw = await (prisma as any).tenantOperationalConfig.findUnique();
+  assert.deepEqual(raw.config.independent, { keep: true });
+});
 
 function prismaWithConfig(config: unknown) {
   return {
@@ -597,6 +650,8 @@ test("resolveAiAssistantConfigSettings prefers DB assistant config over tenants.
   const resolved = await resolveAiAssistantConfigSettings({
     prisma: prismaWithConfig({
       aiAssistantConfig: {
+        aiAssistantEnabled: true,
+        aiAssistantFallbackToHandoff: true,
         aiBusinessContext: "DB contexto",
         aiAssistantSystemPrompt: "DB prompt",
         aiAssistantGreetingMessage: "DB oi",
@@ -628,6 +683,8 @@ test("resolveAiAssistantConfigSettings prefers DB assistant config over tenants.
 
   assert.equal(resolved.source, "db");
   assert.deepEqual(resolved.settings, {
+    aiAssistantEnabled: true,
+    aiAssistantFallbackToHandoff: true,
     aiBusinessContext: "DB contexto",
     aiAssistantSystemPrompt: "DB prompt",
     aiAssistantGreetingMessage: "DB oi",
@@ -647,6 +704,8 @@ test("resolveAiAssistantConfigSettings falls back to tenants.json assistant conf
     prisma: prismaWithConfig({}),
     clientId: "client-1",
     tenant: {
+      aiAssistantEnabled: true,
+      aiAssistantFallbackToHandoff: false,
       aiBusinessContext: "JSON contexto",
       aiAssistantSystemPrompt: "JSON prompt",
       aiAssistantGreetingMessage: "JSON oi",
@@ -663,6 +722,8 @@ test("resolveAiAssistantConfigSettings falls back to tenants.json assistant conf
 
   assert.equal(resolved.source, "json_fallback");
   assert.deepEqual(resolved.settings, {
+    aiAssistantEnabled: true,
+    aiAssistantFallbackToHandoff: false,
     aiBusinessContext: "JSON contexto",
     aiAssistantSystemPrompt: "JSON prompt",
     aiAssistantGreetingMessage: "JSON oi",
@@ -686,6 +747,8 @@ test("resolveAiAssistantConfigSettings uses safe assistant defaults", async () =
 
   assert.equal(resolved.source, "json_fallback");
   assert.deepEqual(resolved.settings, {
+    aiAssistantEnabled: false,
+    aiAssistantFallbackToHandoff: false,
     aiBusinessContext: "",
     aiAssistantSystemPrompt: "",
     aiAssistantGreetingMessage: "",
@@ -706,6 +769,8 @@ test("applyAiAssistantConfigToTenant preserves intent catalog and qualification 
     aiQualification: { fields: [{ id: "name", label: "Nome" }] },
   };
   const applied = applyAiAssistantConfigToTenant(tenant as Partial<import("./tenantConfig.js").TenantConfig>, {
+    aiAssistantEnabled: true,
+    aiAssistantFallbackToHandoff: true,
     aiBusinessContext: "Contexto",
     aiAssistantSystemPrompt: "Prompt",
     aiAssistantGreetingMessage: "Oi",

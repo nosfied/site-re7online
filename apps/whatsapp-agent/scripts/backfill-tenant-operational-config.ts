@@ -2,12 +2,13 @@
 import { withLockedTenantOperationalConfig } from "../src/config/tenantOperationalConfigStore.js";
 import path from "node:path";
 import process from "node:process";
+import { isDeepStrictEqual } from "node:util";
 import dotenv from "dotenv";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { normalizeQualificationSchema } from "../src/agent/qualification.js";
 import { env } from "../src/config/env.js";
+import { readAuthenticatedTenantJsonSource } from "../src/config/authenticatedTenantJsonSource.js";
 import {
-  getTenants,
   normalizeAiAssistantIntentCatalog,
   normalizeCrmBusinessStatuses,
   normalizeHandoffLeadNotificationRecipients,
@@ -18,12 +19,15 @@ type Options = {
   json: boolean;
   tenant?: string;
   dryRun: boolean;
+  source: string;
+  expectedSourceSha256: string;
 };
 
 type BackfillItem = {
   tenantKey: string;
   clientId: string | null;
-  action: "would_upsert" | "upserted" | "skipped_missing_client";
+  action: "would_upsert" | "upserted" | "unchanged" | "skipped_missing_client";
+  fieldsChanged: string[];
   statusCount: number;
   manualHandoffTemplate: string | null;
   followUp: ReturnType<typeof normalizeFollowUp>;
@@ -33,12 +37,15 @@ type BackfillItem = {
   automationFlags: ReturnType<typeof normalizeAutomationFlags>;
   aiAssistantConfig: ReturnType<typeof summarizeAiAssistantConfig>;
   aiIntentQualification: ReturnType<typeof summarizeAiIntentQualification>;
+  baseConfig: ReturnType<typeof summarizeBaseConfig>;
 };
 
 function parseArgs(argv: string[]): Options {
   const options: Options = {
     json: false,
     dryRun: false,
+    source: "",
+    expectedSourceSha256: "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const current = argv[index];
@@ -56,10 +63,24 @@ function parseArgs(argv: string[]): Options {
         options.tenant = next;
         index += 1;
         break;
+      case "--source":
+        if (!next || next.startsWith("--")) throw new Error("--source exige um valor");
+        options.source = next;
+        index += 1;
+        break;
+      case "--expected-source-sha256":
+        if (!next || !/^[a-f0-9]{64}$/i.test(next)) {
+          throw new Error("--expected-source-sha256 exige SHA-256 hexadecimal");
+        }
+        options.expectedSourceSha256 = next.toLowerCase();
+        index += 1;
+        break;
       default:
         throw new Error(`flag nao reconhecida: ${current}`);
     }
   }
+  if (!path.isAbsolute(options.source)) throw new Error("source_must_be_absolute");
+  if (!options.expectedSourceSha256) throw new Error("expected_source_sha256_required");
   return options;
 }
 
@@ -191,6 +212,33 @@ function normalizeAutomationFlags(tenant: {
   };
 }
 
+function normalizeBaseConfig(tenant: {
+  allowlist?: string[];
+  handoffAttendantWaid?: string;
+  defaultLanguage?: string;
+  disableAutoReply?: boolean;
+}) {
+  return {
+    allowlist: normalizeQuotaExcludeWaIds(tenant.allowlist),
+    handoffAttendantWaid: typeof tenant.handoffAttendantWaid === "string"
+      ? tenant.handoffAttendantWaid.replace(/\D/g, "")
+      : "",
+    defaultLanguage: typeof tenant.defaultLanguage === "string" && /^[a-z]{2}_[A-Z]{2}$/.test(tenant.defaultLanguage.trim())
+      ? tenant.defaultLanguage.trim()
+      : env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+    disableAutoReply: tenant.disableAutoReply === true,
+  };
+}
+
+function summarizeBaseConfig(config: ReturnType<typeof normalizeBaseConfig>) {
+  return {
+    allowlistCount: config.allowlist.length,
+    hasHandoffAttendant: Boolean(config.handoffAttendantWaid),
+    defaultLanguage: config.defaultLanguage,
+    disableAutoReply: config.disableAutoReply,
+  };
+}
+
 function normalizeAiAssistantProfile(input: unknown) {
   if (input === "government" || input === "legal_previdenciario") return input;
   return "business";
@@ -214,6 +262,8 @@ function normalizeAiAssistantTermList(input: unknown) {
 }
 
 function normalizeAiAssistantConfig(tenant: {
+  aiAssistantEnabled?: boolean;
+  aiAssistantFallbackToHandoff?: boolean;
   aiBusinessContext?: string;
   aiAssistantSystemPrompt?: string;
   aiAssistantGreetingMessage?: string;
@@ -227,6 +277,8 @@ function normalizeAiAssistantConfig(tenant: {
   aiAssistantProfile?: string;
 }) {
   return {
+    aiAssistantEnabled: tenant.aiAssistantEnabled === true,
+    aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
     aiBusinessContext: normalizeAiAssistantText(tenant.aiBusinessContext, 4000),
     aiAssistantSystemPrompt: normalizeAiAssistantText(tenant.aiAssistantSystemPrompt, 4000),
     aiAssistantGreetingMessage: normalizeAiAssistantText(tenant.aiAssistantGreetingMessage, 1000),
@@ -243,6 +295,8 @@ function normalizeAiAssistantConfig(tenant: {
 
 function summarizeAiAssistantConfig(config: ReturnType<typeof normalizeAiAssistantConfig>) {
   return {
+    aiAssistantEnabled: config.aiAssistantEnabled,
+    aiAssistantFallbackToHandoff: config.aiAssistantFallbackToHandoff,
     hasBusinessContext: Boolean(config.aiBusinessContext),
     hasSystemPrompt: Boolean(config.aiAssistantSystemPrompt),
     hasGreetingMessage: Boolean(config.aiAssistantGreetingMessage),
@@ -279,6 +333,7 @@ function summarizeAiIntentQualification(config: ReturnType<typeof normalizeAiInt
 
 function mergeConfig(
   current: unknown,
+  baseConfig: ReturnType<typeof normalizeBaseConfig>,
   crmBusinessStatuses: unknown,
   manualHandoffTemplate: string | null,
   followUp: ReturnType<typeof normalizeFollowUp>,
@@ -293,6 +348,7 @@ function mergeConfig(
     current && typeof current === "object" && !Array.isArray(current)
       ? { ...(current as Record<string, unknown>) }
       : {};
+  base.baseConfig = baseConfig;
   base.crmBusinessStatuses = crmBusinessStatuses;
   if (manualHandoffTemplate) {
     const currentTemplates =
@@ -314,6 +370,29 @@ function mergeConfig(
   return base as Prisma.InputJsonValue;
 }
 
+const MANAGED_CONFIG_FIELDS = [
+  "baseConfig",
+  "crmBusinessStatuses",
+  "templates",
+  "followUp",
+  "handoffLeadNotification",
+  "mediaHandoffPolicy",
+  "planLimits",
+  "automationFlags",
+  "aiAssistantConfig",
+  "aiIntentQualification",
+] as const;
+
+function changedManagedFields(current: unknown, next: unknown) {
+  const currentRecord = current && typeof current === "object" && !Array.isArray(current)
+    ? current as Record<string, unknown>
+    : {};
+  const nextRecord = next && typeof next === "object" && !Array.isArray(next)
+    ? next as Record<string, unknown>
+    : {};
+  return MANAGED_CONFIG_FIELDS.filter((field) => !isDeepStrictEqual(currentRecord[field], nextRecord[field]));
+}
+
 async function main() {
   loadEnv();
   const options = parseArgs(process.argv.slice(2));
@@ -321,20 +400,27 @@ async function main() {
   const startedAt = Date.now();
   const items: BackfillItem[] = [];
   try {
-    const tenants = await getTenants();
+    const tenants = await readAuthenticatedTenantJsonSource({
+      source: options.source,
+      expectedSha256: options.expectedSourceSha256,
+    });
     const entries = Object.entries(tenants).filter(([tenantKey]) => {
       return options.tenant ? tenantKey === options.tenant : true;
     });
+    const clients = await prisma.client.findMany({
+      where: { clientKey: { in: entries.map(([tenantKey]) => tenantKey) } },
+      select: { id: true, clientKey: true, operationalConfig: { select: { config: true } } },
+    });
+    const clientsByKey = new Map(clients.map((client) => [client.clientKey, client]));
+    const missingClients = entries
+      .map(([tenantKey]) => tenantKey)
+      .filter((tenantKey) => !clientsByKey.has(tenantKey));
+    if (missingClients.length > 0) {
+      throw new Error(`source_tenant_missing_client:${missingClients.sort().join(",")}`);
+    }
     for (const [tenantKey, tenant] of entries) {
-      const client = await prisma.client.findUnique({
-        where: { clientKey: tenantKey },
-        select: {
-          id: true,
-          operationalConfig: {
-            select: { config: true },
-          },
-        },
-      });
+      const client = clientsByKey.get(tenantKey)!;
+      const baseConfig = normalizeBaseConfig(tenant);
       const statuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
       const manualHandoffTemplate = normalizeManualHandoffTemplate(tenant.templates?.manualHandoff);
       const followUp = normalizeFollowUp(tenant);
@@ -349,6 +435,7 @@ async function main() {
           tenantKey,
           clientId: null,
           action: "skipped_missing_client",
+          fieldsChanged: [],
           statusCount: statuses.length,
           manualHandoffTemplate,
           followUp,
@@ -358,13 +445,28 @@ async function main() {
           automationFlags,
           aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
           aiIntentQualification: summarizeAiIntentQualification(aiIntentQualification),
+          baseConfig: summarizeBaseConfig(baseConfig),
         });
         continue;
       }
-      items.push({
+      const previewConfig = mergeConfig(
+        client.operationalConfig?.config,
+        baseConfig,
+        statuses,
+        manualHandoffTemplate,
+        followUp,
+        handoffLeadNotification,
+        mediaHandoffPolicy,
+        planLimits,
+        automationFlags,
+        aiAssistantConfig,
+        aiIntentQualification
+      );
+      const item: BackfillItem = {
         tenantKey,
         clientId: client.id,
         action: options.dryRun ? "would_upsert" : "upserted",
+        fieldsChanged: changedManagedFields(client.operationalConfig?.config, previewConfig),
         statusCount: statuses.length,
         manualHandoffTemplate,
         followUp,
@@ -374,12 +476,18 @@ async function main() {
         automationFlags,
         aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
         aiIntentQualification: summarizeAiIntentQualification(aiIntentQualification),
-      });
-      if (options.dryRun) continue;
+        baseConfig: summarizeBaseConfig(baseConfig),
+      };
+      if (item.fieldsChanged.length === 0) item.action = "unchanged";
+      if (options.dryRun) {
+        items.push(item);
+        continue;
+      }
       await withLockedTenantOperationalConfig(prisma, client.id, async (tx) => {
         const current = await tx.tenantOperationalConfig.findUnique({ where: { clientId: client.id }, select: { config: true } });
         const nextConfig = mergeConfig(
           current?.config,
+          baseConfig,
           statuses,
           manualHandoffTemplate,
           followUp,
@@ -390,6 +498,11 @@ async function main() {
           aiAssistantConfig,
           aiIntentQualification
         );
+        item.fieldsChanged = changedManagedFields(current?.config, nextConfig);
+        if (isDeepStrictEqual(current?.config ?? {}, nextConfig)) {
+          item.action = "unchanged";
+          return;
+        }
         await tx.tenantOperationalConfig.upsert({
           where: { clientId: client.id },
           update: {
@@ -403,16 +516,25 @@ async function main() {
           },
         });
       });
+      items.push(item);
     }
+    const deltaCounts = Object.fromEntries(MANAGED_CONFIG_FIELDS.map((field) => [
+      field,
+      items.filter((item) => item.fieldsChanged.includes(field)).length,
+    ]));
     const report = {
       ok: true,
       dryRun: options.dryRun,
+      source: options.source,
+      sourceSha256: options.expectedSourceSha256,
       tenant: options.tenant ?? null,
       durationMs: Date.now() - startedAt,
       processed: items.length,
       upserted: items.filter((item) => item.action === "upserted").length,
       wouldUpsert: items.filter((item) => item.action === "would_upsert").length,
+      unchanged: items.filter((item) => item.action === "unchanged").length,
       skippedMissingClient: items.filter((item) => item.action === "skipped_missing_client").length,
+      deltaCounts,
       items,
     };
     if (options.json) {

@@ -88,20 +88,11 @@ import {
   resolveTemplateKey,
 } from "./templateCommand.js";
 import {
-  getDefaultTenant,
-  getTenantByClientKeyOrPhoneNumberId,
   isAiAssistantConfigured,
   normalizeTenantMediaHandoffPolicy,
+  type TenantConfig,
 } from "../config/tenantConfig.js";
 import {
-  applyAiAssistantConfigToTenant,
-  applyAiIntentQualificationToTenant,
-  resolveAiAssistantConfigSettings,
-  resolveAiIntentQualificationSettings,
-  resolveAutomationFlagsSettings,
-  resolveHandoffLeadNotificationSettings,
-  resolveMediaHandoffPolicy,
-  resolvePlanLimitsSettings,
   resolveWhatsappMediaPolicy,
   isWhatsappMediaAllowed,
   isWhatsappMediaKind,
@@ -115,6 +106,7 @@ import {
   shouldRetryWithFallback,
 } from "../services/outboundTemplateService.js";
 import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
+import { resolveWhatsappMetaTenantRuntimeConfig } from "./tenantMetaRuntimeConfig.js";
 import {
   buildMetaUsageEventPayload,
   recordMetaUsageLedgerEvent,
@@ -453,13 +445,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
 
-      let appliedTenantConfig = await getDefaultTenant();
+      let appliedTenantConfig: Partial<TenantConfig> = {};
       let hasResolvedTenantConfig = false;
-      let tenantAllowlist = (appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST)
+      let tenantConfigReadinessReasons: string[] = [];
+      let tenantReactiveAutomationEnabled = false;
+      let tenantReactiveOutboundEnabled = false;
+      let tenantAllowlist = (env.WHATSAPP_ALLOWLIST ?? [])
         .map((value: string) => normalizeWaId(value))
         .filter(Boolean);
       let tenantDefaultLanguage =
-        appliedTenantConfig?.defaultLanguage ||
         env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
         "pt_BR";
 
@@ -692,6 +686,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     guard?: { version: number; lastInboundAt?: string },
     messageId?: string
   ) => {
+    if (!tenantReactiveOutboundEnabled) return false;
     if (!guard) return true;
     const current = conversationVersionByWaId.get(waId);
     const matchesVersion = current?.version === guard.version;
@@ -1067,52 +1062,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         select: { status: true },
       }))?.status ?? null;
     logger.updateContext({ clientKey: tenantClientKey });
-    const resolvedTenantConfig = await getTenantByClientKeyOrPhoneNumberId(
-      tenantClientKey,
-      phoneNumberId
-    );
-    appliedTenantConfig = resolvedTenantConfig.tenant;
-    hasResolvedTenantConfig = resolvedTenantConfig.hasTenantConfig;
-    const resolvedAiAssistantConfig = await resolveAiAssistantConfigSettings({
+    const runtimeConfig = await resolveWhatsappMetaTenantRuntimeConfig({
       prisma,
       clientId: tenantClientId,
-      tenant: appliedTenantConfig,
+      clientKey: tenantClientKey,
+      phoneNumberId: phoneNumberId ?? "",
     });
-    appliedTenantConfig = applyAiAssistantConfigToTenant(
-      appliedTenantConfig,
-      resolvedAiAssistantConfig.settings
-    );
-    const resolvedAiIntentQualification = await resolveAiIntentQualificationSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    });
-    appliedTenantConfig = applyAiIntentQualificationToTenant(
-      appliedTenantConfig,
-      resolvedAiIntentQualification.settings
-    );
-    const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    });
-    handoffLeadNotificationSettings = resolvedHandoffLeadNotification.settings;
-    const resolvedMediaHandoffPolicy = await resolveMediaHandoffPolicy({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    });
-    mediaHandoffPolicy = resolvedMediaHandoffPolicy.policy;
-    planLimitsSettings = (await resolvePlanLimitsSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    })).settings;
-    automationFlags = (await resolveAutomationFlagsSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    })).settings;
+    appliedTenantConfig = runtimeConfig.tenant;
+    hasResolvedTenantConfig = runtimeConfig.readiness.ready;
+    tenantConfigReadinessReasons = runtimeConfig.readiness.reasons;
+    tenantReactiveAutomationEnabled = runtimeConfig.channel.enabled &&
+      runtimeConfig.channel.runtimeEnabled && runtimeConfig.channel.automationEnabled;
+    tenantReactiveOutboundEnabled = runtimeConfig.channel.enabled &&
+      runtimeConfig.channel.runtimeEnabled && runtimeConfig.channel.outboundEnabled;
+    appliedTenantConfig.aiAssistantEnabled = appliedTenantConfig.aiAssistantEnabled === true &&
+      runtimeConfig.channel.aiEnabled;
+    handoffLeadNotificationSettings = runtimeConfig.handoffLeadNotification;
+    mediaHandoffPolicy = runtimeConfig.mediaHandoffPolicy;
+    planLimitsSettings = runtimeConfig.planLimits;
+    automationFlags = runtimeConfig.automationFlags;
     tenantAllowlist = (
       appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST
     )
@@ -1431,7 +1399,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     inboundText: string | null | undefined,
   ) => {
     if (!tenantClientId) return null;
-    if (!hasResolvedTenantConfig) return null;
+    if (!hasResolvedTenantConfig || !tenantReactiveAutomationEnabled) return null;
     if (isChatbotDisabledForTenant()) return null;
     if (
       state.flow === "quote_site" ||
@@ -2770,7 +2738,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }) => {
     if (!params.receivedMedia) return params.nextState;
     if (params.replyAlreadyPlanned) return params.nextState;
-    if (!params.allowlistHit || !env.outboundEnabled || !hasResolvedTenantConfig) {
+    if (!params.allowlistHit || !env.outboundEnabled || !hasResolvedTenantConfig || !tenantReactiveOutboundEnabled) {
       return params.nextState;
     }
     if (!tenantClientId) return params.nextState;
@@ -5783,7 +5751,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         }
       : handoffResult.handled
         ? { state: updatedConversation, handled: false as const, replyText: undefined }
-        : automationFlags.disableLegacyFlows || !hasResolvedTenantConfig
+        : automationFlags.disableLegacyFlows || !hasResolvedTenantConfig || !tenantReactiveAutomationEnabled
           ? { state: updatedConversation, handled: false as const, replyText: undefined }
         : await runFlowExecutor({
             tenantId: appliedTenantConfig?.id ?? "default",
@@ -5963,7 +5931,22 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       logger.info({
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
-        reason: "tenant_config_missing",
+        reason: "tenant_db_config_incomplete",
+        readinessReasons: tenantConfigReadinessReasons,
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
+    if (!tenantReactiveAutomationEnabled || !tenantReactiveOutboundEnabled) {
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: !tenantReactiveAutomationEnabled
+          ? "tenant_reactive_automation_disabled"
+          : "tenant_reactive_outbound_disabled",
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,
@@ -6393,7 +6376,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let skipDemoReplies = false;
     let hasDemoSignal = false;
 
-    if (message.text && !automationFlags.disableLegacyFlows && hasResolvedTenantConfig) {
+    if (message.text && !automationFlags.disableLegacyFlows && hasResolvedTenantConfig && tenantReactiveAutomationEnabled) {
       const midDemoFlowResult = await runMidDemoFlowExecutor({
         tenantId: appliedTenantConfig?.id ?? "default",
         clientKey: tenantClientKey,
@@ -6502,7 +6485,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled && message.text && updatedConversation.leadRequestedAt
         ? parseLeadFields(message.text)
         : {};
-    const postDemoFlowResult = automationFlags.disableLegacyFlows || !hasResolvedTenantConfig
+    const postDemoFlowResult = automationFlags.disableLegacyFlows || !hasResolvedTenantConfig || !tenantReactiveAutomationEnabled
       ? { handled: false as const }
       : await runPostDemoFlowExecutor({
           tenantId: appliedTenantConfig?.id ?? "default",
@@ -6675,7 +6658,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const noAutomationReplyConfigured =
-      hasResolvedTenantConfig &&
+      hasResolvedTenantConfig && tenantReactiveAutomationEnabled &&
       !env.WHATSAPP_ECHO_ENABLED &&
       !demoReplyText &&
       !leadReplyText &&
@@ -8031,8 +8014,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               brain: agentBrain,
               text: message.text,
               tenant: {
-                name: appliedTenantConfig.name,
-                defaultLanguage: appliedTenantConfig.defaultLanguage,
+                name: appliedTenantConfig.name ?? tenantClientKey,
+                defaultLanguage: appliedTenantConfig.defaultLanguage ?? tenantDefaultLanguage,
                 aiBusinessContext,
                 aiAssistantSystemPrompt: appliedTenantConfig.aiAssistantSystemPrompt,
                 aiAssistantAllowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,

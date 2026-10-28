@@ -10,7 +10,7 @@ export type TenantResolution = {
 export class TenantResolutionError extends Error {
   constructor(
     message: string,
-    public readonly code: "missing_phone_number_id" | "unmapped_phone_number_id",
+    public readonly code: "missing_phone_number_id" | "unmapped_phone_number_id" | "ambiguous_phone_number_id",
     public readonly phoneNumberId?: string
   ) {
     super(message);
@@ -64,6 +64,37 @@ export async function resolveTenant(
     return {
       clientId: phone.client.id,
       clientKey: phone.client.clientKey,
+      phoneNumberId,
+    };
+  }
+
+  const metaConfigs = await prisma.tenantMetaConfig.findMany({
+    where: { phoneNumberId },
+    include: { client: true },
+    take: 2,
+  });
+  if (metaConfigs.length > 1) {
+    throw new TenantResolutionError(
+      "phone_number_id mapped to multiple tenant Meta configs",
+      "ambiguous_phone_number_id",
+      phoneNumberId
+    );
+  }
+  const metaConfig = metaConfigs[0];
+  if (metaConfig?.client) {
+    logger.info({
+      event: "tenant.resolve.success",
+      source: "tenant_meta_config",
+      phoneNumberId,
+      clientId: metaConfig.client.id,
+      clientKey: metaConfig.client.clientKey,
+      requestId: meta?.requestId,
+      route: meta?.route,
+      method: meta?.method,
+    });
+    return {
+      clientId: metaConfig.client.id,
+      clientKey: metaConfig.client.clientKey,
       phoneNumberId,
     };
   }

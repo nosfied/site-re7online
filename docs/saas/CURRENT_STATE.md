@@ -8,6 +8,16 @@ no [registro de fechamento b96](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND
 Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
 
+## Correção P00 de configuração WhatsApp Meta — pendente de merge/deploy
+
+O incidente observado após troca de release não foi falha de resolução do tenant:
+PostgreSQL resolveu e persistiu o inbound, mas o gate reativo ainda dependia da
+presença de `<api-runtime>/.data/tenants.json`. A correção em desenvolvimento move
+base, toggles e readiness do WhatsApp Meta para autoridade DB-first tenant-scoped.
+O plano de backfill permanece futuro e separado; este registro não autoriza acesso
+à produção. Contrato detalhado em
+[WhatsApp Meta tenant runtime DB-first](WHATSAPP_META_TENANT_RUNTIME.md).
+
 ## Implantação vigente — 28/10/2026
 
 Fonte: relatório do Codex local encaminhado pelo owner, com hashes das evidências

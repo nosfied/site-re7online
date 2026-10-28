@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,9 +32,9 @@ function runScript(cwd: string, script: string, args: string[]) {
   let output = "";
   child.stdout.on("data", data => { output += data; });
   child.stderr.on("data", data => { output += data; });
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     child.once("error", reject);
-    child.once("exit", code => code === 0 ? resolve() : reject(new Error(`synthetic script ${script} failed (${code}): ${output}`)));
+    child.once("exit", code => code === 0 ? resolve(output) : reject(new Error(`synthetic script ${script} failed (${code}): ${output}`)));
   });
 }
 async function waitForBlockedProcess() {
@@ -72,7 +73,12 @@ for (const item of cases) {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-scripts-"));
     temporaryDirectories.push(cwd);
     await mkdir(path.join(cwd, ".data"));
-    await writeFile(path.join(cwd, ".data/tenants.json"), JSON.stringify({ [item.key]: { id: item.key, name: "Synthetic", metaPhoneNumberId: "synthetic", allowlist: [], handoffAttendantWaid: "", defaultLanguage: "pt_BR" } }));
+    const tenantsPath = path.join(cwd, ".data/tenants.json");
+    const tenantsBytes = JSON.stringify({ [item.key]: { id: item.key, name: "Synthetic", metaPhoneNumberId: "synthetic", allowlist: [], handoffAttendantWaid: "", defaultLanguage: "pt_BR" } });
+    await writeFile(tenantsPath, tenantsBytes, { mode: 0o600 });
+    const sourceArgs = item.script === "backfill-tenant-operational-config.ts"
+      ? ["--source", tenantsPath, "--expected-source-sha256", crypto.createHash("sha256").update(tenantsBytes).digest("hex")]
+      : [];
     const entered = deferred(), release = deferred();
     const held = prisma.$transaction(tx => withLockedTenantOperationalConfig(tx, client.id, async locked => {
       await locked.tenantOperationalConfig.update({ where: { clientId: client.id }, data: { config: { [flag]: false, independent: { values: [null, false, "kept"] } } } });
@@ -80,7 +86,7 @@ for (const item of cases) {
       await release.promise;
     }), { timeout: 15000 });
     await entered.promise;
-    const script = runScript(cwd, item.script, item.apply);
+    const script = runScript(cwd, item.script, [...item.apply, ...sourceArgs]);
     // Attach a rejection handler immediately; finally still propagates its error.
     script.catch(() => undefined);
     try { await waitForBlockedProcess(); } finally { release.resolve(); await held; await script; }
@@ -89,7 +95,17 @@ for (const item of cases) {
     assert.equal(config[flag], false);
     assert.deepEqual(config.independent, { values: [null, false, "kept"] });
     const beforeCounts = await counts(client.id);
-    await runScript(cwd, item.script, item.dry);
+    if (item.script === "backfill-tenant-operational-config.ts") {
+      const repeatedOutput = await runScript(cwd, item.script, [...item.apply, ...sourceArgs]);
+      const report = JSON.parse(repeatedOutput);
+      assert.equal(report.source, tenantsPath);
+      assert.equal(report.sourceSha256, crypto.createHash("sha256").update(tenantsBytes).digest("hex"));
+      assert.equal(report.unchanged, 1);
+      assert(report.items[0].fieldsChanged.length === 0);
+      assert(Object.values(report.deltaCounts).every((count) => count === 0));
+      assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), after);
+    }
+    await runScript(cwd, item.script, [...item.dry, ...sourceArgs]);
     assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), after);
     assert.deepEqual(await counts(client.id), beforeCounts);
   });
@@ -108,4 +124,32 @@ test("create-only provisioning preserves config; concurrent empty upsert may rej
   await prisma.tenantOperationalConfig.upsert({ where: { clientId: client.id }, create: { clientId: client.id, config: {} }, update: {} });
   assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), before);
   assert.equal(await prisma.tenantOperationalConfig.count({ where: { clientId: client.id } }), 1);
+});
+
+test("backfill denies a source tenant without Client before any write", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-missing-client-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const tenantKey = `missing-client-${Date.now()}`;
+  const bytes = JSON.stringify({
+    [tenantKey]: {
+      id: tenantKey,
+      name: "Synthetic missing client",
+      metaPhoneNumberId: "missing",
+      allowlist: [],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+    },
+  });
+  await writeFile(source, bytes, { mode: 0o600 });
+  const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+  await assert.rejects(
+    runScript(cwd, "backfill-tenant-operational-config.ts", [
+      "--source", source,
+      "--expected-source-sha256", sha256,
+      "--json",
+    ]),
+    /source_tenant_missing_client/
+  );
+  assert.equal(await prisma.client.count({ where: { clientKey: tenantKey } }), 0);
 });
