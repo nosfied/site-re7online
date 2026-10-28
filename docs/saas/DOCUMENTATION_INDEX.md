@@ -1,13 +1,17 @@
 # Índice documental vigente
 
 > [!IMPORTANT]
-> Comece pelo [estado canônico](CURRENT_STATE.md). A única instrução operacional
-> executável de deploy é o [runbook canônico](DEPLOY_RUNBOOK.md). O
-> [modelo de releases imutáveis](DEPLOYMENT_OPERATING_MODEL.md) define arquitetura
-> e princípios, sem substituir o runbook.
+> Comece pelos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md) e pelo
+> [estado canônico](CURRENT_STATE.md). A única instrução operacional executável de
+> deploy é o [runbook canônico](DEPLOY_RUNBOOK.md). O
+> [modelo de releases imutáveis](DEPLOYMENT_OPERATING_MODEL.md) aplica os princípios
+> à arquitetura, sem substituir o runbook.
 
 ## Estado ativo
 
+- [Princípios fundamentais de trabalho](WORKING_PRINCIPLES.md) — autoridade superior
+  para decisões: multitenancy, não retrabalho, código/estado verdade, auditoria,
+  documentação, preservação do que funciona e proteção da produção viva.
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
 - [Sequência consolidada e revisão documental de 26/10](PRODUCT_MAP_CURRENT_2026-10-19.md)
