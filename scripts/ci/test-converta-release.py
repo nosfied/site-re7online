@@ -746,7 +746,9 @@ class ReleaseProducerTest(unittest.TestCase):
     def test_p00_override_is_recorded_in_lifecycle_and_artifact_contract(self) -> None:
         from types import SimpleNamespace
         release_id = "immutable-p00-evidence"
-        output = self.outputs / "p00-evidence-output"
+        parent = self.outputs / "p00-evidence-parent"
+        parent.mkdir()
+        output = parent / "p00-evidence-output"
         capacity = capacity_contract(
             self.base / "p00-evidence-capacity.private.json", self.base, self.target, release_id
         )
@@ -780,7 +782,7 @@ class ReleaseProducerTest(unittest.TestCase):
             self.assertEqual(evidence[0]["class"], "EVIDENCE_PRESERVE")
             self.assertEqual(evidence[0]["digest"], {"sha256": override_sha})
         finally:
-            shutil.rmtree(output, ignore_errors=True)
+            shutil.rmtree(parent, ignore_errors=True)
 
     def test_failed_generation_is_closed_as_failed(self) -> None:
         release_id = "immutable-failed-generation"
