@@ -2,16 +2,16 @@
   "schemaVersion": 7,
   "updatedAtUtc": "2026-10-28T02:36:19.721Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
-  "activeOperationalRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
+  "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json",
+  "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_SANITIZED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-708f018c-vps-20261027T152109Z",
-    "releasePath": "/opt/re7online/releases/immutable-708f018c-vps-20261027T152109Z",
-    "targetCommit": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
+    "releaseId": "immutable-b96eb779-vps-20261028T025159Z",
+    "releasePath": "/opt/re7online/releases/immutable-b96eb779-vps-20261028T025159Z",
+    "targetCommit": "b96eb779f4ce091a79cf67e97bcd25be255e1af3",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
@@ -24,14 +24,14 @@
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "LYTSr9y2MqeYwOpsBD6dy",
+      "buildId": "jRFzvE9WaHEtDCwGbV-EH",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 745530,
-      "lastReportedStartTicks": 28397556,
-      "selectedTargetCommit": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
-      "selectedReleaseId": "immutable-708f018c-vps-20261027T152109Z",
-      "restartCount": 9
+      "lastReportedPid": 873615,
+      "lastReportedStartTicks": 33441329,
+      "selectedTargetCommit": "b96eb779f4ce091a79cf67e97bcd25be255e1af3",
+      "selectedReleaseId": "immutable-b96eb779-vps-20261028T025159Z",
+      "restartCount": 12
     },
     "worker": {
       "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
@@ -57,15 +57,15 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "fc86b239cdb40f3337873c60aa5ebc869c9b14421f3e320bbf6e37bd8254bd5e",
+      "dumpSha256": "67c31a1fbd95178a27be2fb248ab3c039352f3ae16c612a780096b6294d2285f",
       "dumpSha256Scope": "CURRENT_FIXED_CURRENT_TOPOLOGY",
-      "currentDumpSha256": "fc86b239cdb40f3337873c60aa5ebc869c9b14421f3e320bbf6e37bd8254bd5e",
+      "currentDumpSha256": "67c31a1fbd95178a27be2fb248ab3c039352f3ae16c612a780096b6294d2285f",
       "rollbackSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
       "savedExactlyOnce": true,
-      "previousDumpSha256": "5aa289dd3b610382af34df64555ac9b9effb7793e07573b73e0057824e3b1095",
+      "previousDumpSha256": "fc86b239cdb40f3337873c60aa5ebc869c9b14421f3e320bbf6e37bd8254bd5e",
       "saveCount": 1,
       "instancesRepresentation": {
         "apiFrontend": "LIVE_ONE_EQUALS_DUMP_OMITTED_ONLY_FOR_AUTHENTICATED_PM2_6_0_14_FORK_MODE_SINGLETON",
@@ -73,22 +73,21 @@
       },
       "representationLookup": "TOP_LEVEL_THEN_PM2_ENV_CANONICAL_AND_ALIASES_WITHOUT_UNPROVEN_DEFAULTS"
     },
-    "markerSha256": "f56d25dfbe1e6e5319e30ef0184cc3f7cc83a6396dad72e82963ec7d3c23038f",
+    "markerSha256": "8b11c06a10407d0157c055d32ffb91df9e283154b8a23f346212683bdc4daf92",
     "markerSha256Scope": "CURRENT_FIXED_CURRENT_RELEASE",
-    "currentMarkerSha256": "f56d25dfbe1e6e5319e30ef0184cc3f7cc83a6396dad72e82963ec7d3c23038f",
+    "currentMarkerSha256": "8b11c06a10407d0157c055d32ffb91df9e283154b8a23f346212683bdc4daf92",
     "lastFinalization": {
-      "component": "api_frontend",
+      "component": "frontend",
       "journalState": "DEPLOYED_SANITIZED",
       "lockReleased": true,
       "pm2SaveCount": 1,
-      "receiptSha256": "afd22a53d0c790d799590fbf676e2a32d5b3b4649afa3f76376c94fc786ba0bf",
-      "journalSha256": "e3cab222351f1b73f20e8124c81ee93ef7bc5ea890ae67bc48403c5ea7d9069d",
-      "dumpValidationSha256": "4bd494a2da86c1d596f16e8cf1378477745f4a9e48baf63a67e2219238fe9256",
-      "retirementReceiptSha256": "e839ee8bd051db5cc92bcd15c65b4b791a023b95bfbf5166d4c91d8a686c96dd",
-      "retirementJournalSha256": "68faff9672cbf1102b1dc22e6c6b77fa30ca389292192b72a431f87d5d119f7b",
-      "retirementReviewSha256": "42ecdc22360b701157f36599e84af7e532bfb7a9970d4e6eafe667fac8461d73"
+      "receiptSha256": "44ef85e0607fd779f65b7611fb1ab2b5621129000ab0ea565b097e4a034321ee",
+      "journalSha256": "6392fc63f21074964c57dcc9140a1ac7ba47b46f43f987568bc40f99bc33b42a",
+      "dumpValidationSha256": "6336e61b807a24e19126bc465615af8211ba55ce9cb7d20c2995a7d7a400ff12",
+      "retirementReceiptSha256": "ce071492975ff08fcb1930364d22e94bcb45695ccb21ee5d545e87153f2ad1cf",
+      "retirementReviewSha256": "4f860b3a49ccfdafbfecfb04b1e2263ac8e7096037be81b8cfd5c8e8cdf6f356"
     },
-    "controlPlaneCommit": "bd83b8b537ed8363ddbdceaeb31447972e6e315a",
+    "controlPlaneCommit": "34a2878ae74443a42b026100166c18c13ca83eb7",
     "readiness": {
       "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
       "requiredStableSamples": 3,
@@ -302,11 +301,11 @@
         "retry": false,
         "buildDeployRestartOrSaveExecuted": false
       },
-      "nextAcceptance": "DEPLOY_AND_ACCEPT_PENDING_ONLY_AUDIENCE_SUMMARY_FIX_THEN_MULTIBATCH_THEN_CLIENT_SPECIFIC",
+      "nextAcceptance": "MULTIBATCH_THEN_CLIENT_SPECIFIC_WHEN_PLANNED_NO_MEDIA_OR_SCHEDULE_REPEAT_REQUIRED",
       "uiAcceptance": {
         "source": "OWNER_MANUAL_PRODUCTION_INTERFACE_REPORT",
-        "reportedDate": "2026-10-27",
-        "releaseId": "immutable-708f018c-vps-20261027T152109Z",
+        "reportedDate": "2026-10-28",
+        "releaseId": "immutable-b96eb779-vps-20261028T025159Z",
         "state": "PASS",
         "layoutAligned": true,
         "previewReplacesPrimaryGuidance": true,
@@ -357,7 +356,7 @@
           "completedAudienceSource": "messagesMetaStatus_rendered_only_in_real_message_status",
           "gap": "UI_708F_DID_NOT_SHOW_SCHEDULED_AUDIENCE",
           "dataLoss": false,
-          "candidateState": "REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE",
+          "candidateState": "DEPLOYED_VISUALLY_ACCEPTED_B96",
           "campaignAudienceSummaryStates": [
             "draft",
             "scheduled"
@@ -381,9 +380,9 @@
         }
       }
     },
-    "topology": "UNIFIED_API_FRONTEND_FIXED_CURRENT_WORKER_PRESERVED",
+    "topology": "SPLIT_API_708F_FRONTEND_B96_WORKER_PRESERVED",
     "frontendRollback": {
-      "releaseId": "immutable-f1602787-vps-20261026T174702Z",
+      "releaseId": "immutable-708f018c-vps-20261027T152109Z",
       "authenticated": true
     }
   },
@@ -553,7 +552,7 @@
     "latestCampaignHomologationState": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN",
     "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md",
     "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK",
-    "frontendPresentationDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
+    "frontendPresentationDeploymentRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json",
     "frontendPresentationState": "DEPLOYED_VISUAL_ACCEPTANCE_PASS",
     "draftSelectionReconciliation": {
       "state": "DEPLOYED_ACCEPTED",
@@ -592,14 +591,14 @@
       "deploymentTarget": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
       "manualAcceptanceDate": "2026-10-27"
     },
-    "acceptanceBoundary": "IMAGE_VIDEO_DRAFT_RECONCILIATION_TERMINAL_PRESENTATION_AND_SCHEDULE_EXECUTION_PASS; PENDING_ONLY_AUDIENCE_UI_FIX_PENDING_DEPLOY_ACCEPTANCE; MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE",
+    "acceptanceBoundary": "IMAGE_VIDEO_DRAFT_RECONCILIATION_TERMINAL_PRESENTATION_SCHEDULE_EXECUTION_AND_AUDIENCE_UI_PASS; MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE",
     "scheduledAudiencePresentation": {
-      "state": "REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE",
+      "state": "DEPLOYED_VISUALLY_ACCEPTED_B96",
       "scheduledSource": "draftReview.recipients",
       "completedSource": "messagesMetaStatus_in_real_message_status_only",
       "recipientCountAudited": 2,
       "dataIntegrity": "PASS",
-      "uiPresentation": "PENDING_ONLY_FIX_PROPOSED_NOT_DEPLOYED",
+      "uiPresentation": "DRAFT_SCHEDULED_SUMMARY_AND_COMPLETED_REAL_MESSAGE_STATUS_ACCEPTED",
       "evidenceManifestSha256": "0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8",
       "summaryStates": [
         "draft",
@@ -623,7 +622,7 @@
   },
   "artifactGenerationLifecycle": {
     "schemaVersion": 1,
-    "state": "MANDATORY_GENERATION_RETIREMENT_708F_DEPLOYED_SANITIZED_NO_CURRENT_DEBT",
+    "state": "MANDATORY_GENERATION_RETIREMENT_B96_DEPLOYED_SANITIZED_CAPACITY_BELOW_BUILD_FLOOR",
     "minimumFreeBytesBeforeBuild": 12884901888,
     "retentionDebtBlocksBuild": true,
     "currentRetentionDebtPresent": false,
@@ -753,6 +752,23 @@
       "productionChangedByRetirement": false,
       "locksFreeAfterCompletion": true
     },
+    "latestB96": {
+      "state": "DEPLOYED_SANITIZED",
+      "releaseId": "immutable-b96eb779-vps-20261028T025159Z",
+      "target": "b96eb779f4ce091a79cf67e97bcd25be255e1af3",
+      "commandsCompleted": 3,
+      "commandsAttempted": 3,
+      "remainingDerivedArtifacts": 0,
+      "automaticRetry": false,
+      "receiptSha256": "ce071492975ff08fcb1930364d22e94bcb45695ccb21ee5d545e87153f2ad1cf",
+      "reviewSha256": "4f860b3a49ccfdafbfecfb04b1e2263ac8e7096037be81b8cfd5c8e8cdf6f356",
+      "finalFreeBytes": 12402286592,
+      "minimumBuildFreeBytes": 12884901888,
+      "buildBlockedByCapacity": true,
+      "noBuildAuditsAndAcceptanceAllowed": true,
+      "productionChangedByRetirement": false,
+      "locksFreeAfterCompletion": true
+    },
     "preflightCompleteness": {
       "exactConsumerModesRequired": true,
       "checkoutModeNotExecutionAuthority": true,
@@ -761,6 +777,6 @@
       "nominalPredicateRequired": true
     }
   },
-  "updatedAtDate": "2026-10-27",
-  "updatedAtUtcScope": "OWNER_RELAYED_708F_DEPLOYED_SANITIZED_PROCESS_CONTRACT_AND_CAMPAIGN_UI_ACCEPTANCE"
+  "updatedAtDate": "2026-10-28",
+  "updatedAtUtcScope": "OWNER_RELAYED_B96_DEPLOYED_SANITIZED_VISUAL_ACCEPTANCE_AND_CAPACITY"
 }

@@ -99,6 +99,14 @@ journal `68faff9672cbf1102b1dc22e6c6b77fa30ca389292192b72a431f87d5d119f7b`
 e review `42ecdc22360b701157f36599e84af7e532bfb7a9970d4e6eafe667fac8461d73`
 fecharam a geração com 13.813.510.144 bytes livres. Não repetir essa retirada.
 
+O fechamento frontend-only `immutable-b96eb779-vps-20261028T025159Z` concluiu
+`DEPLOYED_SANITIZED`, um save e retirada 3/3, sem Meta, restart adicional ou mudança
+da guarda. A capacidade final foi 12.402.286.592 bytes (aprox. 11,55 GiB), abaixo
+do piso de build de 12 GiB (12.884.901.888 bytes): novo build fica bloqueado, mas
+auditorias e homologações sem build continuam permitidas. O fechamento por
+transferência de lock usa somente `scripts/frontend-finalization-continuation.py`;
+wrappers inline/improvisados não são evidência operacional válida.
+
 `immutable-123ba7bd-vps-20261026T200100Z` é a única geração conhecida anterior
 ao contrato: `LEGACY_PRE_CONTRACT`, não uma review v1 `PRESERVE`. Seu bootstrap
 aceita exclusivamente o descriptor versionado

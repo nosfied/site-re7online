@@ -1,10 +1,10 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API + FRONTEND 708F DEPLOYED_SANITIZED EM 27/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
+**Status: CANÔNICO / API 708F + FRONTEND B96 DEPLOYED_SANITIZED EM 28/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
 
 Este documento define a arquitetura e os princípios vigentes. Os comandos executáveis
 estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
-[registro 708f implantado e sanitizado](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
+[registro b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json).
 Preparações e executores anteriores são evidência e não autorizam repetição.
 
 ## Topologia canônica
@@ -43,6 +43,9 @@ geração.
 O mesmo limite vale ao frontend-only: o executor versionado possui `activate` e
 `finalize`; após o único save e o marker, ele executa a retenção uma vez e retoma por
 receipt autenticado, sem segundo save, restart ou retirada repetida.
+Quando uma transferência encerra o holder anterior, a única entrada permitida para
+continuar a finalização é `scripts/frontend-finalization-continuation.py`, com pedido
+privado autenticado. Wrappers inline ou improvisados são proibidos.
 
 O encerramento é determinístico e limitado ao contrato daquela geração. Ele não
 refaz inventário global nem comparação entre todas as releases. Package,
@@ -221,30 +224,29 @@ Os itens abaixo são históricos e **não utilizáveis**:
   socket com amostra única logo após `pm2 start`;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
 
-## Release produtiva relatada em 26/10/2026
+## Release produtiva relatada em 28/10/2026
 
 A produção usa uma topologia deliberadamente dividida por componente:
 
-- API: target `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, release
-  `immutable-a959129e-vps-20261026T023100Z`;
-- frontend: target `f16027874e91c86e5f818d0888e6d735b07a6eda`, release
-  `immutable-f1602787-vps-20261026T174702Z`, BUILD_ID
-  `HYTuoIlZopPMaTrcg6uiv`;
+- API: target `708f018cb853a06fd6f0f1d5d920b8b35d8fb06a`, release
+  `immutable-708f018c-vps-20261027T152109Z`;
+- frontend: target `b96eb779f4ce091a79cf67e97bcd25be255e1af3`, release
+  `immutable-b96eb779-vps-20261028T025159Z`, BUILD_ID
+  `jRFzvE9WaHEtDCwGbV-EH`;
 - worker: processo anterior preservado, sem restart.
 
 O registro operacional ativo do frontend é
-[`CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json`](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json).
+[`CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json).
 O registro que continua autenticando a API e a implantação técnica de mídia é
-[`CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json`](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
+[`FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json`](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
 Não se deve forçar um único release ID sobre componentes que foram promovidos em
 janelas diferentes.
 
-O frontend f160 foi promovido pelo executor frontend-only release-bound, com readiness
-de três amostras estáveis, um único restart e um único `pm2 save` após o aceite. O
-dump final é
-`5aa289dd3b610382af34df64555ac9b9effb7793e07573b73e0057824e3b1095`;
-marker, journal e recibo finais foram publicados, e o lock foi liberado pelo protocolo
-privado. A omissão de `instances` no dump tem duas regras distintas: API/frontend
+O frontend b96 foi aceito técnica e visualmente e encerrou em
+`DEPLOYED_SANITIZED`, com um único `pm2 save`, retenção 3/3 e lock liberado pelo
+protocolo privado. O dump final é
+`67c31a1fbd95178a27be2fb248ab3c039352f3ae16c612a780096b6294d2285f`.
+A omissão de `instances` no dump tem duas regras distintas: API/frontend
 vivos com `instances=1` equivalem à omissão somente no PM2 6.0.14 autenticado,
 `fork_mode` singleton e com os demais campos idênticos; worker ausente/nulo nos
 dois lados é comparado sem normalização.
@@ -255,8 +257,8 @@ truthiness: a chave existente no topo do registro prevalece, inclusive quando va
 está ausente no topo. A regra vale igualmente para API, frontend e worker, não amplia
 o conjunto fechado de variáveis e mantém qualquer divergência real como `DENY`.
 
-A guarda de campanhas permanece aberta na geração 41, sem tarefas ou fault. IMAGE e
-VIDEO passaram em campanhas controladas; agendamento, multilote e aceites específicos
+A guarda de campanhas permanece aberta na geração 41, sem tarefas ou fault. IMAGE,
+VIDEO e agendamento passaram; não há repetição pendente. Multilote e aceites específicos
 permanecem frentes separadas. Fonte: relatório do Codex local encaminhado pelo owner;
 não é inspeção viva feita pelo editor documental.
 

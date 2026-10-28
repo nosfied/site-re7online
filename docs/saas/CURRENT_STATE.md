@@ -4,35 +4,33 @@
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
-no [registro estruturado 708f](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
+no [registro de fechamento b96](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json).
 Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
 
-## Implantação API + frontend vigente — 27/10/2026
+## Implantação vigente — 28/10/2026
 
 Fonte: relatório do Codex local encaminhado pelo owner, com hashes das evidências
 privadas; o editor documental não realizou nova inspeção independente da VPS.
 
-API e frontend estão na release
-`immutable-708f018c-vps-20261027T152109Z`, target
-`708f018cb853a06fd6f0f1d5d920b8b35d8fb06a`, BUILD_ID
-`LYTSr9y2MqeYwOpsBD6dy`. API: PID/ticks `745424/28396867`, restart 7;
-frontend: `745530/28397556`, restart 9. Worker preservado:
+API permanece na release `immutable-708f018c-vps-20261027T152109Z`; frontend está
+na `immutable-b96eb779-vps-20261028T025159Z`, target
+`b96eb779f4ce091a79cf67e97bcd25be255e1af3`, BUILD_ID
+`jRFzvE9WaHEtDCwGbV-EH`. API: PID/ticks `745424/28396867`, restart 7;
+frontend: `873615/33441329`, restart 12. Worker preservado:
 `2233/17758`, restart 0, release `immutable-e2e7f17a-20261022T005110Z`.
 Health local/público: HTTP 200, `ok=true`, `db=ok`. Guarda aberta na geração
 41, tarefas zero e sem fault.
 
-O único `pm2 save` produziu dump
-`fc86b239cdb40f3337873c60aa5ebc869c9b14421f3e320bbf6e37bd8254bd5e`.
-A reconciliação sem segundo save publicou marker
-`f56d25dfbe1e6e5319e30ef0184cc3f7cc83a6396dad72e82963ec7d3c23038f`.
-A retirada autônoma posterior concluiu `DEPLOYED_SANITIZED`: 3/3 comandos,
-sem retry, removendo apenas worktree e runtimes derivados do output. Recibo
-`e839ee8bd051db5cc92bcd15c65b4b791a023b95bfbf5166d4c91d8a686c96dd`,
-journal `68faff9672cbf1102b1dc22e6c6b77fa30ca389292192b72a431f87d5d119f7b`
-e review `42ecdc22360b701157f36599e84af7e532bfb7a9970d4e6eafe667fac8461d73`.
-A release instalada, pacote, marker e dump foram preservados; locks ficaram livres.
-Espaço final observado: 13.813.510.144 bytes.
+O fechamento b96 terminou `DEPLOYED_SANITIZED`, com aceite técnico/visual integral,
+um `pm2 save` e retenção 3/3. Dump
+`67c31a1fbd95178a27be2fb248ab3c039352f3ae16c612a780096b6294d2285f`,
+marker `8b11c06a10407d0157c055d32ffb91df9e283154b8a23f346212683bdc4daf92`,
+journal `6392fc63f21074964c57dcc9140a1ac7ba47b46f43f987568bc40f99bc33b42a`,
+recibo `44ef85e0607fd779f65b7611fb1ab2b5621129000ab0ea565b097e4a034321ee`
+e recibo de retenção
+`ce071492975ff08fcb1930364d22e94bcb45695ccb21ee5d545e87153f2ad1cf`.
+Não houve chamada Meta, restart adicional na finalização ou alteração da guarda.
 
 ## Aceite visual de Campanhas/Rascunho — 27/10/2026
 
@@ -44,11 +42,8 @@ retornado, sem reutilizar visualmente a campanha anterior. As apresentações
 “Descartada” e “Cancelada” respeitaram o lifecycle persistido e o alerta de resultado
 incerto ficou separado. Nenhum envio ou agendamento integrou este aceite.
 
-Estado: **CAMPAIGN_DRAFT_AND_TERMINAL_PRESENTATION_ACCEPTED**. A correção está
-implantada na 708f e deixa de bloquear a homologação de agendamento. Não repetir
-build, deploy, save, IMAGE ou VIDEO para reproduzir essa prova. Próximo ato: definir
-template, destinatário controlado e horário futuro antes de autorizar um único
-agendamento.
+Estado: **CAMPAIGN_DRAFT_AND_TERMINAL_PRESENTATION_ACCEPTED**. A correção permanece
+aceita e não exige repetição de build, deploy, save, IMAGE ou VIDEO.
 
 ## Homologação de agendamento estático — 27/10/2026
 
@@ -74,7 +69,9 @@ processadas possuem a fonte “Situação real por mensagem”. A correção rev
 o resumo somente em rascunho/agendada; depois do processamento, permanece apenas a
 situação real por mensagem. Nome/modelo/datas continuam no topo, o texto explicativo
 da fila do tenant foi removido e status cru em inglês permanece proibido. Estado:
-**REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**.
+**DEPLOYED_VISUALLY_ACCEPTED_B96**. Rascunhos e agendadas exibem o resumo; concluídas
+mantêm somente “Situação real por mensagem”. A prova de agendamento não precisa ser
+repetida.
 
 Evidências privadas: 24 arquivos; índice SHA-256
 `0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8`.
@@ -89,8 +86,8 @@ com os argumentos exatos, promoção API→frontend, aceite, um save e retirada 
 mesma geração. O preflight agora exige modos privados corretos, pai do receipt
 físico `0700` e evidência integral; o dump PM2 6.0.14 aceita suas representações
 autenticadas no topo ou em `pm2_env`. Não repetir a ativação, o save nem a retirada
-708f. Releases `a959` e `f160` permanecem referências históricas de retorno, não
-estado ativo.
+b96. A release 708f permanece dependência de API e retorno do frontend; `a959` e
+`f160` são referências históricas, não estado ativo.
 
 ## Homologação manual posterior — 26/10/2026
 
@@ -107,10 +104,9 @@ este estado posterior; o novo hash do ledger não foi fornecido.
 
 Índice privado da janela:
 `d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f`.
-Estado: **SEND_ACCEPTED_GUARD_CLOSED**. O aceite cobre esse envio de vídeo, não
-IMAGE, agendamento, multilote ou uso amplo. Próximo ato: **homologação IMAGE, após reabertura geral executada pelo Codex local**, conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md). Guarda aberta na geração 41 para uso normal; não repetir CAS de abertura, vídeo,
-build/deploy/save. A abertura e sua evidência estão registradas abaixo.
-Homologação IMAGE e demais cenários mantêm seu escopo próprio.
+Estado histórico: **SEND_ACCEPTED_GUARD_CLOSED**. IMAGE e agendamento foram validados
+posteriormente; nenhum desses testes precisa ser repetido. A guarda está aberta na
+geração 41 para uso normal, sem repetir CAS, vídeo, build, deploy ou save.
 
 ## Templates de Utilidade — leitura local
 
@@ -133,9 +129,11 @@ continua `NOT_PROVEN`.
 
 ## Capacidade e retenção
 
-A geração 708f está encerrada em `DEPLOYED_SANITIZED`, sem dívida atual: os três
-derivados foram retirados imediatamente após o deploy e a medição final registrou
-13.813.510.144 bytes livres. Novo build continua proibido abaixo de 12 GiB, diante
+A geração b96 está encerrada em `DEPLOYED_SANITIZED`, sem dívida atual: a retenção
+concluiu 3/3. A medição final registrou 12.402.286.592 bytes (aprox. 11,55 GiB),
+abaixo do piso de 12 GiB (12.884.901.888 bytes). Novo build permanece bloqueado;
+auditorias e homologações que não constroem artefatos continuam permitidas. Também
+há bloqueio diante
 de review não terminal ou quando criaria uma segunda candidata. Retenção incompleta
 não pode permanecer como tarefa informal: bloqueia a próxima geração até reconciliação.
 
@@ -261,7 +259,6 @@ Recibo/disponibilidade SHA-256:
 Fonte documental: relatório operacional, sem nova inspeção independente pelo editor.
 Estado **GENERAL_OPERATIONS_OPEN**; manter aberta para uso normal, sem repetir
 abertura ou fechar por fim de homologação. Proteções canônicas permanecem ativas.
-Próximo teste de mídia: IMAGE, com escopo e destinatário definidos antes do envio.
 
 ## Homologação IMAGE concluída — 26/10/2026
 

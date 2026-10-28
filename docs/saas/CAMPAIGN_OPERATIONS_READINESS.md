@@ -356,9 +356,8 @@ viva do editor. Nenhum build/deploy/restart/save/envio de teste ou retomada hist
 A pendência de execução da seção anterior está encerrada. Estado vigente:
 **GENERAL_OPERATIONS_OPEN**. Não repetir CAS; não fechar ao fim de um teste normal.
 Mantêm-se as proteções automáticas diante de resultado incerto e a ausência de
-permissão para replay de aceitação. Próxima homologação: IMAGE em escopo controlado,
-com template aprovado, arquivo coerente, destinatário e quantidade definidos.
-Não repetir VIDEO; agendamento/multilote e aceites específicos seguem separados.
+permissão para replay de aceitação. IMAGE, VIDEO e agendamento foram posteriormente
+homologados e não devem ser repetidos; multilote e aceites específicos seguem separados.
 
 ## Homologação IMAGE concluída — dois destinatários
 
@@ -505,11 +504,10 @@ Contrato obrigatório da correção:
 
 O primeiro candidato foi ativado em `AWAITING_ACCEPTANCE` e passou nos itens de
 identidade, texto removido e localização, mas o owner rejeitou a duplicação do resumo
-em campanhas processadas. Ele não deve ser finalizado. Estado:
-**REVISED_CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**. A execução agendada está
-homologada; somente o resumo de audiência enquanto pendente depende de novo deploy e
-aceite visual. Não repetir a campanha para comprovar os mesmos dados. Depois desse
-aceite, seguir para multilote e homologações específicas de clientes.
+em campanhas processadas; esse candidato foi revertido e retirado. A correção final
+foi aceita na release `immutable-b96eb779-vps-20261028T025159Z`, estado
+**DEPLOYED_SANITIZED**. A execução agendada e a apresentação estão homologadas e não
+devem ser repetidas; multilote e homologações específicas permanecem escopos futuros.
 
 Evidências privadas: 24 arquivos, índice SHA-256
 `0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8`.
