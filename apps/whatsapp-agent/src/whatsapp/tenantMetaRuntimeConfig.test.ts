@@ -129,9 +129,63 @@ test("incomplete DB config is nominally denied while channel flags remain indepe
   });
 
   assert.equal(result.readiness.ready, false);
-  assert.deepEqual(result.readiness.reasons.sort(), ["tenant_ai_config_missing", "tenant_base_config_missing"]);
+  assert.deepEqual(result.readiness.reasons, ["tenant_base_config_missing"]);
   assert.equal(result.channel.automationEnabled, false);
   assert.equal(result.channel.outboundEnabled, false);
   assert.equal(result.channel.aiEnabled, false);
   assert.equal(result.channel.inboundPersistenceEnabled, true);
+});
+
+test("aiEnabled=false does not require aiAssistantConfig or block the DB runtime", async () => {
+  const result = await resolveWhatsappMetaTenantRuntimeConfig({
+    prisma: runtimePrisma({
+      clientId: "tenant-no-ai",
+      clientKey: "cra",
+      phoneNumberId: "phone-cra",
+      config: {
+        baseConfig: {
+          allowlist: [],
+          handoffAttendantWaid: "",
+          defaultLanguage: "pt_BR",
+          disableAutoReply: false,
+        },
+      },
+      channel: { aiEnabled: false, automationEnabled: true, handoffEnabled: true },
+    }),
+    clientId: "tenant-no-ai",
+    clientKey: "cra",
+    phoneNumberId: "phone-cra",
+  });
+
+  assert.equal(result.readiness.ready, true);
+  assert.deepEqual(result.readiness.reasons, []);
+  assert.equal(result.channel.aiEnabled, false);
+  assert.equal(result.channel.automationEnabled, true);
+  assert.equal(result.channel.handoffEnabled, true);
+});
+
+test("aiEnabled=true denies an incomplete aiAssistantConfig", async () => {
+  const result = await resolveWhatsappMetaTenantRuntimeConfig({
+    prisma: runtimePrisma({
+      clientId: "tenant-invalid-ai",
+      clientKey: "tendencia",
+      phoneNumberId: "phone-invalid-ai",
+      config: {
+        baseConfig: {
+          allowlist: [],
+          handoffAttendantWaid: "",
+          defaultLanguage: "pt_BR",
+          disableAutoReply: false,
+        },
+        aiAssistantConfig: { aiAssistantEnabled: true },
+      },
+      channel: { aiEnabled: true },
+    }),
+    clientId: "tenant-invalid-ai",
+    clientKey: "tendencia",
+    phoneNumberId: "phone-invalid-ai",
+  });
+
+  assert.equal(result.readiness.ready, false);
+  assert.deepEqual(result.readiness.reasons, ["tenant_ai_config_missing"]);
 });

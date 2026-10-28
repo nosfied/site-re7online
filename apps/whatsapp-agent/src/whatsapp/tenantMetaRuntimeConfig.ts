@@ -79,7 +79,9 @@ export async function resolveWhatsappMetaTenantRuntimeConfig(params: {
     reasons.push("phone_mapping_mismatch");
   }
   if (base.source !== "db") reasons.push("tenant_base_config_missing");
-  if (ai.source !== "db") reasons.push("tenant_ai_config_missing");
+  if (channelAccount?.aiEnabled === true && (ai.source !== "db" || !ai.runtimeReady)) {
+    reasons.push("tenant_ai_config_missing");
+  }
   if (!channelAccount) reasons.push("channel_account_missing");
 
   const tenantBase: Partial<TenantConfig> = {

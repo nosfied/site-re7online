@@ -34,8 +34,48 @@ test("tenants.json retirement checks the complete active WhatsApp Meta DB contra
   assert.match(retirementCheck, /baseConfig/);
   assert.match(retirementCheck, /aiAssistantEnabled/);
   assert.match(retirementCheck, /aiAssistantFallbackToHandoff/);
+  assert.match(retirementCheck, /if \(aiEnabled && ai &&/);
   assert.match(retirementCheck, /account\.channel === "whatsapp" && account\.provider === "meta"/);
   assert.match(retirementCheck, /!tenant\.waPhoneNumber && !tenant\.tenantMetaConfig/);
   assert.match(retirementCheck, /runtime_critical/);
   assert.doesNotMatch(webhook, /loadTenantsJsonFallback|getTenants\(/);
+});
+
+test("all reactive Meta text and template paths share the complete tenant outbound gate", () => {
+  assert.match(
+    webhook,
+    /const isTenantReactiveOutboundReady = \(\) =>\s*hasResolvedTenantConfig &&\s*tenantMetaChannelEnabled &&\s*tenantMetaRuntimeEnabled &&\s*tenantMetaAutomationEnabled &&\s*tenantMetaOutboundEnabled;/
+  );
+  const fallback = webhook.slice(
+    webhook.indexOf("const attemptTemplateFallback"),
+    webhook.indexOf("const shouldSendOutbound")
+  );
+  const passive = webhook.slice(
+    webhook.indexOf("const sendPassiveOutboundText"),
+    webhook.indexOf("const sendReactiveTemplateMessage")
+  );
+  const reactiveTemplate = webhook.slice(
+    webhook.indexOf("const sendReactiveTemplateMessage"),
+    webhook.indexOf("const typedPayload")
+  );
+  assert.match(fallback, /if \(!isTenantReactiveOutboundReady\(\)\)/);
+  assert.match(passive, /if \(!isTenantReactiveOutboundReady\(\)\)/);
+  assert.match(reactiveTemplate, /if \(!isTenantReactiveOutboundReady\(\)\)/);
+  assert.equal((webhook.match(/sendTemplateMessage\(/g) ?? []).length, 2);
+  assert.match(webhook, /const sendOutboundText[\s\S]*?if \(!shouldSendOutbound[\s\S]*?checkUsageGate/);
+});
+
+test("Meta inbound persistence and automatic handoff toggles stay independently scoped", () => {
+  assert.match(webhook, /if \(!tenantMetaInboundPersistenceEnabled\)[\s\S]*?tenant_inbound_persistence_disabled/);
+  assert.match(webhook, /const isSupervisedAiHandoffEnabled = \(\) =>\s*tenantAutomaticHandoffEnabled/);
+  assert.match(webhook, /handoff\.automatic\.skipped/);
+  assert.match(webhook, /if \(currentHandoffStatus === "active"\)/);
+});
+
+test("Tendencia, Justa and CRA remain isolated by tenant and transport modality", () => {
+  assert.match(webhook, /resolveWhatsappMetaTenantRuntimeConfig\(\{/);
+  assert.match(webhook, /resolveEffectiveWhatsappOutboundTransport\(\{/);
+  assert.doesNotMatch(webhook, /getDefaultTenant|getTenantByClientKeyOrPhoneNumberId/);
+  const webSession = readFileSync(new URL("../web-session/webSessionInbound.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(webSession, /resolveWhatsappMetaTenantRuntimeConfig|isTenantReactiveOutboundReady/);
 });

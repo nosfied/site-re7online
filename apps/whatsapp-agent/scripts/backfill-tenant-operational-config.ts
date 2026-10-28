@@ -393,6 +393,66 @@ function changedManagedFields(current: unknown, next: unknown) {
   return MANAGED_CONFIG_FIELDS.filter((field) => !isDeepStrictEqual(currentRecord[field], nextRecord[field]));
 }
 
+function normalizedManagedValues(tenant: Record<string, unknown>) {
+  return {
+    baseConfig: normalizeBaseConfig(tenant),
+    statuses: normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses),
+    manualHandoffTemplate: normalizeManualHandoffTemplate(
+      (tenant.templates as { manualHandoff?: unknown } | undefined)?.manualHandoff
+    ),
+    followUp: normalizeFollowUp(tenant),
+    handoffLeadNotification: normalizeHandoffLeadNotification(tenant),
+    mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy),
+    planLimits: normalizePlanLimits(tenant),
+    automationFlags: normalizeAutomationFlags(tenant),
+    aiAssistantConfig: normalizeAiAssistantConfig(tenant),
+    aiIntentQualification: normalizeAiIntentQualification(tenant),
+  };
+}
+
+function mergedManagedConfig(current: unknown, values: ReturnType<typeof normalizedManagedValues>) {
+  return mergeConfig(
+    current,
+    values.baseConfig,
+    values.statuses,
+    values.manualHandoffTemplate,
+    values.followUp,
+    values.handoffLeadNotification,
+    values.mediaHandoffPolicy,
+    values.planLimits,
+    values.automationFlags,
+    values.aiAssistantConfig,
+    values.aiIntentQualification
+  );
+}
+
+function backfillItem(params: {
+  tenantKey: string;
+  clientId: string;
+  current: unknown;
+  next: unknown;
+  values: ReturnType<typeof normalizedManagedValues>;
+  dryRun: boolean;
+}): BackfillItem {
+  const fieldsChanged = changedManagedFields(params.current, params.next);
+  return {
+    tenantKey: params.tenantKey,
+    clientId: params.clientId,
+    action: fieldsChanged.length === 0 ? "unchanged" : params.dryRun ? "would_upsert" : "upserted",
+    fieldsChanged,
+    statusCount: params.values.statuses.length,
+    manualHandoffTemplate: params.values.manualHandoffTemplate,
+    followUp: params.values.followUp,
+    handoffLeadNotification: params.values.handoffLeadNotification,
+    mediaHandoffPolicy: params.values.mediaHandoffPolicy,
+    planLimits: params.values.planLimits,
+    automationFlags: params.values.automationFlags,
+    aiAssistantConfig: summarizeAiAssistantConfig(params.values.aiAssistantConfig),
+    aiIntentQualification: summarizeAiIntentQualification(params.values.aiIntentQualification),
+    baseConfig: summarizeBaseConfig(params.values.baseConfig),
+  };
+}
+
 async function main() {
   loadEnv();
   const options = parseArgs(process.argv.slice(2));
@@ -407,8 +467,9 @@ async function main() {
     const entries = Object.entries(tenants).filter(([tenantKey]) => {
       return options.tenant ? tenantKey === options.tenant : true;
     });
+    const clientKeys = entries.map(([tenantKey]) => tenantKey);
     const clients = await prisma.client.findMany({
-      where: { clientKey: { in: entries.map(([tenantKey]) => tenantKey) } },
+      where: { clientKey: { in: clientKeys } },
       select: { id: true, clientKey: true, operationalConfig: { select: { config: true } } },
     });
     const clientsByKey = new Map(clients.map((client) => [client.clientKey, client]));
@@ -418,105 +479,100 @@ async function main() {
     if (missingClients.length > 0) {
       throw new Error(`source_tenant_missing_client:${missingClients.sort().join(",")}`);
     }
-    for (const [tenantKey, tenant] of entries) {
+    const clientIds = clients.map((client) => client.id);
+    const [channelAccounts, phoneNumbers, metaConfigs] = await Promise.all([
+      prisma.channelAccount.findMany({
+        where: { clientId: { in: clientIds }, channel: "whatsapp", provider: "meta" },
+        select: {
+          clientId: true,
+          channelAccountId: true,
+          aliases: { select: { alias: true } },
+        },
+      }),
+      prisma.waPhoneNumber.findMany({
+        where: { clientId: { in: clientIds } },
+        select: { clientId: true, phoneNumberId: true },
+      }),
+      prisma.tenantMetaConfig.findMany({
+        where: { clientId: { in: clientIds } },
+        select: { clientId: true, phoneNumberId: true },
+      }),
+    ]);
+    const prepared = entries.map(([tenantKey, tenant]) => {
       const client = clientsByKey.get(tenantKey)!;
-      const baseConfig = normalizeBaseConfig(tenant);
-      const statuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
-      const manualHandoffTemplate = normalizeManualHandoffTemplate(tenant.templates?.manualHandoff);
-      const followUp = normalizeFollowUp(tenant);
-      const handoffLeadNotification = normalizeHandoffLeadNotification(tenant);
-      const mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy);
-      const planLimits = normalizePlanLimits(tenant);
-      const automationFlags = normalizeAutomationFlags(tenant);
-      const aiAssistantConfig = normalizeAiAssistantConfig(tenant);
-      const aiIntentQualification = normalizeAiIntentQualification(tenant);
-      if (!client) {
-        items.push({
-          tenantKey,
-          clientId: null,
-          action: "skipped_missing_client",
-          fieldsChanged: [],
-          statusCount: statuses.length,
-          manualHandoffTemplate,
-          followUp,
-          handoffLeadNotification,
-          mediaHandoffPolicy,
-          planLimits,
-          automationFlags,
-          aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
-          aiIntentQualification: summarizeAiIntentQualification(aiIntentQualification),
-          baseConfig: summarizeBaseConfig(baseConfig),
-        });
-        continue;
+      const sourcePhoneNumberId = typeof tenant.metaPhoneNumberId === "string"
+        ? tenant.metaPhoneNumberId.trim()
+        : "";
+      const mappedPhoneIds = new Set([
+        ...phoneNumbers.filter((phone) => phone.clientId === client.id).map((phone) => phone.phoneNumberId),
+        ...metaConfigs.filter((config) => config.clientId === client.id).map((config) => config.phoneNumberId).filter(Boolean),
+      ]);
+      if (!sourcePhoneNumberId || !mappedPhoneIds.has(sourcePhoneNumberId)) {
+        throw new Error(`source_tenant_missing_phone_mapping:${tenantKey}`);
       }
-      const previewConfig = mergeConfig(
-        client.operationalConfig?.config,
-        baseConfig,
-        statuses,
-        manualHandoffTemplate,
-        followUp,
-        handoffLeadNotification,
-        mediaHandoffPolicy,
-        planLimits,
-        automationFlags,
-        aiAssistantConfig,
-        aiIntentQualification
+      const hasChannelAccount = channelAccounts.some((account) =>
+        account.clientId === client.id &&
+        (account.channelAccountId === sourcePhoneNumberId || account.aliases.some((alias) => alias.alias === sourcePhoneNumberId))
       );
-      const item: BackfillItem = {
-        tenantKey,
-        clientId: client.id,
-        action: options.dryRun ? "would_upsert" : "upserted",
-        fieldsChanged: changedManagedFields(client.operationalConfig?.config, previewConfig),
-        statusCount: statuses.length,
-        manualHandoffTemplate,
-        followUp,
-        handoffLeadNotification,
-        mediaHandoffPolicy,
-        planLimits,
-        automationFlags,
-        aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
-        aiIntentQualification: summarizeAiIntentQualification(aiIntentQualification),
-        baseConfig: summarizeBaseConfig(baseConfig),
-      };
-      if (item.fieldsChanged.length === 0) item.action = "unchanged";
-      if (options.dryRun) {
-        items.push(item);
-        continue;
+      if (!hasChannelAccount) {
+        throw new Error(`source_tenant_missing_channel_account:${tenantKey}`);
       }
-      await withLockedTenantOperationalConfig(prisma, client.id, async (tx) => {
-        const current = await tx.tenantOperationalConfig.findUnique({ where: { clientId: client.id }, select: { config: true } });
-        const nextConfig = mergeConfig(
-          current?.config,
-          baseConfig,
-          statuses,
-          manualHandoffTemplate,
-          followUp,
-          handoffLeadNotification,
-          mediaHandoffPolicy,
-          planLimits,
-          automationFlags,
-          aiAssistantConfig,
-          aiIntentQualification
-        );
-        item.fieldsChanged = changedManagedFields(current?.config, nextConfig);
-        if (isDeepStrictEqual(current?.config ?? {}, nextConfig)) {
-          item.action = "unchanged";
-          return;
+      const values = normalizedManagedValues(tenant as Record<string, unknown>);
+      const next = mergedManagedConfig(client.operationalConfig?.config, values);
+      return { tenantKey, client, values, next };
+    }).sort((left, right) => left.client.id.localeCompare(right.client.id));
+
+    for (const entry of prepared) {
+      items.push(backfillItem({
+        tenantKey: entry.tenantKey,
+        clientId: entry.client.id,
+        current: entry.client.operationalConfig?.config,
+        next: entry.next,
+        values: entry.values,
+        dryRun: options.dryRun,
+      }));
+    }
+
+    if (!options.dryRun) {
+      await prisma.$transaction(async (tx) => {
+        const lockedConfigs = new Map<string, unknown>();
+        for (const entry of prepared) {
+          const lockedClient = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT id FROM "Client"
+            WHERE id = ${entry.client.id}::uuid
+            FOR UPDATE
+          `);
+          if (lockedClient.length !== 1) {
+            throw new Error(`source_tenant_client_changed:${entry.tenantKey}`);
+          }
         }
-        await tx.tenantOperationalConfig.upsert({
-          where: { clientId: client.id },
-          update: {
-            config: nextConfig,
-            schemaVersion: 1,
-          },
-          create: {
-            clientId: client.id,
-            config: nextConfig,
-            schemaVersion: 1,
-          },
-        });
+        for (const entry of prepared) {
+          const current = await withLockedTenantOperationalConfig(tx, entry.client.id, async (lockedTx) => {
+            const current = await lockedTx.tenantOperationalConfig.findUnique({
+              where: { clientId: entry.client.id },
+              select: { config: true },
+            });
+            return current?.config ?? {};
+          }, { createIfMissing: false, onMissing: () => ({}) });
+          lockedConfigs.set(entry.client.id, current);
+        }
+        for (const entry of prepared) {
+          const current = lockedConfigs.get(entry.client.id) ?? {};
+          const next = mergedManagedConfig(current, entry.values);
+          const item = items.find((candidate) => candidate.clientId === entry.client.id)!;
+          item.fieldsChanged = changedManagedFields(current, next);
+          if (isDeepStrictEqual(current, next)) {
+            item.action = "unchanged";
+            continue;
+          }
+          item.action = "upserted";
+          await tx.tenantOperationalConfig.upsert({
+            where: { clientId: entry.client.id },
+            update: { config: next, schemaVersion: 1 },
+            create: { clientId: entry.client.id, config: next, schemaVersion: 1 },
+          });
+        }
       });
-      items.push(item);
     }
     const deltaCounts = Object.fromEntries(MANAGED_CONFIG_FIELDS.map((field) => [
       field,

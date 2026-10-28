@@ -241,7 +241,7 @@ function inspectOperationalConfig(config: unknown, aiEnabled: boolean) {
   }
   const ai = isRecord(config.aiAssistantConfig) ? config.aiAssistantConfig : null;
   if (aiEnabled && !ai) reasons.push("ai_config_missing");
-  if (ai && (typeof ai.aiAssistantEnabled !== "boolean" || typeof ai.aiAssistantFallbackToHandoff !== "boolean")) {
+  if (aiEnabled && ai && (typeof ai.aiAssistantEnabled !== "boolean" || typeof ai.aiAssistantFallbackToHandoff !== "boolean")) {
     reasons.push("ai_toggles_invalid");
   }
   return { ready: reasons.length === 0, reasons };

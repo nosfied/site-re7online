@@ -259,6 +259,7 @@ export type AiAssistantConfigSettings = {
 export type ResolvedAiAssistantConfigSettings = {
   settings: AiAssistantConfigSettings;
   source: TenantOperationalConfigSource;
+  runtimeReady: boolean;
 };
 
 export type AiIntentQualificationSettings = {
@@ -2167,16 +2168,27 @@ export async function resolveAiAssistantConfigSettings(params: {
     where: { clientId: params.clientId },
     select: { config: true },
   });
+  const rawConfig = isRecord(record?.config) ? record.config : null;
+  const rawAiConfig = rawConfig && isRecord(rawConfig.aiAssistantConfig)
+    ? rawConfig.aiAssistantConfig
+    : null;
+  const runtimeReady = Boolean(
+    rawAiConfig &&
+    typeof rawAiConfig.aiAssistantEnabled === "boolean" &&
+    typeof rawAiConfig.aiAssistantFallbackToHandoff === "boolean"
+  );
   const dbConfig = parseOperationalConfig(record?.config);
   if (dbConfig.aiAssistantConfig) {
     return {
       settings: dbConfig.aiAssistantConfig,
       source: "db",
+      runtimeReady,
     };
   }
   return {
     settings: normalizeAiAssistantConfigSettingsFromTenant(params.tenant),
     source: "json_fallback",
+    runtimeReady: false,
   };
 }
 
