@@ -98,7 +98,9 @@ Current shape:
 
 Fields currently supported:
 
-- identity: `id`, `tenantKey`, `channel`, `provider`, `channelAccountId`
+- operational account reference: `id`, `tenantKey`, `channel`, `provider`,
+  `channelAccountId`. For WhatsApp Meta this is not the authority that resolves
+  the tenant's phone identity;
 - aliases: `externalAccountIds`, `externalBusinessId`, `metadata`
 - flags: `enabled`, `automationEnabled`, `runtimeEnabled`, `inboundPersistenceEnabled`, `outboundEnabled`, `aiEnabled`, `handoffEnabled`
 - status: `status`, `tokenStatus`
@@ -152,8 +154,9 @@ Normalization currently:
 
 WhatsApp:
 
-- primary runtime resolution is already DB-first through `WaPhoneNumber.phoneNumberId`;
-- credentials are DB-first through `TenantMetaConfig.businessToken` with env fallbacks;
+- runtime phone identity is DB-first exclusively through
+  `WaPhoneNumber.phoneNumberId`;
+- Meta credentials are DB-first through `TenantMetaConfig`;
 - `channelAccounts` can contain WhatsApp-like entries for demos/staging, but current production webhook resolution does not rely on this block the way Messenger/Instagram do.
 
 Messenger:
@@ -249,7 +252,9 @@ model ChannelAccountAlias {
 
 Rationale:
 
-- `ChannelAccount` keeps non-secret operational identity and flags.
+- `ChannelAccount` keeps the operational account reference and gates. For
+  WhatsApp Meta it is a prerequisite for operational authorization, not a
+  resolver of phone identity;
 - `ChannelAccountSecret` isolates secret material for encryption, redaction and rotation.
 - `ChannelAccountAlias` makes webhook resolution indexable and auditable.
 - JSON metadata remains acceptable for provider-specific IDs that are not used as high-volume lookup keys.
@@ -320,13 +325,16 @@ Collision policy:
 
 Current:
 
-- WhatsApp: DB-first through `WaPhoneNumber`, with JSON fallback for legacy/bootstrap.
+- WhatsApp: DB-first through `WaPhoneNumber` for phone identity and
+  `TenantMetaConfig` for credentials, without JSON fallback.
 - Messenger: JSON-first through `TenantConfig.channelAccounts`.
 - Instagram: JSON-first through `TenantConfig.channelAccounts`, including alias matching.
 
 Target:
 
-- WhatsApp remains on `WaPhoneNumber` / `TenantMetaConfig`; do not force WhatsApp into `ChannelAccount` until there is a separate reason.
+- WhatsApp remains on `WaPhoneNumber` / `TenantMetaConfig` for identity and
+  credentials. `ChannelAccount` is required separately for tenant-scoped
+  operational gates and never replaces those authorities.
 - Messenger resolves DB-first from `ChannelAccount` and `ChannelAccountAlias`, fallback JSON.
 - Instagram resolves DB-first from `ChannelAccount` and `ChannelAccountAlias`, fallback JSON.
 - Fallback must preserve exact current behavior until shadow comparison is clean.
@@ -444,7 +452,8 @@ Do not attempt another Messenger DB-first flip until the collected profile shows
 ### Phase 4: JSON Removal
 
 - Stop writing `channelAccounts` to `tenants.json`.
-- Keep a read-only JSON fallback for one emergency release if feasible.
+- Messenger/Instagram may retain a read-only JSON fallback only while their
+  documented shadow migration requires it. WhatsApp Meta has no JSON fallback.
 - Remove JSON token material only after backup/rollback window is complete.
 
 ## Backfill Design
@@ -514,7 +523,8 @@ Rollback must be possible without data loss.
 Immediate rollback:
 
 - set env/feature flag `CHANNEL_ACCOUNTS_DB_READ=false` or equivalent;
-- runtime returns to JSON-first;
+- Messenger/Instagram may return to their documented JSON-first resolver while
+  those migrations remain active; WhatsApp Meta does not;
 - keep DB rows untouched;
 - keep encrypted tokens untouched;
 - do not delete backfilled rows during incident response.
@@ -526,12 +536,14 @@ Per-channel rollback:
 
 Per-tenant rollback:
 
-- force tenant to JSON-first while investigating.
+- for Messenger/Instagram only, force the tenant to the documented JSON-first
+  resolver while investigating. This option does not exist for WhatsApp Meta.
 
 Problematic account rollback:
 
 - set DB account `enabled=false` or `status=error`;
-- JSON fallback can still be used if feature flag allows.
+- Messenger/Instagram JSON fallback can still be used if their feature flag
+  allows it; WhatsApp Meta remains DB-first.
 
 Validation after rollback:
 
@@ -550,7 +562,8 @@ Validation after rollback:
 - inbound webhook resolves tenant through `WaPhoneNumber`;
 - outbound text works for a known conversation;
 - approved template send works;
-- tenant resolution ignores channel account migration changes;
+- phone identity resolution remains authoritative in `WaPhoneNumber`, while
+  `ChannelAccount` gates may independently allow or deny operational behavior;
 - `channels:shadow:compare` remains `ok=true`.
 
 ### Messenger
@@ -593,7 +606,8 @@ Sprint 65B may create model/migration only if the following are ready:
 
 - approved Prisma model names and relations;
 - agreed token encryption key source;
-- explicit feature flags for JSON-first, shadow and DB-first;
+- explicit feature flags for Messenger/Instagram JSON-first, shadow and
+  DB-first; WhatsApp Meta remains DB-first without JSON fallback;
 - backfill design accepted;
 - shadow diff taxonomy accepted;
 - rollback runbook accepted;
