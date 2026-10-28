@@ -10,7 +10,8 @@
 ## Estado ativo
 
 - [Princípios fundamentais de trabalho](WORKING_PRINCIPLES.md) — autoridade superior
-  para decisões: multitenancy, não retrabalho, código/estado verdade, auditoria e documentação.
+  para decisões: multitenancy, não retrabalho, código/estado verdade, auditoria,
+  documentação, preservação do que funciona e proteção da produção viva.
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
 - [Sequência consolidada e revisão documental de 26/10](PRODUCT_MAP_CURRENT_2026-10-19.md)
