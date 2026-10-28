@@ -95,6 +95,12 @@
       "frontendResult": "READINESS_PASS",
       "activationMethod": "API_FRONTEND_FIXED_CURRENT_EXISTING_PM2_REGISTRATIONS"
     },
+    "fixedCurrentCapabilities": {
+      "acceptedComponentSets": ["api", "api,frontend"],
+      "payloadComponents": ["api", "frontend"],
+      "apiOnlyPreserves": ["frontend", "worker"],
+      "partialSelectionMarkerRecordsComponents": true
+    },
     "observation": {
       "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
       "reportedDate": "2026-10-27",

@@ -96,9 +96,10 @@ permanece válido no escopo registrado. Não repetir envio para obter a mesma pr
 
 ## Continuidade canônica
 
-A rota vigente é API+frontend `fixed-current`: um build autenticado, preflight
-com os argumentos exatos, promoção API→frontend, aceite, um save e retirada da
-mesma geração. O preflight agora exige modos privados corretos, pai do receipt
+A rota fixed-current versionada aceita `api` ou `api,frontend`: o pacote segue
+completo, mas impacto backend-only promove/reinicia somente API e prova frontend/worker
+preservados. O fluxo completo mantém promoção API→frontend, aceite, um save e retirada
+da mesma geração. O preflight exige modos privados corretos, pai do receipt
 físico `0700` e evidência integral; o dump PM2 6.0.14 aceita suas representações
 autenticadas no topo ou em `pm2_env`. Não repetir a ativação, o save nem a retirada
 b96. A release 708f permanece dependência de API e retorno do frontend; `a959` e

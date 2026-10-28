@@ -57,6 +57,10 @@ com os modos exigidos pelo consumidor e comprova que o pai físico do receipt ex
 como diretório `deploy:deploy 0700`, sem symlink, enquanto o receipt final não existe.
 Permissão do checkout não substitui permissão da cópia privada consumida.
 
+Uma seleção fixed-current parcial não reduz o payload: pacote, manifesto e índice
+continuam API+frontend. O marker lista os componentes promovidos; release não selecionada,
+frontend/worker vivos e seus symlinks permanecem dependências protegidas até nova janela.
+
 A execução da retirada preserva e sincroniza stdout, stderr e exit code integrais,
 além de seus hashes; somente o digest não é diagnóstico suficiente. Uma negativa
 nova só admite outra janela após regressão que reproduza o predicado nominal. Não se

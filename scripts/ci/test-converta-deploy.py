@@ -332,8 +332,126 @@ class DeployFixture(unittest.TestCase):
         self.driver.acceptance.write_text("ACEITE TÉCNICO PASS\n")
         self.driver.acceptance.chmod(0o600)
 
+    def api_only(self) -> FixtureDriver:
+        self.inputs = dataclasses.replace(self.inputs, components=("api",))
+        self.driver = self._driver()
+        return self.driver
+
 
 class DriverTests(DeployFixture):
+    def test_api_only_passes_and_preserves_frontend_and_worker(self) -> None:
+        driver = self.api_only()
+        frontend_before = driver._process_snapshot(
+            self.host.rows[deploy.PROCESS_NAMES["frontend"]], "frontend",
+            self.stable["frontend"].resolve())
+        worker_before = driver._worker(list(self.host.rows.values()))
+        frontend_target = os.readlink(self.stable["frontend"])
+        driver.preflight(); driver.activate()
+        mutations = [event for event in self.host.events if event.startswith("PM2:")]
+        self.assertEqual(mutations, ["PM2:restart re7-whatsapp-agent"])
+        self.assertEqual(os.readlink(self.stable["frontend"]), frontend_target)
+        journal = driver._journal_read()
+        self.assertEqual(journal["candidate"]["processes"]["frontend"], frontend_before)
+        self.assertEqual(journal["candidate"]["worker"], worker_before)
+        self.assertEqual(journal["state"], "AWAITING_ACCEPTANCE")
+        self.assertEqual(journal["saveCount"], 0)
+        self.assertFalse((driver.release_root / "DEPLOYED").exists())
+
+    def test_api_only_denies_frontend_pid_restart_symlink_or_listener_drift(self) -> None:
+        for drift in ("pid", "restart", "symlink", "listener"):
+            with self.subTest(drift=drift):
+                self.tearDown(); self.setUp()
+                driver = self.api_only(); driver.preflight()
+                frontend = self.host.rows[deploy.PROCESS_NAMES["frontend"]]
+                if drift == "pid":
+                    old_pid = frontend["pid"]
+                    frontend["pid"] = 98
+                    self.host.process_cwds[98] = self.host.process_cwds.pop(old_pid)
+                elif drift == "restart":
+                    frontend["pm2_env"]["restart_time"] += 1
+                elif drift == "symlink":
+                    self.stable["frontend"].unlink()
+                    os.symlink(self.releases / self.candidate / deploy.RUNTIME_DIR["frontend"],
+                               self.stable["frontend"])
+                else:
+                    self.host.wait_fail = "frontend"
+                with self.assertRaises(deploy.Denied):
+                    driver.activate()
+                self.assertFalse(any("re7-admin-front" in event
+                                     for event in self.host.events if event.startswith("PM2:")))
+                self.assertEqual(self.host.save_calls, 0)
+
+    def test_api_only_denies_worker_drift_without_restarting_preserved_processes(self) -> None:
+        driver = self.api_only(); driver.preflight()
+        self.host.rows[deploy.PROCESS_NAMES["worker"]]["pm2_env"]["restart_time"] += 1
+        with self.assertRaisesRegex(deploy.Denied, "pre_activation_worker_drift"):
+            driver.activate()
+        self.assertFalse(any(name in event for event in self.host.events
+                             for name in ("re7-admin-front", "re7-whatsapp-web-worker")))
+
+    def test_api_only_delayed_api_listener_passes_after_three_samples(self) -> None:
+        driver = self.api_only(); self.host.wait_samples = 7
+        driver.preflight(); driver.activate()
+        report = json.loads((self.transaction / "activate-api.report.private.json").read_text())
+        self.assertEqual(report["stableSamples"], 3)
+        self.assertEqual(report["sampleCount"], 7)
+
+    def test_api_only_readiness_failure_rolls_back_only_api(self) -> None:
+        driver = self.api_only(); self.host.wait_fail = "api"
+        driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "READINESS_TIMEOUT:api:3001"):
+            driver.activate()
+        mutations = [event for event in self.host.events if event.startswith("PM2:")]
+        self.assertEqual(mutations, ["PM2:restart re7-whatsapp-agent",
+                                     "PM2:restart re7-whatsapp-agent"])
+        self.assertFalse(any("re7-admin-front" in event for event in mutations))
+        self.assertEqual(driver._journal_read()["state"], "ROLLED_BACK")
+
+    def test_api_only_finalize_saves_once_validates_all_processes_and_retires(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        driver.finalize()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(journal["components"], ["api"])
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+        marker = deploy.read_json(driver.release_root / "DEPLOYED")
+        self.assertEqual(marker["components"], ["api"])
+
+    def test_api_only_finalize_resume_never_repeats_save_or_retirement(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        driver.failpoints.add("after_save")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_save"):
+            driver.finalize()
+        driver.finalize()
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_api_only_partial_retirement_is_terminal_without_retry(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        original = self.host.run
+
+        def fail_retirement(command: list[str], *, timeout: float = 40) -> subprocess.CompletedProcess[str]:
+            if len(command) > 3 and command[2] == "execute" and "--intent" in command:
+                self.host.retirement_calls += 1
+                return subprocess.CompletedProcess(command, 2, "partial\n", "RETENTION_DENY\n")
+            return original(command, timeout=timeout)
+
+        self.host.run = fail_retirement  # type: ignore[method-assign]
+        driver.finalize()
+        self.assertEqual(driver._journal_read()["state"], "DEPLOYED_RETENTION_INCOMPLETE")
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_only_exact_supported_component_sets_are_accepted(self) -> None:
+        for components in ((), ("frontend",), ("worker",), ("frontend", "api"),
+                           ("api", "worker"), ("api", "frontend", "worker")):
+            with self.subTest(components=components):
+                self.tearDown(); self.setUp()
+                self.inputs = dataclasses.replace(self.inputs, components=components)
+                with self.assertRaisesRegex(deploy.Denied, "components_must_be_api_or_api_frontend"):
+                    self._driver().preflight()
+
     def test_preflight_without_bindings_passes_and_authenticates_existing_records(self) -> None:
         self.driver.preflight()
         journal = self.driver._journal_read()
@@ -433,6 +551,8 @@ class DriverTests(DeployFixture):
         self.assertEqual(self.host.save_calls, 1)
         self.assertEqual(self.host.retirement_calls, 1)
         self.assertTrue((self.driver.release_root / "DEPLOYED").is_file())
+        self.assertNotIn("components", deploy.read_json(self.driver.release_root / "DEPLOYED"))
+        self.assertNotIn("components", journal)
         self.assertFalse(self.lock.exists())
 
     def test_dump_instances_missing_is_only_equivalent_for_single_fork_process(self) -> None:
