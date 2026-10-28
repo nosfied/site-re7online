@@ -4,6 +4,10 @@ import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import {
+  classifyTenantMetaParticipation,
+  isActiveTenantMetaContractIncomplete,
+} from "../src/config/tenantMetaParticipation.js";
 
 type UsageKind = "runtime_critical" | "admin" | "onboarding" | "fallback_legacy" | "seed_demo_test";
 
@@ -148,6 +152,13 @@ async function main() {
     const phonesByClient = new Set(phoneNumbers.map((item) => item.clientId));
     const tenants = clients.map((client) => {
       const accounts = channelAccountsByClient.get(client.id) ?? [];
+      const metaParticipation = classifyTenantMetaParticipation({
+        metaChannelAccount: accounts.some(
+          (account) => account.channel === "whatsapp" && account.provider === "meta"
+        ),
+        tenantMetaConfig: metaByClient.has(client.id),
+        waPhoneNumber: phonesByClient.has(client.id),
+      });
       return {
         clientKey: client.clientKey,
         status: client.status,
@@ -158,6 +169,7 @@ async function main() {
         ),
         tenantMetaConfig: metaByClient.has(client.id),
         waPhoneNumber: phonesByClient.has(client.id),
+        metaParticipation,
         channelAccounts: accounts.map((account) => ({
           channel: account.channel,
           provider: account.provider,
@@ -185,14 +197,12 @@ async function main() {
     });
     const blocking = usages.filter((usage) => usage.kind === "runtime_critical" || usage.kind === "onboarding");
     const incompleteTenants = databaseReachable
-      ? tenants.filter(
-          (tenant) => tenant.status === "ACTIVE" && (
-            !tenant.operationalConfig ||
-            !tenant.operationalReadiness.ready ||
-            (!tenant.waPhoneNumber && !tenant.tenantMetaConfig) ||
-            !tenant.channelAccounts.some((account) => account.channel === "whatsapp" && account.provider === "meta")
-          )
-        )
+      ? tenants.filter((tenant) => isActiveTenantMetaContractIncomplete({
+          status: tenant.status,
+          participation: tenant.metaParticipation,
+          hasOperationalConfig: tenant.operationalConfig,
+          operationalConfigReady: tenant.operationalReadiness.ready,
+        }))
       : [];
     const activeTenantsWithoutChannelAccounts = databaseReachable
       ? tenants.filter((tenant) => tenant.status === "ACTIVE" && tenant.channelAccounts.length === 0)

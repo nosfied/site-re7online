@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  classifyTenantMetaParticipation,
+  isActiveTenantMetaContractIncomplete,
+} from "../config/tenantMetaParticipation.js";
 
 const webhook = readFileSync(new URL("./webhook.controller.ts", import.meta.url), "utf8");
 const retirementCheck = readFileSync(
@@ -36,9 +40,46 @@ test("tenants.json retirement checks the complete active WhatsApp Meta DB contra
   assert.match(retirementCheck, /aiAssistantFallbackToHandoff/);
   assert.match(retirementCheck, /if \(aiEnabled && ai &&/);
   assert.match(retirementCheck, /account\.channel === "whatsapp" && account\.provider === "meta"/);
-  assert.match(retirementCheck, /!tenant\.waPhoneNumber && !tenant\.tenantMetaConfig/);
+  assert.match(retirementCheck, /isActiveTenantMetaContractIncomplete/);
   assert.match(retirementCheck, /runtime_critical/);
   assert.doesNotMatch(webhook, /loadTenantsJsonFallback|getTenants\(/);
+});
+
+test("retirement scopes Meta requirements to proven Meta participation", () => {
+  const webSessionOnly = classifyTenantMetaParticipation({
+    metaChannelAccount: false,
+    waPhoneNumber: false,
+    tenantMetaConfig: false,
+  });
+  assert.equal(webSessionOnly.participatesInMeta, false);
+  assert.equal(webSessionOnly.hasCompleteIdentity, false);
+  assert.equal(isActiveTenantMetaContractIncomplete({
+    status: "ACTIVE",
+    participation: webSessionOnly,
+    hasOperationalConfig: false,
+    operationalConfigReady: false,
+  }), false, "an ACTIVE Web Session-only tenant does not owe Meta artifacts");
+
+  for (const tenant of ["tendencia", "justa", "cra"]) {
+    const meta = classifyTenantMetaParticipation({
+      metaChannelAccount: true,
+      waPhoneNumber: true,
+      tenantMetaConfig: false,
+    });
+    assert.equal(meta.participatesInMeta, true, tenant);
+    assert.equal(meta.hasCompleteIdentity, true, tenant);
+    assert.equal(isActiveTenantMetaContractIncomplete({
+      status: "ACTIVE",
+      participation: meta,
+      hasOperationalConfig: false,
+      operationalConfigReady: false,
+    }), true, tenant);
+  }
+  assert.equal(classifyTenantMetaParticipation({
+    metaChannelAccount: true,
+    waPhoneNumber: false,
+    tenantMetaConfig: false,
+  }).hasCompleteIdentity, false);
 });
 
 test("all reactive Meta text and template paths share the complete tenant outbound gate", () => {

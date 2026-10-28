@@ -8,6 +8,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { normalizeQualificationSchema } from "../src/agent/qualification.js";
 import { env } from "../src/config/env.js";
 import { readAuthenticatedTenantJsonSource } from "../src/config/authenticatedTenantJsonSource.js";
+import { classifyTenantMetaParticipation } from "../src/config/tenantMetaParticipation.js";
 import {
   normalizeAiAssistantIntentCatalog,
   normalizeCrmBusinessStatuses,
@@ -507,15 +508,25 @@ async function main() {
         ...phoneNumbers.filter((phone) => phone.clientId === client.id).map((phone) => phone.phoneNumberId),
         ...metaConfigs.filter((config) => config.clientId === client.id).map((config) => config.phoneNumberId).filter(Boolean),
       ]);
-      if (!sourcePhoneNumberId || !mappedPhoneIds.has(sourcePhoneNumberId)) {
-        throw new Error(`source_tenant_missing_phone_mapping:${tenantKey}`);
-      }
-      const hasChannelAccount = channelAccounts.some((account) =>
-        account.clientId === client.id &&
-        (account.channelAccountId === sourcePhoneNumberId || account.aliases.some((alias) => alias.alias === sourcePhoneNumberId))
-      );
-      if (!hasChannelAccount) {
-        throw new Error(`source_tenant_missing_channel_account:${tenantKey}`);
+      const clientMetaAccounts = channelAccounts.filter((account) => account.clientId === client.id);
+      const participation = classifyTenantMetaParticipation({
+        metaChannelAccount: clientMetaAccounts.length > 0,
+        waPhoneNumber: phoneNumbers.some((phone) => phone.clientId === client.id),
+        tenantMetaConfig: metaConfigs.some((config) => config.clientId === client.id),
+      });
+      if (sourcePhoneNumberId) {
+        if (!mappedPhoneIds.has(sourcePhoneNumberId)) {
+          throw new Error(`source_tenant_missing_phone_mapping:${tenantKey}`);
+        }
+        const hasExactChannelAccount = clientMetaAccounts.some((account) =>
+          account.channelAccountId === sourcePhoneNumberId ||
+          account.aliases.some((alias) => alias.alias === sourcePhoneNumberId)
+        );
+        if (!hasExactChannelAccount) {
+          throw new Error(`source_tenant_missing_channel_account:${tenantKey}`);
+        }
+      } else if (participation.participatesInMeta) {
+        throw new Error(`source_tenant_meta_identity_ambiguous:${tenantKey}`);
       }
       const values = normalizedManagedValues(tenant as Record<string, unknown>);
       const next = mergedManagedConfig(client.operationalConfig?.config, values);

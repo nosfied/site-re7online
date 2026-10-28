@@ -50,14 +50,34 @@ Os gates são independentes fora desse predicado composto:
 Configuração DB incompleta com persistência habilitada mantém o inbound e bloqueia
 resposta com predicado nominal tenant-scoped; ela nunca seleciona outro tenant.
 
+## Participação Meta
+
+Esta migração não transforma requisitos Meta em obrigação global para todo
+`Client` ativo. A participação Meta é comprovada por uma conta
+`whatsapp/meta`, `WaPhoneNumber`, `TenantMetaConfig` ou por
+`metaPhoneNumberId` na fonte autenticada.
+
+- quando a fonte declara `metaPhoneNumberId`, o telefone e a conta Meta (ID ou
+  alias) devem corresponder exatamente;
+- sem identidade Meta na fonte e sem evidência Meta no banco, um tenant
+  Web Session-only é válido e não precisa desses artefatos;
+- sem identidade Meta na fonte, mas com qualquer evidência Meta no banco, o
+  backfill nega como ambíguo antes da primeira escrita;
+- o retirement check exige configuração operacional e identidade completa
+  apenas de tenants com participação Meta comprovada.
+
+Um lote misto Meta + Web Session continua integralmente pré-validado e é
+aplicado em uma única transação PostgreSQL com locks determinísticos. Qualquer
+inconsistência deixa todos os tenants inalterados.
+
 ## Migração e aposentadoria do JSON
 
 A ordem obrigatória para uma futura intervenção produtiva é:
 
 1. auditar e autenticar a fonte externa;
 2. executar backfill em `--dry-run` com caminho absoluto e SHA-256 esperado;
-3. validar integralmente todos os Clients, contas Meta, mapeamentos de telefone e
-   deltas antes da primeira escrita;
+3. validar integralmente todos os Clients e deltas e, para os participantes
+   Meta, contas e mapeamentos de telefone antes da primeira escrita;
 4. executar todos os tenants selecionados em uma única transação PostgreSQL, com
    locks em ordem determinística; qualquer falha reverte todos os tenants;
 5. executar `tenants-json:retirement:check` por tenant ativo;
@@ -65,7 +85,8 @@ A ordem obrigatória para uma futura intervenção produtiva é:
 7. ativar após autorização explícita.
 
 O backfill preserva blocos DB não relacionados, é idempotente e nega antes de
-escrever qualquer tenant JSON sem `Client`, conta Meta ou mapeamento de telefone.
+escrever qualquer tenant sem `Client` ou com participação Meta incompleta ou
+ambígua. Tenants exclusivamente Web Session não precisam de conta Meta.
 O relatório é sanitizado e não publica números completos. Rollback para código
 antigo é estruturalmente seguro:
 campos JSON adicionais em `TenantOperationalConfig.config` são ignorados pelo

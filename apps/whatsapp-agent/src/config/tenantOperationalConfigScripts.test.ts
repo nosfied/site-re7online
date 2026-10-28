@@ -228,6 +228,121 @@ test("backfill dry-run denies missing phone mapping and ChannelAccount before an
   }
 });
 
+test("backfill accepts an atomic mixed Meta plus Web Session-only batch", async () => {
+  const nonce = `${process.pid}-${Date.now()}`;
+  const metaClient = await prisma.client.create({
+    data: { clientKey: `backfill-meta-${nonce}`, name: "Synthetic Meta" },
+  });
+  const webClient = await prisma.client.create({
+    data: { clientKey: `backfill-web-${nonce}`, name: "Synthetic Web Session" },
+  });
+  ids.push(metaClient.id, webClient.id);
+  const metaPhoneNumberId = `mixed-meta-${nonce}`;
+  await Promise.all([
+    prisma.tenantOperationalConfig.create({ data: { clientId: metaClient.id, config: { sentinel: "meta" } } }),
+    prisma.tenantOperationalConfig.create({ data: { clientId: webClient.id, config: { sentinel: "web" } } }),
+    prisma.waPhoneNumber.create({ data: { clientId: metaClient.id, phoneNumberId: metaPhoneNumberId } }),
+    prisma.channelAccount.create({
+      data: {
+        clientId: metaClient.id,
+        channel: "whatsapp",
+        provider: "meta",
+        channelAccountId: metaPhoneNumberId,
+      },
+    }),
+    prisma.channelAccount.create({
+      data: {
+        clientId: webClient.id,
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: `mixed-web-${nonce}`,
+      },
+    }),
+  ]);
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-mixed-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const bytes = JSON.stringify({
+    [metaClient.clientKey]: {
+      id: metaClient.clientKey,
+      name: "Synthetic Meta",
+      metaPhoneNumberId,
+      allowlist: [],
+      defaultLanguage: "pt_BR",
+    },
+    [webClient.clientKey]: {
+      id: webClient.clientKey,
+      name: "Synthetic Web Session",
+      allowlist: [],
+      defaultLanguage: "pt_BR",
+    },
+  });
+  await writeFile(source, bytes, { mode: 0o600 });
+  const output = await runScript(cwd, "backfill-tenant-operational-config.ts", [
+    "--source", source,
+    "--expected-source-sha256", crypto.createHash("sha256").update(bytes).digest("hex"),
+    "--json",
+  ]);
+  const report = JSON.parse(output);
+  assert.equal(report.items.length, 2);
+  assert.equal(await prisma.channelAccount.count({
+    where: { clientId: webClient.id, channel: "whatsapp", provider: "meta" },
+  }), 0);
+  for (const clientId of [metaClient.id, webClient.id]) {
+    const config = await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId } });
+    assert.equal(
+      ((config.config as Record<string, unknown>).baseConfig as Record<string, unknown>).defaultLanguage,
+      "pt_BR"
+    );
+  }
+});
+
+test("mixed batch with ambiguous Meta evidence leaves Meta and Web Session tenants unchanged", async () => {
+  const nonce = `${process.pid}-${Date.now()}`;
+  const metaClient = await prisma.client.create({
+    data: { clientKey: `backfill-ambiguous-meta-${nonce}`, name: "Synthetic Meta ambiguous" },
+  });
+  const webClient = await prisma.client.create({
+    data: { clientKey: `backfill-ambiguous-web-${nonce}`, name: "Synthetic Web Session" },
+  });
+  ids.push(metaClient.id, webClient.id);
+  const metaPhoneNumberId = `ambiguous-meta-${nonce}`;
+  await Promise.all([
+    prisma.tenantOperationalConfig.create({ data: { clientId: metaClient.id, config: { sentinel: ["meta", false] } } }),
+    prisma.tenantOperationalConfig.create({ data: { clientId: webClient.id, config: { sentinel: ["web", false] } } }),
+    prisma.waPhoneNumber.create({ data: { clientId: metaClient.id, phoneNumberId: metaPhoneNumberId } }),
+    prisma.channelAccount.create({
+      data: { clientId: metaClient.id, channel: "whatsapp", provider: "meta", channelAccountId: metaPhoneNumberId },
+    }),
+    prisma.channelAccount.create({
+      data: { clientId: webClient.id, channel: "whatsapp", provider: "web_session", channelAccountId: `ambiguous-web-${nonce}` },
+    }),
+  ]);
+  const before = new Map(await Promise.all([metaClient, webClient].map(async (client) => [
+    client.id,
+    await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+  ] as const)));
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-ambiguous-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const bytes = JSON.stringify({
+    [metaClient.clientKey]: { id: metaClient.clientKey, name: "Meta without source identity", allowlist: [] },
+    [webClient.clientKey]: { id: webClient.clientKey, name: "Web Session", allowlist: [] },
+  });
+  await writeFile(source, bytes, { mode: 0o600 });
+  await assert.rejects(runScript(cwd, "backfill-tenant-operational-config.ts", [
+    "--source", source,
+    "--expected-source-sha256", crypto.createHash("sha256").update(bytes).digest("hex"),
+    "--json",
+  ]), /source_tenant_meta_identity_ambiguous/);
+  for (const client of [metaClient, webClient]) {
+    assert.deepEqual(
+      await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+      before.get(client.id)
+    );
+  }
+});
+
 test("backfill is atomic when the second deterministically locked tenant fails", async () => {
   const nonce = `${process.pid}-${Date.now()}`;
   const created = await Promise.all(["a", "b"].map(async (label) => {
