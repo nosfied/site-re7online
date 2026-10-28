@@ -463,7 +463,7 @@ Implemented Sprint 65B scripts:
 ```bash
 npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --dry-run --json
 npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --json
-npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --tenant re7online --dry-run --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --tenant tendencia-modas --tenant justa-advocacia --tenant cra-pr --dry-run --json
 npm run channel-accounts:shadow:compare -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --json
 ```
 
@@ -471,7 +471,17 @@ Requirements:
 
 - idempotent;
 - dry-run by default for pre-release;
-- filter by tenant;
+- `--tenant` é repetível; o lote selecionado é deduplicado, ordenado e aplicado
+  na mesma transação `SERIALIZABLE`, com locks de `Client` em ordem
+  determinística;
+- tenant repetido, vazio ou desconhecido é negado antes da primeira escrita;
+- um tenant solicitado deve pertencer à fonte histórica. A única exceção é
+  `cra-pr`, que pode vir exclusivamente do plano com
+  `provenance=OWNER_AUTHORIZED_DB_IDENTITY`;
+- tenants não selecionados são omitidos sem serem classificados como plano
+  incompleto. Sem `--tenant`, permanece vinculante o lote integral anterior;
+- o shadow compare recebe a mesma lista repetível e compara exatamente o mesmo
+  conjunto selecionado;
 - do not modify the authenticated historical source;
 - authenticate a separate private plan whose mandatory `sourceSha256` binds it
   to exactly one historical source;

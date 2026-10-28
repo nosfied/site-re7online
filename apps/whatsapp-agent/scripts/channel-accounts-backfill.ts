@@ -6,13 +6,14 @@ import dotenv from "dotenv";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { readAuthenticatedTenantJsonSource } from "../src/config/authenticatedTenantJsonSource.js";
 import { readAuthenticatedPrivateJsonSource } from "../src/config/authenticatedPrivateJsonSource.js";
-import { buildChannelAccountMigrationPlan, sanitizedMigrationItem, type ChannelAccountPlanDocument } from "../src/channels/channelAccountMigrationPlan.js";
+import { buildChannelAccountMigrationPlan, channelAccountMigrationTenantKeys, normalizeChannelAccountTenantSelection, sanitizedMigrationItem, type ChannelAccountPlanDocument } from "../src/channels/channelAccountMigrationPlan.js";
 import type { TenantChannelAccount } from "../src/channels/tenantChannelAccount.types.js";
 
-type Options = { source: string; expectedSourceSha256: string; plan: string; expectedPlanSha256: string; json: boolean; dryRun: boolean; tenant?: string };
+type Options = { source: string; expectedSourceSha256: string; plan: string; expectedPlanSha256: string; json: boolean; dryRun: boolean; tenants?: string[] };
 function parseArgs(argv: string[]): Options {
   let source = ""; let expectedSourceSha256 = ""; let plan = ""; let expectedPlanSha256 = "";
   const options = { json: false, dryRun: false } as Options;
+  const tenantValues: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
     const current = argv[i]; const next = argv[i + 1];
     if (["--source", "--expected-source-sha256", "--plan", "--expected-plan-sha256", "--tenant", "--client-key"].includes(current)) {
@@ -21,7 +22,7 @@ function parseArgs(argv: string[]): Options {
       else if (current === "--expected-source-sha256") expectedSourceSha256 = next;
       else if (current === "--plan") plan = next;
       else if (current === "--expected-plan-sha256") expectedPlanSha256 = next;
-      else options.tenant = next;
+      else tenantValues.push(next);
       i += 1;
     } else if (current === "--json") options.json = true;
     else if (current === "--dry-run") options.dryRun = true;
@@ -31,7 +32,7 @@ function parseArgs(argv: string[]): Options {
   if (!path.isAbsolute(plan)) throw new Error("plan_must_be_absolute");
   if (!/^[a-f0-9]{64}$/i.test(expectedSourceSha256)) throw new Error("expected_source_sha256_required");
   if (!/^[a-f0-9]{64}$/i.test(expectedPlanSha256)) throw new Error("expected_plan_sha256_required");
-  return { ...options, source, plan, expectedSourceSha256: expectedSourceSha256.toLowerCase(), expectedPlanSha256: expectedPlanSha256.toLowerCase() };
+  return { ...options, source, plan, expectedSourceSha256: expectedSourceSha256.toLowerCase(), expectedPlanSha256: expectedPlanSha256.toLowerCase(), tenants: tenantValues.length ? normalizeChannelAccountTenantSelection(tenantValues) : undefined };
 }
 function loadEnv() {
   const appDir = path.resolve(process.cwd(), "apps/whatsapp-agent");
@@ -59,7 +60,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const tenants = await readAuthenticatedTenantJsonSource({ source: options.source, expectedSha256: options.expectedSourceSha256 });
   const planDocument = await readAuthenticatedPrivateJsonSource<ChannelAccountPlanDocument>({ source: options.plan, expectedSha256: options.expectedPlanSha256 });
-  const sourceKeys = [...new Set([...Object.keys(tenants), ...Object.keys(planDocument.tenants ?? {})])].filter((key) => !options.tenant || key === options.tenant).sort();
+  const sourceKeys = channelAccountMigrationTenantKeys({ tenants, planDocument, selectedTenants: options.tenants });
   const prisma = new PrismaClient(); const encryptionKey = getEncryptionKey();
   try {
     const report = await prisma.$transaction(async (tx) => {
@@ -71,7 +72,7 @@ async function main() {
         tx.tenantMetaConfig.findMany({ where: { clientId: { in: clientIds } }, select: { clientId: true, phoneNumberId: true } }),
         tx.channelAccount.findMany({ where: { channel: "whatsapp", provider: "meta" }, include: { aliases: true, secrets: true, client: { select: { clientKey: true } } } }),
       ]);
-      const plan = buildChannelAccountMigrationPlan({ tenants, planDocument, expectedSourceSha256: options.expectedSourceSha256, clients, phoneNumbers: phones, metaConfigs, existingMetaAccounts: existing.map((row) => ({ clientId: row.clientId, clientKey: row.client.clientKey, channelAccountId: row.channelAccountId, aliases: row.aliases.map((alias) => alias.alias) })), selectedTenant: options.tenant });
+      const plan = buildChannelAccountMigrationPlan({ tenants, planDocument, expectedSourceSha256: options.expectedSourceSha256, clients, phoneNumbers: phones, metaConfigs, existingMetaAccounts: existing.map((row) => ({ clientId: row.clientId, clientKey: row.client.clientKey, channelAccountId: row.channelAccountId, aliases: row.aliases.map((alias) => alias.alias) })), selectedTenants: options.tenants });
       const existingByKey = new Map(existing.map((item) => [`${item.clientId}:${item.channelAccountId}`, item]));
       const prepared = plan.items.map((item) => {
         const prior = existingByKey.get(`${item.clientId}:${item.account.channelAccountId}`); const secrets = accountSecrets(item.account);
@@ -90,7 +91,7 @@ async function main() {
         if (!entry.prior) for (const alias of entry.item.account.externalAccountIds ?? []) await tx.channelAccountAlias.create({ data: { channelAccountId: account.id, alias, aliasType: "externalAccountId" } });
         if (!entry.prior) for (const secret of entry.secrets) { const ciphertext = encryptionKey ? encryptSecret(secret.value, encryptionKey) : null; await tx.channelAccountSecret.create({ data: { channelAccountId: account.id, secretKind: secret.kind, secretHash: secretHash(secret.value), secretCiphertext: ciphertext, encryptionKeyRef: ciphertext ? "CHANNEL_ACCOUNT_SECRET_KEY" : null, status: "configured" } }); }
       }
-      return { ok: true, dryRun: options.dryRun, sourceSha256: options.expectedSourceSha256, planSha256: options.expectedPlanSha256, sourceTenantCount: plan.sourceTenantCount, metaTenantCount: plan.metaTenantCount, webSessionOnlyCount: plan.webSessionOnlyCount, webSessionOnlyTenants: plan.webSessionOnlyTenants, changes: prepared.map(({ item, prior, changed }) => sanitizedMigrationItem(item, !changed ? "unchanged" : options.dryRun ? (prior ? "would_update" : "would_create") : (prior ? "updated" : "created"))) };
+      return { ok: true, dryRun: options.dryRun, sourceSha256: options.expectedSourceSha256, planSha256: options.expectedPlanSha256, selectedTenants: options.tenants ?? null, sourceTenantCount: plan.sourceTenantCount, metaTenantCount: plan.metaTenantCount, webSessionOnlyCount: plan.webSessionOnlyCount, webSessionOnlyTenants: plan.webSessionOnlyTenants, changes: prepared.map(({ item, prior, changed }) => sanitizedMigrationItem(item, !changed ? "unchanged" : options.dryRun ? (prior ? "would_update" : "would_create") : (prior ? "updated" : "created"))) };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     console.log(options.json ? JSON.stringify(report, null, 2) : `CHANNEL_ACCOUNT_BACKFILL_PASS dryRun=${report.dryRun} meta=${report.metaTenantCount} webSessionOnly=${report.webSessionOnlyCount}`);
   } finally { await prisma.$disconnect(); }
