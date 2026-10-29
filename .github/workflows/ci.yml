@@ -171,6 +171,7 @@ jobs:
       - name: Consent management persistence, idempotency and Automation isolation
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_config_persistence_ci
+          APP_AUTH_SECRET: synthetic-consent-ci-secret
         run: |
           node --import tsx --test --test-name-pattern "integrated WEB consent|consent reprocessing" \
             src/conversation/automationOwnActivity.test.ts
