@@ -59,6 +59,8 @@
 
 ## Backlog ativo separado
 
+- [Plano P00 de convergência da preparação de deploy](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md)
+  — bloqueia repetição de gates previsíveis; exige admissão integral, materialização canônica do control plane e regressão ponta a ponta antes de nova geração normal.
 - [Disponibilidade, mídia e homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md)
   — IMAGE e VIDEO manuais PASS; inventário global concluído e reabertura geral autorizada pelo owner,
   executada pelo Codex local na geração 41. Agendamento/multilote e aceites específicos seguem separados.
