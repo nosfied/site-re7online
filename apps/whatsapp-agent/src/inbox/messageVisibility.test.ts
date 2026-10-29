@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   isManagementOnlyInboxMessage,
+  shouldIncludeInboxMessageForView,
   shouldProjectConversationToHumanInbox,
   shouldUserSeeConversationInInbox,
   withInboxMessageVisibility,
@@ -14,6 +16,29 @@ test("inbox message visibility uses structured raw payload metadata only", () =>
   assert.equal(isManagementOnlyInboxMessage(payload), true);
   assert.equal(isManagementOnlyInboxMessage({ provider: "web_session", bodyText: "Obrigado(a)" }), false);
   assert.equal(isManagementOnlyInboxMessage(null), false);
+});
+
+test("consent prompt and definitive answers are visible in authorized histories without opening other management content", () => {
+  for (const kind of ["consent_prompt", "consent_positive", "consent_negative"]) {
+    const consent = withInboxMessageVisibility({}, "management_only", kind);
+    assert.equal(shouldIncludeInboxMessageForView(consent, "human"), true);
+    assert.equal(shouldIncludeInboxMessageForView(consent, "authorized_automation"), true);
+  }
+
+  for (const kind of ["consent_invalid", "internal_management_note"]) {
+    const restricted = withInboxMessageVisibility({}, "management_only", kind);
+    assert.equal(shouldIncludeInboxMessageForView(restricted, "human"), false);
+    assert.equal(shouldIncludeInboxMessageForView(restricted, "authorized_automation"), false);
+  }
+
+  assert.equal(shouldIncludeInboxMessageForView({}, "human"), true);
+});
+
+test("Meta webhook propagates the existing consent classification to both persistence paths", () => {
+  const source = readFileSync(new URL("../whatsapp/webhook.controller.ts", import.meta.url), "utf8");
+  assert.match(source, /managementInteraction: chatbotResult\.managementInteraction/);
+  assert.match(source, /withInboxMessageVisibility\([\s\S]*?"management_only", chatbotFlowResult\.managementInteraction\.inboundKind\)/);
+  assert.match(source, /inboxVisibility: chatbotFlowResult\.managementInteraction\?\.outboundKind[\s\S]*?inboxInteractionKind: chatbotFlowResult\.managementInteraction\?\.outboundKind/);
 });
 
 test("human inbox projection requires a real human operational state", () => {

@@ -12,8 +12,16 @@ const originalFetch = globalThis.fetch;
 let onSend: (() => Promise<void>) | undefined;
 let sends = 0;
 const ids: string[] = [];
+const jsonObject = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 test.before(() => {
-  assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/re7_/);
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? "");
+  assert.equal(databaseUrl.protocol, "postgresql:");
+  assert.equal(databaseUrl.hostname, "127.0.0.1");
+  assert.match(databaseUrl.port, /^\d+$/);
+  assert.match(databaseUrl.pathname, /^\/re7_/);
   process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = "http://worker.invalid";
   globalThis.fetch = (async (url: unknown) => {
     assert(String(url) === "http://worker.invalid/web-session/send-text" || String(url).startsWith("https://graph.facebook.com/"));
@@ -52,10 +60,10 @@ async function send(f: Awaited<ReturnType<typeof fixture>>, token: ReturnType<ty
     outboundSource: "bot", skipAgentSignature: true, runtimeWriteToken: token,
     source: { channel: "whatsapp", provider: "web_session", channelAccountId: f.account.channelAccountId } });
 }
-async function inbound(f: Awaited<ReturnType<typeof fixture>>, text: string) {
+async function inbound(f: Awaited<ReturnType<typeof fixture>>, text: string, externalMessageId = crypto.randomUUID()) {
   return ingestWebSessionInboundMessage({ prisma, message: { provider: "web_session", channel: "whatsapp",
     clientId: f.client.id, tenantKey: f.client.clientKey, channelAccountDbId: f.account.id,
-    channelAccountId: f.account.channelAccountId, externalMessageId: crypto.randomUUID(), sender: f.waId,
+    channelAccountId: f.account.channelAccountId, externalMessageId, sender: f.waId,
     senderCanonical: f.waId, senderJid: `${f.waId}@s.whatsapp.net`, timestamp: new Date(), type: "TEXT", text, rawPayload: {} },
     publishMessageCreatedRealtime: async () => {}, publishHandoffRealtime: async () => {} });
 }
@@ -70,9 +78,18 @@ for (const answer of ["1", "2"]) test(`integrated WEB consent ${answer}: real ou
     },
   } } });
   const first = await inbound(f,"Hello"); assert.equal(first.ok,true);
+  const initialInbound = await prisma.inboundMessage.findFirstOrThrow({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
+  const initialOutbound = await prisma.outboundMessage.findFirstOrThrow({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
+  assert.notEqual(jsonObject(initialInbound.rawPayload).inboxVisibility,"management_only");
+  assert.equal(jsonObject(initialOutbound.rawPayload).inboxVisibility,"management_only");
+  assert.equal(jsonObject(initialOutbound.rawPayload).inboxInteractionKind,"consent_prompt");
   let row = await prisma.conversationRuntimeState.findUniqueOrThrow({where:{clientId_waId:{clientId:f.client.id,waId:f.waId}}});
   assert.equal(row.chatbotNodeId,"consent"); assert.equal(row.chatbotActive,true); assert(row.lastOutboundAt);
   await inbound(f,answer);
+  const answerInbound = await prisma.inboundMessage.findMany({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
+  const latestAnswerInbound = answerInbound[answerInbound.length - 1];
+  assert.equal(jsonObject(latestAnswerInbound?.rawPayload).inboxVisibility,"management_only");
+  assert.equal(jsonObject(latestAnswerInbound?.rawPayload).inboxInteractionKind,answer === "1" ? "consent_positive" : "consent_negative");
   row = await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:row.id}});
   if(answer === "1") {
     assert.equal(row.chatbotNodeId,"menu");
@@ -81,6 +98,23 @@ for (const answer of ["1", "2"]) test(`integrated WEB consent ${answer}: real ou
     assert.equal(row.chatbotNodeId,"next");
   } else assert.notEqual(row.chatbotNodeId,"consent");
   assert.equal(await prisma.contactConsent.count({where:{clientId:f.client.id,status:"accepted"}}),answer === "1" ? 1 : 0);
+});
+test("consent reprocessing preserves one inbound and one management outbound", async () => {
+  const f = await fixture("consent-idempotent");
+  await prisma.chatbotFlow.create({ data: { clientId: f.client.id, name: "Synthetic consent idempotency", isActive: true, entryPoint: true, definition: {
+    start: "consent", nodes: {
+      consent: { type: "consent", purpose: "service_communications", textVersion: "synthetic-v1", message: "Consent?", acceptOption: "1", declineOption: "2", onAccepted: "done", onDeclined: "done" },
+      done: { type: "text", text: "Done" },
+    },
+  } } });
+  const externalMessageId = crypto.randomUUID();
+  assert.equal((await inbound(f, "Hello", externalMessageId)).ok, true);
+  assert.equal((await inbound(f, "Hello", externalMessageId)).ok, true);
+  assert.equal(await prisma.inboundMessage.count({ where: { clientId: f.client.id } }), 1);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }), 1);
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: f.client.id } });
+  assert.equal(jsonObject(outbound.rawPayload).inboxVisibility, "management_only");
+  assert.equal(jsonObject(outbound.rawPayload).inboxInteractionKind, "consent_prompt");
 });
 for (const change of ["none","claim","transfer","close_csat","reentry","inbound","cycle","transport","account"] as const) test(`real accepted outbound during ${change}: own receipt or stale completion denied`, async () => {
   const f=await fixture(change);

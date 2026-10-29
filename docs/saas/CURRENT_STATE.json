@@ -1,10 +1,10 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-28T02:36:19.721Z",
+  "updatedAtUtc": "2026-10-29T12:00:00.000Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json",
-  "activeApiDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
+  "activeApiDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_SANITIZED",
@@ -16,11 +16,11 @@
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
       "entrySha256Scope": "CURRENT_FIXED_CURRENT_RELEASE",
-      "selectedTargetCommit": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
-      "selectedReleaseId": "immutable-708f018c-vps-20261027T152109Z",
-      "lastReportedPid": 745424,
-      "lastReportedStartTicks": 28396867,
-      "restartCount": 7
+      "selectedTargetCommit": "0fdec8b026b28acb42c2d95e1fe473b49b6b0a20",
+      "selectedReleaseId": "immutable-0fdec8b0-vps-20261028T224726Z",
+      "lastReportedPid": 1002527,
+      "lastReportedStartTicks": 38600683,
+      "restartCount": 8
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
@@ -57,9 +57,9 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "67c31a1fbd95178a27be2fb248ab3c039352f3ae16c612a780096b6294d2285f",
+      "dumpSha256": "f630586b3f66041114cc7ddfa92c7bf3974440ffaa50964cdbaa58875172942a",
       "dumpSha256Scope": "CURRENT_FIXED_CURRENT_TOPOLOGY",
-      "currentDumpSha256": "67c31a1fbd95178a27be2fb248ab3c039352f3ae16c612a780096b6294d2285f",
+      "currentDumpSha256": "f630586b3f66041114cc7ddfa92c7bf3974440ffaa50964cdbaa58875172942a",
       "rollbackSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
       "mode": "0600",
       "owner": "deploy",
@@ -73,21 +73,21 @@
       },
       "representationLookup": "TOP_LEVEL_THEN_PM2_ENV_CANONICAL_AND_ALIASES_WITHOUT_UNPROVEN_DEFAULTS"
     },
-    "markerSha256": "8b11c06a10407d0157c055d32ffb91df9e283154b8a23f346212683bdc4daf92",
+    "markerSha256": "3ed8c45c84b03ebcc197ae37fa96adbee3ef541d5c2a9d15a046f6a3e09d580e",
     "markerSha256Scope": "CURRENT_FIXED_CURRENT_RELEASE",
-    "currentMarkerSha256": "8b11c06a10407d0157c055d32ffb91df9e283154b8a23f346212683bdc4daf92",
+    "currentMarkerSha256": "3ed8c45c84b03ebcc197ae37fa96adbee3ef541d5c2a9d15a046f6a3e09d580e",
     "lastFinalization": {
-      "component": "frontend",
+      "component": "api",
       "journalState": "DEPLOYED_SANITIZED",
       "lockReleased": true,
       "pm2SaveCount": 1,
-      "receiptSha256": "44ef85e0607fd779f65b7611fb1ab2b5621129000ab0ea565b097e4a034321ee",
-      "journalSha256": "6392fc63f21074964c57dcc9140a1ac7ba47b46f43f987568bc40f99bc33b42a",
-      "dumpValidationSha256": "6336e61b807a24e19126bc465615af8211ba55ce9cb7d20c2995a7d7a400ff12",
-      "retirementReceiptSha256": "ce071492975ff08fcb1930364d22e94bcb45695ccb21ee5d545e87153f2ad1cf",
-      "retirementReviewSha256": "4f860b3a49ccfdafbfecfb04b1e2263ac8e7096037be81b8cfd5c8e8cdf6f356"
+      "receiptSha256": null,
+      "journalSha256": "ca7bd35a3ec9b3f247fdfc1bb496221ed5db04656caf301833c5aa5d92321778",
+      "dumpValidationSha256": null,
+      "retirementReceiptSha256": "7d69a118303bf75ed7385d7a72769137fe77c721776ea3beb212389845117e4f",
+      "retirementReviewSha256": null
     },
-    "controlPlaneCommit": "34a2878ae74443a42b026100166c18c13ca83eb7",
+    "controlPlaneCommit": "c504e75f2a51857f7971d5088f731c7de67fb54d",
     "readiness": {
       "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
       "requiredStableSamples": 3,
@@ -106,6 +106,32 @@
       "reportedDate": "2026-10-27",
       "independentVpsInspectionByDocumentationEditor": false,
       "scope": "Reported fixed-current deployment, finalization and autonomous retention V2"
+    },
+    "p00TenantRuntime": {
+      "state": "DB_FIRST_API_DEPLOYED",
+      "apiReleaseId": "immutable-0fdec8b0-vps-20261028T224726Z",
+      "selectedTenantRetirementGate": "PASS",
+      "consentManagementInteraction": {
+        "rootCause": "META_WEBHOOK_DROPPED_EXISTING_MANAGEMENT_INTERACTION_AND_AUTOMATION_READ_MODEL_FILTERED_MANAGEMENT_ONLY",
+        "correlationFinding": "CONTROLLED_CRA_RESPONSE_PERSISTED_BY_EFFECTIVE_WEB_SESSION_TRANSPORT; TEXT_ONLY_CORRELATION_SELECTED_AN_EARLIER_HOMONYMOUS_INBOUND",
+        "status": "PATCH_IN_REVIEW",
+        "allInboxPreserved": true,
+        "visibleInteractionKinds": [
+          "consent_prompt",
+          "consent_positive",
+          "consent_negative"
+        ],
+        "visibilityScope": "AUTHORIZED_AUTOMATION_AND_AUTHORIZED_HUMAN_AFTER_HANDOFF",
+        "otherManagementOnlyPreserved": true
+      },
+      "craTemplateAppId": {
+        "status": "TENANT_SCOPED_APP_ID_NOT_AUTHENTICATED",
+        "businessTokenPresent": true,
+        "wabaIdPresent": true,
+        "phoneIdentityPresent": true,
+        "globalFallbackAllowed": false,
+        "templateSubmissionPerformed": false
+      }
     },
     "campaignOperations": {
       "state": "GENERAL_OPERATIONS_OPEN",
@@ -490,8 +516,8 @@
   },
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
-    "deploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
-    "apiDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
+    "deploymentRecord": "docs/saas/releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json",
+    "apiDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json",
     "components": [
       "api",
       "frontend",
@@ -783,6 +809,6 @@
       "nominalPredicateRequired": true
     }
   },
-  "updatedAtDate": "2026-10-28",
-  "updatedAtUtcScope": "OWNER_RELAYED_B96_DEPLOYED_SANITIZED_VISUAL_ACCEPTANCE_AND_CAPACITY"
+  "updatedAtDate": "2026-10-29",
+  "updatedAtUtcScope": "OWNER_RELAYED_0FDEC_DEPLOYED_SANITIZED_AND_P00_CONSENT_AUDIT"
 }

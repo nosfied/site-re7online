@@ -22,6 +22,7 @@
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend ativo, aceite visual integral, um save e derivados retirados 3/3.
 - [Release fixed-current 708f implantada e sanitizada](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json)
+- [Release API-only fixed-current 0fdec implantada e sanitizada](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json)
   — API ativa e retorno do frontend; registro histórico da promoção API/frontend.
 - [Layout de mídia em campanhas: deploy frontend f160](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json)
   — registro histórico do frontend anterior, preservado como retorno.

@@ -50,6 +50,40 @@ Os gates são independentes fora desse predicado composto:
 Configuração DB incompleta com persistência habilitada mantém o inbound e bloqueia
 resposta com predicado nominal tenant-scoped; ela nunca seleciona outro tenant.
 
+## Consentimento e visibilidade da automação
+
+`chatbotConsentRuntime` é a autoridade da classificação de interações de
+consentimento: `consent_prompt`, `consent_positive`, `consent_negative` e
+`consent_invalid`. O webhook Meta deve propagar `managementInteraction` tanto para
+o `InboundMessage` quanto para o `OutboundMessage` DB-first, usando
+`inboxVisibility=management_only` e `inboxInteractionKind`. A identidade do outbound
+não depende de reutilizar o `requestId` do inbound: a correlação usa tenant,
+identidade multicanal canônica, IDs internos/do provider e
+`ConversationRuntimeState`.
+
+Enquanto a conversa permanece BOT, ela continua fora de “Todas”; somente um ator
+autorizado a ler o filtro Automação recebe a troca de consentimento
+(`consent_prompt`, `consent_positive` e `consent_negative`). Quando o fluxo
+existente encaminha a conversa para atendimento humano, esse mesmo trecho acompanha
+o histórico integral entregue ao operador autorizado. `consent_invalid` e qualquer
+outro conteúdo `management_only` permanecem ocultos. A projeção não faz claim,
+handoff ou transição, não altera o fluxo vigente e não cria mensagens. Retries e
+reprocessamento continuam protegidos pelas identidades únicas do inbound e do
+outbound.
+
+A fotografia P00 de 29/10 confirmou ainda uma armadilha de observabilidade: dois
+inbounds CRA com texto igual existiam em instantes próximos. A correlação apenas
+por texto selecionou o registro anterior, enquanto a resposta controlada real foi
+persistida pelo transporte Web Session escolhido pelo roteador híbrido. Portanto,
+texto, `Contact`, `ContactChannelIdentity`, igualdade de `requestId` e o modelo
+genérico `Message` não são identidades obrigatórias desse fluxo.
+
+O CRA continua com uma frente separada de configuração de App ID para templates.
+Token, WABA e identidade telefônica estavam estruturalmente presentes, mas o App ID
+tenant-scoped não estava autenticado. Nenhum ID do Demo pode ser copiado ou inferido,
+e fallback global permanece proibido. A futura operação exige autenticação do App ID
+vinculado ao token CRA antes do PUT tenant-scoped; não inclui submissão de template.
+
 ## Participação Meta
 
 Esta migração não transforma requisitos Meta em obrigação global para todo

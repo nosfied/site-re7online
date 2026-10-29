@@ -32,6 +32,30 @@ export function isManagementOnlyInboxMessage(rawPayload: unknown) {
   return (rawPayload as Record<string, unknown>).inboxVisibility === "management_only";
 }
 
+const inboxVisibleConsentInteractionKinds = new Set([
+  "consent_prompt",
+  "consent_positive",
+  "consent_negative",
+]);
+
+function isInboxVisibleConsentInteraction(rawPayload: unknown) {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return false;
+  const kind = (rawPayload as Record<string, unknown>).inboxInteractionKind;
+  return typeof kind === "string" && inboxVisibleConsentInteractionKinds.has(kind);
+}
+
+export function shouldIncludeInboxMessageForView(
+  rawPayload: unknown,
+  view: "human" | "authorized_automation"
+) {
+  if (!isManagementOnlyInboxMessage(rawPayload)) return true;
+  switch (view) {
+    case "human":
+    case "authorized_automation":
+      return isInboxVisibleConsentInteraction(rawPayload);
+  }
+}
+
 export function withInboxMessageVisibility(
   rawPayload: Prisma.InputJsonObject,
   visibility: InboxMessageVisibility,

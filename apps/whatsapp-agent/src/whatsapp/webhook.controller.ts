@@ -134,6 +134,7 @@ import {
   extractChatbotFlowId,
   getInitialChatbotAwaitingNodeId,
   validateChatbotFlowDefinition,
+  type ChatbotExecutionResult,
   type ChatbotPendingHandoff,
 } from "../chatbot/chatbotFlow.js";
 import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.js";
@@ -155,6 +156,7 @@ import { canonicalizeBrazilWaId } from "../utils/waid.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
 import { buildInboxMessageMedia } from "../http/inboxMedia.js";
 import { extractMessageLocation } from "../inbox/messageLocation.js";
+import { withInboxMessageVisibility, type InboxMessageVisibility } from "../inbox/messageVisibility.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
   buildWhatsAppMultichannelIdentity,
@@ -927,6 +929,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     replyText: string;
     runtimeWriteToken?: ConversationState["runtimeWriteToken"];
     guard?: { version: number; lastInboundAt?: string };
+    inboxVisibility?: InboxMessageVisibility;
+    inboxInteractionKind?: string | null;
   }) => {
     if (!isTenantReactiveOutboundReady()) {
       return {
@@ -985,6 +989,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           outboundSource: "bot",
           runtimeWriteToken: params.runtimeWriteToken,
           skipAgentSignature: true,
+          inboxVisibility: params.inboxVisibility,
+          inboxInteractionKind: params.inboxInteractionKind,
           source: { channel: "whatsapp", provider: "web_session", channelAccountId: null },
         });
         if (!result.ok) {
@@ -1860,6 +1866,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         wasInserted: inserted,
       });
       if (inserted) {
+        const managementOnly = Boolean(
+          params.rawPayload &&
+          typeof params.rawPayload === "object" &&
+          !Array.isArray(params.rawPayload) &&
+          (params.rawPayload as Record<string, unknown>).inboxVisibility === "management_only"
+        );
         const insertedMessage = await getPrisma().inboundMessage.findUnique({
           where: {
             clientId_messageId: {
@@ -1912,13 +1924,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           waIdCanonical: canonicalizeBrazilWaId(params.waId),
           mode: realtimeConversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
           handoffStatus: realtimeHandoffStatus,
-          humanInboxVisible: true,
+          humanInboxVisible: !managementOnly,
           assignedUserId: realtimeConversation?.assignedUserId ?? null,
           departmentId: realtimeConversation?.departmentId ?? null,
           protocol: realtimeServiceCycle?.protocol ?? null,
           cycleId: realtimeServiceCycle?.cycleId ?? null,
           message: {
-            inboxVisibility: "human_timeline",
+            inboxVisibility: managementOnly ? "management_only" : "human_timeline",
             protocol: realtimeServiceCycle?.protocol ?? null,
             cycleId: realtimeServiceCycle?.cycleId ?? null,
             internalMessageId: insertedMessage?.id ?? null,
@@ -5469,12 +5481,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       replyText?: string;
       flowId: string | null;
       pendingHandoff?: ChatbotPendingHandoff;
+      managementInteraction?: ChatbotExecutionResult["managementInteraction"];
     } = {
       handled: false,
       state: updatedConversation,
       replyText: undefined as string | undefined,
       flowId: null as string | null,
       pendingHandoff: undefined as ChatbotPendingHandoff | undefined,
+      managementInteraction: undefined,
     };
     let chatbotReplyProgressCheckpoint: ConversationState | null = null;
 
@@ -5799,6 +5813,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               pendingHandoff: tenantAutomaticHandoffEnabled
                 ? chatbotResult.pendingHandoff
                 : undefined,
+              managementInteraction: chatbotResult.managementInteraction,
             };
             if (chatbotResult.pendingHandoff && !tenantAutomaticHandoffEnabled) {
               updatedConversation = chatbotProgressBeforeReply;
@@ -5808,6 +5823,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 replyText: undefined,
                 flowId: chatbotFlow.id,
                 pendingHandoff: undefined,
+                managementInteraction: chatbotResult.managementInteraction,
               };
               logger.info({
                 event: "handoff.automatic.skipped",
@@ -5859,6 +5875,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           replyText: undefined,
           flowId: previousFlowId,
           pendingHandoff: undefined,
+          managementInteraction: undefined,
         };
         logger.info({
           event: "flow.runtime_coherence.cleared",
@@ -6029,11 +6046,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       bodyText: message.text,
       allowlistHit,
       occurredAt: parseWebhookTimestampToDate(message.timestamp),
-      rawPayload: {
-        ...message.raw,
-        text: message.text,
-        timestamp: message.timestamp,
-      },
+      rawPayload: chatbotFlowResult.managementInteraction?.inboundKind
+        ? withInboxMessageVisibility({
+            ...message.raw,
+            text: message.text,
+            timestamp: message.timestamp,
+          }, "management_only", chatbotFlowResult.managementInteraction.inboundKind)
+        : {
+            ...message.raw,
+            text: message.text,
+            timestamp: message.timestamp,
+          },
     });
     await notifyHandoffLeadArrivalOnRuntimeTransition({
       previousState: currentConversation,
@@ -8580,6 +8603,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             messageId: message.messageId,
             replyText,
             guard: inboundGuard,
+            inboxVisibility: chatbotFlowResult.managementInteraction?.outboundKind
+              ? "management_only"
+              : undefined,
+            inboxInteractionKind: chatbotFlowResult.managementInteraction?.outboundKind ?? null,
           });
 
     void sendPromise

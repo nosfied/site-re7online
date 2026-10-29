@@ -159,12 +159,25 @@ jobs:
       - name: Tenant operational config backfill and retirement contracts
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_config_persistence_ci
+          APP_AUTH_SECRET: synthetic-consent-ci-secret
+          STORAGE_MODE: postgres
+          CONV_STATE_READ_SOURCE: postgres
         run: |
           npm run db:deploy
           node --import tsx --test src/channels/channelAccountMigrationPlan.test.ts
           node --import tsx --test src/channels/channelAccountMigrationScripts.test.ts
           node --import tsx --test src/config/tenantOperationalConfigMigrationPlan.test.ts
           node --import tsx --test src/config/tenantOperationalConfigScripts.test.ts
+      - name: Consent management persistence, idempotency and Automation isolation
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_config_persistence_ci
+          APP_AUTH_SECRET: synthetic-consent-ci-secret
+        run: |
+          node --import tsx --test --test-name-pattern "integrated WEB consent|consent reprocessing" \
+            src/conversation/automationOwnActivity.test.ts
+          node --import tsx --test src/inbox/messageVisibility.test.ts
+          node --import tsx --test --test-name-pattern "management-only consent" \
+            src/http/automationConversations.test.ts
       - name: Backend durable-operation and multi-tenant tests
         run: >-
           node --import tsx --test
