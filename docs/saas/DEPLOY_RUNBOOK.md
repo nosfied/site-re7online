@@ -62,8 +62,8 @@ para satisfazer a política. Em particular, a ausência de `/opt/re7online/stagi
 Um staging já `SANITIZED` e comprovadamente removido pelo produtor também não
 reativa essa exigência histórica.
 
-O build publica `generation-artifacts.private.json`. Depois da verificação do
-pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
+O build publica `generation-artifacts.private.json`; antes de `generation-retirement.py prepare`, `deploy-preparation-admission.py` autentica pedido/provas privados, agrega negativas e só materializa atomicamente `0700`/`0600` com `copied=true`; execute com `-B`/`PYTHONDONTWRITEBYTECODE=1`, permita apenas reuso byte-exato e negue ausência, lock, symlink, owner/mode/hash ou prova divergente.
+Depois da verificação do pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
 lifecycle e fotografia operacional autenticados. A intenção resultante e seu
 hash integram a autorização de ativação; o executor frontend-only autentica ambos
 antes de selecionar o symlink. A preparação contém somente metadados, comandos e
