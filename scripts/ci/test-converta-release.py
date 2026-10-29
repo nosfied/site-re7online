@@ -219,6 +219,15 @@ class ReleaseProducerTest(unittest.TestCase):
             arguments.extend(("--deployed-marker-sha256", marker_sha256))
         return invoke(*arguments)
 
+    def verify_contract_overlay(self, root: Path) -> subprocess.CompletedProcess[str]:
+        contract = self.output_a / "generation-artifacts.private.json"
+        return invoke(
+            "verify", "--release-root", str(root), "--target", self.target,
+            "--release-id", self.release_id, "--components", COMPONENTS,
+            "--artifact-contract", str(contract),
+            "--artifact-contract-sha256", hashlib.sha256(contract.read_bytes()).hexdigest(),
+        )
+
     def copy_a959_release(self, name: str) -> tuple[Path, str]:
         destination = self.base / name / MODULE.A959_LEGACY_RELEASE_ID
         destination.parent.mkdir()
@@ -303,6 +312,10 @@ class ReleaseProducerTest(unittest.TestCase):
         })
         self.assertTrue(all("initialIdentity" in item and "observedIdentity" in item
                             for item in artifact_contract["artifacts"]))
+        self.assertEqual(artifact_contract["privateDataOverlay"], {
+            "path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
+            "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+        })
 
     def test_failed_command_preserves_private_output_without_printing_it(self) -> None:
         root = self.base / "failed-command-evidence"
@@ -368,6 +381,49 @@ class ReleaseProducerTest(unittest.TestCase):
         root = self.copy_release("extra")
         write(root / "api-runtime/extra.js", "extra\n")
         self.assert_denied(self.verify(root), "release_index_inventory")
+
+    def test_current_release_contract_allows_only_literal_private_data_overlay(self) -> None:
+        root = self.copy_release("current-overlay-valid")
+        overlay = root / "api-runtime/.data"
+        write(overlay / "private/state.json", "mutable\n", 0o600)
+        overlay.chmod(0o755)
+        accepted = self.verify_contract_overlay(root)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        observed = json.loads(accepted.stdout)["privateDataOverlay"]
+        self.assertEqual((observed["present"], observed["path"], observed["mode"]),
+                         (True, "api-runtime/.data", 0o755))
+
+        (overlay / "private/state.json").write_text("changed\n")
+        self.assertEqual(self.verify_contract_overlay(root).returncode, 0)
+        write(root / "api-runtime/unindexed.txt", "extra\n")
+        self.assert_denied(self.verify_contract_overlay(root), "release_index_inventory")
+
+    def test_current_release_contract_denies_overlay_symlink_and_unsafe_identity(self) -> None:
+        linked = self.copy_release("current-overlay-symlink")
+        target = linked / "api-runtime/private-target"; target.mkdir()
+        (linked / "api-runtime/.data").symlink_to(target)
+        self.assert_denied(self.verify_contract_overlay(linked), "private_data_overlay_identity")
+
+        writable = self.copy_release("current-overlay-writable")
+        overlay = writable / "api-runtime/.data"; overlay.mkdir(mode=0o775); overlay.chmod(0o775)
+        self.assert_denied(self.verify_contract_overlay(writable), "private_data_overlay_identity")
+
+    def test_private_data_overlay_contract_is_installed_only_and_hash_bound(self) -> None:
+        contract = self.output_a / "generation-artifacts.private.json"
+        package = invoke(
+            "verify", "--package", str(self.package), "--target", self.target,
+            "--release-id", self.release_id, "--components", COMPONENTS,
+            "--artifact-contract", str(contract),
+            "--artifact-contract-sha256", hashlib.sha256(contract.read_bytes()).hexdigest(),
+        )
+        self.assert_denied(package, "private_data_contract_binding")
+        root = self.copy_release("current-overlay-bad-contract-hash")
+        bad = invoke(
+            "verify", "--release-root", str(root), "--target", self.target,
+            "--release-id", self.release_id, "--components", COMPONENTS,
+            "--artifact-contract", str(contract), "--artifact-contract-sha256", "0" * 64,
+        )
+        self.assert_denied(bad, "private_data_contract_identity")
 
     def test_a959_installed_overlay_is_closed_and_does_not_relax_package_inventory(self) -> None:
         root, marker_sha = self.copy_a959_release("a959-overlay-valid")

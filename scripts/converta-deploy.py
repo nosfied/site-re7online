@@ -22,6 +22,8 @@ from typing import Any, Callable
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
+PRIVATE_DATA_POLICY = "PRIVATE_DATA_NEVER_RETIRE"
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -503,6 +505,80 @@ class Driver:
         if status.returncode or status.stdout.strip():
             deny("control_plane_not_clean")
 
+    def _private_data_contract(self) -> dict[str, Any]:
+        binding = self.inputs.retirement
+        if binding is None:
+            deny("private_data_contract_binding")
+        intent_raw, _ = stable_regular_bytes(binding.intent, required_mode=0o600)
+        if hashlib.sha256(intent_raw).hexdigest() != binding.intent_sha256:
+            deny("private_data_contract_intent")
+        intent = json_object(intent_raw, binding.intent.name)
+        contract_sha256 = intent.get("contractSha256")
+        if not isinstance(contract_sha256, str) or not SHA256.fullmatch(contract_sha256):
+            deny("private_data_contract_identity")
+        contract_path = binding.review_output.parent / "generation-artifacts.private.json"
+        contract_raw, _ = stable_regular_bytes(contract_path, required_mode=0o600)
+        if hashlib.sha256(contract_raw).hexdigest() != contract_sha256:
+            deny("private_data_contract_sha256")
+        contract = json_object(contract_raw, contract_path.name)
+        required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
+                    "writerLockPath", "classes", "artifacts", "privateDataPolicy"}
+        optional = {"privateDataOverlay"}
+        if (not required.issubset(contract) or not set(contract).issubset(required | optional) or
+                contract.get("schemaVersion") != 1 or contract.get("state") != "COMPLETE" or
+                contract.get("generationId") != self.inputs.release or
+                contract.get("releaseId") != self.inputs.release or
+                contract.get("targetCommit") != self.inputs.target or
+                contract.get("privateDataPolicy") != PRIVATE_DATA_POLICY):
+            deny("private_data_contract_schema")
+        declared = contract.get("privateDataOverlay")
+        expected = {"path": PRIVATE_DATA_OVERLAY.as_posix(),
+                    "classification": PRIVATE_DATA_POLICY,
+                    "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC"}
+        if declared is not None and declared != expected:
+            deny("private_data_contract_overlay")
+        return contract
+
+    def _private_data_overlay(self) -> dict[str, Any]:
+        self._private_data_contract()
+        overlay = self.release_root / PRIVATE_DATA_OVERLAY
+        if not overlay.exists() and not overlay.is_symlink():
+            return {"present": False, "path": PRIVATE_DATA_OVERLAY.as_posix(),
+                    "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY"}
+        try:
+            release_info = self.release_root.lstat()
+            release_resolved = self.release_root.resolve(strict=True)
+            before = overlay.lstat()
+            resolved = overlay.resolve(strict=True)
+        except OSError:
+            deny("private_data_overlay_read")
+        if (overlay.is_symlink() or not stat.S_ISDIR(before.st_mode) or resolved != overlay or
+                release_resolved not in resolved.parents or
+                (before.st_uid, before.st_gid) != (release_info.st_uid, release_info.st_gid) or
+                stat.S_IMODE(before.st_mode) & 0o022):
+            deny("private_data_overlay_identity")
+        entries = 1
+        for path in sorted(overlay.rglob("*"), key=lambda item: item.as_posix()):
+            try:
+                info = path.lstat()
+                path_resolved = path.resolve(strict=True)
+            except OSError:
+                deny("private_data_overlay_read")
+            if (stat.S_ISLNK(info.st_mode) or
+                    not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)) or
+                    not (path_resolved == resolved or resolved in path_resolved.parents)):
+                deny("private_data_overlay_symlink")
+            entries += 1
+        after = overlay.lstat()
+        if ((before.st_dev, before.st_ino, before.st_mode, before.st_uid, before.st_gid) !=
+                (after.st_dev, after.st_ino, after.st_mode, after.st_uid, after.st_gid)):
+            deny("private_data_overlay_changed")
+        return {"present": True, "path": PRIVATE_DATA_OVERLAY.as_posix(),
+                "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY",
+                "rootIdentity": {"device": after.st_dev, "inode": after.st_ino},
+                "ownerUid": after.st_uid, "groupGid": after.st_gid,
+                "mode": stat.S_IMODE(after.st_mode), "observedEntries": entries}
+
     def _release_index(self, index_path: Path, raw: bytes) -> dict[str, Any]:
         index = json_object(raw, index_path.name)
         if index.get("schemaVersion") != 1 or index.get("scope") != list(RUNTIME_DIR.values()):
@@ -533,6 +609,7 @@ class Driver:
                 deny("release_index_symlink")
             expected[entry["path"]] = entry
 
+        overlay = self._private_data_overlay()
         observed: dict[str, dict[str, Any]] = {}
         observed_identity: dict[str, tuple[int, ...]] = {}
         for runtime_name in RUNTIME_DIR.values():
@@ -541,7 +618,11 @@ class Driver:
                 deny(f"release_runtime_missing:{runtime_name}")
             paths = [root, *sorted(root.rglob("*"))]
             for path in paths:
-                relative = path.relative_to(self.release_root).as_posix()
+                relative_path = PurePosixPath(path.relative_to(self.release_root).as_posix())
+                if (relative_path == PRIVATE_DATA_OVERLAY or
+                        PRIVATE_DATA_OVERLAY in relative_path.parents):
+                    continue
+                relative = relative_path.as_posix()
                 info = path.lstat()
                 observed_identity[relative] = (info.st_dev, info.st_ino, info.st_mode,
                                                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
@@ -570,7 +651,13 @@ class Driver:
         for relative, item in expected.items():
             if observed[relative] != item:
                 deny(f"release_index_mismatch:{relative}")
-        return {"sha256": hashlib.sha256(raw).hexdigest(), "entries": len(expected)}
+        overlay_after = self._private_data_overlay()
+        stable = ("present", "path", "classification", "state", "rootIdentity",
+                  "ownerUid", "groupGid", "mode")
+        if any(overlay_after.get(key) != overlay.get(key) for key in stable):
+            deny("private_data_overlay_changed")
+        return {"sha256": hashlib.sha256(raw).hexdigest(), "entries": len(expected),
+                "privateDataOverlay": overlay_after}
 
     def _release(self) -> dict[str, Any]:
         if not SHA40.fullmatch(self.inputs.target):
@@ -605,7 +692,8 @@ class Driver:
             if not runtime.is_dir():
                 deny(f"release_runtime_missing:{component}")
         return {"manifestSha256": manifest_sha, "indexSha256": index["sha256"],
-                "indexEntries": index["entries"]}
+                "indexEntries": index["entries"],
+                "privateDataOverlay": index["privateDataOverlay"]}
 
     def _rollback_release(self, component: str, identity: dict[str, Any]) -> Path:
         root = self.releases / identity["releaseId"]
@@ -1216,12 +1304,34 @@ class Driver:
                 deny(f"readiness_identity:{component}:{key}")
         return after, readiness
 
+    @staticmethod
+    def _validate_private_data_continuity(journal: dict[str, Any], release: dict[str, Any]) -> None:
+        current = release.get("privateDataOverlay")
+        if not isinstance(current, dict):
+            deny("private_data_overlay_evidence")
+        expected = journal.get("preflight", {}).get("release", {}).get("privateDataOverlay")
+        # Transactions prepared before the generic contract was versioned did not
+        # persist this projection. Their authenticated generation contract remains
+        # the authority; finalization still performs the full current validation.
+        if expected is None:
+            return
+        if not isinstance(expected, dict):
+            deny("private_data_overlay_preflight_evidence")
+        common = ("path", "classification", "state")
+        if any(expected.get(key) != current.get(key) for key in common):
+            deny("private_data_overlay_contract_drift")
+        if expected.get("present") is True:
+            stable = ("present", "rootIdentity", "ownerUid", "groupGid", "mode")
+            if any(expected.get(key) != current.get(key) for key in stable):
+                deny("private_data_overlay_identity_drift")
+
     def activate(self) -> None:
         journal = self._journal_read()
         if journal["state"] != "PREFLIGHT_PASS":
             deny("activate_state")
         self._control_head(); runtime_manifest = self._authenticated_runtime_manifest()
-        self._release()
+        release = self._release()
+        self._validate_private_data_continuity(journal, release)
         self._acquire_lock(journal)
         try:
             rows = self.host.pm2_rows(self._resolve_pm2())
@@ -1378,7 +1488,8 @@ class Driver:
             deny("finalize_replay")
         try:
             self._control_head(); self._authenticated_runtime_manifest()
-            self._release()
+            release = self._release()
+            self._validate_private_data_continuity(journal, release)
             final_readiness: dict[str, Any] = {}
             for component in COMPONENTS:
                 selected = component in self.inputs.components

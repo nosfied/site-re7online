@@ -246,6 +246,19 @@ class DeployFixture(unittest.TestCase):
             path = self.base / f"{name}.private.json"
             put(path, {"name": name}, 0o644 if name == "policy" else 0o600)
             retirement_paths[name] = path
+        self.generation_contract = self.base / "generation-artifacts.private.json"
+        put(self.generation_contract, {
+            "schemaVersion": 1, "generationId": self.candidate,
+            "releaseId": self.candidate, "targetCommit": self.target, "state": "COMPLETE",
+            "writerLockPath": str(self.base / ".generation-build.lock"),
+            "classes": ["PRIVATE_DATA_NEVER_RETIRE"], "artifacts": [],
+            "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+            "privateDataOverlay": {
+                "path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+            },
+        })
+        put(retirement_paths["intent"], {"contractSha256": sha(self.generation_contract)})
         put(retirement_paths["operational"], {
             "observations": {
                 "currentLinks": [{"path": str(path), "target": str(path.resolve())}
@@ -419,6 +432,44 @@ class DriverTests(DeployFixture):
         marker = deploy.read_json(driver.release_root / "DEPLOYED")
         self.assertEqual(marker["components"], ["api"])
 
+    def test_api_only_resume_accepts_only_literal_private_data_overlay_before_single_save(self) -> None:
+        overlay = self.releases / self.candidate / "api-runtime/.data"
+        overlay.mkdir(mode=0o755)
+        (overlay / "state.json").write_text("before\n")
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        acceptance_sha = sha(driver.acceptance)
+        (overlay / "state.json").write_text("after\n")
+        journal = driver._journal_read()
+        self.assertTrue(journal["preflight"]["release"]["privateDataOverlay"]["present"])
+        journal["preflight"]["release"].pop("privateDataOverlay")
+        journal["failure"] = "release_index_inventory"
+        journal["recoveryAction"] = "finalize"
+        driver._journal_write(journal, "FAILED")
+        restarts = [item for item in self.host.events if item.startswith("PM2:restart")]
+        driver.finalize()
+        self.assertEqual(sha(driver.acceptance), acceptance_sha)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual([item for item in self.host.events if item.startswith("PM2:restart")], restarts)
+        self.assertEqual(driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+
+    def test_private_data_overlay_is_fail_closed_without_relaxing_other_inventory(self) -> None:
+        for drift, predicate in (("extra", "release_index_inventory"),
+                                 ("symlink", "private_data_overlay_identity"),
+                                 ("writable", "private_data_overlay_identity")):
+            with self.subTest(drift=drift):
+                self.tearDown(); self.setUp()
+                root = self.releases / self.candidate
+                overlay = root / "api-runtime/.data"
+                if drift == "extra":
+                    (root / "api-runtime/unindexed.txt").write_text("extra\n")
+                elif drift == "symlink":
+                    target = root / "api-runtime/private-target"; target.mkdir()
+                    overlay.symlink_to(target)
+                else:
+                    overlay.mkdir(mode=0o775); overlay.chmod(0o775)
+                with self.assertRaisesRegex(deploy.Denied, predicate):
+                    self.api_only().preflight()
+                self.assertEqual(self.host.save_calls, 0)
     def test_api_only_finalize_resume_never_repeats_save_or_retirement(self) -> None:
         driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
         driver.failpoints.add("after_save")

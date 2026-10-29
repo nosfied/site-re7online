@@ -153,19 +153,18 @@ ocorre depois pelo `prepare --legacy-review-sha256`, que produz intenção sem
 comandos e review v2 `SANITIZED`; não há etapa `execute`. A release instalada
 permanece `ACTIVE_DEPENDENCY`, fora de qualquer comando.
 
-A release instalada `a959` contém ainda o overlay operacional literal
-`api-runtime/.data`, ausente do pacote e do índice imutável. Somente a combinação
-fechada release/target da `a959` pode verificá-lo separadamente: a raiz precisa ser
-diretório físico confinado, com owner/group iguais aos da release, sem escrita por
-grupo/outros; sua identidade é registrada e nenhum symlink é aceito.
-As 34.351 entradas imutáveis continuam comparadas integralmente ao índice e qualquer
-adição fora do overlay é `DENY`. O contrato classifica a raiz como
-`PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`; `prepare` e `execute` nunca geram
-comando para ela. Entre bootstrap e `prepare`, a projeção estrutural da release é
-recalculada excluindo somente esse subtree; drift em qualquer entrada imutável é
-`DENY`, enquanto conteúdo mutável dentro de `.data` não invalida a projeção. A
-verificação do pacote não admite overlay ou exceção. Releases
-futuras devem manter todo dado mutável fora da árvore imutável instalada.
+A `a959` introduziu o contrato comprovado do overlay literal `api-runtime/.data`.
+Gerações do fluxo atual registram a mesma política no contrato autenticado, sem
+binding por release: pacote e índice nunca contêm `.data`; somente a release instalada
+pode apresentar esse diretório físico, confinado, com owner/group da release e sem
+escrita por grupo/outros. O modo `0755` é válido porque concede apenas leitura/travessia
+a grupo/outros. Symlink, escape, identidade insegura ou qualquer adição externa é
+`DENY`. A projeção estrutural exclui somente o subtree, permitindo mudança interna
+entre preflight e finalize, e o overlay não gera comando isolado de retenção. O
+preflight registra a projeção antes da seleção; finalize a revalida antes do único
+save. O binding fechado da `a959` continua somente para seu bootstrap histórico.
+Dados mutáveis futuros devem migrar para persistência externa à release; este contrato
+não autoriza essa migração nem relaxa a verificação do pacote.
 
 Portanto, `123ba` e `a959` não compartilham bootstrap: a primeira é
 `LEGACY_PRE_CONTRACT` sem review; a segunda já tem review v1, não pode fabricá-la

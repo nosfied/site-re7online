@@ -106,12 +106,7 @@ terceira geração.
 
 O procedimento legado de `d436/f160` com descriptors fechados e ordinais `2/6/7` (rollback) e `3/8/9` (ativa) foi concluído em 27/10/2026: dois prepares sem comandos, reviews v2 `SANITIZED` e um único gate global `PASS`. Não repetir os bootstraps nem tratá-los como etapa vigente do próximo build.
 Em `f160`, somente o cache literal documentado é overlay efêmero; pacote/índice seguem estritos e sua retirada isolada é proibida.
-Exclusivamente na verificação instalada da `a959`, o bootstrap habilita o contrato legado para `api-runtime/.data`. O verificador mantém o índice imutável estrito e
-autentica confinamento, tipo físico, owner/group da release, modo, symlinks e identidade
-da raiz privada, devolvida ao contrato como
-`PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`. O modo é negado para pacotes, outro
-target/release ou overlay diferente. Não mover, indexar ou retirar `.data`; novas releases devem apontar dados mutáveis para persistência externa à release. O `prepare`
-reautentica a projeção sem `.data`: drift fora dela é `DENY`; mudança interna é permitida.
+O contrato `privateDataPolicy` produzido por gerações atuais reserva somente o caminho literal `api-runtime/.data` como `PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY` na release instalada. Pacote e índice continuam estritos; o driver autentica contrato/hash, confinamento, diretório físico, owner/group da release, modo sem escrita por grupo/outros e ausência de symlink antes da ativação. A projeção estrutural exclui somente esse subtree: drift externo é `DENY`, conteúdo interno mutável é permitido e o overlay nunca origina comando isolado de retenção. O binding legado da `a959` permanece apenas para seu bootstrap histórico; não é copiado para gerações atuais. Não mover ou indexar `.data`; dados mutáveis futuros devem migrar para persistência externa à release.
 
 No fluxo fixed-current, o `preflight` aceita somente `--components api` ou `--components api,frontend` e exige `--generation-retirement-*` e manifesto privado do runtime, sem bindings PM2/`validate-pair`. O payload permanece API+frontend integralmente verificado; no modo API-only, frontend e worker são dependências preservadas. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
@@ -209,7 +204,7 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 ## Preflight (`preflight`)
 
 1. Adquirir o lock e confirmar ausência de outra janela.
-2. Revalidar pacote/release, target, BUILD_ID, entrypoint, symlinks e retornos.
+2. Revalidar pacote/release, target, BUILD_ID, entrypoint, symlinks e retornos; autenticar o contrato do overlay literal `api-runtime/.data` e sua projeção antes de qualquer seleção.
 3. Reabrir cada insumo privado e validar tipo, symlink, hash, owner/group e modo
    exigido pelo driver; modo do checkout não substitui o da cópia privada. Antes da
    autorização, exigir pai físico do receipt `deploy:deploy 0700` e receipt ausente.

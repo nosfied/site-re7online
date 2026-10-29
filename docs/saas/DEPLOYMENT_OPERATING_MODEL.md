@@ -60,6 +60,13 @@ O pacote e o índice permanecem API+frontend em ambos. No escopo API-only, somen
 dependências preservadas, reautenticadas antes/depois, incluídas na validação do dump
 e nunca selecionadas ou reiniciadas. O marker registra os componentes selecionados.
 
+O produtor registra no contrato da geração o único overlay operacional admitido,
+`api-runtime/.data`, como `PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`. O preflight
+autentica contrato, raiz física, confinamento, owner/group e modo `0755` (leitura e
+travessia para grupo/outros, sem escrita); pacote e índice jamais contêm o overlay.
+O conteúdo interno pode mudar sem mascarar qualquer drift fora desse subtree. Essa
+compatibilidade não substitui a migração futura dos dados para persistência externa.
+
 O encerramento é determinístico e limitado ao contrato daquela geração. Ele não
 refaz inventário global nem comparação entre todas as releases. Package,
 manifest, index, evidências, releases no grafo active/rollback/transitive-return e
