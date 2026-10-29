@@ -1,8 +1,8 @@
 # Plano P00 — convergência da preparação de deploy
 
-**Status:** P00 / BLOQUEADOR / PLANEJAMENTO  
+**Status:** P00 / BLOQUEADOR / IMPLEMENTAÇÃO EM REVISÃO  
 **Data de abertura:** 29/10/2026  
-**Atualização:** ciclo do lock resolvido pelo PR #275 / merge `3d7604800ee62ef236a7985f7279306f4085a307`  
+**Atualização:** admissão agregada e materialização atômica do control plane implementadas em PR próprio; ciclo do lock resolvido pelo PR #275 / merge `3d7604800ee62ef236a7985f7279306f4085a307`  
 **Autoridade:** [princípios fundamentais de trabalho](../WORKING_PRINCIPLES.md)
 
 Este plano registra uma dívida operacional evidenciada durante a preparação da
@@ -142,6 +142,26 @@ Adicionar regressões que comprovem:
 Atualizar, no mesmo conjunto versionado, testes, runbook, modelo operacional,
 lifecycle, estado canônico e validadores documentais. A documentação não pode
 declarar o procedimento incorporado antes dessas fontes concordarem.
+
+## Implementação versionada da admissão
+
+`scripts/deploy-preparation-admission.py` consome um pedido privado autenticado e
+valida, em uma única passagem, o conjunto fechado de checks e provas exigido antes
+de `prepare`. Divergências são agregadas e retornadas juntas; nenhuma cópia
+consumível é publicada na negativa.
+
+No caminho válido, as três fontes autenticadas
+(`generation-retirement.py`, `converta-release.py` e
+`deploy-artifact-roots.json`) são reabertas sem seguir symlink, copiadas em
+`0600` para uma raiz parcial `0700`, reobservadas por hash e publicadas junto
+da fotografia operacional com `copied=true` por um único rename da raiz. A
+publicação exige destino final ausente, pai físico privado, `fsync` de arquivos
+e diretórios e execução Python com bytecode desabilitado. Destino existente nunca
+é sobrescrito ou tratado como sucesso idempotente implícito.
+
+A CI reproduz modo `0664`, cópia/hash divergente, symlink, lock ocupado,
+assertion/check ausente, identidade operacional divergente e destino parcial,
+comprovando negativa agregada e ausência da raiz consumível.
 
 ## Definição de pronto
 
