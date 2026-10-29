@@ -113,8 +113,14 @@ O fechamento frontend-only `immutable-b96eb779-vps-20261028T025159Z` concluiu
 da guarda. A capacidade final foi 12.402.286.592 bytes (aprox. 11,55 GiB), abaixo
 do piso de build de 12 GiB (12.884.901.888 bytes): novo build fica bloqueado, mas
 auditorias e homologações sem build continuam permitidas. O fechamento por
-transferência de lock usa somente `scripts/frontend-finalization-continuation.py`;
-wrappers inline/improvisados não são evidência operacional válida.
+transferência de lock usa somente o wrapper versionado do modo:
+`scripts/frontend-finalization-continuation.py` ou
+`scripts/fixed-current-finalization-continuation.py`. O protocolo compartilhado
+autentica o lock existente no FD 9, mantém o `flock` até receipt/journal/fsync e
+proíbe pré-criação de stdout/stderr. No fixed-current, o mesmo FD é repassado ao
+retirement por `--deployment-lock-fd 9`; o driver não remove o inode enquanto o
+lock externo estiver ativo. Wrappers inline/improvisados não são evidência
+operacional válida.
 
 `immutable-123ba7bd-vps-20261026T200100Z` é a única geração conhecida anterior
 ao contrato: `LEGACY_PRE_CONTRACT`, não uma review v1 `PRESERVE`. Seu bootstrap

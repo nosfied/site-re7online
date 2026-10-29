@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -61,6 +62,8 @@ PROCESS_NAMES = {
     "worker": "re7-whatsapp-web-worker",
 }
 LOCK = Path("/opt/re7online/backups/converta-persistent/deploy.lock")
+EXTERNAL_LOCK_ENV = "RE7_DEPLOYMENT_LOCK_HELD"
+EXTERNAL_LOCK_FD = 9
 PM2_CANDIDATES = (
     Path.home() / ".npm-global/bin/pm2", Path.home() / ".local/bin/pm2",
     Path("/usr/local/bin/pm2"),
@@ -315,8 +318,17 @@ class Inputs:
 class Host:
     """Small host surface; tests replace this object without changing the CLI."""
 
-    def run(self, command: list[str], *, timeout: float = 40) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(command, text=True, capture_output=True, timeout=timeout, check=False)
+    def run(self, command: list[str], *, timeout: float = 40,
+            pass_fds: tuple[int, ...] = (),
+            env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        options: dict[str, Any] = {
+            "text": True, "capture_output": True, "timeout": timeout, "check": False,
+        }
+        if pass_fds:
+            options["pass_fds"] = pass_fds
+        if env is not None:
+            options["env"] = env
+        return subprocess.run(command, **options)
 
     def get(self, url: str, timeout: float = 10) -> int:
         request = urllib.request.Request(url, method="GET")
@@ -1121,7 +1133,15 @@ class Driver:
                    "--deployment-lock", str(binding.deployment_lock),
                    "--receipt-root", str(binding.receipt_root),
                    "--review-output", str(binding.review_output)]
-        result = self.host.run(command, timeout=180)
+        if self._external_lock_active():
+            self._authenticate_external_lock()
+            command.extend(["--deployment-lock-fd", str(EXTERNAL_LOCK_FD)])
+            environment = dict(os.environ)
+            environment[EXTERNAL_LOCK_ENV] = "1"
+            result = self.host.run(command, timeout=180,
+                                   pass_fds=(EXTERNAL_LOCK_FD,), env=environment)
+        else:
+            result = self.host.run(command, timeout=180)
         stdout_raw = result.stdout.encode()
         stderr_raw = result.stderr.encode()
         stdout_path = self.inputs.transaction_root / "generation-retirement.stdout.private.txt"
@@ -1317,7 +1337,70 @@ class Driver:
             stream.flush(); os.fsync(stream.fileno())
         journal["lockDigest"] = digest(self.lock)
 
+    def _external_lock_active(self) -> bool:
+        value = os.environ.get(EXTERNAL_LOCK_ENV)
+        if value is None:
+            return False
+        if value != "1":
+            deny("external_lock_flag")
+        return True
+
+    def _authenticate_external_lock(self) -> None:
+        try:
+            before = self.lock.lstat()
+            opened = os.fstat(EXTERNAL_LOCK_FD)
+        except OSError:
+            deny("external_lock_fd")
+        if (self.lock.is_symlink() or not stat.S_ISREG(before.st_mode) or
+                not stat.S_ISREG(opened.st_mode) or
+                (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino) or
+                (before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode)) !=
+                (os.geteuid(), os.getegid(), 0o600) or
+                (opened.st_uid, opened.st_gid, stat.S_IMODE(opened.st_mode)) !=
+                (os.geteuid(), os.getegid(), 0o600) or
+                not os.get_inheritable(EXTERNAL_LOCK_FD)):
+            deny("external_lock_identity")
+        try:
+            fdinfo = Path(f"/proc/self/fdinfo/{EXTERNAL_LOCK_FD}").read_text()
+        except OSError:
+            deny("external_lock_fdinfo")
+        expected = (os.major(opened.st_dev), os.minor(opened.st_dev), opened.st_ino)
+        owned = False
+        for line in fdinfo.splitlines():
+            fields = line.split()
+            if (len(fields) < 7 or fields[0] != "lock:" or
+                    fields[2:5] != ["FLOCK", "ADVISORY", "WRITE"]):
+                continue
+            try:
+                major, minor, inode = fields[6].split(":")
+                observed = (int(major, 16), int(minor, 16), int(inode))
+            except (ValueError, IndexError):
+                continue
+            if observed == expected:
+                owned = True
+                break
+        if not owned:
+            deny("external_lock_not_held")
+        try:
+            probe = os.open(self.lock, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+        except OSError:
+            deny("external_lock_probe")
+        try:
+            try:
+                fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return
+            fcntl.flock(probe, fcntl.LOCK_UN)
+            deny("external_lock_not_held")
+        finally:
+            os.close(probe)
+
     def _release_lock(self, journal: dict[str, Any], *, allow_absent: bool = False) -> None:
+        if self._external_lock_active():
+            self._authenticate_external_lock()
+            if digest(self.lock) != journal.get("lockDigest"):
+                deny("global_lock_identity")
+            return
         if not self.lock.exists() and allow_absent:
             return
         regular_private(self.lock)
@@ -1326,6 +1409,11 @@ class Driver:
         self.lock.unlink()
 
     def _ensure_lock(self, journal: dict[str, Any]) -> None:
+        if self._external_lock_active():
+            self._authenticate_external_lock()
+            if digest(self.lock) != journal.get("lockDigest"):
+                deny("global_lock_identity")
+            return
         if self.lock.exists():
             regular_private(self.lock)
             if digest(self.lock) != journal.get("lockDigest"): deny("global_lock_identity")
@@ -1575,6 +1663,8 @@ class Driver:
         if journal.get("saveCount") not in {0, 1}:
             deny("finalize_replay")
         try:
+            if self._external_lock_active():
+                self._ensure_lock(journal)
             self._control_head(); self._authenticated_runtime_manifest()
             release = self._release(continuation_journal=journal)
             self._validate_private_data_continuity(journal, release)
@@ -1732,6 +1822,8 @@ def parse() -> tuple[str, Inputs]:
 def main() -> int:
     try:
         command, inputs = parse()
+        if os.environ.get(EXTERNAL_LOCK_ENV) is not None and command != "finalize":
+            deny("external_lock_command")
         driver = Driver(inputs)
         if command == "status":
             print(driver.status())

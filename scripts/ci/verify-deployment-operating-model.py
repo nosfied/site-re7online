@@ -49,8 +49,9 @@ require("não utilizáveis" in model, "obsolete mechanisms")
 require("executor de ativação temporário em `/tmp`" in model,
         "temporary activation executor retired")
 require("scripts/frontend-finalization-continuation.py" in model and
+        "scripts/fixed-current-finalization-continuation.py" in model and
         "Wrappers inline ou improvisados são proibidos" in model,
-        "canonical frontend continuation entry")
+        "canonical continuation entries")
 runbook = (ROOT / "docs/saas/DEPLOY_RUNBOOK.md").read_text()
 driver = (ROOT / "scripts/converta-deploy.py").read_text()
 producer = (ROOT / "scripts/converta-release.py").read_text()
@@ -68,8 +69,9 @@ require([item["path"] for item in root_policy["canonicalRoots"]["evidence"]] ==
 require(len(runbook.splitlines()) <= MAX_DEPLOY_RUNBOOK_LINES,
         f"bounded deploy runbook size (maximum {MAX_DEPLOY_RUNBOOK_LINES} lines)")
 require("scripts/frontend-finalization-continuation.py" in runbook and
+        "scripts/fixed-current-finalization-continuation.py" in runbook and
         "wrappers inline" in runbook,
-        "runbook frontend continuation entry")
+        "runbook continuation entries")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK",
                "generation-retirement.py", "DEPLOYED_SANITIZED", "12 GiB",
@@ -79,7 +81,9 @@ for marker in ('choices=("preflight", "activate", "finalize", "rollback", "statu
                "pm2-definition-control.py", '"wait-existing-readiness"',
                '"--runtime-manifest"', '["restart", name]', '"ACEITE TÉCNICO PASS"',
                'SUPPORTED_COMPONENT_SETS = (("api",), COMPONENTS)',
-               'payload["components"] = ["api"]'):
+               'payload["components"] = ["api"]',
+               '"--deployment-lock-fd", str(EXTERNAL_LOCK_FD)',
+               'pass_fds=(EXTERNAL_LOCK_FD,), env=environment'):
     require(marker in driver, f"minimal deploy driver marker {marker}")
 for forbidden in ('pm2_mutate(pm2, ["delete"', 'pm2_mutate(pm2, ["start"',
                   '"--update-env"', '"validate-pair"'):
@@ -116,6 +120,16 @@ for marker in (
     '["/usr/bin/bash", "--noprofile", "--norc", str(executor), "finalize"]',
 ):
     require(marker in continuation, f"frontend continuation marker {marker}")
+fixed_continuation = (ROOT / "scripts/fixed-current-finalization-continuation.py").read_text()
+for marker in (
+    "os.O_WRONLY | os.O_CREAT | os.O_EXCL",
+    "fcntl.LOCK_EX | fcntl.LOCK_NB",
+    "os.dup2(fd, LOCK_FD, inheritable=True)",
+    'environment[LOCK_ENV] = "1"',
+    "stdout=stdout_fd, stderr=stderr_fd",
+    "pass_fds=(lock_fd,)",
+):
+    require(marker in fixed_continuation, f"fixed-current continuation marker {marker}")
 fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-readiness-race.sanitized.json").read_text())
 require(fixture["classification"] == "READINESS_RACE_SINGLE_SAMPLE",
         "readiness incident classification")

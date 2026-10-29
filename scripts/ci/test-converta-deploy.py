@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import dataclasses
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -72,8 +73,13 @@ class FakeHost(deploy.Host):
         self.worker_drift = False
         self.save_calls = 0
         self.retirement_calls = 0
+        self.retirement_pass_fds: tuple[int, ...] = ()
+        self.retirement_environment: dict[str, str] | None = None
+        self.retirement_command: list[str] = []
 
-    def run(self, command: list[str], *, timeout: float = 40) -> subprocess.CompletedProcess[str]:
+    def run(self, command: list[str], *, timeout: float = 40,
+            pass_fds: tuple[int, ...] = (),
+            env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         if command[:4] == ["git", "-C", str(ROOT), "rev-parse"]:
             return subprocess.CompletedProcess(command, 0, self.control_plane + "\n", "")
         if command[:4] == ["git", "-C", str(ROOT), "status"]:
@@ -82,6 +88,9 @@ class FakeHost(deploy.Host):
             return subprocess.CompletedProcess(command, 0, "6.0.14\n", "")
         if len(command) > 3 and command[2] == "execute" and "--intent" in command:
             self.retirement_calls += 1
+            self.retirement_pass_fds = pass_fds
+            self.retirement_environment = env
+            self.retirement_command = list(command)
             receipt_root = Path(command[command.index("--receipt-root") + 1])
             receipt_root.mkdir(mode=0o700)
             receipt = receipt_root / "execution-receipt.private.json"
@@ -289,6 +298,10 @@ class DeployFixture(unittest.TestCase):
         self.driver = self._driver()
 
     def tearDown(self) -> None:
+        try:
+            os.close(deploy.EXTERNAL_LOCK_FD)
+        except OSError:
+            pass
         self.temporary.cleanup()
 
     def _driver(self) -> FixtureDriver:
@@ -351,6 +364,18 @@ class DeployFixture(unittest.TestCase):
         self.inputs = dataclasses.replace(self.inputs, components=("api",))
         self.driver = self._driver()
         return self.driver
+
+    def external_lock(self, path: Path | None = None, *, held: bool = True) -> int:
+        source = path or self.lock
+        fd = os.open(source, os.O_RDWR | os.O_NOFOLLOW)
+        if held:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if fd != deploy.EXTERNAL_LOCK_FD:
+            os.dup2(fd, deploy.EXTERNAL_LOCK_FD, inheritable=True)
+            os.close(fd)
+        else:
+            os.set_inheritable(fd, True)
+        return deploy.EXTERNAL_LOCK_FD
 
     def legacy_overlay_finalize(self) -> tuple[FixtureDriver, Path, dict[str, Any]]:
         overlay = self.releases / self.candidate / "api-runtime/.data"
@@ -494,6 +519,73 @@ class DriverTests(DeployFixture):
         self.assertEqual(self.host.retirement_calls, 1)
         marker = deploy.read_json(driver.release_root / "DEPLOYED")
         self.assertEqual(marker["components"], ["api"])
+
+    def test_external_lock_finalize_passes_fd_to_retirement_and_preserves_lock_file(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        restarts = [event for event in self.host.events if event.startswith("PM2:restart")]
+        self.external_lock()
+        with patch.dict(os.environ, {deploy.EXTERNAL_LOCK_ENV: "1"}):
+            driver.finalize()
+        self.assertEqual(driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+        self.assertEqual(self.host.retirement_pass_fds, (deploy.EXTERNAL_LOCK_FD,))
+        self.assertEqual(self.host.retirement_environment[deploy.EXTERNAL_LOCK_ENV], "1")
+        index = self.host.retirement_command.index("--deployment-lock-fd")
+        self.assertEqual(self.host.retirement_command[index + 1], str(deploy.EXTERNAL_LOCK_FD))
+        self.assertTrue(self.lock.is_file())
+        self.assertEqual([event for event in self.host.events if event.startswith("PM2:restart")], restarts)
+
+    def test_external_lock_flag_without_fd_denies_before_save(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        try:
+            os.close(deploy.EXTERNAL_LOCK_FD)
+        except OSError:
+            pass
+        with patch.dict(os.environ, {deploy.EXTERNAL_LOCK_ENV: "1"}):
+            with self.assertRaisesRegex(deploy.Denied, "external_lock_fd"):
+                driver.finalize()
+        self.assertEqual(driver._journal_read()["saveCount"], 0)
+        self.assertEqual(self.host.save_calls, 0)
+
+    def test_fd9_without_flag_keeps_historical_driver_behavior(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        self.external_lock()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(deploy.EXTERNAL_LOCK_ENV, None)
+            driver.finalize()
+        self.assertEqual(driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertFalse(self.lock.exists())
+
+    def test_external_lock_inode_or_unlocked_fd_denies(self) -> None:
+        for variant in ("inode", "unlocked"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+                if variant == "inode":
+                    other = self.base / "other.lock"; other.write_text(""); other.chmod(0o600)
+                    self.external_lock(other)
+                    predicate = "external_lock_identity"
+                else:
+                    self.external_lock(held=False)
+                    predicate = "external_lock_not_held"
+                with patch.dict(os.environ, {deploy.EXTERNAL_LOCK_ENV: "1"}):
+                    with self.assertRaisesRegex(deploy.Denied, predicate):
+                        driver.finalize()
+                self.assertEqual(driver._journal_read()["saveCount"], 0)
+                self.assertEqual(self.host.save_calls, 0)
+
+    def test_external_lock_resume_after_save_does_not_repeat_save(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        self.external_lock(); driver.failpoints.add("after_save")
+        with patch.dict(os.environ, {deploy.EXTERNAL_LOCK_ENV: "1"}):
+            with self.assertRaisesRegex(deploy.Denied, "injected:after_save"):
+                driver.finalize()
+            driver.finalize()
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+        self.assertTrue(self.lock.is_file())
 
     def test_contract_without_overlay_is_denied_without_reconciliation(self) -> None:
         contract = json.loads(self.generation_contract.read_text())

@@ -50,9 +50,14 @@ geração.
 O mesmo limite vale ao frontend-only: o executor versionado possui `activate` e
 `finalize`; após o único save e o marker, ele executa a retenção uma vez e retoma por
 receipt autenticado, sem segundo save, restart ou retirada repetida.
-Quando uma transferência encerra o holder anterior, a única entrada permitida para
-continuar a finalização é `scripts/frontend-finalization-continuation.py`, com pedido
-privado autenticado. Wrappers inline ou improvisados são proibidos.
+Quando uma transferência encerra o holder anterior, a entrada permitida é somente
+o wrapper versionado do modo: `scripts/frontend-finalization-continuation.py` no
+frontend-only ou `scripts/fixed-current-finalization-continuation.py` no
+fixed-current. O protocolo é único: lock existente regular `0600`, FD 9 herdável
+com `flock` exclusivo e `RE7_DEPLOYMENT_LOCK_HELD=1`. No fixed-current, o driver
+autentica o FD antes do save, preserva o inode e o repassa ao retirement; o wrapper
+retém o lock até o fsync integral. stdout/stderr/exit são criados diretamente com
+exclusividade. Wrappers inline ou improvisados são proibidos.
 
 O driver fixed-current aceita somente os escopos ordenados `api` e `api,frontend`.
 O pacote e o índice permanecem API+frontend em ambos. No escopo API-only, somente
