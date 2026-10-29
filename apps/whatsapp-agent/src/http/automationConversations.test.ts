@@ -123,7 +123,7 @@ test("management-only consent exchange is visible only to authorized automation 
  }
  assert.equal((await request("GET",f.route,a)).status,404);
  assert.equal((await request("GET",f.route,outsider)).status,404);
- assert.equal((await request("GET","/app/conversations",admin)).body.items.some((i:any)=>i.waId===f.waId),false);
+ assert.equal((await request("GET","/app/conversations",admin)).body.items.some((item: { waId?: string })=>item.waId===f.waId),false);
 });
 
 test("revocation blocks direct/list reads and cannot be restored by later signature write",async()=>{

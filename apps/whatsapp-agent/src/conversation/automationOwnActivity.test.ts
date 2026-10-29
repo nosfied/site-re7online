@@ -12,6 +12,10 @@ const originalFetch = globalThis.fetch;
 let onSend: (() => Promise<void>) | undefined;
 let sends = 0;
 const ids: string[] = [];
+const jsonObject = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 test.before(() => {
   assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/re7_/);
   process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = "http://worker.invalid";
@@ -72,16 +76,16 @@ for (const answer of ["1", "2"]) test(`integrated WEB consent ${answer}: real ou
   const first = await inbound(f,"Hello"); assert.equal(first.ok,true);
   const initialInbound = await prisma.inboundMessage.findFirstOrThrow({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
   const initialOutbound = await prisma.outboundMessage.findFirstOrThrow({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
-  assert.notEqual((initialInbound.rawPayload as any)?.inboxVisibility,"management_only");
-  assert.equal((initialOutbound.rawPayload as any)?.inboxVisibility,"management_only");
-  assert.equal((initialOutbound.rawPayload as any)?.inboxInteractionKind,"consent_prompt");
+  assert.notEqual(jsonObject(initialInbound.rawPayload).inboxVisibility,"management_only");
+  assert.equal(jsonObject(initialOutbound.rawPayload).inboxVisibility,"management_only");
+  assert.equal(jsonObject(initialOutbound.rawPayload).inboxInteractionKind,"consent_prompt");
   let row = await prisma.conversationRuntimeState.findUniqueOrThrow({where:{clientId_waId:{clientId:f.client.id,waId:f.waId}}});
   assert.equal(row.chatbotNodeId,"consent"); assert.equal(row.chatbotActive,true); assert(row.lastOutboundAt);
   await inbound(f,answer);
   const answerInbound = await prisma.inboundMessage.findMany({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
   const latestAnswerInbound = answerInbound[answerInbound.length - 1];
-  assert.equal((latestAnswerInbound?.rawPayload as any)?.inboxVisibility,"management_only");
-  assert.equal((latestAnswerInbound?.rawPayload as any)?.inboxInteractionKind,answer === "1" ? "consent_positive" : "consent_negative");
+  assert.equal(jsonObject(latestAnswerInbound?.rawPayload).inboxVisibility,"management_only");
+  assert.equal(jsonObject(latestAnswerInbound?.rawPayload).inboxInteractionKind,answer === "1" ? "consent_positive" : "consent_negative");
   row = await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:row.id}});
   if(answer === "1") {
     assert.equal(row.chatbotNodeId,"menu");
@@ -105,8 +109,8 @@ test("consent reprocessing preserves one inbound and one management outbound", a
   assert.equal(await prisma.inboundMessage.count({ where: { clientId: f.client.id } }), 1);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }), 1);
   const outbound = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: f.client.id } });
-  assert.equal((outbound.rawPayload as any)?.inboxVisibility, "management_only");
-  assert.equal((outbound.rawPayload as any)?.inboxInteractionKind, "consent_prompt");
+  assert.equal(jsonObject(outbound.rawPayload).inboxVisibility, "management_only");
+  assert.equal(jsonObject(outbound.rawPayload).inboxInteractionKind, "consent_prompt");
 });
 for (const change of ["none","claim","transfer","close_csat","reentry","inbound","cycle","transport","account"] as const) test(`real accepted outbound during ${change}: own receipt or stale completion denied`, async () => {
   const f=await fixture(change);
