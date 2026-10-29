@@ -63,6 +63,12 @@ class AdmissionTests(unittest.TestCase):
             ],
         }))
         self.template.chmod(0o600)
+        self.assertion_evidence = {}
+        for name in REQUIRED_ASSERTIONS:
+            path = self.private / f"assertion-{name}.json"
+            path.write_text(json.dumps({"assertion": name, "passed": True}))
+            path.chmod(0o600)
+            self.assertion_evidence[name] = path
         self.paths = {}
         for name in REQUIRED_CHECKS:
             path = self.private / name
@@ -114,7 +120,14 @@ class AdmissionTests(unittest.TestCase):
             "controlPlaneArtifacts": self.controls,
             "checks": checks,
             "assertions": [
-                {"name": name, "passed": True, "evidenceSha256": H}
+                {
+                    "name": name,
+                    "passed": True,
+                    "evidencePath": str(self.assertion_evidence[name]),
+                    "evidenceSha256": hashlib.sha256(
+                        self.assertion_evidence[name].read_bytes()
+                    ).hexdigest(),
+                }
                 for name in sorted(REQUIRED_ASSERTIONS)
             ],
         }
@@ -154,6 +167,11 @@ class AdmissionTests(unittest.TestCase):
                      "admission-report.private.json"):
             self.assertEqual((root / name).stat().st_mode & 0o777, 0o600)
         self.assertFalse(any(self.base.rglob("__pycache__")))
+
+        second, reused = self.run_request(value)
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertEqual(reused["result"], "P00_AGGREGATE_ADMISSION_REUSED")
+        self.assertTrue(reused["reusedExactDestination"])
 
     def test_aggregate_denial_reports_all_known_defects_without_partial_root(self):
         value = self.request()
@@ -228,7 +246,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertIn("operational_template:identity", report["errors"])
         self.assertFalse(Path(value["finalRoot"]).exists())
 
-    def test_existing_destination_is_never_overwritten(self):
+    def test_nonidentical_existing_destination_is_never_overwritten(self):
         value = self.request()
         root = Path(value["finalRoot"])
         root.mkdir(mode=0o700)
@@ -236,8 +254,24 @@ class AdmissionTests(unittest.TestCase):
         marker.write_text("preserve")
         result, report = self.run_request(value)
         self.assertEqual(result.returncode, 2)
-        self.assertIn("request:finalRoot_present", report["errors"])
+        self.assertTrue(any(
+            "existing_destination_inventory" in error
+            for error in report["errors"]
+        ))
         self.assertEqual(marker.read_text(), "preserve")
+
+    def test_authenticated_assertion_evidence_drift_is_denied(self):
+        value = self.request()
+        evidence = self.assertion_evidence["health-public"]
+        evidence.write_text("drift")
+        evidence.chmod(0o600)
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "assertion:health-public:evidence:sha256",
+            report["errors"],
+        )
+        self.assertFalse(Path(value["finalRoot"]).exists())
 
     def test_source_bytes_remain_unchanged(self):
         value = self.request()
