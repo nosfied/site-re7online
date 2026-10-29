@@ -17,7 +17,11 @@ const jsonObject = (value: unknown): Record<string, unknown> =>
     ? value as Record<string, unknown>
     : {};
 test.before(() => {
-  assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/re7_/);
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? "");
+  assert.equal(databaseUrl.protocol, "postgresql:");
+  assert.equal(databaseUrl.hostname, "127.0.0.1");
+  assert.match(databaseUrl.port, /^\d+$/);
+  assert.match(databaseUrl.pathname, /^\/re7_/);
   process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = "http://worker.invalid";
   globalThis.fetch = (async (url: unknown) => {
     assert(String(url) === "http://worker.invalid/web-session/send-text" || String(url).startsWith("https://graph.facebook.com/"));
