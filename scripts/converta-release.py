@@ -70,6 +70,11 @@ REVIEW_STATES = {
 }
 ROOT_POLICY_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
 ROOT_POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
+INSTALL_RECOVERY_FIELDS = {
+    "schemaVersion", "targetCommit", "releaseId", "packagePath", "packageSha256",
+    "stagingPath", "stagingDevice", "stagingInode", "ownerUid", "groupGid",
+    "mode", "finalPath",
+}
 
 
 class Denied(RuntimeError):
@@ -1082,6 +1087,72 @@ def safe_extract(package: Path, destination: Path, expected_release: str) -> Pat
     return root
 
 
+def fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def package_root_identity(package: Path, expected_release: str) -> tuple[str, int]:
+    package_raw, _ = stable_bytes(package)
+    try:
+        with tarfile.open(fileobj=io.BytesIO(package_raw), mode="r:xz") as archive:
+            roots = [
+                member for member in archive.getmembers()
+                if member.name.rstrip("/") == expected_release
+            ]
+    except (OSError, EOFError, lzma.LZMAError, tarfile.TarError):
+        deny("package_integrity")
+    if len(roots) != 1 or not roots[0].isdir():
+        deny("package_release_root")
+    mode = stat.S_IMODE(roots[0].mode)
+    if mode != 0o755:
+        deny("package_release_root_mode")
+    return sha256_bytes(package_raw), mode
+
+
+def authenticated_install_recovery(
+        path: Path, expected_sha256: str, *,
+        target: str, release_id: str, package: Path,
+        package_sha256: str, releases_root: Path) -> tuple[dict[str, Any], Path, Path]:
+    raw, info = stable_bytes(path)
+    if (not path.is_absolute() or not SHA256.fullmatch(expected_sha256) or
+            info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+            stat.S_IMODE(info.st_mode) != 0o600 or
+            sha256_bytes(raw) != expected_sha256):
+        deny("install_recovery_manifest_identity")
+    recovery = json_object(raw, "install-recovery")
+    if set(recovery) != INSTALL_RECOVERY_FIELDS or recovery.get("schemaVersion") != 1:
+        deny("install_recovery_manifest_schema")
+    staging = Path(str(recovery.get("stagingPath", "")))
+    final = releases_root / release_id
+    if (recovery.get("targetCommit") != target or
+            recovery.get("releaseId") != release_id or
+            recovery.get("packagePath") != str(package) or
+            recovery.get("packageSha256") != package_sha256 or
+            recovery.get("finalPath") != str(final) or
+            not staging.is_absolute() or staging.parent != releases_root or
+            staging.name != f".{release_id}.installing"):
+        deny("install_recovery_manifest_binding")
+    try:
+        observed = staging.lstat()
+        resolved = staging.resolve(strict=True)
+    except OSError:
+        deny("install_recovery_staging_identity")
+    mode = stat.S_IMODE(observed.st_mode)
+    if (staging.is_symlink() or resolved != staging or
+            not stat.S_ISDIR(observed.st_mode) or
+            observed.st_dev != recovery.get("stagingDevice") or
+            observed.st_ino != recovery.get("stagingInode") or
+            observed.st_uid != recovery.get("ownerUid") or
+            observed.st_gid != recovery.get("groupGid") or
+            mode != recovery.get("mode") or mode != 0o700 or mode & 0o022):
+        deny("install_recovery_staging_identity")
+    return recovery, staging, final
+
+
 def authenticate_private_data_contract(path: Path, expected_sha256: str,
                                        target: str, release_id: str) -> dict[str, Any]:
     if not path.is_absolute() or not SHA256.fullmatch(expected_sha256):
@@ -1113,10 +1184,16 @@ def verify_root(root: Path, target: str, release_id: str,
                 deployed_marker_sha256: str | None = None, *,
                 allow_private_data_overlay: bool = False,
                 allow_a959_private_data_overlay: bool = False,
-                allow_f160_runtime_cache_overlay: bool = False) -> dict[str, Any]:
+                allow_f160_runtime_cache_overlay: bool = False,
+                physical_name: str | None = None,
+                expected_root_mode: int = 0o755) -> dict[str, Any]:
     if not root.is_absolute() or not root.is_dir() or root.is_symlink():
         deny("release_root")
-    if root.name != release_id:
+    root_info = root.lstat()
+    if (root.name != (physical_name or release_id) or
+            root_info.st_uid != os.geteuid() or root_info.st_gid != os.getegid() or
+            stat.S_IMODE(root_info.st_mode) != expected_root_mode or
+            expected_root_mode & 0o022):
         deny("release_directory_identity")
     allowed = {"manifest.json", "index.sha256", *RUNTIMES}
     if deployed_marker_sha256 is not None:
@@ -1430,6 +1507,87 @@ def verify(args: argparse.Namespace) -> None:
                           "targetCommit": args.target, **result}).decode().strip())
 
 
+def install(args: argparse.Namespace) -> None:
+    if args.components != ",".join(COMPONENTS):
+        deny("components")
+    roots = authenticated_build_roots(args.root_policy, args.root_policy_sha256)
+    releases_root = args.installed_releases_root
+    if releases_root != roots["releases"]:
+        deny("installed_releases_root_mismatch")
+    package = args.package.resolve(strict=True)
+    package_sha256, package_root_mode = package_root_identity(package, args.release_id)
+    final = releases_root / args.release_id
+    if final.exists() or final.is_symlink():
+        deny("installed_release_exists")
+    recovery_pair = (
+        args.recovery_manifest is not None,
+        args.recovery_manifest_sha256 is not None,
+    )
+    if recovery_pair[0] != recovery_pair[1]:
+        deny("install_recovery_manifest_pair")
+    if args.recovery_manifest is not None:
+        _, staged, bound_final = authenticated_install_recovery(
+            args.recovery_manifest, args.recovery_manifest_sha256,
+            target=args.target, release_id=args.release_id, package=package,
+            package_sha256=package_sha256, releases_root=releases_root,
+        )
+        if bound_final != final:
+            deny("install_recovery_manifest_binding")
+        result = verify_root(
+            staged, args.target, args.release_id,
+            physical_name=staged.name, expected_root_mode=0o700,
+        )
+        before = staged.lstat()
+        os.chmod(staged, package_root_mode)
+        after = staged.lstat()
+        if ((before.st_dev, before.st_ino, before.st_uid, before.st_gid) !=
+                (after.st_dev, after.st_ino, after.st_uid, after.st_gid) or
+                stat.S_IMODE(after.st_mode) != package_root_mode):
+            deny("install_recovery_mode_transition")
+        if final.exists() or final.is_symlink():
+            deny("installed_release_exists")
+        os.rename(staged, final)
+        fsync_directory(releases_root)
+        final_result = verify_root(final, args.target, args.release_id)
+        if final_result != result:
+            deny("installed_release_postrename_mismatch")
+        result = final_result
+        recovered = True
+    else:
+        temporary = releases_root / f".{args.release_id}.installing.{os.getpid()}"
+        if temporary.exists() or temporary.is_symlink():
+            deny("install_temporary_exists")
+        os.mkdir(temporary, 0o700)
+        extracted: Path | None = None
+        try:
+            extracted = safe_extract(package, temporary, args.release_id)
+            result = verify_root(extracted, args.target, args.release_id)
+            if final.exists() or final.is_symlink():
+                deny("installed_release_exists")
+            os.rename(extracted, final)
+            fsync_directory(releases_root)
+            temporary.rmdir()
+            result = verify_root(final, args.target, args.release_id)
+        except BaseException:
+            if extracted is not None and extracted.exists():
+                shutil.rmtree(extracted)
+            try:
+                temporary.rmdir()
+            except OSError:
+                pass
+            raise
+        recovered = False
+    print(canonical_json({
+        "result": "RELEASE INSTALLED",
+        "releaseId": args.release_id,
+        "targetCommit": args.target,
+        "packageSha256": package_sha256,
+        "releasePath": str(final),
+        "recoveredExistingStaging": recovered,
+        **result,
+    }).decode().strip())
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
@@ -1461,6 +1619,17 @@ def parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--legacy-a959-private-data-overlay", action="store_true")
     verify_parser.add_argument("--legacy-f160-runtime-cache-overlay", action="store_true")
     verify_parser.set_defaults(handler=verify)
+    install_parser = commands.add_parser("install")
+    install_parser.add_argument("--package", type=Path, required=True)
+    install_parser.add_argument("--target", required=True)
+    install_parser.add_argument("--release-id", required=True)
+    install_parser.add_argument("--components", required=True)
+    install_parser.add_argument("--installed-releases-root", type=Path, required=True)
+    install_parser.add_argument("--root-policy", type=Path, required=True)
+    install_parser.add_argument("--root-policy-sha256", required=True)
+    install_parser.add_argument("--recovery-manifest", type=Path)
+    install_parser.add_argument("--recovery-manifest-sha256")
+    install_parser.set_defaults(handler=install)
     return root
 
 
