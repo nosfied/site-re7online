@@ -118,18 +118,39 @@ test("Meta/IA and WEB_SESSION BOT: manager tenant-wide read; Automation only, no
  }
 });
 
-test("management-only consent exchange is visible only to authorized automation readers",async()=>{
+test("consent exchange is visible in Automation and follows an authorized human handoff without exposing other management content",async()=>{
  await enable(true);
  const f=await bot("web_session");
- const messageId=f.state.id+"-restricted";
- await prisma.inboundMessage.create({data:{clientId:client.id,waId:f.waId,waIdCanonical:f.waId,messageId,type:"TEXT",bodyText:"restricted-consent-secret",allowlistHit:true,rawPayload:{inboxVisibility:"management_only",inboxInteractionKind:"consent_prompt"}}});
+ const messages=[
+  ["prompt","consent_prompt","consent-question"],
+  ["positive","consent_positive","consent-positive"],
+  ["negative","consent_negative","consent-negative"],
+  ["invalid","consent_invalid","consent-invalid-hidden"],
+  ["internal","internal_management_note","internal-management-hidden"],
+ ] as const;
+ for(const [suffix,kind,bodyText] of messages){
+  await prisma.inboundMessage.create({data:{clientId:client.id,waId:f.waId,waIdCanonical:f.waId,messageId:`${f.state.id}-${suffix}`,type:"TEXT",bodyText,allowlistHit:true,rawPayload:{inboxVisibility:"management_only",inboxInteractionKind:kind}}});
+ }
+ const assertConsentProjection=(body:unknown)=>{
+  const serialized=JSON.stringify(body);
+  for(const visible of ["consent-question","consent-positive","consent-negative"])assert(serialized.includes(visible),serialized);
+  for(const hidden of ["consent-invalid-hidden","internal-management-hidden"])assert(!serialized.includes(hidden),serialized);
+ };
  for(const actor of [admin,supervisor]){
-  for(const suffix of ["","/timeline"]){const r=await request("GET",f.route+suffix,actor);assert(JSON.stringify(r.body).includes("restricted-consent-secret"));}
-  assert.equal((await request("GET",f.route+"/messages/"+messageId+"/media",actor)).status,404);
+  for(const suffix of ["","/timeline"]){const r=await request("GET",f.route+suffix,actor);assert.equal(r.status,200,JSON.stringify(r));assertConsentProjection(r.body);}
+  assert.equal((await request("GET",f.route+"/messages/"+f.state.id+"-prompt/media",actor)).status,404);
  }
  assert.equal((await request("GET",f.route,a)).status,404);
  assert.equal((await request("GET",f.route,outsider)).status,404);
  assert.equal((await request("GET","/app/conversations",admin)).body.items.some((item: { waId?: string })=>item.waId===f.waId),false);
+
+ await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{mode:"HUMAN",handoffStatus:"ACTIVE",status:"IN_PROGRESS",departmentId:department.id,queueId:queue.id,assignedUserId:a.id,assignedAt:new Date(),handoffActivatedAt:new Date()}});
+ for(const actor of [a,admin,supervisor]){
+  for(const suffix of ["","/timeline"]){const r=await request("GET",f.route+suffix,actor);assert.equal(r.status,200,JSON.stringify(r));assertConsentProjection(r.body);}
+ }
+ assert.equal((await request("GET",f.route,outsider)).status,404);
+ assert.equal((await request("GET","/app/conversations?automation=true",admin)).body.items.some((item: { waId?: string })=>item.waId===f.waId),false);
+ assert((await request("GET","/app/conversations",a)).body.items.some((item: { waId?: string })=>item.waId===f.waId));
 });
 
 test("revocation blocks direct/list reads and cannot be restored by later signature write",async()=>{

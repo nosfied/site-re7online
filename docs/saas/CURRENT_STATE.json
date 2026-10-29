@@ -116,7 +116,13 @@
         "correlationFinding": "CONTROLLED_CRA_RESPONSE_PERSISTED_BY_EFFECTIVE_WEB_SESSION_TRANSPORT; TEXT_ONLY_CORRELATION_SELECTED_AN_EARLIER_HOMONYMOUS_INBOUND",
         "status": "PATCH_IN_REVIEW",
         "allInboxPreserved": true,
-        "automationOnlyVisibility": true
+        "visibleInteractionKinds": [
+          "consent_prompt",
+          "consent_positive",
+          "consent_negative"
+        ],
+        "visibilityScope": "AUTHORIZED_AUTOMATION_AND_AUTHORIZED_HUMAN_AFTER_HANDOFF",
+        "otherManagementOnlyPreserved": true
       },
       "craTemplateAppId": {
         "status": "TENANT_SCOPED_APP_ID_NOT_AUTHENTICATED",

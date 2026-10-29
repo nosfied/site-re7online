@@ -18,10 +18,19 @@ test("inbox message visibility uses structured raw payload metadata only", () =>
   assert.equal(isManagementOnlyInboxMessage(null), false);
 });
 
-test("management-only messages remain private except in an authorized Automation view", () => {
-  const consent = withInboxMessageVisibility({}, "management_only", "consent_prompt");
-  assert.equal(shouldIncludeInboxMessageForView(consent, "human"), false);
-  assert.equal(shouldIncludeInboxMessageForView(consent, "authorized_automation"), true);
+test("consent prompt and definitive answers are visible in authorized histories without opening other management content", () => {
+  for (const kind of ["consent_prompt", "consent_positive", "consent_negative"]) {
+    const consent = withInboxMessageVisibility({}, "management_only", kind);
+    assert.equal(shouldIncludeInboxMessageForView(consent, "human"), true);
+    assert.equal(shouldIncludeInboxMessageForView(consent, "authorized_automation"), true);
+  }
+
+  for (const kind of ["consent_invalid", "internal_management_note"]) {
+    const restricted = withInboxMessageVisibility({}, "management_only", kind);
+    assert.equal(shouldIncludeInboxMessageForView(restricted, "human"), false);
+    assert.equal(shouldIncludeInboxMessageForView(restricted, "authorized_automation"), false);
+  }
+
   assert.equal(shouldIncludeInboxMessageForView({}, "human"), true);
 });
 

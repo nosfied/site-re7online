@@ -61,11 +61,15 @@ não depende de reutilizar o `requestId` do inbound: a correlação usa tenant,
 identidade multicanal canônica, IDs internos/do provider e
 `ConversationRuntimeState`.
 
-Interações `management_only` permanecem fora de “Todas” e da timeline humana.
-Somente um ator autorizado a ler a conversa BOT no filtro Automação recebe a
-troca completa. Essa leitura não faz claim, handoff ou transição para atendimento
-humano. Retries/reprocessamento continuam protegidos pelas identidades únicas do
-inbound e do outbound; a classificação não cria uma segunda mensagem.
+Enquanto a conversa permanece BOT, ela continua fora de “Todas”; somente um ator
+autorizado a ler o filtro Automação recebe a troca de consentimento
+(`consent_prompt`, `consent_positive` e `consent_negative`). Quando o fluxo
+existente encaminha a conversa para atendimento humano, esse mesmo trecho acompanha
+o histórico integral entregue ao operador autorizado. `consent_invalid` e qualquer
+outro conteúdo `management_only` permanecem ocultos. A projeção não faz claim,
+handoff ou transição, não altera o fluxo vigente e não cria mensagens. Retries e
+reprocessamento continuam protegidos pelas identidades únicas do inbound e do
+outbound.
 
 A fotografia P00 de 29/10 confirmou ainda uma armadilha de observabilidade: dois
 inbounds CRA com texto igual existiam em instantes próximos. A correlação apenas
