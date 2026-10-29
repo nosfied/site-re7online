@@ -62,18 +62,7 @@ para satisfazer a política. Em particular, a ausência de `/opt/re7online/stagi
 Um staging já `SANITIZED` e comprovadamente removido pelo produtor também não
 reativa essa exigência histórica.
 
-O build publica `generation-artifacts.private.json`. Antes de invocar
-`generation-retirement.py prepare`, execute a admissão versionada
-`scripts/deploy-preparation-admission.py` com pedido privado `0600` e SHA-256
-esperado. O pedido deve conter o conjunto completo e fechado de checks e assertions
-do contrato P00. A negativa agrega todas as divergências detectáveis e não publica
-raiz consumível. Somente `P00_AGGREGATE_ADMISSION_PASS` autoriza consumir a raiz
-atômica `0700`, as três cópias privadas `0600` e a fotografia operacional
-resultante com `copied=true`. Executar o Python com `-B` e
-`PYTHONDONTWRITEBYTECODE=1`; destino existente, check ausente, lock ocupado,
-symlink, modo/owner/hash divergente ou prova incompleta são `DENY` antes de
-`prepare`.
-
+O build publica `generation-artifacts.private.json`; antes de `generation-retirement.py prepare`, `deploy-preparation-admission.py` autentica pedido/provas privados, agrega negativas e só materializa atomicamente `0700`/`0600` com `copied=true`; execute com `-B`/`PYTHONDONTWRITEBYTECODE=1`, permita apenas reuso byte-exato e negue ausência, lock, symlink, owner/mode/hash ou prova divergente.
 Depois da verificação do pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
 lifecycle e fotografia operacional autenticados. A intenção resultante e seu
 hash integram a autorização de ativação; o executor frontend-only autentica ambos
