@@ -317,6 +317,105 @@ class ReleaseProducerTest(unittest.TestCase):
             "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
         })
 
+    def install_arguments(self) -> list[str]:
+        return [
+            "install", "--package", str(self.package), "--target", self.target,
+            "--release-id", self.release_id, "--components", COMPONENTS,
+            "--installed-releases-root", str(self.releases),
+            "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha,
+        ]
+
+    def recovery_manifest(self, staged: Path, *, inode: int | None = None) -> tuple[Path, str]:
+        info = staged.lstat()
+        path = self.base / "install-recovery.private.json"
+        value = {
+            "schemaVersion": 1,
+            "targetCommit": self.target,
+            "releaseId": self.release_id,
+            "packagePath": str(self.package.resolve()),
+            "packageSha256": hashlib.sha256(self.package.read_bytes()).hexdigest(),
+            "stagingPath": str(staged),
+            "stagingDevice": info.st_dev,
+            "stagingInode": info.st_ino if inode is None else inode,
+            "ownerUid": info.st_uid,
+            "groupGid": info.st_gid,
+            "mode": 0o700,
+            "finalPath": str(self.releases / self.release_id),
+        }
+        write(path, json.dumps(value, sort_keys=True) + "\n", 0o600)
+        return path, hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def test_canonical_install_extracts_under_release_name_and_preserves_root_mode(self) -> None:
+        final = self.releases / self.release_id
+        self.assertFalse(final.exists())
+        try:
+            result = invoke(*self.install_arguments())
+            self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["result"], "RELEASE INSTALLED")
+            self.assertFalse(payload["recoveredExistingStaging"])
+            self.assertEqual(stat.S_IMODE(final.stat().st_mode), 0o755)
+            self.assertEqual(self.verify(final).returncode, 0)
+            self.assertFalse(any(self.releases.glob(f".{self.release_id}.installing.*")))
+        finally:
+            if final.exists():
+                shutil.rmtree(final)
+
+    def test_recovery_install_reuses_exact_staging_without_reextracting(self) -> None:
+        final = self.releases / self.release_id
+        staged = self.releases / f".{self.release_id}.installing"
+        shutil.copytree(self.release, staged, symlinks=True)
+        staged.chmod(0o700)
+        inode = staged.stat().st_ino
+        manifest, manifest_sha = self.recovery_manifest(staged)
+        try:
+            result = invoke(
+                *self.install_arguments(),
+                "--recovery-manifest", str(manifest),
+                "--recovery-manifest-sha256", manifest_sha,
+            )
+            self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["recoveredExistingStaging"])
+            self.assertFalse(staged.exists())
+            self.assertEqual(final.stat().st_ino, inode)
+            self.assertEqual(stat.S_IMODE(final.stat().st_mode), 0o755)
+            self.assertEqual(self.verify(final).returncode, 0)
+        finally:
+            if final.exists():
+                shutil.rmtree(final)
+            if staged.exists():
+                shutil.rmtree(staged)
+
+    def test_recovery_identity_drift_denies_without_mutating_staging(self) -> None:
+        staged = self.releases / f".{self.release_id}.installing"
+        shutil.copytree(self.release, staged, symlinks=True)
+        staged.chmod(0o700)
+        manifest, manifest_sha = self.recovery_manifest(
+            staged, inode=staged.stat().st_ino + 1)
+        before = (staged.stat().st_ino, stat.S_IMODE(staged.stat().st_mode))
+        try:
+            result = invoke(
+                *self.install_arguments(),
+                "--recovery-manifest", str(manifest),
+                "--recovery-manifest-sha256", manifest_sha,
+            )
+            self.assert_denied(result, "install_recovery_staging_identity")
+            self.assertEqual(
+                (staged.stat().st_ino, stat.S_IMODE(staged.stat().st_mode)),
+                before,
+            )
+            self.assertFalse((self.releases / self.release_id).exists())
+        finally:
+            if staged.exists():
+                shutil.rmtree(staged)
+
+    def test_release_root_mode_is_part_of_verified_identity(self) -> None:
+        root = self.copy_release("invalid-release-root-mode")
+        root.chmod(0o700)
+        self.assert_denied(self.verify(root), "release_directory_identity")
+
     def test_failed_command_preserves_private_output_without_printing_it(self) -> None:
         root = self.base / "failed-command-evidence"
         root.mkdir()
