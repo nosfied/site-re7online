@@ -193,3 +193,23 @@ incompleto. Uma urgência P00 não dispensa a admissão integral; apenas permite
 exceção de capacidade já autenticada, sem relaxar os demais gates.
 
 - O reuso idempotente byte-exato do destino é permitido somente após reabrir e autenticar o inventário completo; qualquer arquivo extra, modo divergente ou byte divergente resulta em `DENY`, sem sobrescrita.
+
+
+## Extensão P00-C — instalação inerte canônica
+
+A negativa `RELEASE_DENY:release_directory_identity` da geração
+`immutable-aa9527cc-vps-20261029T222733Z` comprovou que a admissão também
+precisa qualificar a rota de instalação antes do build. Extração manual em uma
+raiz `.installing` com `--strip-components` não é uma rota canônica.
+
+`converta-release.py install` passa a ser a única rota normal: extrai sob o nome
+de release preservado pelo pacote, autentica owner/group e modo `0755`, verifica
+a árvore, promove por rename no mesmo filesystem e sincroniza o diretório. Uma
+extração já preservada somente pode ser recuperada por manifesto privado `0600`
+vinculado ao target, release, pacote, caminho final, device/inode, owner/group e
+modo `0700`; após verificar o conteúdo, o instalador materializa o modo do pacote,
+preserva o inode e promove atomicamente. Não há rebuild nem extração repetida.
+
+A asserção fechada `installation-route-qualified` é obrigatória no gate agregado.
+Assim, ausência da rota, extração ad hoc ou identidade de raiz incompatível negam
+antes da criação de worktree/output.

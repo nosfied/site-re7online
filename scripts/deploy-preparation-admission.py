@@ -31,7 +31,7 @@ REQUIRED_ASSERTIONS = {
     "generation-gate", "release-graph-authenticated", "pm2-live-authenticated",
     "pm2-dump-authenticated", "health-local", "health-public",
     "capacity-budget", "inode-budget", "ancestors-authenticated",
-    "no-partial-output",
+    "installation-route-qualified", "no-partial-output",
 }
 REQUEST_KEYS = {
     "schemaVersion", "generationId", "releaseId", "targetCommit", "finalRoot",
