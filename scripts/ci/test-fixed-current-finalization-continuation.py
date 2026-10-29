@@ -154,6 +154,62 @@ class ContinuationTests(unittest.TestCase):
             os.close(probe)
         self.assertTrue(self.fixture.lock.is_file())
 
+    def terminal_journal(self, *, state: str = "DEPLOYED_SANITIZED") -> Path:
+        path = self.fixture.tx / "transaction.v1.private.json"
+        private_json(path, {
+            "state": state,
+            "saveCount": 1,
+            "deployedMarkerCreated": True,
+            "generationRetirementState": state,
+            "lockDigest": digest(self.fixture.lock),
+            "finalize": {"lockReleaseStarted": True},
+        })
+        return path
+
+    def test_terminal_finalize_releases_existing_lock_after_authenticated_state(self):
+        journal = self.terminal_journal()
+        lock_fd = self.fixture.lock_fd()
+        receipt = CONTINUATION.release_terminal_lock(self.fixture.request, lock_fd)
+        self.assertFalse(self.fixture.lock.exists())
+        self.assertEqual(receipt["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(receipt["transactionJournalSha256"], digest(journal))
+
+    def test_nonterminal_or_divergent_lock_is_preserved(self):
+        for variant in ("state", "digest"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                journal = self.terminal_journal(
+                    state="AWAITING_ACCEPTANCE" if variant == "state" else "DEPLOYED_SANITIZED")
+                if variant == "digest":
+                    value = json.loads(journal.read_text())
+                    value["lockDigest"] = "0" * 64
+                    private_json(journal, value)
+                lock_fd = self.fixture.lock_fd()
+                with self.assertRaises(CONTINUATION.Denied):
+                    CONTINUATION.release_terminal_lock(self.fixture.request, lock_fd)
+                self.assertTrue(self.fixture.lock.is_file())
+
+    def test_release_terminal_lock_request_is_closed_and_hash_bound(self):
+        journal = self.terminal_journal()
+        receipt = self.fixture.root / "receipt.private.json"
+        request = {
+            "schemaVersion": 1,
+            "action": "release_terminal_lock",
+            "lockPath": str(self.fixture.lock),
+            "transactionRoot": str(self.fixture.tx),
+            "transactionJournalSha256": digest(journal),
+            "lockSha256": digest(self.fixture.lock),
+            "receiptOutput": str(receipt),
+        }
+        private_json(self.fixture.request_path, request)
+        loaded = CONTINUATION.load_request(
+            self.fixture.request_path, digest(self.fixture.request_path))
+        lock_fd = self.fixture.lock_fd()
+        result = CONTINUATION.release_terminal_lock(loaded, lock_fd)
+        self.assertFalse(self.fixture.lock.exists())
+        self.assertTrue(receipt.is_file())
+        self.assertEqual(result, json.loads(receipt.read_text()))
+
     def test_request_rejects_non_finalize_action(self):
         self.fixture.request["finalizeArgv"][3] = "activate"
         private_json(self.fixture.request_path, self.fixture.request)

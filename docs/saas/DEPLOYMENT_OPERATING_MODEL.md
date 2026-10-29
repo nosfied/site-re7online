@@ -56,7 +56,10 @@ frontend-only ou `scripts/fixed-current-finalization-continuation.py` no
 fixed-current. O protocolo é único: lock existente regular `0600`, FD 9 herdável
 com `flock` exclusivo e `RE7_DEPLOYMENT_LOCK_HELD=1`. No fixed-current, o driver
 autentica o FD antes do save, preserva o inode e o repassa ao retirement; o wrapper
-retém o lock até o fsync integral. stdout/stderr/exit são criados diretamente com
+retém o lock até o fsync integral e, somente após estado terminal autenticado, remove
+o nome canônico ainda sob o mesmo `flock` e sincroniza o diretório. Um lock terminal
+legado somente pode ser liberado pelo mesmo wrapper, com journal e SHA externos
+vinculados; remoção manual é proibida. stdout/stderr/exit são criados diretamente com
 exclusividade. Wrappers inline ou improvisados são proibidos.
 
 O driver fixed-current aceita somente os escopos ordenados `api` e `api,frontend`.

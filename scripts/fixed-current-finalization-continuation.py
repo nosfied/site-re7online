@@ -57,6 +57,11 @@ def stable_regular(path: Path, *, modes: set[int]) -> bytes:
         os.close(fd)
 
 
+def _sha256_value(value: Any) -> bool:
+    return (isinstance(value, str) and len(value) == 64 and
+            all(character in "0123456789abcdef" for character in value))
+
+
 def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
     raw = stable_regular(path, modes={0o600})
     if sha256(raw) != expected_sha256:
@@ -65,28 +70,42 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
         value = json.loads(raw)
     except json.JSONDecodeError as error:
         raise Denied("request_json") from error
-    required = {
-        "schemaVersion", "action", "lockPath", "transactionRoot", "driver",
-        "driverSha256", "finalizeArgv",
-    }
-    if (set(value) != required or value.get("schemaVersion") != 1 or
-            value.get("action") != "finalize"):
+    common = {"schemaVersion", "action", "lockPath", "transactionRoot"}
+    if value.get("schemaVersion") != 1 or not common.issubset(value):
         raise Denied("request_schema")
-    for name in ("lockPath", "transactionRoot", "driver"):
-        item = value.get(name)
-        if not isinstance(item, str) or not Path(item).is_absolute():
-            raise Denied(f"request_path:{name}")
-    digest = value.get("driverSha256")
-    if not isinstance(digest, str) or len(digest) != 64 or any(
-            character not in "0123456789abcdef" for character in digest):
-        raise Denied("request_driver_sha256")
-    argv = value.get("finalizeArgv")
-    if (not isinstance(argv, list) or not argv or
-            not all(isinstance(item, str) and item for item in argv) or
-            argv[:4] != ["/usr/bin/python3", "-B", value["driver"], "finalize"] or
-            any(item in {"preflight", "activate", "rollback", "restart"}
-                for item in argv[4:])):
-        raise Denied("request_finalize_argv")
+    action = value.get("action")
+    if action == "finalize":
+        required = common | {"driver", "driverSha256", "finalizeArgv"}
+        if set(value) != required:
+            raise Denied("request_schema")
+        for name in ("lockPath", "transactionRoot", "driver"):
+            item = value.get(name)
+            if not isinstance(item, str) or not Path(item).is_absolute():
+                raise Denied(f"request_path:{name}")
+        if not _sha256_value(value.get("driverSha256")):
+            raise Denied("request_driver_sha256")
+        argv = value.get("finalizeArgv")
+        if (not isinstance(argv, list) or not argv or
+                not all(isinstance(item, str) and item for item in argv) or
+                argv[:4] != ["/usr/bin/python3", "-B", value["driver"], "finalize"] or
+                any(item in {"preflight", "activate", "rollback", "restart"}
+                    for item in argv[4:])):
+            raise Denied("request_finalize_argv")
+    elif action == "release_terminal_lock":
+        required = common | {
+            "transactionJournalSha256", "lockSha256", "receiptOutput",
+        }
+        if set(value) != required:
+            raise Denied("request_schema")
+        for name in ("lockPath", "transactionRoot", "receiptOutput"):
+            item = value.get(name)
+            if not isinstance(item, str) or not Path(item).is_absolute():
+                raise Denied(f"request_path:{name}")
+        for name in ("transactionJournalSha256", "lockSha256"):
+            if not _sha256_value(value.get(name)):
+                raise Denied(f"request_sha256:{name}")
+    else:
+        raise Denied("request_action")
     return value
 
 
@@ -214,6 +233,97 @@ def _write_all(fd: int, raw: bytes) -> None:
         view = view[written:]
 
 
+def _fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _lock_bytes(lock_fd: int) -> bytes:
+    os.lseek(lock_fd, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    while block := os.read(lock_fd, 1024 * 1024):
+        chunks.append(block)
+    return b"".join(chunks)
+
+
+def release_terminal_lock(request: dict[str, Any], lock_fd: int) -> dict[str, Any]:
+    lock_path = Path(request["lockPath"])
+    validate_lock(lock_path, lock_fd)
+    transaction = Path(request["transactionRoot"])
+    info = transaction.lstat()
+    if (transaction.is_symlink() or not transaction.is_dir() or
+            (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) !=
+            (os.geteuid(), os.getegid(), 0o700)):
+        raise Denied("transaction_root")
+    journal_path = transaction / "transaction.v1.private.json"
+    journal_raw = stable_regular(journal_path, modes={0o600})
+    journal_sha256 = sha256(journal_raw)
+    expected_journal = request.get("transactionJournalSha256")
+    if expected_journal is not None and journal_sha256 != expected_journal:
+        raise Denied("terminal_journal_sha256")
+    try:
+        journal = json.loads(journal_raw)
+    except json.JSONDecodeError as error:
+        raise Denied("terminal_journal_json") from error
+    terminal = {"DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"}
+    finalize = journal.get("finalize")
+    if (not isinstance(journal, dict) or journal.get("state") not in terminal or
+            journal.get("saveCount") != 1 or journal.get("deployedMarkerCreated") is not True or
+            journal.get("generationRetirementState") != journal.get("state") or
+            not isinstance(finalize, dict) or finalize.get("lockReleaseStarted") is not True):
+        raise Denied("terminal_journal_state")
+    lock_raw = _lock_bytes(lock_fd)
+    lock_sha256 = sha256(lock_raw)
+    if journal.get("lockDigest") != lock_sha256:
+        raise Denied("terminal_lock_digest")
+    expected_lock = request.get("lockSha256")
+    if expected_lock is not None and lock_sha256 != expected_lock:
+        raise Denied("terminal_lock_sha256")
+    opened = os.fstat(lock_fd)
+    before = lock_path.lstat()
+    if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+        raise Denied("terminal_lock_identity")
+    receipt = {
+        "schemaVersion": 1,
+        "action": "RELEASE_TERMINAL_DEPLOYMENT_LOCK",
+        "state": journal["state"],
+        "transactionRoot": str(transaction),
+        "transactionJournalSha256": journal_sha256,
+        "lockPath": str(lock_path),
+        "lockSha256": lock_sha256,
+        "lockDevice": opened.st_dev,
+        "lockInode": opened.st_ino,
+        "released": True,
+    }
+    receipt_path = Path(request["receiptOutput"]) if request.get("receiptOutput") else None
+    receipt_fd = -1
+    if receipt_path is not None:
+        parent = receipt_path.parent
+        parent_info = parent.lstat()
+        if (parent.is_symlink() or not parent.is_dir() or
+                (parent_info.st_uid, parent_info.st_gid, stat.S_IMODE(parent_info.st_mode)) !=
+                (os.geteuid(), os.getegid(), 0o700)):
+            raise Denied("receipt_parent")
+        receipt_fd = _open_exclusive(receipt_path)
+    try:
+        lock_path.unlink()
+        _fsync_directory(lock_path.parent)
+        if receipt_fd >= 0:
+            raw = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode()
+            _write_all(receipt_fd, raw)
+            os.fsync(receipt_fd)
+            _fsync_directory(receipt_path.parent)
+    finally:
+        if receipt_fd >= 0:
+            os.close(receipt_fd)
+    if lock_path.exists() or lock_path.is_symlink():
+        raise Denied("terminal_lock_remains")
+    return receipt
+
+
 def run(request: dict[str, Any], lock_fd: int, *,
         runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run) -> int:
     lock_path = Path(request["lockPath"])
@@ -268,11 +378,17 @@ def main() -> int:
     try:
         request = load_request(args.request, args.request_sha256)
         lock_fd = acquire_lock(Path(request["lockPath"]))
+        if request["action"] == "release_terminal_lock":
+            receipt = release_terminal_lock(request, lock_fd)
+            print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+            return 0
         returncode = run(request, lock_fd)
         if returncode != 0:
             print(f"FIXED_CURRENT_FINALIZATION_CONTINUATION_DENY:finalize_exit:{returncode}",
                   file=sys.stderr)
-        return returncode
+            return returncode
+        release_terminal_lock(request, lock_fd)
+        return 0
     except (Denied, OSError, ValueError) as error:
         print(f"FIXED_CURRENT_FINALIZATION_CONTINUATION_DENY:{error}", file=sys.stderr)
         return 2

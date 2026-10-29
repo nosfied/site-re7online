@@ -306,7 +306,7 @@ mesma finalização, mediante autorização explícita, nunca retry da ativaçã
 motivo para novo `pm2 save`.
 
 Após transferência, continuar somente pelo wrapper versionado do modo:
-`scripts/frontend-finalization-continuation.py` ou `scripts/fixed-current-finalization-continuation.py`. O protocolo único abre o lock existente sem `O_CREAT`/symlink, exige `deploy:deploy 0600`, mantém `flock` exclusivo no FD 9 herdável e define `RE7_DEPLOYMENT_LOCK_HELD=1`; FD ou variável isolados não concedem autoridade.
+`scripts/frontend-finalization-continuation.py` ou `scripts/fixed-current-finalization-continuation.py`. O protocolo único abre o lock existente sem `O_CREAT`/symlink, exige `deploy:deploy 0600`, mantém `flock` exclusivo no FD 9 herdável e define `RE7_DEPLOYMENT_LOCK_HELD=1`; após finalize terminal autenticado e evidências sincronizadas, o wrapper remove o nome canônico ainda sob o mesmo `flock` e sincroniza o diretório, permitindo a próxima criação exclusiva sem confundir arquivo livre com holder ativo; FD ou variável isolados não concedem autoridade.
 No fixed-current, o driver reconfirma device/inode, owner/group, modo, herdabilidade e ocupação antes do save, preserva o inode e repassa o FD ao retirement com `--deployment-lock-fd 9`/`pass_fds=(9,)`. O wrapper libera após stdout, stderr, exit code, receipt, journal e diretórios sincronizados; saídas usam diretamente `O_EXCL|O_NOFOLLOW`, sem pré-criação.
 O pedido autentica transação/driver/aceite; wrappers inline, republicar aceite, `preflight`, `activate`/restart e segundo save com `saveCount=1` são proibidos.
 
