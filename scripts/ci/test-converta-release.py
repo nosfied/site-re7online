@@ -398,6 +398,35 @@ class ReleaseProducerTest(unittest.TestCase):
         write(root / "api-runtime/unindexed.txt", "extra\n")
         self.assert_denied(self.verify_contract_overlay(root), "release_index_inventory")
 
+    def test_current_release_contract_accepts_absent_overlay_and_denies_appearance_during_scan(self) -> None:
+        root = self.copy_release("current-overlay-absent")
+        accepted = self.verify_contract_overlay(root)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(json.loads(accepted.stdout)["privateDataOverlay"], {
+            "present": False,
+            "path": "api-runtime/.data",
+            "classification": "PRIVATE_DATA_NEVER_RETIRE",
+            "state": "ACTIVE_DEPENDENCY",
+        })
+
+        absent = MODULE.validate_private_data_overlay(root)
+        appeared = {
+            "present": True,
+            "path": "api-runtime/.data",
+            "classification": "PRIVATE_DATA_NEVER_RETIRE",
+            "state": "ACTIVE_DEPENDENCY",
+            "rootIdentity": {"device": 1, "inode": 2},
+            "ownerUid": root.stat().st_uid,
+            "groupGid": root.stat().st_gid,
+            "mode": 0o755,
+            "observedEntries": 1,
+        }
+        with patch.object(MODULE, "validate_private_data_overlay",
+                          side_effect=[absent, appeared]):
+            with self.assertRaises(MODULE.Denied) as caught:
+                MODULE.scan_runtime(root, allow_private_data_overlay=True)
+        self.assertIn("legacy_overlay_changed", str(caught.exception))
+
     def test_current_release_contract_denies_overlay_symlink_and_unsafe_identity(self) -> None:
         linked = self.copy_release("current-overlay-symlink")
         target = linked / "api-runtime/private-target"; target.mkdir()
