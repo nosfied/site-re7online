@@ -2,6 +2,7 @@
 
 **Status:** P00 / BLOQUEADOR / PLANEJAMENTO  
 **Data de abertura:** 29/10/2026  
+**Atualização:** ciclo do lock resolvido pelo PR #275 / merge `3d7604800ee62ef236a7985f7279306f4085a307`  
 **Autoridade:** [princípios fundamentais de trabalho](../WORKING_PRINCIPLES.md)
 
 Este plano registra uma dívida operacional evidenciada durante a preparação da
@@ -26,6 +27,11 @@ disco, execuções de CI e autorizações. A causa processual é a ausência de 
 admissão integral que valide todos os requisitos antes de invocar `prepare`.
 Tratar cada predicado isoladamente viola os princípios de evitar retrabalho,
 auditar antes de alterar e não transferir ao owner o custo de falhas previsíveis.
+
+O item 3 foi corrigido de forma versionada pelo PR #275: finalizações terminais
+agora liberam o nome canônico ainda sob o mesmo `flock`, e o lock legado pode ser
+reconciliado somente por ação fechada e autenticada. Essa entrega não encerra os
+itens 1 e 2 nem substitui a admissão integral restante.
 
 ## Estado que deve ser reutilizado
 
@@ -92,17 +98,17 @@ existente em vez de criar wrapper temporário, que:
   `PYTHONDONTWRITEBYTECODE=1`;
 - seja idempotente por verificação exata, nunca por sobrescrita silenciosa.
 
-O protocolo do lock também deve ser único e versionado:
+#### Protocolo do lock — resolvido pelo PR #275
 
-- distinguir identidade física do arquivo canônico de ocupação advisory efetiva;
-- nunca interpretar arquivo regular livre como holder ativo apenas por existir;
-- nunca remover, renomear ou substituir manualmente o lock para contornar o driver;
-- preservar device/inode quando essa for a identidade canônica autenticada;
-- representar de forma fechada os estados livre e ocupado e sincronizar a transição;
-- negar owner, group, modo, symlink, inode, conteúdo ou `flock` divergentes;
-- suportar duas implantações sequenciais completas sobre o mesmo lock canônico;
-- reconciliar o lock legado atual somente mediante prova da transação terminal
-  anterior, sem aceitar arquivo arbitrário como livre.
+O merge `3d7604800ee62ef236a7985f7279306f4085a307` incorporou o protocolo
+versionado: mantém FD 9 e `flock` durante o fechamento, autentica o estado
+terminal, remove o nome canônico sob o mesmo lock e sincroniza o diretório.
+Também incorporou a ação fechada `release_terminal_lock`, vinculada aos hashes
+do journal e do lock, para reconciliar exclusivamente o resíduo legado atual.
+
+Essa frente não deve ser reimplementada. A admissão restante apenas consome e
+valida esse contrato, negando lock ocupado, identidade divergente ou estado não
+terminal. Remoção, renomeação ou substituição manual continuam proibidas.
 
 ### P00-C — consumo condicionado
 
@@ -125,10 +131,11 @@ Adicionar regressões que comprovem:
 - nenhum destino parcial é publicado quando a admissão nega;
 - o caminho válido materializa as três cópias, gera fotografia v2 aceita e alcança
   `PREFLIGHT_PASS` sem ativar;
-- lock canônico existente e livre permite aquisição segura, enquanto lock realmente
-  ocupado ou com identidade divergente é negado;
-- duas transações consecutivas alcançam ativação/finalização em fixture, preservando
-  a identidade prevista do lock e sem `global_lock_active` falso;
+- as regressões já incorporadas pelo PR #275 permanecem obrigatórias: estado
+  terminal libera o nome canônico; estado não terminal, digest divergente ou lock
+  ocupado preservam o lock e negam;
+- a suíte convergente integra, sem duplicar ou substituir, o contrato do #275 e
+  comprova que a admissão restante não reintroduz `global_lock_active` falso;
 - frontend, worker, tenants, campanhas, Meta, guarda e dump permanecem intactos;
 - pacote/release existentes são reutilizados e o contador de build permanece zero.
 
@@ -152,7 +159,8 @@ A dívida só pode ser encerrada quando:
 
 ## Ordem de execução
 
-1. concluir a auditoria e a implementação versionada P00-A/P00-B;
+1. concluir a auditoria e a implementação versionada dos itens ainda pendentes
+   em P00-A/P00-B, reutilizando sem reimplementar o protocolo do lock do #275;
 2. aprovar CI e revisão;
 3. preparar a retomada da `754281d3` reutilizando todos os artefatos existentes;
 4. obter autorização específica;
