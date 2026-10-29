@@ -1,8 +1,8 @@
 # Plano P00 — convergência da preparação de deploy
 
-**Status:** P00 / BLOQUEADOR / IMPLEMENTAÇÃO EM REVISÃO  
+**Status:** P00 / IMPLEMENTADO / USO CONDICIONADO A MERGE AUTENTICADO  
 **Data de abertura:** 29/10/2026  
-**Atualização:** admissão agregada e materialização atômica do control plane implementadas em PR próprio; ciclo do lock resolvido pelo PR #275 / merge `3d7604800ee62ef236a7985f7279306f4085a307`  
+**Atualização:** admissão agregada e materialização atômica do control plane implementadas no PR #277; ciclo do lock resolvido pelo PR #275 / merge `3d7604800ee62ef236a7985f7279306f4085a307`  
 **Autoridade:** [princípios fundamentais de trabalho](../WORKING_PRINCIPLES.md)
 
 Este plano registra uma dívida operacional evidenciada durante a preparação da
