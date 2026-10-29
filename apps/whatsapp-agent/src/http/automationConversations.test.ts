@@ -17,7 +17,13 @@ import { attachRealtimeWebSocket } from "../realtime/websocket.js";
 import { addConnection, closeRealtimeConnectionsForClient, publishRealtimeEvent, publishRealtimeEventAsync } from "../realtime/hub.js";
 
 const url = new URL(process.env.DATABASE_URL ?? "http://missing");
-assert(["127.0.0.1", "localhost"].includes(url.hostname) && url.pathname.startsWith("/re7_secult_"), "synthetic local DB required");
+assert(
+  url.protocol === "postgresql:"
+    && ["127.0.0.1", "localhost"].includes(url.hostname)
+    && /^\d+$/.test(url.port)
+    && url.pathname.startsWith("/re7_"),
+  "synthetic local DB required",
+);
 const prisma = getPrisma();
 const prefix = `bot-inbox-local-${crypto.randomUUID()}`;
 let server: Server, base = "", cwd = process.cwd(), temp = "";
