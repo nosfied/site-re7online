@@ -191,3 +191,5 @@ A dívida só pode ser encerrada quando:
 Até a definição de pronto, nenhuma nova geração não emergencial deve usar o fluxo
 incompleto. Uma urgência P00 não dispensa a admissão integral; apenas permite a
 exceção de capacidade já autenticada, sem relaxar os demais gates.
+
+- O reuso idempotente byte-exato do destino é permitido somente após reabrir e autenticar o inventário completo; qualquer arquivo extra, modo divergente ou byte divergente resulta em `DENY`, sem sobrescrita.
