@@ -164,7 +164,9 @@ Gerações do fluxo atual registram obrigatoriamente a mesma política e o campo
 `privateDataOverlay` no contrato autenticado, sem
 binding por release: pacote e índice nunca contêm `.data`; somente a release instalada
 pode apresentar esse diretório físico, confinado, com owner/group da release e sem
-escrita por grupo/outros. O modo `0755` é válido porque concede apenas leitura/travessia
+escrita por grupo/outros. Na verificação do pacote e do release-root inerte, a ausência
+do overlay é válida e deve permanecer ausente nas duas observações; sua aparição entre
+as leituras é `DENY` sem acessar campos de identidade física inexistentes. O modo `0755` é válido porque concede apenas leitura/travessia
 a grupo/outros. Symlink, escape, identidade insegura ou qualquer adição externa é
 `DENY`. A projeção estrutural exclui somente o subtree, permitindo mudança interna
 entre preflight e finalize, e o overlay não gera comando isolado de retenção. O

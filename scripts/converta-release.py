@@ -860,8 +860,13 @@ def scan_runtime(release_root: Path, *, allow_private_data_overlay: bool = False
                          validate_a959_private_data_overlay(release_root)
                          if allow_a959_private_data_overlay else
                          validate_f160_runtime_cache_overlay(release_root))
-        stable_fields = ("path", "classification", "state", "rootIdentity", "ownerUid",
-                         "groupGid", "mode")
+        stable_fields = ("path", "classification", "state")
+        if allow_private_data_overlay:
+            stable_fields += ("present",)
+            if overlay["present"]:
+                stable_fields += ("rootIdentity", "ownerUid", "groupGid", "mode")
+        else:
+            stable_fields += ("rootIdentity", "ownerUid", "groupGid", "mode")
         if any(overlay_after[field] != overlay[field] for field in stable_fields):
             deny("legacy_overlay_changed")
         overlay = overlay_after
