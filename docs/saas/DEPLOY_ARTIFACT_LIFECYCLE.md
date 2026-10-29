@@ -271,6 +271,16 @@ fronteiras, seus owners, modos e ancestrais são conferidos antes de criar a sa�
 lock de geração ou executar npm. Caminho externo, raiz redefinida ou symlink é `DENY`.
 Staging e outras raízes de retenção não utilizadas não integram esse gate pré-build.
 
+A instalação inerte usa exclusivamente `converta-release.py install`. A rota
+normal extrai o pacote sob seu próprio `releaseId`, autentica a raiz `0755`,
+verifica o payload e promove por rename no mesmo filesystem. Uma raiz
+`.installing` preservada só pode ser retomada por manifesto privado `0600`
+vinculado a pacote/target/release, caminho final e identidade física completa; o
+modo do pacote é materializado sem trocar o inode antes da promoção. Extração
+manual com remoção do primeiro componente, chmod ad hoc ou nome físico divergente
+não produz `RELEASE_RUNTIME` válido. A admissão agregada exige a prova
+`installation-route-qualified` antes do build.
+
 Uma review v1 `PRESERVE` verdadeira só pode ser migrada sem inventário global
 quando `prepare` recebe `--legacy-review-sha256` igual aos bytes preservados e
 generation/lifecycle coincidem. Esse caminho não se aplica à `123ba`, que não
