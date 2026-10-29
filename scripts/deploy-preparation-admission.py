@@ -198,7 +198,8 @@ def validate_assertions(items: Any, errors: list[str]) -> None:
         return
     names: set[str] = set()
     for item in items:
-        if (not isinstance(item, dict) or set(item) != {"name", "passed", "evidenceSha256"} or
+        if (not isinstance(item, dict) or
+                set(item) != {"name", "passed", "evidencePath", "evidenceSha256"} or
                 not isinstance(item.get("name"), str)):
             errors.append("assertion:schema")
             continue
@@ -208,16 +209,23 @@ def validate_assertions(items: Any, errors: list[str]) -> None:
         names.add(name)
         if item.get("passed") is not True:
             errors.append(f"assertion:{name}:failed")
-        if not valid_sha(item.get("evidenceSha256")):
-            errors.append(f"assertion:{name}:evidence")
+        evidence_path = normalized_absolute(item.get("evidencePath"))
+        evidence_sha = item.get("evidenceSha256")
+        if evidence_path is None or not valid_sha(evidence_sha):
+            errors.append(f"assertion:{name}:evidence_schema")
+        elif not path_is_physical(evidence_path):
+            errors.append(f"assertion:{name}:evidence_symlink")
+        else:
+            stable_regular(evidence_path, {0o600}, evidence_sha, errors,
+                           f"assertion:{name}:evidence")
     for name in sorted(REQUIRED_ASSERTIONS - names):
         errors.append(f"assertion:{name}:missing")
     for name in sorted(names - REQUIRED_ASSERTIONS):
         errors.append(f"assertion:{name}:unknown")
 
 
-def validate_controls(items: Any, errors: list[str]) -> dict[str, tuple[bytes, str]]:
-    result: dict[str, tuple[bytes, str]] = {}
+def validate_controls(items: Any, errors: list[str]) -> dict[str, tuple[Path, bytes, str]]:
+    result: dict[str, tuple[Path, bytes, str]] = {}
     if not isinstance(items, list):
         errors.append("control:schema")
         return result
@@ -244,13 +252,15 @@ def validate_controls(items: Any, errors: list[str]) -> dict[str, tuple[bytes, s
             continue
         observed = stable_regular(path, {0o600, 0o644}, expected, errors, f"control:{role}")
         if observed is not None:
-            result[role] = (observed[0], expected)
+            result[role] = (path, observed[0], expected)
     for role in sorted(set(CONTROL_ROLES) - roles):
         errors.append(f"control:{role}:missing")
     return result
 
 
-def validate_request(value: Any) -> tuple[list[str], dict[str, tuple[bytes, str]], bytes | None]:
+def validate_request(value: Any) -> tuple[
+        list[str], dict[str, tuple[Path, bytes, str]],
+        tuple[Path, bytes, str] | None]:
     errors: list[str] = []
     if not isinstance(value, dict) or set(value) != REQUEST_KEYS or value.get("schemaVersion") != 1:
         return ["request:schema"], {}, None
@@ -264,14 +274,12 @@ def validate_request(value: Any) -> tuple[list[str], dict[str, tuple[bytes, str]
         errors.append("request:finalRoot")
     elif not path_is_physical(final_root.parent):
         errors.append("request:finalRoot_parent_symlink")
-    elif final_root.exists() or final_root.is_symlink():
-        errors.append("request:finalRoot_present")
     output_name = value.get("operationalStateOutputName")
     if output_name != "operational-state.private.json":
         errors.append("request:operational_output")
     controls = validate_controls(value.get("controlPlaneArtifacts"), errors)
     template = value.get("operationalStateTemplate")
-    template_raw: bytes | None = None
+    template_info: tuple[Path, bytes, str] | None = None
     if (not isinstance(template, dict) or set(template) != {"path", "sha256"} or
             normalized_absolute(template.get("path")) is None or not valid_sha(template.get("sha256"))):
         errors.append("operational_template:schema")
@@ -279,9 +287,9 @@ def validate_request(value: Any) -> tuple[list[str], dict[str, tuple[bytes, str]
         observed = stable_regular(normalized_absolute(template["path"]), {0o600},
                                   template["sha256"], errors, "operational_template")
         if observed is not None:
-            template_raw = observed[0]
+            template_info = (normalized_absolute(template["path"]), observed[0], template["sha256"])
             try:
-                operational = json.loads(template_raw)
+                operational = json.loads(observed[0])
                 if (not isinstance(operational, dict) or operational.get("schemaVersion") != 2 or
                         operational.get("generationId") != value.get("generationId") or
                         operational.get("releaseId") != value.get("releaseId") or
@@ -306,7 +314,7 @@ def validate_request(value: Any) -> tuple[list[str], dict[str, tuple[bytes, str]
         for name in sorted(names - REQUIRED_CHECKS):
             errors.append(f"check:{name}:unknown")
     validate_assertions(value.get("assertions"), errors)
-    return sorted(set(errors)), controls, template_raw
+    return sorted(set(errors)), controls, template_info
 
 
 def write_exclusive(path: Path, raw: bytes, mode: int = 0o600) -> None:
@@ -332,8 +340,86 @@ def fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
-def materialize(value: dict[str, Any], controls: dict[str, tuple[bytes, str]],
-                template_raw: bytes) -> dict[str, Any]:
+def expected_materialization(
+        value: dict[str, Any],
+        controls: dict[str, tuple[Path, bytes, str]],
+        template_raw: bytes) -> tuple[dict[str, bytes], dict[str, Any]]:
+    final_root = Path(value["finalRoot"])
+    control_projection = []
+    payloads: dict[str, bytes] = {}
+    for role in ("generation-retirement", "converta-release", "root-policy"):
+        filename = CONTROL_ROLES[role]
+        _, raw, expected = controls[role]
+        payloads[filename] = raw
+        control_projection.append({
+            "path": str(final_root / filename),
+            "sha256": expected,
+            "copied": True,
+        })
+    operational = json.loads(template_raw)
+    operational["controlPlaneArtifacts"] = control_projection
+    operational_raw = canonical(operational)
+    payloads[value["operationalStateOutputName"]] = operational_raw
+    report = {
+        "schemaVersion": 1,
+        "result": "P00_AGGREGATE_ADMISSION_PASS",
+        "generationId": value["generationId"],
+        "releaseId": value["releaseId"],
+        "targetCommit": value["targetCommit"],
+        "controlPlaneArtifacts": control_projection,
+        "operationalStatePath": str(
+            final_root / value["operationalStateOutputName"]),
+        "operationalStateSha256": digest(operational_raw),
+        "consumableMaterialized": True,
+        "automaticRetry": False,
+    }
+    payloads["admission-report.private.json"] = canonical(report)
+    return payloads, report
+
+
+def verify_existing_root(root: Path, payloads: dict[str, bytes]) -> None:
+    errors: list[str] = []
+    try:
+        info = root.lstat()
+        if (root.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+                stat.S_IMODE(info.st_mode) != 0o700):
+            raise RuntimeError("existing_destination_identity")
+        if {item.name for item in root.iterdir()} != set(payloads):
+            raise RuntimeError("existing_destination_inventory")
+    except OSError as error:
+        raise RuntimeError("existing_destination_identity") from error
+    for name, raw in payloads.items():
+        observed = stable_regular(root / name, {0o600}, digest(raw), errors,
+                                  f"existing:{name}")
+        if observed is not None and observed[0] != raw:
+            errors.append(f"existing:{name}:bytes")
+    if errors:
+        raise RuntimeError("existing_destination_drift:" + ",".join(sorted(set(errors))))
+
+
+def reobserve_inputs(
+        controls: dict[str, tuple[Path, bytes, str]],
+        template_info: tuple[Path, bytes, str]) -> bytes:
+    errors: list[str] = []
+    for role, (path, original_raw, expected) in controls.items():
+        observed = stable_regular(path, {0o600, 0o644}, expected, errors,
+                                  f"reobserve:control:{role}")
+        if observed is not None and observed[0] != original_raw:
+            errors.append(f"reobserve:control:{role}:bytes")
+    template_path, template_raw, template_sha = template_info
+    observed = stable_regular(template_path, {0o600}, template_sha, errors,
+                              "reobserve:operational_template")
+    if observed is not None and observed[0] != template_raw:
+        errors.append("reobserve:operational_template:bytes")
+    if errors:
+        raise RuntimeError("input_reobservation:" + ",".join(sorted(set(errors))))
+    return template_raw
+
+
+def materialize(value: dict[str, Any],
+                controls: dict[str, tuple[Path, bytes, str]],
+                template_info: tuple[Path, bytes, str]) -> dict[str, Any]:
     final_root = Path(value["finalRoot"])
     parent = final_root.parent
     info = parent.lstat()
@@ -341,47 +427,37 @@ def materialize(value: dict[str, Any], controls: dict[str, tuple[bytes, str]],
             info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
             stat.S_IMODE(info.st_mode) & 0o022):
         raise RuntimeError("final_root_parent_identity")
+    template_raw = reobserve_inputs(controls, template_info)
+    payloads, report = expected_materialization(value, controls, template_raw)
+    if final_root.exists() or final_root.is_symlink():
+        verify_existing_root(final_root, payloads)
+        reused = dict(report)
+        reused["result"] = "P00_AGGREGATE_ADMISSION_REUSED"
+        reused["reusedExactDestination"] = True
+        return reused
     partial = parent / f".{final_root.name}.partial.{os.getpid()}"
     if partial.exists() or partial.is_symlink():
         raise RuntimeError("partial_root_exists")
     os.mkdir(partial, 0o700)
     created: list[Path] = []
     try:
-        control_projection = []
-        for role in ("generation-retirement", "converta-release", "root-policy"):
-            filename = CONTROL_ROLES[role]
-            raw, expected = controls[role]
-            destination = partial / filename
+        for name, raw in payloads.items():
+            destination = partial / name
             write_exclusive(destination, raw)
             created.append(destination)
-            control_projection.append({
-                "path": str(final_root / filename),
-                "sha256": expected,
-                "copied": True,
-            })
-        operational = json.loads(template_raw)
-        operational["controlPlaneArtifacts"] = control_projection
-        operational_raw = canonical(operational)
-        operational_path = partial / value["operationalStateOutputName"]
-        write_exclusive(operational_path, operational_raw)
-        created.append(operational_path)
-        report = {
-            "schemaVersion": 1,
-            "result": "P00_AGGREGATE_ADMISSION_PASS",
-            "generationId": value["generationId"],
-            "releaseId": value["releaseId"],
-            "targetCommit": value["targetCommit"],
-            "controlPlaneArtifacts": control_projection,
-            "operationalStatePath": str(final_root / value["operationalStateOutputName"]),
-            "operationalStateSha256": digest(operational_raw),
-            "consumableMaterialized": True,
-            "automaticRetry": False,
-        }
-        write_exclusive(partial / "admission-report.private.json", canonical(report))
-        created.append(partial / "admission-report.private.json")
+        verify_errors: list[str] = []
+        for name, raw in payloads.items():
+            observed = stable_regular(partial / name, {0o600}, digest(raw),
+                                      verify_errors, f"output:{name}")
+            if observed is not None and observed[0] != raw:
+                verify_errors.append(f"output:{name}:bytes")
+        if verify_errors:
+            raise RuntimeError("output_verification:" +
+                               ",".join(sorted(set(verify_errors))))
         fsync_dir(partial)
         os.rename(partial, final_root)
         fsync_dir(parent)
+        verify_existing_root(final_root, payloads)
         return report
     except Exception:
         for path in reversed(created):
@@ -394,7 +470,6 @@ def materialize(value: dict[str, Any], controls: dict[str, tuple[bytes, str]],
         except OSError:
             pass
         raise
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -423,14 +498,16 @@ def main() -> int:
                          "errors": ["request:json"],
                          "consumableMaterialized": False}).decode(), end="")
         return 2
-    errors, controls, template_raw = validate_request(value)
+    errors, controls, template_info = validate_request(value)
     if errors:
         print(canonical({"result": "P00_AGGREGATE_ADMISSION_DENY",
                          "errors": errors, "consumableMaterialized": False,
                          "automaticRetry": False}).decode(), end="")
         return 2
     try:
-        report = materialize(value, controls, template_raw or b"")
+        if template_info is None:
+            raise RuntimeError("operational_template_unavailable")
+        report = materialize(value, controls, template_info)
     except Exception as error:
         print(canonical({"result": "P00_AGGREGATE_ADMISSION_DENY",
                          "errors": [f"materialization:{error}"],
