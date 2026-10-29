@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+    "reportedDate": "2026-10-29",
+    "independentVpsInspectionByDocumentationEditor": false
+  },
+  "release": {
+    "id": "immutable-0fdec8b0-vps-20261028T224726Z",
+    "target": "0fdec8b026b28acb42c2d95e1fe473b49b6b0a20",
+    "buildId": "GmuX_IriZxsoGRceEs-d9",
+    "packageSha256": "51e46c6054646c97caa138a63c651bf687dc6434adffbd6d9f1291a66166515a",
+    "manifestSha256": "0de6e3c594674be49d30abf6803b0aee62f1f1a0b36fdcd1515b3f615133c2bc",
+    "indexSha256": "7728789d13669676c36d9d250d6f5addeb9445bc56e57a8b1885d734f188230c",
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "contractSha256": "f3188049ea87c6f9e9ece01c4698d6e49994a13fe682cc828a0b0fc34e020c0a",
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "selection": {
+    "components": ["api"],
+    "apiReleaseId": "immutable-0fdec8b0-vps-20261028T224726Z",
+    "frontendReleaseId": "immutable-b96eb779-vps-20261028T025159Z",
+    "workerReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "frontendPreserved": true,
+    "workerPreserved": true
+  },
+  "finalization": {
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "f630586b3f66041114cc7ddfa92c7bf3974440ffaa50964cdbaa58875172942a",
+    "markerSha256": "3ed8c45c84b03ebcc197ae37fa96adbee3ef541d5c2a9d15a046f6a3e09d580e",
+    "journalSha256": "ca7bd35a3ec9b3f247fdfc1bb496221ed5db04656caf301833c5aa5d92321778",
+    "retirementReceiptSha256": "7d69a118303bf75ed7385d7a72769137fe77c721776ea3beb212389845117e4f"
+  },
+  "retirement": {
+    "state": "SANITIZED",
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "remainingDerivedArtifacts": 0,
+    "debt": false,
+    "privateDataOverlay": {
+      "path": "api-runtime/.data",
+      "classification": "PRIVATE_DATA_NEVER_RETIRE",
+      "state": "ACTIVE_DEPENDENCY",
+      "preserved": true
+    }
+  },
+  "locks": {
+    "deploymentFree": true,
+    "writerFree": true,
+    "filesPreserved": true
+  },
+  "forbiddenEffects": {
+    "extraRestarts": 0,
+    "secondPm2Save": 0,
+    "metaCalls": 0,
+    "guardChanges": 0
+  },
+  "nextPermittedAct": "DO_NOT_REOPEN_0FDEC_TRANSACTION"
+}

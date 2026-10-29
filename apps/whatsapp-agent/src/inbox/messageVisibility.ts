@@ -32,6 +32,13 @@ export function isManagementOnlyInboxMessage(rawPayload: unknown) {
   return (rawPayload as Record<string, unknown>).inboxVisibility === "management_only";
 }
 
+export function shouldIncludeInboxMessageForView(
+  rawPayload: unknown,
+  view: "human" | "authorized_automation"
+) {
+  return view === "authorized_automation" || !isManagementOnlyInboxMessage(rawPayload);
+}
+
 export function withInboxMessageVisibility(
   rawPayload: Prisma.InputJsonObject,
   visibility: InboxMessageVisibility,

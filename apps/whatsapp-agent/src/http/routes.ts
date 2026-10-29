@@ -602,6 +602,7 @@ import {
 import { makeConversationKey } from "../storage/conversationKey.js";
 import {
   isManagementOnlyInboxMessage,
+  shouldIncludeInboxMessageForView,
   shouldProjectConversationToHumanInbox,
   shouldUserSeeConversationInInbox,
 } from "../inbox/messageVisibility.js";
@@ -6243,6 +6244,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         requestId,
         source: "app_conversation_timeline",
         validateAutomationRead,
+        includeManagementInteractions: automationRead,
       });
       await validateAutomationRead?.();
       json(res, 200, result);
@@ -6381,6 +6383,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         requestId,
         source: "app_conversation_detail",
         validateAutomationRead,
+        includeManagementInteractions: automationRead,
         latency,
       });
       latency.duration("buildPayload", buildPayloadStartedAt);
@@ -36653,6 +36656,7 @@ async function buildConversationDetailPayload(
     source: string;
     latency?: ChannelLatencyProfiler | null;
     validateAutomationRead?: AutomationReadCheckpoint;
+    includeManagementInteractions?: boolean;
   }
 ) {
   const defaultsStartedAt = channelLatencyNow();
@@ -36754,8 +36758,13 @@ async function buildConversationDetailPayload(
     }),
   ]);
   params.latency?.duration("detailMessageQuery", messageQueryStartedAt);
-  const humanTimelineInbound = inbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload));
-  const humanTimelineOutbound = outbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload));
+  const inboxMessageView = params.includeManagementInteractions ? "authorized_automation" : "human";
+  const humanTimelineInbound = inbound.filter((item) =>
+    shouldIncludeInboxMessageForView(item.rawPayload, inboxMessageView)
+  );
+  const humanTimelineOutbound = outbound.filter((item) =>
+    shouldIncludeInboxMessageForView(item.rawPayload, inboxMessageView)
+  );
   const actorUserIds = Array.from(
     new Set(
       humanTimelineOutbound
@@ -36783,7 +36792,9 @@ async function buildConversationDetailPayload(
       const contextualReply = extractContextualReplyPayload(item.rawPayload);
       const serviceCycle = getServiceCycleSnapshot(item.rawPayload);
       return {
-        inboxVisibility: "human_timeline" as const,
+        inboxVisibility: isManagementOnlyInboxMessage(item.rawPayload)
+          ? "management_only" as const
+          : "human_timeline" as const,
         protocol: serviceCycle?.protocol ?? null,
         cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: item.id,
@@ -36831,7 +36842,9 @@ async function buildConversationDetailPayload(
       const actor = extractOutboundActorPayload(item.rawPayload);
       const serviceCycle = getServiceCycleSnapshot(item.rawPayload);
       return {
-        inboxVisibility: "human_timeline" as const,
+        inboxVisibility: isManagementOnlyInboxMessage(item.rawPayload)
+          ? "management_only" as const
+          : "human_timeline" as const,
         protocol: serviceCycle?.protocol ?? null,
         cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: item.id,
@@ -37065,6 +37078,7 @@ async function buildContactTimelinePayload(
     requestId: string;
     source: string;
     validateAutomationRead?: AutomationReadCheckpoint;
+    includeManagementInteractions?: boolean;
   }
 ) {
   const resolved = await resolveConversationTarget(prisma, {
@@ -37218,7 +37232,10 @@ async function buildContactTimelinePayload(
   ]);
 
   const items = [
-    ...inbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload)).map((item) => ({
+    ...inbound.filter((item) => shouldIncludeInboxMessageForView(
+      item.rawPayload,
+      params.includeManagementInteractions ? "authorized_automation" : "human"
+    )).map((item) => ({
       id: `inbound:${item.id}`,
       kind: "message",
       direction: "INBOUND",
@@ -37231,7 +37248,10 @@ async function buildContactTimelinePayload(
         location: extractMessageLocation(item.rawPayload),
       },
     })),
-    ...outbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload)).map((item) => ({
+    ...outbound.filter((item) => shouldIncludeInboxMessageForView(
+      item.rawPayload,
+      params.includeManagementInteractions ? "authorized_automation" : "human"
+    )).map((item) => ({
       id: `outbound:${item.id}`,
       kind: "message",
       direction: "OUTBOUND",

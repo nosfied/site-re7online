@@ -415,10 +415,14 @@ def verify_frontend_operational_closure(record_path: Path, record: dict) -> None
     require(state.get("activeDeploymentRecord") ==
             record_path.relative_to(ROOT).as_posix(), "frontend closure active record")
     production = state.get("production", {})
+    active_api_record = read_json(ROOT / state.get("activeApiDeploymentRecord", ""))
     require(production.get("releaseId") == release.get("id") and
             production.get("targetCommit") == release.get("target") and
             production.get("frontend", {}).get("buildId") == release.get("buildId") and
-            production.get("pm2", {}).get("dumpSha256") == finalization.get("dumpSha256"),
+            production.get("api", {}).get("selectedReleaseId") ==
+            active_api_record.get("release", {}).get("id") and
+            production.get("pm2", {}).get("dumpSha256") ==
+            active_api_record.get("finalization", {}).get("dumpSha256"),
             "frontend closure current state")
     print("DEPLOYMENT_RECORD_OK: b96 frontend closure, save and retention agree")
 

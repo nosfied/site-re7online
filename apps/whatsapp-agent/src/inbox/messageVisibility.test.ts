@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   isManagementOnlyInboxMessage,
+  shouldIncludeInboxMessageForView,
   shouldProjectConversationToHumanInbox,
   shouldUserSeeConversationInInbox,
   withInboxMessageVisibility,
@@ -14,6 +16,20 @@ test("inbox message visibility uses structured raw payload metadata only", () =>
   assert.equal(isManagementOnlyInboxMessage(payload), true);
   assert.equal(isManagementOnlyInboxMessage({ provider: "web_session", bodyText: "Obrigado(a)" }), false);
   assert.equal(isManagementOnlyInboxMessage(null), false);
+});
+
+test("management-only messages remain private except in an authorized Automation view", () => {
+  const consent = withInboxMessageVisibility({}, "management_only", "consent_prompt");
+  assert.equal(shouldIncludeInboxMessageForView(consent, "human"), false);
+  assert.equal(shouldIncludeInboxMessageForView(consent, "authorized_automation"), true);
+  assert.equal(shouldIncludeInboxMessageForView({}, "human"), true);
+});
+
+test("Meta webhook propagates the existing consent classification to both persistence paths", () => {
+  const source = readFileSync(new URL("../whatsapp/webhook.controller.ts", import.meta.url), "utf8");
+  assert.match(source, /managementInteraction: chatbotResult\.managementInteraction/);
+  assert.match(source, /withInboxMessageVisibility\([\s\S]*?"management_only", chatbotFlowResult\.managementInteraction\.inboundKind\)/);
+  assert.match(source, /inboxVisibility: chatbotFlowResult\.managementInteraction\?\.outboundKind[\s\S]*?inboxInteractionKind: chatbotFlowResult\.managementInteraction\?\.outboundKind/);
 });
 
 test("human inbox projection requires a real human operational state", () => {

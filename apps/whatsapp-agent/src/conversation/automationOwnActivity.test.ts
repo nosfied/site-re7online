@@ -52,10 +52,10 @@ async function send(f: Awaited<ReturnType<typeof fixture>>, token: ReturnType<ty
     outboundSource: "bot", skipAgentSignature: true, runtimeWriteToken: token,
     source: { channel: "whatsapp", provider: "web_session", channelAccountId: f.account.channelAccountId } });
 }
-async function inbound(f: Awaited<ReturnType<typeof fixture>>, text: string) {
+async function inbound(f: Awaited<ReturnType<typeof fixture>>, text: string, externalMessageId = crypto.randomUUID()) {
   return ingestWebSessionInboundMessage({ prisma, message: { provider: "web_session", channel: "whatsapp",
     clientId: f.client.id, tenantKey: f.client.clientKey, channelAccountDbId: f.account.id,
-    channelAccountId: f.account.channelAccountId, externalMessageId: crypto.randomUUID(), sender: f.waId,
+    channelAccountId: f.account.channelAccountId, externalMessageId, sender: f.waId,
     senderCanonical: f.waId, senderJid: `${f.waId}@s.whatsapp.net`, timestamp: new Date(), type: "TEXT", text, rawPayload: {} },
     publishMessageCreatedRealtime: async () => {}, publishHandoffRealtime: async () => {} });
 }
@@ -70,9 +70,18 @@ for (const answer of ["1", "2"]) test(`integrated WEB consent ${answer}: real ou
     },
   } } });
   const first = await inbound(f,"Hello"); assert.equal(first.ok,true);
+  const initialInbound = await prisma.inboundMessage.findFirstOrThrow({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
+  const initialOutbound = await prisma.outboundMessage.findFirstOrThrow({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
+  assert.notEqual((initialInbound.rawPayload as any)?.inboxVisibility,"management_only");
+  assert.equal((initialOutbound.rawPayload as any)?.inboxVisibility,"management_only");
+  assert.equal((initialOutbound.rawPayload as any)?.inboxInteractionKind,"consent_prompt");
   let row = await prisma.conversationRuntimeState.findUniqueOrThrow({where:{clientId_waId:{clientId:f.client.id,waId:f.waId}}});
   assert.equal(row.chatbotNodeId,"consent"); assert.equal(row.chatbotActive,true); assert(row.lastOutboundAt);
   await inbound(f,answer);
+  const answerInbound = await prisma.inboundMessage.findMany({where:{clientId:f.client.id},orderBy:{createdAt:"asc"}});
+  const latestAnswerInbound = answerInbound[answerInbound.length - 1];
+  assert.equal((latestAnswerInbound?.rawPayload as any)?.inboxVisibility,"management_only");
+  assert.equal((latestAnswerInbound?.rawPayload as any)?.inboxInteractionKind,answer === "1" ? "consent_positive" : "consent_negative");
   row = await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:row.id}});
   if(answer === "1") {
     assert.equal(row.chatbotNodeId,"menu");
@@ -81,6 +90,23 @@ for (const answer of ["1", "2"]) test(`integrated WEB consent ${answer}: real ou
     assert.equal(row.chatbotNodeId,"next");
   } else assert.notEqual(row.chatbotNodeId,"consent");
   assert.equal(await prisma.contactConsent.count({where:{clientId:f.client.id,status:"accepted"}}),answer === "1" ? 1 : 0);
+});
+test("consent reprocessing preserves one inbound and one management outbound", async () => {
+  const f = await fixture("consent-idempotent");
+  await prisma.chatbotFlow.create({ data: { clientId: f.client.id, name: "Synthetic consent idempotency", isActive: true, entryPoint: true, definition: {
+    start: "consent", nodes: {
+      consent: { type: "consent", purpose: "service_communications", textVersion: "synthetic-v1", message: "Consent?", acceptOption: "1", declineOption: "2", onAccepted: "done", onDeclined: "done" },
+      done: { type: "text", text: "Done" },
+    },
+  } } });
+  const externalMessageId = crypto.randomUUID();
+  assert.equal((await inbound(f, "Hello", externalMessageId)).ok, true);
+  assert.equal((await inbound(f, "Hello", externalMessageId)).ok, true);
+  assert.equal(await prisma.inboundMessage.count({ where: { clientId: f.client.id } }), 1);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }), 1);
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: f.client.id } });
+  assert.equal((outbound.rawPayload as any)?.inboxVisibility, "management_only");
+  assert.equal((outbound.rawPayload as any)?.inboxInteractionKind, "consent_prompt");
 });
 for (const change of ["none","claim","transfer","close_csat","reentry","inbound","cycle","transport","account"] as const) test(`real accepted outbound during ${change}: own receipt or stale completion denied`, async () => {
   const f=await fixture(change);

@@ -112,14 +112,18 @@ test("Meta/IA and WEB_SESSION BOT: manager tenant-wide read; Automation only, no
  }
 });
 
-test("restricted messages/media remain hidden from automation readers",async()=>{
+test("management-only consent exchange is visible only to authorized automation readers",async()=>{
+ await enable(true);
  const f=await bot("web_session");
  const messageId=f.state.id+"-restricted";
- await prisma.inboundMessage.create({data:{clientId:client.id,waId:f.waId,waIdCanonical:f.waId,messageId,type:"IMAGE",bodyText:"restricted-consent-secret",allowlistHit:true,rawPayload:{inboxVisibility:"management_only",inboxInteractionKind:"consent"}}});
+ await prisma.inboundMessage.create({data:{clientId:client.id,waId:f.waId,waIdCanonical:f.waId,messageId,type:"TEXT",bodyText:"restricted-consent-secret",allowlistHit:true,rawPayload:{inboxVisibility:"management_only",inboxInteractionKind:"consent_prompt"}}});
  for(const actor of [admin,supervisor]){
-  for(const suffix of ["","/timeline"]){const r=await request("GET",f.route+suffix,actor);assert(!JSON.stringify(r.body).includes("restricted-consent-secret"));}
+  for(const suffix of ["","/timeline"]){const r=await request("GET",f.route+suffix,actor);assert(JSON.stringify(r.body).includes("restricted-consent-secret"));}
   assert.equal((await request("GET",f.route+"/messages/"+messageId+"/media",actor)).status,404);
  }
+ assert.equal((await request("GET",f.route,a)).status,404);
+ assert.equal((await request("GET",f.route,outsider)).status,404);
+ assert.equal((await request("GET","/app/conversations",admin)).body.items.some((i:any)=>i.waId===f.waId),false);
 });
 
 test("revocation blocks direct/list reads and cannot be restored by later signature write",async()=>{

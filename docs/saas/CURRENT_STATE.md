@@ -4,38 +4,48 @@
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
-no [registro de fechamento b96](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json).
+no [registro de fechamento frontend b96](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json);
+o componente API vigente está no
+[registro de fechamento 0fdec](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json).
 Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
 
-## Correção P00 de configuração WhatsApp Meta — pendente de merge/deploy
+## Correção P00 de configuração WhatsApp Meta — API implantada
 
 O incidente observado após troca de release não foi falha de resolução do tenant:
 PostgreSQL resolveu e persistiu o inbound, mas o gate reativo ainda dependia da
-presença de `<api-runtime>/.data/tenants.json`. A correção em desenvolvimento move
-base, toggles e readiness do WhatsApp Meta para autoridade DB-first tenant-scoped.
-O plano de backfill permanece futuro e separado; este registro não autoriza acesso
-à produção. Contrato detalhado em
+presença de `<api-runtime>/.data/tenants.json`. A API 0fdec implantou a autoridade
+DB-first tenant-scoped depois dos backfills e gates selecionados de Tendência,
+Justa e CRA. O fechamento está concluído e não deve ser reaberto. Contrato detalhado em
 [WhatsApp Meta tenant runtime DB-first](WHATSAPP_META_TENANT_RUNTIME.md).
 
-O control plane em revisão admite autorização P00 privada e temporária que dispensa
+O control plane admite autorização P00 privada e temporária que dispensa
 exclusivamente o piso estático de 12 GiB, sem relaxar capacity contract, reserva,
-inodes ou checkpoints. Ela ainda não foi usada e não autoriza build, deploy ou
-ativação; produção permanece inalterada.
+inodes ou checkpoints. Ela não autoriza build, deploy ou ativação por si só.
 
-## Implantação vigente — 28/10/2026
+## Implantação vigente — 29/10/2026
 
 Fonte: relatório do Codex local encaminhado pelo owner, com hashes das evidências
 privadas; o editor documental não realizou nova inspeção independente da VPS.
 
-API permanece na release `immutable-708f018c-vps-20261027T152109Z`; frontend está
+API está na release `immutable-0fdec8b0-vps-20261028T224726Z`; frontend está
 na `immutable-b96eb779-vps-20261028T025159Z`, target
 `b96eb779f4ce091a79cf67e97bcd25be255e1af3`, BUILD_ID
-`jRFzvE9WaHEtDCwGbV-EH`. API: PID/ticks `745424/28396867`, restart 7;
-frontend: `873615/33441329`, restart 12. Worker preservado:
+`jRFzvE9WaHEtDCwGbV-EH`. A identidade de processo da API foi recapturada na
+auditoria privada de 29/10; frontend: `873615/33441329`, restart 12. Worker preservado:
 `2233/17758`, restart 0, release `immutable-e2e7f17a-20261022T005110Z`.
 Health local/público: HTTP 200, `ok=true`, `db=ok`. Guarda aberta na geração
 41, tarefas zero e sem fault.
+
+O fechamento API-only 0fdec terminou `DEPLOYED_SANITIZED`, com `saveCount=1` e
+retenção 3/3. Dump
+`f630586b3f66041114cc7ddfa92c7bf3974440ffaa50964cdbaa58875172942a`, marker
+`3ed8c45c84b03ebcc197ae37fa96adbee3ef541d5c2a9d15a046f6a3e09d580e`, journal
+`ca7bd35a3ec9b3f247fdfc1bb496221ed5db04656caf301833c5aa5d92321778` e recibo de
+retenção `7d69a118303bf75ed7385d7a72769137fe77c721776ea3beb212389845117e4f`.
+O overlay `api-runtime/.data` foi preservado como `PRIVATE_DATA_NEVER_RETIRE /
+ACTIVE_DEPENDENCY`; os três derivados foram retirados e não há dívida da geração.
+Frontend b96 e worker e2e7 foram preservados e os locks terminaram livres.
 
 O fechamento b96 terminou `DEPLOYED_SANITIZED`, com aceite técnico/visual integral,
 um `pm2 save` e retenção 3/3. Dump
