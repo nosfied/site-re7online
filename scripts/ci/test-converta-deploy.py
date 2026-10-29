@@ -13,8 +13,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -246,6 +248,19 @@ class DeployFixture(unittest.TestCase):
             path = self.base / f"{name}.private.json"
             put(path, {"name": name}, 0o644 if name == "policy" else 0o600)
             retirement_paths[name] = path
+        self.generation_contract = self.base / "generation-artifacts.private.json"
+        put(self.generation_contract, {
+            "schemaVersion": 1, "generationId": self.candidate,
+            "releaseId": self.candidate, "targetCommit": self.target, "state": "COMPLETE",
+            "writerLockPath": str(self.base / ".generation-build.lock"),
+            "classes": ["PRIVATE_DATA_NEVER_RETIRE"], "artifacts": [],
+            "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+            "privateDataOverlay": {
+                "path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+            },
+        })
+        put(retirement_paths["intent"], {"contractSha256": sha(self.generation_contract)})
         put(retirement_paths["operational"], {
             "observations": {
                 "currentLinks": [{"path": str(path), "target": str(path.resolve())}
@@ -337,6 +352,67 @@ class DeployFixture(unittest.TestCase):
         self.driver = self._driver()
         return self.driver
 
+    def legacy_overlay_finalize(self) -> tuple[FixtureDriver, Path, dict[str, Any]]:
+        overlay = self.releases / self.candidate / "api-runtime/.data"
+        overlay.mkdir(mode=0o755)
+        (overlay / "state.json").write_text("before\n")
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        acceptance_sha = sha(driver.acceptance)
+
+        contract = json.loads(self.generation_contract.read_text())
+        contract.pop("privateDataOverlay")
+        put(self.generation_contract, contract)
+        contract_sha = sha(self.generation_contract)
+        put(self.retirement.intent, {"contractSha256": contract_sha})
+        self.retirement = replace(self.retirement, intent_sha256=sha(self.retirement.intent))
+        self.inputs = replace(self.inputs, retirement=self.retirement)
+
+        journal = json.loads(driver.journal.read_text())
+        journal["binding"] = self.inputs.binding()
+        journal["preflight"]["release"].pop("privateDataOverlay", None)
+        journal["state"] = "FAILED"
+        journal["failure"] = "private_data_contract_overlay_missing"
+        journal["recoveryAction"] = "finalize"
+        journal["saveCount"] = 0
+        put(driver.journal, journal)
+
+        info = overlay.lstat()
+        manifest = self.base / "private-data-reconciliation.private.json"
+        put(manifest, {
+            "schemaVersion": 1,
+            "kind": deploy.PRIVATE_DATA_RECONCILIATION_KIND,
+            "releaseId": self.candidate,
+            "targetCommit": self.target,
+            "contractSha256": contract_sha,
+            "retirementIntentSha256": self.retirement.intent_sha256,
+            "transactionRoot": str(self.transaction),
+            "overlay": {
+                "path": "api-runtime/.data",
+                "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                "state": "ACTIVE_DEPENDENCY",
+                "rootIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                "mode": stat.S_IMODE(info.st_mode),
+            },
+            "requiredContinuation": {
+                "state": "FAILED", "recoveryAction": "finalize",
+                "acceptanceSha256": acceptance_sha, "saveCount": 0,
+            },
+        })
+        self.inputs = replace(
+            self.inputs, private_data_reconciliation=manifest,
+            private_data_reconciliation_sha256=sha(manifest),
+        )
+        self.driver = self._driver()
+        constants = {
+            "LEGACY_0FDEC_RELEASE": self.candidate,
+            "LEGACY_0FDEC_TARGET": self.target,
+            "LEGACY_0FDEC_CONTRACT_SHA256": contract_sha,
+            "LEGACY_0FDEC_RETIREMENT_INTENT_SHA256": self.retirement.intent_sha256,
+            "LEGACY_0FDEC_TRANSACTION": self.transaction,
+        }
+        return self.driver, manifest, constants
+
 
 class DriverTests(DeployFixture):
     def test_api_only_passes_and_preserves_frontend_and_worker(self) -> None:
@@ -419,6 +495,97 @@ class DriverTests(DeployFixture):
         marker = deploy.read_json(driver.release_root / "DEPLOYED")
         self.assertEqual(marker["components"], ["api"])
 
+    def test_contract_without_overlay_is_denied_without_reconciliation(self) -> None:
+        contract = json.loads(self.generation_contract.read_text())
+        contract.pop("privateDataOverlay")
+        put(self.generation_contract, contract)
+        put(self.retirement.intent, {"contractSha256": sha(self.generation_contract)})
+        self.retirement = replace(self.retirement, intent_sha256=sha(self.retirement.intent))
+        self.inputs = replace(self.inputs, retirement=self.retirement)
+        with self.assertRaisesRegex(deploy.Denied, "private_data_contract_overlay_missing"):
+            self.api_only().preflight()
+        reconciliation = self.base / "not-authorized-for-preflight.private.json"
+        put(reconciliation, {"schemaVersion": 1})
+        self.inputs = replace(
+            self.inputs, private_data_reconciliation=reconciliation,
+            private_data_reconciliation_sha256=sha(reconciliation),
+        )
+        self.driver = self._driver()
+        with self.assertRaisesRegex(deploy.Denied, "private_data_contract_overlay_missing"):
+            self.driver.preflight()
+        self.assertEqual(self.host.save_calls, 0)
+
+    def test_0fdec_reconciliation_resumes_finalize_without_repeating_acceptance_or_restart(self) -> None:
+        driver, _, constants = self.legacy_overlay_finalize()
+        acceptance_sha = sha(driver.acceptance)
+        overlay = self.releases / self.candidate / "api-runtime/.data"
+        (overlay / "state.json").write_text("after\n")
+        restarts = [item for item in self.host.events if item.startswith("PM2:restart")]
+        with patch.multiple(deploy, **constants):
+            driver.finalize()
+        self.assertEqual(sha(driver.acceptance), acceptance_sha)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual([item for item in self.host.events if item.startswith("PM2:restart")], restarts)
+        self.assertEqual(driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+
+    def test_0fdec_reconciliation_denies_release_target_contract_or_transaction_drift(self) -> None:
+        for field, value in (
+                ("releaseId", "immutable-other"),
+                ("targetCommit", "f" * 40),
+                ("contractSha256", "f" * 64),
+                ("transactionRoot", str(self.base / "other-transaction"))):
+            with self.subTest(field=field):
+                self.tearDown(); self.setUp()
+                driver, manifest, constants = self.legacy_overlay_finalize()
+                payload = json.loads(manifest.read_text()); payload[field] = value; put(manifest, payload)
+                self.inputs = replace(self.inputs, private_data_reconciliation_sha256=sha(manifest))
+                driver = self._driver()
+                with patch.multiple(deploy, **constants):
+                    with self.assertRaisesRegex(deploy.Denied, "private_data_reconciliation_binding"):
+                        driver.finalize()
+                self.assertEqual(self.host.save_calls, 0)
+
+    def test_0fdec_reconciliation_allows_content_change_but_denies_overlay_identity_change(self) -> None:
+        driver, _, constants = self.legacy_overlay_finalize()
+        overlay = self.releases / self.candidate / "api-runtime/.data"
+        overlay.rename(self.base / "preserved-old-overlay")
+        overlay.mkdir(mode=0o755)
+        with patch.multiple(deploy, **constants):
+            with self.assertRaisesRegex(deploy.Denied, "private_data_reconciliation_overlay_drift"):
+                driver.finalize()
+        self.assertEqual(self.host.save_calls, 0)
+
+    def test_0fdec_reconciliation_constants_are_closed_to_the_open_transaction(self) -> None:
+        self.assertEqual(deploy.LEGACY_0FDEC_RELEASE,
+                         "immutable-0fdec8b0-vps-20261028T224726Z")
+        self.assertEqual(deploy.LEGACY_0FDEC_TARGET,
+                         "0fdec8b026b28acb42c2d95e1fe473b49b6b0a20")
+        self.assertEqual(deploy.LEGACY_0FDEC_CONTRACT_SHA256,
+                         "f3188049ea87c6f9e9ece01c4698d6e49994a13fe682cc828a0b0fc34e020c0a")
+        self.assertEqual(deploy.LEGACY_0FDEC_RETIREMENT_INTENT_SHA256,
+                         "edd0eedf0561c3634e369d605d8f94092e95e6e1726625df350a5378cf1b33c3")
+        self.assertEqual(str(deploy.LEGACY_0FDEC_TRANSACTION),
+                         "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+                         "immutable-0fdec8b0-vps-20261028T224726Z-api-only-a23aded8-v1-once")
+
+    def test_private_data_overlay_is_fail_closed_without_relaxing_other_inventory(self) -> None:
+        for drift, predicate in (("extra", "release_index_inventory"),
+                                 ("symlink", "private_data_overlay_identity"),
+                                 ("writable", "private_data_overlay_identity")):
+            with self.subTest(drift=drift):
+                self.tearDown(); self.setUp()
+                root = self.releases / self.candidate
+                overlay = root / "api-runtime/.data"
+                if drift == "extra":
+                    (root / "api-runtime/unindexed.txt").write_text("extra\n")
+                elif drift == "symlink":
+                    target = root / "api-runtime/private-target"; target.mkdir()
+                    overlay.symlink_to(target)
+                else:
+                    overlay.mkdir(mode=0o775); overlay.chmod(0o775)
+                with self.assertRaisesRegex(deploy.Denied, predicate):
+                    self.api_only().preflight()
+                self.assertEqual(self.host.save_calls, 0)
     def test_api_only_finalize_resume_never_repeats_save_or_retirement(self) -> None:
         driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
         driver.failpoints.add("after_save")

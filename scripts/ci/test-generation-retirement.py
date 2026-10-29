@@ -126,7 +126,12 @@ class Fixture:
                      "releaseId": self.release_id, "targetCommit": self.target, "state": "COMPLETE",
                      "writerLockPath": str(self.writer_lock),
                      "classes": sorted(MODULE.PRESERVE_CLASSES | MODULE.DERIVED_CLASSES | {"RELEASE_RUNTIME", "PRIVATE_DATA_NEVER_RETIRE"}),
-                     "artifacts": artifacts, "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"})
+                     "artifacts": artifacts, "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+                     "privateDataOverlay": {
+                         "path": "api-runtime/.data",
+                         "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                         "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+                     }})
         self.graph = self.root / "release-graph.private.json"
         effective_active = active or deployed
         graph = {"activeReleases": [self.release_id] if effective_active else [],
@@ -1340,8 +1345,22 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertNotIn(str(fixture.package), command_text)
             self.assertNotIn(str(fixture.manifest), command_text)
             self.assertNotIn(str(fixture.index), command_text)
+            self.assertNotIn("api-runtime/.data", command_text)
             self.assertLess(fixture.intent.stat().st_size + fixture.commands.stat().st_size, 100_000)
             self.assertEqual(json.loads(fixture.review.read_text())["state"], "RETIREMENT_READY")
+        finally:
+            fixture.close()
+
+    def test_current_private_data_overlay_policy_is_closed_and_never_a_command(self):
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            contract["privateDataOverlay"]["path"] = "api-runtime/.other"
+            private_json(fixture.contract, contract)
+            result = fixture.prepare()
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("artifact_contract_private_data_overlay", result.stderr)
+            self.assertFalse(fixture.commands.exists())
         finally:
             fixture.close()
 

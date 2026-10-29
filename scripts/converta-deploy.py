@@ -22,6 +22,17 @@ from typing import Any, Callable
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
+PRIVATE_DATA_POLICY = "PRIVATE_DATA_NEVER_RETIRE"
+PRIVATE_DATA_RECONCILIATION_KIND = "LEGACY_PRIVATE_DATA_OVERLAY_FINALIZE_RECONCILIATION"
+LEGACY_0FDEC_RELEASE = "immutable-0fdec8b0-vps-20261028T224726Z"
+LEGACY_0FDEC_TARGET = "0fdec8b026b28acb42c2d95e1fe473b49b6b0a20"
+LEGACY_0FDEC_CONTRACT_SHA256 = "f3188049ea87c6f9e9ece01c4698d6e49994a13fe682cc828a0b0fc34e020c0a"
+LEGACY_0FDEC_RETIREMENT_INTENT_SHA256 = "edd0eedf0561c3634e369d605d8f94092e95e6e1726625df350a5378cf1b33c3"
+LEGACY_0FDEC_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-0fdec8b0-vps-20261028T224726Z-api-only-a23aded8-v1-once"
+)
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -285,6 +296,8 @@ class Inputs:
     transaction_root: Path
     runtime_manifest_sha256: str
     retirement: RetirementBinding | None = None
+    private_data_reconciliation: Path | None = None
+    private_data_reconciliation_sha256: str | None = None
 
     def binding(self) -> dict[str, Any]:
         value = {
@@ -503,7 +516,158 @@ class Driver:
         if status.returncode or status.stdout.strip():
             deny("control_plane_not_clean")
 
-    def _release_index(self, index_path: Path, raw: bytes) -> dict[str, Any]:
+    def _private_data_reconciliation(self, contract_sha256: str,
+                                     journal: dict[str, Any]) -> dict[str, Any]:
+        path = self.inputs.private_data_reconciliation
+        expected_sha256 = self.inputs.private_data_reconciliation_sha256
+        if path is None or expected_sha256 is None or not path.is_absolute() or not SHA256.fullmatch(expected_sha256):
+            deny("private_data_reconciliation_binding")
+        raw, info = stable_regular_bytes(path, required_mode=0o600)
+        if ((info.st_uid, info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(raw).hexdigest() != expected_sha256):
+            deny("private_data_reconciliation_identity")
+        value = json_object(raw, path.name)
+        required = {"schemaVersion", "kind", "releaseId", "targetCommit", "contractSha256",
+                    "retirementIntentSha256", "transactionRoot", "overlay", "requiredContinuation"}
+        if set(value) != required or value.get("schemaVersion") != 1 or value.get("kind") != PRIVATE_DATA_RECONCILIATION_KIND:
+            deny("private_data_reconciliation_schema")
+        if (self.inputs.release != LEGACY_0FDEC_RELEASE or self.inputs.target != LEGACY_0FDEC_TARGET or
+                self.inputs.transaction_root != LEGACY_0FDEC_TRANSACTION or
+                contract_sha256 != LEGACY_0FDEC_CONTRACT_SHA256 or
+                self.inputs.retirement is None or
+                self.inputs.retirement.intent_sha256 != LEGACY_0FDEC_RETIREMENT_INTENT_SHA256):
+            deny("private_data_reconciliation_scope")
+        if (value.get("releaseId") != self.inputs.release or
+                value.get("targetCommit") != self.inputs.target or
+                value.get("contractSha256") != contract_sha256 or
+                value.get("retirementIntentSha256") != self.inputs.retirement.intent_sha256 or
+                value.get("transactionRoot") != str(self.inputs.transaction_root)):
+            deny("private_data_reconciliation_binding")
+        continuation = value.get("requiredContinuation")
+        if (not isinstance(continuation, dict) or
+                set(continuation) != {"state", "recoveryAction", "acceptanceSha256", "saveCount"} or
+                continuation.get("state") != "FAILED" or
+                continuation.get("recoveryAction") != "finalize" or
+                continuation.get("saveCount") != 0 or
+                not SHA256.fullmatch(str(continuation.get("acceptanceSha256", ""))) or
+                journal.get("state") != continuation["state"] or
+                journal.get("recoveryAction") != continuation["recoveryAction"] or
+                journal.get("saveCount") != continuation["saveCount"]):
+            deny("private_data_reconciliation_state")
+        acceptance_raw, acceptance_info = stable_regular_bytes(self.acceptance, required_mode=0o600)
+        if ((acceptance_info.st_uid, acceptance_info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(acceptance_raw).hexdigest() != continuation["acceptanceSha256"]):
+            deny("private_data_reconciliation_acceptance")
+        overlay = value.get("overlay")
+        if (not isinstance(overlay, dict) or
+                set(overlay) != {"path", "classification", "state", "rootIdentity",
+                                "ownerUid", "groupGid", "mode"} or
+                overlay.get("path") != PRIVATE_DATA_OVERLAY.as_posix() or
+                overlay.get("classification") != PRIVATE_DATA_POLICY or
+                overlay.get("state") != "ACTIVE_DEPENDENCY" or
+                not isinstance(overlay.get("rootIdentity"), dict) or
+                set(overlay["rootIdentity"]) != {"device", "inode"} or
+                any(not isinstance(overlay["rootIdentity"].get(key), int)
+                    for key in ("device", "inode")) or
+                any(not isinstance(overlay.get(key), int)
+                    for key in ("ownerUid", "groupGid", "mode")) or
+                any(overlay["rootIdentity"][key] < 0 for key in ("device", "inode")) or
+                any(overlay[key] < 0 for key in ("ownerUid", "groupGid", "mode")) or
+                overlay["mode"] > 0o7777 or overlay["mode"] & 0o022):
+            deny("private_data_reconciliation_overlay")
+        return value
+
+    def _private_data_contract(self, continuation_journal: dict[str, Any] | None = None
+                               ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        binding = self.inputs.retirement
+        if binding is None:
+            deny("private_data_contract_binding")
+        intent_raw, _ = stable_regular_bytes(binding.intent, required_mode=0o600)
+        if hashlib.sha256(intent_raw).hexdigest() != binding.intent_sha256:
+            deny("private_data_contract_intent")
+        intent = json_object(intent_raw, binding.intent.name)
+        contract_sha256 = intent.get("contractSha256")
+        if not isinstance(contract_sha256, str) or not SHA256.fullmatch(contract_sha256):
+            deny("private_data_contract_identity")
+        contract_path = binding.review_output.parent / "generation-artifacts.private.json"
+        contract_raw, _ = stable_regular_bytes(contract_path, required_mode=0o600)
+        if hashlib.sha256(contract_raw).hexdigest() != contract_sha256:
+            deny("private_data_contract_sha256")
+        contract = json_object(contract_raw, contract_path.name)
+        required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
+                    "writerLockPath", "classes", "artifacts", "privateDataPolicy"}
+        if (not required.issubset(contract) or not set(contract).issubset(required | {"privateDataOverlay"}) or
+                contract.get("schemaVersion") != 1 or contract.get("state") != "COMPLETE" or
+                contract.get("generationId") != self.inputs.release or
+                contract.get("releaseId") != self.inputs.release or
+                contract.get("targetCommit") != self.inputs.target or
+                contract.get("privateDataPolicy") != PRIVATE_DATA_POLICY):
+            deny("private_data_contract_schema")
+        declared = contract.get("privateDataOverlay")
+        expected = {"path": PRIVATE_DATA_OVERLAY.as_posix(),
+                    "classification": PRIVATE_DATA_POLICY,
+                    "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC"}
+        reconciliation = None
+        if declared is None:
+            if continuation_journal is None:
+                deny("private_data_contract_overlay_missing")
+            reconciliation = self._private_data_reconciliation(contract_sha256, continuation_journal)
+        elif declared != expected:
+            deny("private_data_contract_overlay")
+        elif self.inputs.private_data_reconciliation is not None:
+            deny("private_data_reconciliation_unnecessary")
+        return contract, reconciliation
+
+    def _private_data_overlay(self, continuation_journal: dict[str, Any] | None = None) -> dict[str, Any]:
+        _, reconciliation = self._private_data_contract(continuation_journal)
+        overlay = self.release_root / PRIVATE_DATA_OVERLAY
+        if not overlay.exists() and not overlay.is_symlink():
+            if reconciliation is not None:
+                deny("private_data_reconciliation_overlay_missing")
+            return {"present": False, "path": PRIVATE_DATA_OVERLAY.as_posix(),
+                    "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY"}
+        try:
+            release_info = self.release_root.lstat()
+            release_resolved = self.release_root.resolve(strict=True)
+            before = overlay.lstat()
+            resolved = overlay.resolve(strict=True)
+        except OSError:
+            deny("private_data_overlay_read")
+        if (overlay.is_symlink() or not stat.S_ISDIR(before.st_mode) or resolved != overlay or
+                release_resolved not in resolved.parents or
+                (before.st_uid, before.st_gid) != (release_info.st_uid, release_info.st_gid) or
+                stat.S_IMODE(before.st_mode) & 0o022):
+            deny("private_data_overlay_identity")
+        entries = 1
+        for path in sorted(overlay.rglob("*"), key=lambda item: item.as_posix()):
+            try:
+                info = path.lstat()
+                path_resolved = path.resolve(strict=True)
+            except OSError:
+                deny("private_data_overlay_read")
+            if (stat.S_ISLNK(info.st_mode) or
+                    not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)) or
+                    not (path_resolved == resolved or resolved in path_resolved.parents)):
+                deny("private_data_overlay_symlink")
+            entries += 1
+        after = overlay.lstat()
+        if ((before.st_dev, before.st_ino, before.st_mode, before.st_uid, before.st_gid) !=
+                (after.st_dev, after.st_ino, after.st_mode, after.st_uid, after.st_gid)):
+            deny("private_data_overlay_changed")
+        evidence = {"present": True, "path": PRIVATE_DATA_OVERLAY.as_posix(),
+                "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY",
+                "rootIdentity": {"device": after.st_dev, "inode": after.st_ino},
+                "ownerUid": after.st_uid, "groupGid": after.st_gid,
+                "mode": stat.S_IMODE(after.st_mode), "observedEntries": entries}
+        if reconciliation is not None:
+            expected_overlay = reconciliation["overlay"]
+            stable = ("path", "classification", "state", "rootIdentity", "ownerUid", "groupGid", "mode")
+            if any(evidence.get(key) != expected_overlay.get(key) for key in stable):
+                deny("private_data_reconciliation_overlay_drift")
+        return evidence
+
+    def _release_index(self, index_path: Path, raw: bytes,
+                       continuation_journal: dict[str, Any] | None = None) -> dict[str, Any]:
         index = json_object(raw, index_path.name)
         if index.get("schemaVersion") != 1 or index.get("scope") != list(RUNTIME_DIR.values()):
             deny("release_index_schema")
@@ -533,6 +697,7 @@ class Driver:
                 deny("release_index_symlink")
             expected[entry["path"]] = entry
 
+        overlay = self._private_data_overlay(continuation_journal)
         observed: dict[str, dict[str, Any]] = {}
         observed_identity: dict[str, tuple[int, ...]] = {}
         for runtime_name in RUNTIME_DIR.values():
@@ -541,7 +706,11 @@ class Driver:
                 deny(f"release_runtime_missing:{runtime_name}")
             paths = [root, *sorted(root.rglob("*"))]
             for path in paths:
-                relative = path.relative_to(self.release_root).as_posix()
+                relative_path = PurePosixPath(path.relative_to(self.release_root).as_posix())
+                if (relative_path == PRIVATE_DATA_OVERLAY or
+                        PRIVATE_DATA_OVERLAY in relative_path.parents):
+                    continue
+                relative = relative_path.as_posix()
                 info = path.lstat()
                 observed_identity[relative] = (info.st_dev, info.st_ino, info.st_mode,
                                                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
@@ -570,9 +739,15 @@ class Driver:
         for relative, item in expected.items():
             if observed[relative] != item:
                 deny(f"release_index_mismatch:{relative}")
-        return {"sha256": hashlib.sha256(raw).hexdigest(), "entries": len(expected)}
+        overlay_after = self._private_data_overlay(continuation_journal)
+        stable = ("present", "path", "classification", "state", "rootIdentity",
+                  "ownerUid", "groupGid", "mode")
+        if any(overlay_after.get(key) != overlay.get(key) for key in stable):
+            deny("private_data_overlay_changed")
+        return {"sha256": hashlib.sha256(raw).hexdigest(), "entries": len(expected),
+                "privateDataOverlay": overlay_after}
 
-    def _release(self) -> dict[str, Any]:
+    def _release(self, continuation_journal: dict[str, Any] | None = None) -> dict[str, Any]:
         if not SHA40.fullmatch(self.inputs.target):
             deny("target_format")
         if self.release_root.parent != self.releases or not self.release_root.is_dir():
@@ -599,13 +774,14 @@ class Driver:
             deny("release_index_identity_missing")
         if index_sha != expected_index:
             deny("release_index_identity")
-        index = self._release_index(index_path, index_raw)
+        index = self._release_index(index_path, index_raw, continuation_journal)
         for component in COMPONENTS:
             runtime = self.release_root / RUNTIME_DIR[component]
             if not runtime.is_dir():
                 deny(f"release_runtime_missing:{component}")
         return {"manifestSha256": manifest_sha, "indexSha256": index["sha256"],
-                "indexEntries": index["entries"]}
+                "indexEntries": index["entries"],
+                "privateDataOverlay": index["privateDataOverlay"]}
 
     def _rollback_release(self, component: str, identity: dict[str, Any]) -> Path:
         root = self.releases / identity["releaseId"]
@@ -1216,12 +1392,34 @@ class Driver:
                 deny(f"readiness_identity:{component}:{key}")
         return after, readiness
 
+    @staticmethod
+    def _validate_private_data_continuity(journal: dict[str, Any], release: dict[str, Any]) -> None:
+        current = release.get("privateDataOverlay")
+        if not isinstance(current, dict):
+            deny("private_data_overlay_evidence")
+        expected = journal.get("preflight", {}).get("release", {}).get("privateDataOverlay")
+        # Transactions prepared before the generic contract was versioned did not
+        # persist this projection. Their authenticated generation contract remains
+        # the authority; finalization still performs the full current validation.
+        if expected is None:
+            return
+        if not isinstance(expected, dict):
+            deny("private_data_overlay_preflight_evidence")
+        common = ("path", "classification", "state")
+        if any(expected.get(key) != current.get(key) for key in common):
+            deny("private_data_overlay_contract_drift")
+        if expected.get("present") is True:
+            stable = ("present", "rootIdentity", "ownerUid", "groupGid", "mode")
+            if any(expected.get(key) != current.get(key) for key in stable):
+                deny("private_data_overlay_identity_drift")
+
     def activate(self) -> None:
         journal = self._journal_read()
         if journal["state"] != "PREFLIGHT_PASS":
             deny("activate_state")
         self._control_head(); runtime_manifest = self._authenticated_runtime_manifest()
-        self._release()
+        release = self._release()
+        self._validate_private_data_continuity(journal, release)
         self._acquire_lock(journal)
         try:
             rows = self.host.pm2_rows(self._resolve_pm2())
@@ -1378,7 +1576,8 @@ class Driver:
             deny("finalize_replay")
         try:
             self._control_head(); self._authenticated_runtime_manifest()
-            self._release()
+            release = self._release(continuation_journal=journal)
+            self._validate_private_data_continuity(journal, release)
             final_readiness: dict[str, Any] = {}
             for component in COMPONENTS:
                 selected = component in self.inputs.components
@@ -1508,7 +1707,12 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--generation-retirement-receipt-root", type=Path, required=True)
     parser.add_argument("--generation-retirement-review-output", type=Path, required=True)
     parser.add_argument("--generation-retirement-deployment-lock", type=Path, required=True)
+    parser.add_argument("--private-data-reconciliation", type=Path)
+    parser.add_argument("--private-data-reconciliation-sha256")
     args = parser.parse_args()
+    if ((args.private_data_reconciliation is None) !=
+            (args.private_data_reconciliation_sha256 is None)):
+        deny("private_data_reconciliation_binding")
     components = tuple(args.components.split(","))
     retirement = RetirementBinding(
         args.generation_retirement_tool, args.generation_retirement_tool_sha256,
@@ -1520,7 +1724,9 @@ def parse() -> tuple[str, Inputs]:
         args.generation_retirement_deployment_lock)
     return args.command, Inputs(args.release, args.target, args.control_plane,
                                 components, args.runtime_manifest, args.transaction_root,
-                                args.runtime_manifest_sha256, retirement)
+                                args.runtime_manifest_sha256, retirement,
+                                args.private_data_reconciliation,
+                                args.private_data_reconciliation_sha256)
 
 
 def main() -> int:

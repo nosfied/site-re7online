@@ -30,7 +30,9 @@ COMPONENTS = ("api", "frontend")
 RUNTIMES = ("api-runtime", "frontend-runtime")
 A959_LEGACY_RELEASE_ID = "immutable-a959129e-vps-20261026T023100Z"
 A959_LEGACY_TARGET = "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff"
-A959_PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
+PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
+PRIVATE_DATA_POLICY = "PRIVATE_DATA_NEVER_RETIRE"
+A959_PRIVATE_DATA_OVERLAY = PRIVATE_DATA_OVERLAY
 F160_LEGACY_RELEASE_ID = "immutable-f1602787-vps-20261026T174702Z"
 F160_LEGACY_TARGET = "f16027874e91c86e5f818d0888e6d735b07a6eda"
 F160_RUNTIME_CACHE_OVERLAY = PurePosixPath("frontend-runtime/.next/cache")
@@ -449,7 +451,13 @@ def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
         "releaseId": args.release_id, "targetCommit": args.target, "state": state,
         "writerLockPath": str(args.output.parent / ".generation-build.lock"),
         "classes": sorted(ARTIFACT_CLASSES), "artifacts": entries,
-        "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+        "privateDataPolicy": PRIVATE_DATA_POLICY,
+        "privateDataOverlay": {
+            "path": PRIVATE_DATA_OVERLAY.as_posix(),
+            "classification": PRIVATE_DATA_POLICY,
+            "state": "ACTIVE_DEPENDENCY",
+            "retirableOn": "NEVER_AUTOMATIC",
+        },
     }
 
 
@@ -678,6 +686,49 @@ def inside(child: Path, parent: Path) -> bool:
     return child == parent or parent in child.parents
 
 
+def validate_private_data_overlay(release_root: Path) -> dict[str, Any]:
+    overlay = release_root / PRIVATE_DATA_OVERLAY
+    if not overlay.exists() and not overlay.is_symlink():
+        return {"present": False, "path": PRIVATE_DATA_OVERLAY.as_posix(),
+                "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY"}
+    try:
+        release_resolved = release_root.resolve(strict=True)
+        release_info = release_root.lstat()
+        before = overlay.lstat()
+        resolved = overlay.resolve(strict=True)
+    except OSError:
+        deny("private_data_overlay_read")
+    if (overlay.is_symlink() or not stat.S_ISDIR(before.st_mode) or resolved != overlay or
+            not inside(resolved, release_resolved) or
+            (before.st_uid, before.st_gid) != (release_info.st_uid, release_info.st_gid) or
+            stat.S_IMODE(before.st_mode) & 0o022):
+        deny("private_data_overlay_identity")
+    entry_count = 1
+    for path in sorted(overlay.rglob("*"), key=lambda item: item.as_posix()):
+        try:
+            info = path.lstat()
+            path_resolved = path.resolve(strict=True)
+        except OSError:
+            deny("private_data_overlay_read")
+        if (stat.S_ISLNK(info.st_mode) or
+                not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)) or
+                not inside(path_resolved, resolved)):
+            deny("private_data_overlay_symlink")
+        entry_count += 1
+    try:
+        after = overlay.lstat()
+    except OSError:
+        deny("private_data_overlay_read")
+    if ((before.st_dev, before.st_ino, before.st_mode, before.st_uid, before.st_gid) !=
+            (after.st_dev, after.st_ino, after.st_mode, after.st_uid, after.st_gid)):
+        deny("private_data_overlay_changed")
+    return {"present": True, "path": PRIVATE_DATA_OVERLAY.as_posix(),
+            "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY",
+            "rootIdentity": {"device": after.st_dev, "inode": after.st_ino},
+            "ownerUid": after.st_uid, "groupGid": after.st_gid,
+            "mode": stat.S_IMODE(after.st_mode), "observedEntries": entry_count}
+
+
 def validate_a959_private_data_overlay(release_root: Path) -> dict[str, Any]:
     overlay = release_root / A959_PRIVATE_DATA_OVERLAY
     try:
@@ -759,12 +810,15 @@ def validate_f160_runtime_cache_overlay(release_root: Path) -> dict[str, Any]:
             "mode": stat.S_IMODE(after.st_mode), "observedEntries": entry_count}
 
 
-def scan_runtime(release_root: Path, *, allow_a959_private_data_overlay: bool = False,
+def scan_runtime(release_root: Path, *, allow_private_data_overlay: bool = False,
+                 allow_a959_private_data_overlay: bool = False,
                  allow_f160_runtime_cache_overlay: bool = False
                  ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     resolved_root = release_root.resolve(strict=True)
     entries: list[dict[str, Any]] = []
-    overlay = (validate_a959_private_data_overlay(release_root)
+    overlay = (validate_private_data_overlay(release_root)
+               if allow_private_data_overlay else
+               validate_a959_private_data_overlay(release_root)
                if allow_a959_private_data_overlay else
                validate_f160_runtime_cache_overlay(release_root)
                if allow_f160_runtime_cache_overlay else None)
@@ -774,7 +828,8 @@ def scan_runtime(release_root: Path, *, allow_a959_private_data_overlay: bool = 
             deny(f"release_runtime_missing:{runtime_name}")
         for path in [root, *sorted(root.rglob("*"), key=lambda item: item.as_posix())]:
             relative = path.relative_to(release_root)
-            allowed_overlay = (A959_PRIVATE_DATA_OVERLAY if allow_a959_private_data_overlay else
+            allowed_overlay = (PRIVATE_DATA_OVERLAY if allow_private_data_overlay else
+                               A959_PRIVATE_DATA_OVERLAY if allow_a959_private_data_overlay else
                                F160_RUNTIME_CACHE_OVERLAY if allow_f160_runtime_cache_overlay else None)
             if allowed_overlay is not None and (relative == allowed_overlay or
                                                 allowed_overlay in relative.parents):
@@ -799,8 +854,10 @@ def scan_runtime(release_root: Path, *, allow_a959_private_data_overlay: bool = 
             else:
                 deny(f"release_entry_type:{relative.as_posix()}")
             entries.append(item)
-    if allow_a959_private_data_overlay or allow_f160_runtime_cache_overlay:
-        overlay_after = (validate_a959_private_data_overlay(release_root)
+    if allow_private_data_overlay or allow_a959_private_data_overlay or allow_f160_runtime_cache_overlay:
+        overlay_after = (validate_private_data_overlay(release_root)
+                         if allow_private_data_overlay else
+                         validate_a959_private_data_overlay(release_root)
                          if allow_a959_private_data_overlay else
                          validate_f160_runtime_cache_overlay(release_root))
         stable_fields = ("path", "classification", "state", "rootIdentity", "ownerUid",
@@ -811,7 +868,8 @@ def scan_runtime(release_root: Path, *, allow_a959_private_data_overlay: bool = 
     return entries, overlay
 
 
-def validate_index(release_root: Path, raw: bytes, *, allow_a959_private_data_overlay: bool = False,
+def validate_index(release_root: Path, raw: bytes, *, allow_private_data_overlay: bool = False,
+                   allow_a959_private_data_overlay: bool = False,
                    allow_f160_runtime_cache_overlay: bool = False
                    ) -> tuple[str, int, dict[str, Any] | None]:
     index = json_object(raw, "index.sha256")
@@ -847,7 +905,8 @@ def validate_index(release_root: Path, raw: bytes, *, allow_a959_private_data_ov
         if set(entry) != allowed or not isinstance(entry.get("mode"), int):
             deny("release_index_entry_fields")
     observed, overlay = scan_runtime(
-        release_root, allow_a959_private_data_overlay=allow_a959_private_data_overlay,
+        release_root, allow_private_data_overlay=allow_private_data_overlay,
+        allow_a959_private_data_overlay=allow_a959_private_data_overlay,
         allow_f160_runtime_cache_overlay=allow_f160_runtime_cache_overlay,
     )
     if observed != entries:
@@ -861,6 +920,7 @@ def validate_index(release_root: Path, raw: bytes, *, allow_a959_private_data_ov
 
 
 def validate_manifest(release_root: Path, expected_target: str, expected_release: str, *,
+                      allow_private_data_overlay: bool = False,
                       allow_a959_private_data_overlay: bool = False,
                       allow_f160_runtime_cache_overlay: bool = False) -> dict[str, Any]:
     manifest_raw, _ = stable_bytes(release_root / "manifest.json")
@@ -888,6 +948,7 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
         deny("release_manifest_reproducibility")
     index_sha, entry_count, overlay = validate_index(
         release_root, index_raw,
+        allow_private_data_overlay=allow_private_data_overlay,
         allow_a959_private_data_overlay=allow_a959_private_data_overlay,
         allow_f160_runtime_cache_overlay=allow_f160_runtime_cache_overlay,
     )
@@ -914,7 +975,8 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
               "indexEntries": entry_count, "buildId": build_id,
               "apiEntrySha256": api["entrySha256"]}
     if overlay is not None:
-        result["privateDataOverlay" if allow_a959_private_data_overlay else
+        result["privateDataOverlay" if (allow_private_data_overlay or
+                                         allow_a959_private_data_overlay) else
                "runtimeCacheOverlay"] = overlay
     return result
 
@@ -1015,8 +1077,36 @@ def safe_extract(package: Path, destination: Path, expected_release: str) -> Pat
     return root
 
 
+def authenticate_private_data_contract(path: Path, expected_sha256: str,
+                                       target: str, release_id: str) -> dict[str, Any]:
+    if not path.is_absolute() or not SHA256.fullmatch(expected_sha256):
+        deny("private_data_contract_binding")
+    raw, info = stable_bytes(path)
+    if (info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600 or
+            sha256_bytes(raw) != expected_sha256):
+        deny("private_data_contract_identity")
+    contract = json_object(raw, "generation-artifacts")
+    required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
+                "writerLockPath", "classes", "artifacts", "privateDataPolicy",
+                "privateDataOverlay"}
+    if (set(contract) != required or
+            contract.get("schemaVersion") != 1 or contract.get("state") != "COMPLETE" or
+            contract.get("generationId") != release_id or contract.get("releaseId") != release_id or
+            contract.get("targetCommit") != target or
+            contract.get("privateDataPolicy") != PRIVATE_DATA_POLICY):
+        deny("private_data_contract_schema")
+    declared = contract["privateDataOverlay"]
+    expected = {"path": PRIVATE_DATA_OVERLAY.as_posix(),
+                "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY",
+                "retirableOn": "NEVER_AUTOMATIC"}
+    if declared != expected:
+        deny("private_data_contract_overlay")
+    return contract
+
+
 def verify_root(root: Path, target: str, release_id: str,
                 deployed_marker_sha256: str | None = None, *,
+                allow_private_data_overlay: bool = False,
                 allow_a959_private_data_overlay: bool = False,
                 allow_f160_runtime_cache_overlay: bool = False) -> dict[str, Any]:
     if not root.is_absolute() or not root.is_dir() or root.is_symlink():
@@ -1040,6 +1130,7 @@ def verify_root(root: Path, target: str, release_id: str,
             deny("deployed_marker_mismatch")
     result = validate_manifest(
         root, target, release_id,
+        allow_private_data_overlay=allow_private_data_overlay,
         allow_a959_private_data_overlay=allow_a959_private_data_overlay,
         allow_f160_runtime_cache_overlay=allow_f160_runtime_cache_overlay,
     )
@@ -1297,6 +1388,12 @@ def verify(args: argparse.Namespace) -> None:
         deny("verify_source")
     if args.package and args.deployed_marker_sha256 is not None:
         deny("deployed_marker_package")
+    contract_bound = args.artifact_contract is not None or args.artifact_contract_sha256 is not None
+    if contract_bound:
+        if args.package or args.artifact_contract is None or args.artifact_contract_sha256 is None:
+            deny("private_data_contract_binding")
+        authenticate_private_data_contract(
+            args.artifact_contract, args.artifact_contract_sha256, args.target, args.release_id)
     if args.legacy_a959_private_data_overlay:
         if args.package:
             deny("legacy_a959_private_data_overlay_package")
@@ -1309,12 +1406,14 @@ def verify(args: argparse.Namespace) -> None:
         if (args.release_id != F160_LEGACY_RELEASE_ID or args.target != F160_LEGACY_TARGET or
                 args.deployed_marker_sha256 is None):
             deny("legacy_f160_runtime_cache_overlay_binding")
-    if args.legacy_a959_private_data_overlay and args.legacy_f160_runtime_cache_overlay:
+    if sum((contract_bound, args.legacy_a959_private_data_overlay,
+            args.legacy_f160_runtime_cache_overlay)) > 1:
         deny("legacy_overlay_conflict")
     if args.release_root:
         result = verify_root(
             args.release_root.resolve(strict=True), args.target, args.release_id,
             args.deployed_marker_sha256,
+            allow_private_data_overlay=contract_bound,
             allow_a959_private_data_overlay=args.legacy_a959_private_data_overlay,
             allow_f160_runtime_cache_overlay=args.legacy_f160_runtime_cache_overlay,
         )
@@ -1352,6 +1451,8 @@ def parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--release-id", required=True)
     verify_parser.add_argument("--components", required=True)
     verify_parser.add_argument("--deployed-marker-sha256")
+    verify_parser.add_argument("--artifact-contract", type=Path)
+    verify_parser.add_argument("--artifact-contract-sha256")
     verify_parser.add_argument("--legacy-a959-private-data-overlay", action="store_true")
     verify_parser.add_argument("--legacy-f160-runtime-cache-overlay", action="store_true")
     verify_parser.set_defaults(handler=verify)
