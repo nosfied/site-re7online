@@ -154,7 +154,8 @@ comandos e review v2 `SANITIZED`; não há etapa `execute`. A release instalada
 permanece `ACTIVE_DEPENDENCY`, fora de qualquer comando.
 
 A `a959` introduziu o contrato comprovado do overlay literal `api-runtime/.data`.
-Gerações do fluxo atual registram a mesma política no contrato autenticado, sem
+Gerações do fluxo atual registram obrigatoriamente a mesma política e o campo fechado
+`privateDataOverlay` no contrato autenticado, sem
 binding por release: pacote e índice nunca contêm `.data`; somente a release instalada
 pode apresentar esse diretório físico, confinado, com owner/group da release e sem
 escrita por grupo/outros. O modo `0755` é válido porque concede apenas leitura/travessia
@@ -165,6 +166,11 @@ preflight registra a projeção antes da seleção; finalize a revalida antes do
 save. O binding fechado da `a959` continua somente para seu bootstrap histórico.
 Dados mutáveis futuros devem migrar para persistência externa à release; este contrato
 não autoriza essa migração nem relaxa a verificação do pacote.
+Um contrato sem `privateDataOverlay` é negado, ainda que possua
+`privateDataPolicy`. A única reconciliação é a continuação da transação `0fdec` já
+aberta: manifesto privado vincula release, target, contrato original, intenção,
+transação, aceite, `saveCount=0` e identidade do diretório, e somente `finalize`
+pode consumi-lo. O manifesto não altera lifecycle nem cria autorização reutilizável.
 
 Portanto, `123ba` e `a959` não compartilham bootstrap: a primeira é
 `LEGACY_PRE_CONTRACT` sem review; a segunda já tem review v1, não pode fabricá-la

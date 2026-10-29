@@ -1087,19 +1087,19 @@ def authenticate_private_data_contract(path: Path, expected_sha256: str,
         deny("private_data_contract_identity")
     contract = json_object(raw, "generation-artifacts")
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
-                "writerLockPath", "classes", "artifacts", "privateDataPolicy"}
-    optional = {"privateDataOverlay"}
-    if (not required.issubset(contract) or not set(contract).issubset(required | optional) or
+                "writerLockPath", "classes", "artifacts", "privateDataPolicy",
+                "privateDataOverlay"}
+    if (set(contract) != required or
             contract.get("schemaVersion") != 1 or contract.get("state") != "COMPLETE" or
             contract.get("generationId") != release_id or contract.get("releaseId") != release_id or
             contract.get("targetCommit") != target or
             contract.get("privateDataPolicy") != PRIVATE_DATA_POLICY):
         deny("private_data_contract_schema")
-    declared = contract.get("privateDataOverlay")
+    declared = contract["privateDataOverlay"]
     expected = {"path": PRIVATE_DATA_OVERLAY.as_posix(),
                 "classification": PRIVATE_DATA_POLICY, "state": "ACTIVE_DEPENDENCY",
                 "retirableOn": "NEVER_AUTOMATIC"}
-    if declared is not None and declared != expected:
+    if declared != expected:
         deny("private_data_contract_overlay")
     return contract
 

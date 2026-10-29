@@ -425,6 +425,12 @@ class ReleaseProducerTest(unittest.TestCase):
         )
         self.assert_denied(bad, "private_data_contract_identity")
 
+        missing = json.loads(contract.read_text())
+        missing.pop("privateDataOverlay")
+        write(contract, json.dumps(missing, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+        absent = self.verify_contract_overlay(root)
+        self.assert_denied(absent, "private_data_contract_schema")
+
     def test_a959_installed_overlay_is_closed_and_does_not_relax_package_inventory(self) -> None:
         root, marker_sha = self.copy_a959_release("a959-overlay-valid")
         write(root / "api-runtime/.data/private/state.json", "fixture-private-state\n", 0o600)
