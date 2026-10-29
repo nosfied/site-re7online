@@ -16,7 +16,10 @@ A mesma preparação alcançou gates previsíveis em invocações sucessivas:
 1. política materializada como `0664`, embora o consumidor aceite somente
    `0600` ou `0644`;
 2. fotografia operacional com `controlPlaneArtifacts[].copied=false`, embora o
-   schema exija cópias autenticadas e `copied=true`.
+   schema exija cópias autenticadas e `copied=true`;
+3. `activate` negado por `global_lock_active`: o fluxo anterior preservou
+   `deploy.lock` regular `0600` e livre de `flock`, enquanto a aquisição seguinte
+   ainda tratava a mera existência física como ocupação ativa.
 
 As negativas preservaram produção, mas consumiram tempo humano, capacidade de
 disco, execuções de CI e autorizações. A causa processual é a ausência de uma
@@ -89,6 +92,18 @@ existente em vez de criar wrapper temporário, que:
   `PYTHONDONTWRITEBYTECODE=1`;
 - seja idempotente por verificação exata, nunca por sobrescrita silenciosa.
 
+O protocolo do lock também deve ser único e versionado:
+
+- distinguir identidade física do arquivo canônico de ocupação advisory efetiva;
+- nunca interpretar arquivo regular livre como holder ativo apenas por existir;
+- nunca remover, renomear ou substituir manualmente o lock para contornar o driver;
+- preservar device/inode quando essa for a identidade canônica autenticada;
+- representar de forma fechada os estados livre e ocupado e sincronizar a transição;
+- negar owner, group, modo, symlink, inode, conteúdo ou `flock` divergentes;
+- suportar duas implantações sequenciais completas sobre o mesmo lock canônico;
+- reconciliar o lock legado atual somente mediante prova da transação terminal
+  anterior, sem aceitar arquivo arbitrário como livre.
+
 ### P00-C — consumo condicionado
 
 `prepare` e preflight API-only só podem ser executados quando vinculados à prova
@@ -110,6 +125,10 @@ Adicionar regressões que comprovem:
 - nenhum destino parcial é publicado quando a admissão nega;
 - o caminho válido materializa as três cópias, gera fotografia v2 aceita e alcança
   `PREFLIGHT_PASS` sem ativar;
+- lock canônico existente e livre permite aquisição segura, enquanto lock realmente
+  ocupado ou com identidade divergente é negado;
+- duas transações consecutivas alcançam ativação/finalização em fixture, preservando
+  a identidade prevista do lock e sem `global_lock_active` falso;
 - frontend, worker, tenants, campanhas, Meta, guarda e dump permanecem intactos;
 - pacote/release existentes são reutilizados e o contador de build permanece zero.
 
