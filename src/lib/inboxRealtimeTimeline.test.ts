@@ -3,10 +3,10 @@ import test from "node:test";
 
 import type { InboxMessageItem } from "./whatsappAdminApi";
 import {
+  acceptBackendAuthorizedTimelineMessages,
   compareTimelineMessagesAscending,
   conversationMutationTargetsSelectedConversation,
   getRealtimeHumanInboxVisibility,
-  isHumanTimelineMessageItem,
   isManagementOnlyRealtimeMessage,
   isNonHumanTimelineRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
@@ -138,17 +138,40 @@ test("realtime messages only update human timeline when explicitly classified as
       humanInboxVisible: true,
       message: {
         inboxVisibility: "management_only",
-        bodyText: "5",
+        bodyText: "consentimento autorizado",
+      } as never,
+    }),
+    true
+  );
+  assert.equal(
+    shouldApplyRealtimeMessageToHumanTimeline({
+      message: {
+        inboxVisibility: "management_only",
+        bodyText: "conteúdo administrativo sem autorização explícita",
       } as never,
     }),
     false
   );
 });
 
-test("timeline item visibility uses structured inbox visibility", () => {
-  assert.equal(isHumanTimelineMessageItem({ inboxVisibility: "management_only" }), false);
-  assert.equal(isHumanTimelineMessageItem({ inboxVisibility: "human_timeline" }), true);
-  assert.equal(isHumanTimelineMessageItem({}), true);
+test("backend-authorized timeline keeps consent selected by the server", () => {
+  const consentPrompt = timelineMessage({
+    internalMessageId: "consent-prompt",
+    inboxVisibility: "management_only",
+  });
+  const regularMessage = timelineMessage({
+    internalMessageId: "regular-message",
+    inboxVisibility: "human_timeline",
+  });
+
+  const serverProjection = [consentPrompt, regularMessage];
+  const accepted = acceptBackendAuthorizedTimelineMessages(serverProjection);
+
+  assert.deepEqual(
+    accepted.map((item) => item.internalMessageId),
+    ["consent-prompt", "regular-message"]
+  );
+  assert.notEqual(accepted, serverProjection);
 });
 
 test("timeline ordering is deterministic when timestamps match", () => {

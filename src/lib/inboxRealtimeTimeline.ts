@@ -10,6 +10,7 @@ export function isManagementOnlyRealtimeMessage(
 export function isNonHumanTimelineRealtimeMessage(
   event: Pick<Extract<AppRealtimeEvent, { type: "message.created" }>, "humanInboxVisible" | "message">
 ) {
+  if (event.humanInboxVisible === true) return false;
   return isManagementOnlyRealtimeMessage(event) || event.humanInboxVisible === false;
 }
 
@@ -20,8 +21,8 @@ export function shouldApplyRealtimeMessageToHumanTimeline(
   return event.humanInboxVisible === true || event.message.inboxVisibility === "human_timeline";
 }
 
-export function isHumanTimelineMessageItem(item: { inboxVisibility?: InboxMessageItem["inboxVisibility"] }) {
-  return item.inboxVisibility !== "management_only";
+export function acceptBackendAuthorizedTimelineMessages(items: readonly InboxMessageItem[]) {
+  return [...items];
 }
 
 export function compareTimelineMessagesAscending(

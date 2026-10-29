@@ -35,10 +35,10 @@ import {
   type RealtimeRefetchScheduler,
 } from "@/lib/inboxRealtimeInvalidation";
 import {
+  acceptBackendAuthorizedTimelineMessages,
   compareTimelineMessagesAscending,
   conversationMutationTargetsSelectedConversation,
   getRealtimeHumanInboxVisibility,
-  isHumanTimelineMessageItem,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
@@ -1786,12 +1786,10 @@ function rememberInboundMessages(
 }
 
 function mergeMessagesByIdentity(current: InboxMessageItem[], incoming: InboxMessageItem[]) {
-  const visibleIncoming = incoming.filter(isHumanTimelineMessageItem);
-  const visibleCurrent = current.filter(isHumanTimelineMessageItem);
-  if (visibleIncoming.length === 0) return visibleCurrent;
-  const next = [...visibleCurrent];
-  const seen = new Set(visibleCurrent.map(getMessageIdentity));
-  for (const item of visibleIncoming) {
+  if (incoming.length === 0) return current;
+  const next = [...current];
+  const seen = new Set(current.map(getMessageIdentity));
+  for (const item of incoming) {
     const identity = getMessageIdentity(item);
     if (seen.has(identity)) continue;
     seen.add(identity);
@@ -4279,8 +4277,8 @@ export default function AppInboxPage() {
     ) {
       return;
     }
-    const visibleResponseItems =
-      response.items.filter(isHumanTimelineMessageItem);
+    const authorizedResponseItems =
+      acceptBackendAuthorizedTimelineMessages(response.items);
     if (mode === "append") {
       if (
         latestKnownAt &&
@@ -4288,13 +4286,13 @@ export default function AppInboxPage() {
       ) {
         countUnseenInboundMessages(
           responseConversationKey,
-          visibleResponseItems,
+          authorizedResponseItems,
           notifiedInboundMessageKeysRef.current
         );
       } else {
         rememberInboundMessages(
           responseConversationKey,
-          visibleResponseItems,
+          authorizedResponseItems,
           notifiedInboundMessageKeysRef.current
         );
       }
@@ -4302,12 +4300,12 @@ export default function AppInboxPage() {
     } else {
       rememberInboundMessages(
         responseConversationKey,
-        visibleResponseItems,
+        authorizedResponseItems,
         notifiedInboundMessageKeysRef.current
       );
       primedTimelineNotificationKeysRef.current.add(responseConversationKey);
     }
-    const responseItems = mode === "append" ? visibleResponseItems : sortMessagesAscending(visibleResponseItems);
+    const responseItems = mode === "append" ? authorizedResponseItems : sortMessagesAscending(authorizedResponseItems);
     setMessages((prev) => {
       const nextMessages =
         mode === "append"
@@ -4573,14 +4571,14 @@ export default function AppInboxPage() {
           usedCachedTimeline: Boolean(cachedMessages?.length),
           shouldRefreshUnreadWindow,
         });
-        const visibleResponseItems = response.items.filter(isHumanTimelineMessageItem);
+        const authorizedResponseItems = acceptBackendAuthorizedTimelineMessages(response.items);
         rememberInboundMessages(
           responseConversationKey,
-          visibleResponseItems,
+          authorizedResponseItems,
           notifiedInboundMessageKeysRef.current
         );
         primedTimelineNotificationKeysRef.current.add(responseConversationKey);
-        const responseItems = sortMessagesAscending(visibleResponseItems);
+        const responseItems = sortMessagesAscending(authorizedResponseItems);
         conversationDetailLoadedAtRef.current = {
           key: visibleConversationKey,
           loadedAt: performance.now(),
@@ -5258,10 +5256,7 @@ export default function AppInboxPage() {
     Boolean(selectedConversationWaId) &&
     loadingMessages &&
     messagesConversationKey !== selectedConversationKey;
-  const visibleMessages = useMemo(
-    () => messages.filter(isHumanTimelineMessageItem),
-    [messages]
-  );
+  const visibleMessages = messages;
   const isRefreshingSelectedTimeline =
     Boolean(selectedConversationWaId) &&
     loadingMessages &&
