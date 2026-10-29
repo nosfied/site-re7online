@@ -71,6 +71,16 @@ handoff ou transição, não altera o fluxo vigente e não cria mensagens. Retri
 reprocessamento continuam protegidos pelas identidades únicas do inbound e do
 outbound.
 
+A resposta HTTP da timeline já é a projeção autorizada pelo backend para a visão
+solicitada. O frontend não pode reaplicar um filtro genérico por
+`inboxVisibility=management_only`, porque isso removeria os três tipos de
+consentimento que o backend selecionou e manteria invisível um histórico já
+persistido. No tempo real, a fronteira permanece fail-closed: uma mensagem
+`management_only` só entra na timeline quando o evento do backend traz
+`humanInboxVisible=true` explicitamente; valor ausente ou `false` continua
+negado. Assim, `consent_invalid` e demais mensagens administrativas não são
+ampliadas pelo frontend.
+
 A fotografia P00 de 29/10 confirmou ainda uma armadilha de observabilidade: dois
 inbounds CRA com texto igual existiam em instantes próximos. A correlação apenas
 por texto selecionou o registro anterior, enquanto a resposta controlada real foi

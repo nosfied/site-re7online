@@ -222,7 +222,8 @@ jobs:
             src/lib/screenProcessing.test.ts \
             src/lib/templateMediaOverlay.test.ts \
             src/lib/templateMediaUx.test.ts \
-            src/lib/campaignDrafts.test.ts
+            src/lib/campaignDrafts.test.ts \
+            src/lib/inboxRealtimeTimeline.test.ts
           apps/whatsapp-agent/node_modules/.bin/tsx --test \
             --test-name-pattern "CRM contacts expose progress|CRM initial list|CRM list uses cursor" \
             src/app/app/crm/crmPageContract.test.ts
