@@ -82,7 +82,10 @@ output. `cmdline` vazio, isoladamente, nunca torna um processo dispensável:
 processos de usuário nessa condição ainda têm `cwd`, `root`, `exe`, FDs e mapas
 integralmente inspecionados. Uma thread de kernel só é ignorada após autenticar UIDs
 root, o bit `PF_KTHREAD`, PID/start ticks e flags estáveis; desaparecimento durante
-a coleta só é classificado como processo encerrado após confirmar a ausência do PID.
+a coleta só é classificado como processo encerrado após confirmar a ausência do
+diretório do PID. `ENOENT` em `stat`, revalidação sem cmdline ou revalidação final,
+com o PID ainda presente ou de ausência inconclusiva, permanece falha nominal e
+mantém a coleta incompleta.
 O fechamento de um FD entre a enumeração e o `readlink` é registrado como transiente e aceito somente
 com PID/start ticks estáveis. Qualquer outra falha de leitura de referência de
 processo `deploy` mantém a varredura incompleta e passa a ser contada nominalmente.

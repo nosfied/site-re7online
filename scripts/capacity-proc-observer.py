@@ -237,6 +237,16 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
         add_failure(failures, truncated, pid=pid, ticks=ticks, uids=uids,
                     operation=operation, predicate=predicate, error=error)
 
+    def classify_missing_process(pid: int, proc: Path, ticks: int | None,
+                                 uids: tuple[int, int, int, int] | None,
+                                 operation: str, error: FileNotFoundError) -> bool:
+        """Return true only when absence of the PID directory is proven."""
+        if process_exists(proc):
+            fail(pid, ticks, uids, operation, "PROCESS_IDENTITY_UNREADABLE", error)
+            return False
+        summary["vanishedProcesses"] += 1
+        return True
+
     def add_reference(pid: int, ticks: int, uids: tuple[int, int, int, int],
                       source: str, target: str) -> None:
         if target.endswith(" (deleted)"):
@@ -268,8 +278,9 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
             _state, flags, ticks = process_stat(proc)
             uid_values = status_uids(proc)
             command_raw = (proc / "cmdline").read_bytes()
-        except FileNotFoundError:
-            summary["vanishedProcesses"] += 1
+        except FileNotFoundError as exc:
+            classify_missing_process(pid, proc, ticks, uid_values,
+                                     "identity:initial", exc)
             continue
         except (OSError, Refused) as exc:
             if process_exists(proc):
@@ -282,8 +293,9 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
             try:
                 _after_state, after_flags, after = process_stat(proc)
                 after_uids = status_uids(proc)
-            except FileNotFoundError:
-                summary["vanishedProcesses"] += 1
+            except FileNotFoundError as exc:
+                classify_missing_process(pid, proc, ticks, uid_values,
+                                         "identity:empty-cmdline-revalidation", exc)
                 continue
             if after != ticks or after_flags != flags or after_uids != uid_values:
                 summary["identityChanges"] += 1
@@ -366,8 +378,9 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
         try:
             _after_state, after_flags, after_ticks = process_stat(proc)
             after_uids = status_uids(proc)
-        except FileNotFoundError:
-            summary["vanishedProcesses"] += 1
+        except FileNotFoundError as exc:
+            classify_missing_process(pid, proc, ticks, uid_values,
+                                     "identity:final-revalidation", exc)
             continue
         except (OSError, Refused) as exc:
             fail(pid, ticks, uid_values, "identity:after", "PROCESS_IDENTITY_UNREADABLE", exc)

@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -153,6 +154,51 @@ class ProcObserverTests(unittest.TestCase):
                 observation = OBSERVER.scan_proc(["/tmp/candidate"], 1000, proc_root)
             self.assertFalse(observation["complete"])
             self.assertEqual(observation["summary"]["identityChanges"], 1)
+
+    def test_initial_missing_file_with_pid_present_is_incomplete(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); proc = self.fake_proc(root, 61, arguments=("worker",))
+            (proc / "stat").unlink()
+            observation = OBSERVER.scan_proc([OBSERVER.NPM_CACHE], 1000, root)
+        self.assertFalse(observation["complete"])
+        self.assertEqual(observation["summary"]["vanishedProcesses"], 0)
+        self.assertEqual(observation["failures"][0]["operation"], "identity:initial")
+
+    def test_empty_cmdline_revalidation_missing_file_with_pid_present_is_incomplete(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); proc = self.fake_proc(root, 62)
+            initial = OBSERVER.process_stat(proc)
+            missing = FileNotFoundError(2, "missing", str(proc / "stat"))
+            with mock.patch.object(OBSERVER, "process_stat", side_effect=[initial, missing]):
+                observation = OBSERVER.scan_proc([OBSERVER.NPM_CACHE], 1000, root)
+        self.assertFalse(observation["complete"])
+        self.assertEqual(observation["summary"]["vanishedProcesses"], 0)
+        self.assertEqual(observation["failures"][0]["operation"],
+                         "identity:empty-cmdline-revalidation")
+
+    def test_final_revalidation_missing_file_with_pid_present_is_incomplete(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); proc = self.fake_proc(root, 63, arguments=("worker",))
+            initial = OBSERVER.process_stat(proc)
+            missing = FileNotFoundError(2, "missing", str(proc / "stat"))
+            with mock.patch.object(OBSERVER, "process_stat", side_effect=[initial, missing]):
+                observation = OBSERVER.scan_proc([OBSERVER.NPM_CACHE], 1000, root)
+        self.assertFalse(observation["complete"])
+        self.assertEqual(observation["summary"]["vanishedProcesses"], 0)
+        self.assertEqual(observation["failures"][0]["operation"],
+                         "identity:final-revalidation")
+
+    def test_missing_file_is_vanished_only_after_pid_directory_absence_is_confirmed(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); proc = self.fake_proc(root, 64, arguments=("worker",))
+            def vanish(_proc):
+                shutil.rmtree(proc)
+                raise FileNotFoundError(2, "missing", str(proc / "stat"))
+            with mock.patch.object(OBSERVER, "process_stat", side_effect=vanish):
+                observation = OBSERVER.scan_proc([OBSERVER.NPM_CACHE], 1000, root)
+        self.assertTrue(observation["complete"])
+        self.assertEqual(observation["summary"]["vanishedProcesses"], 1)
+        self.assertEqual(observation["failures"], [])
 
     def test_empty_cmdline_user_process_is_fully_inspected(self):
         with tempfile.TemporaryDirectory() as raw:
