@@ -14,16 +14,12 @@ export function isPersistedHumanHandoff(state: ConversationState): boolean {
 }
 
 export async function persistAcceptedHandoffTransition(params: {
-  confirmationState: ConversationState;
-  persistConfirmation: (state: ConversationState) => Promise<ConversationState>;
+  sourceState: ConversationState;
   buildActivatedState: (state: ConversationState) => Promise<ConversationState>;
   persistActivation: (state: ConversationState) => Promise<ConversationState>;
 }): Promise<AcceptedHandoffTransitionResult> {
-  const confirmationPersisted = await params.persistConfirmation(
-    params.confirmationState
-  );
   const activationCandidate = await params.buildActivatedState(
-    confirmationPersisted
+    params.sourceState
   );
   const activationPersisted = await params.persistActivation(
     activationCandidate
