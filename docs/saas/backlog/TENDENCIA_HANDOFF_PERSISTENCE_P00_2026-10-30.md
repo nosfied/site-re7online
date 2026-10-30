@@ -1,6 +1,6 @@
 # Tendência handoff persistence loop — P00
 
-Status: `BUILT / INSTALLED_INERT_VERIFIED / RETENTION_PREPARATION_BLOCKED_PM2_FINGERPRINT / PRODUCTION UNCHANGED`.
+Status: `DEPLOYED_SANITIZED / OWNER ACCEPTANCE PASS / CLOSED`.
 
 ## Evidence and scope
 
@@ -126,3 +126,55 @@ Não repetir build, extração ou instalação. Nenhuma criação de fluxo ou al
 de configuração tenant-scoped foi demonstrada necessária. A nova leitura não
 amplia autorização de deploy, envio ou exclusão. A lacuna preventiva da admissão
 permanece no [P00-D](DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md).
+
+## Encerramento operacional — 30/10/2026
+
+A geração anterior `059ea95a` foi rejeitada somente pela confirmação outbound,
+revertida canonicamente e sanitizada. O diagnóstico confirmou
+`late_reply_dropped`: a atribuição automática avançava o runtime humano e
+invalidava o token anterior. O PR #289 corrigiu o fence e adicionou o evento
+sanitizado `ai.orchestrator.handoff_confirmation.outbound_failed`.
+
+A geração substituta foi construída uma vez e concluída sem rebuild após a queda do
+transporte SSH. O produtor sobrevivente promoveu o pacote existente e publicou o
+lifecycle `COMPLETE`.
+
+| Identidade/evidência final | Valor |
+| --- | --- |
+| Release ativa | `immutable-fa63994a-vps-20261030T153352Z` |
+| Target | `fa63994acd5655bd499a328679a0f8c11e0740e2` |
+| Tree | `aa4cf6bedfc1c0cbd7bab5dcbda4f5ded06e0161` |
+| BUILD_ID | `1b-P3r73eOn-H8gNJeas_` |
+| Pacote | `c397b392ced3c3e676b028adb3cc1002c35f3baab4c62a199e0585e82644ca11` |
+| Manifesto | `dd3fdf37f6182f616a6c0dc3ec49d35f0e7a60adb489630e9e77ab505f073f3d` |
+| Índice | `b347956578e1652b4de104d031620a050860b57af2f238ffdc632b3848ab35e7` |
+| Dump final | `440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280` |
+| Marker DEPLOYED | `99bdae5577e9f205ae030ed46770224e1dde6795b6a97fd3967fa3be24d50614` |
+| Retention receipt | `d7c7630bb4ca7b9a9ee47fdb3fb45e726af0832120229faabaee9636657ac7fc` |
+| Journal final | `cfb74cd7ad5c58bceaae1ca5b8b9f93d4186ad4c2592f4b9bf9039f0becf2f2c` |
+
+### Aceite do owner
+
+O teste novo no final `9614` passou integralmente:
+
+- confirmação de encaminhamento entregue;
+- estado humano e handoff corretos;
+- presença na fila/Inbox;
+- zero reentrada da IA;
+- frontend validado;
+- frontend e worker preservados.
+
+`/app/chatbot` sem fluxo visual cadastrado permanece compatível com o
+orquestrador AI-only da Tendência e não exigiu copiar fluxo de outro tenant.
+
+### Fechamento
+
+A transação terminou em `DEPLOYED_SANITIZED`: um único `pm2 save`, retenção
+3/3, marker criado, health local/público `ok=true, db=ok` e lock canônico
+removido. API permaneceu no PID 1371244/restart 12; frontend no PID
+1210937/restart 13; worker no PID 2233/restart 0. Saldo final relatado:
+8.012.804.096 bytes.
+
+Não repetir build, preparação, preflight, ativação, aceite, save ou retenção desta
+geração. A próxima frente é o
+[plano P00 de sanitização](PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
