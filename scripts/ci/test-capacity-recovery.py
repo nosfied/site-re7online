@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,11 @@ SPEC = importlib.util.spec_from_file_location("capacity_recovery", TOOL)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
+PRODUCER_TOOL = Path(__file__).resolve().parents[1] / "converta-release.py"
+PRODUCER_SPEC = importlib.util.spec_from_file_location("converta_release", PRODUCER_TOOL)
+PRODUCER = importlib.util.module_from_spec(PRODUCER_SPEC)
+assert PRODUCER_SPEC.loader is not None
+PRODUCER_SPEC.loader.exec_module(PRODUCER)
 
 
 def sha(path: Path) -> str:
@@ -31,7 +37,11 @@ def scan(targets=None, writers=None, complete=True, **summary):
     counts = {"deployProcessesInspected": 0, "otherProcessesInspected": 0,
               "permissionLimitedOtherProcesses": 0, "kernelThreadsIgnored": 0,
               "vanishedProcesses": 0, "identityFailures": 0,
-              "referenceReadFailures": 0, "transientFdClosures": 0}
+              "referenceReadFailures": 0, "transientFdClosures": 0,
+              "referenceReadFailureDetails": [],
+              "referenceReadFailureDetailsTruncated": 0,
+              "transientFdClosureDetails": [],
+              "transientFdClosureDetailsTruncated": 0}
     counts.update(summary)
     return (targets or [], writers or [], complete, counts)
 
@@ -230,12 +240,13 @@ class CapacityRecoveryTests(unittest.TestCase):
         return mock.patch.object(MODULE, "_proc_targets",
                                  return_value=scan(targets, writers, complete))
 
-    def fake_process(self, proc_root, pid, uid, arguments, *, start_ticks=100,
+    def fake_process(self, proc_root, pid, uid, arguments, *, start_ticks=100, flags=0,
                      inaccessible_cmdline=False, include_maps=True):
         process = proc_root / str(pid)
         (process / "fd").mkdir(parents=True)
         (process / "status").write_text(f"Name:\tfixture\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
-        suffix = ["S", *("0" for _ in range(18)), str(start_ticks), "0"]
+        suffix = ["S", "0", "0", "0", "0", "0", str(flags),
+                  *("0" for _ in range(12)), str(start_ticks), "0"]
         (process / "stat").write_text(f"{pid} (fixture process) " + " ".join(suffix) + "\n")
         if inaccessible_cmdline:
             (process / "cmdline").mkdir()
@@ -523,6 +534,12 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertTrue(complete)
         self.assertEqual(summary["transientFdClosures"], 1)
         self.assertEqual(summary["referenceReadFailures"], 0)
+        self.assertEqual(summary["transientFdClosureDetails"], [{
+            "pid": 49, "startTicks": 100,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "readlink:fd/9", "errno": 2, "errnoName": "ENOENT",
+        }])
 
     def test_deploy_process_inaccessible_is_denied(self):
         proc_root = self.base / "proc-deploy-deny"
@@ -554,16 +571,28 @@ class CapacityRecoveryTests(unittest.TestCase):
 
     def test_kernel_thread_is_ignored_nominally(self):
         proc_root = self.base / "proc-kernel"
-        other_uid = 0 if os.geteuid() != 0 else 1
-        self.fake_process(proc_root, 45, other_uid, [])
+        self.fake_process(proc_root, 45, 0, [], flags=MODULE.PF_KTHREAD)
         _, _, complete, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
         self.assertTrue(complete)
         self.assertEqual(summary["kernelThreadsIgnored"], 1)
 
+    def test_empty_cmdline_deploy_process_references_are_inspected(self):
+        proc_root = self.base / "proc-empty-user"
+        process = self.fake_process(proc_root, 451, os.geteuid(), [])
+        (process / "fd" / "9").symlink_to(self.cache / "entry")
+        (process / "maps").write_text(
+            f"0000-1000 r--p 0 00:00 0 {self.cache / 'mapped'}\n")
+        targets, _, complete, summary = MODULE._proc_targets(
+            proc_root, deploy_uid=os.geteuid())
+        self.assertTrue(complete)
+        self.assertEqual(summary["emptyCmdlineProcessesInspected"], 1)
+        self.assertTrue(any(target[2] == "fd/9" for target in targets))
+        self.assertTrue(any(target[2] == "maps" for target in targets))
+
     def test_recycled_pid_is_denied(self):
         proc_root = self.base / "proc-recycled"
         self.fake_process(proc_root, 46, os.geteuid(), ["/usr/bin/node", "service.js"])
-        with mock.patch.object(MODULE, "_read_start_ticks", side_effect=[100, 101]):
+        with mock.patch.object(MODULE, "_read_proc_identity", side_effect=[(0, 100), (0, 101)]):
             targets, writers, complete, summary = MODULE._proc_targets(
                 proc_root, deploy_uid=os.geteuid())
         self.assertFalse(complete)
@@ -579,6 +608,83 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertFalse(complete)
         _, _, _, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
         self.assertGreater(summary["referenceReadFailures"], 0)
+        self.assertEqual(summary["referenceReadFailureDetails"], [{
+            "pid": 47, "startTicks": 100,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "read:maps", "errno": 2, "errnoName": "ENOENT",
+        }])
+
+    def test_deploy_fd_permission_denied_is_fail_closed_and_recorded(self):
+        proc_root = self.base / "proc-permission-denied"
+        process = self.fake_process(
+            proc_root, 50, os.geteuid(), ["/usr/bin/sshd", "session"])
+        fd_entry = process / "fd" / "9"
+        fd_entry.symlink_to(self.cache)
+        real_readlink = os.readlink
+
+        def denied_fd(path):
+            if Path(path) == fd_entry:
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_readlink(path)
+
+        with mock.patch.object(MODULE.os, "readlink", side_effect=denied_fd):
+            _, _, complete, summary = MODULE._proc_targets(
+                proc_root, deploy_uid=os.geteuid())
+        self.assertFalse(complete)
+        self.assertEqual(summary["referenceReadFailures"], 1)
+        self.assertEqual(summary["referenceReadFailureDetails"], [{
+            "pid": 50, "startTicks": 100,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "readlink:fd/9", "errno": 13, "errnoName": "EACCES",
+        }])
+
+    def test_audit_denial_preserves_sanitized_process_failure_details(self):
+        detail = {
+            "pid": 777, "startTicks": 12345,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "read:maps", "errno": 13, "errnoName": "EACCES",
+        }
+        private_json(self.request, self.request_value([self.npm_candidate()]))
+        process = scan(complete=False, referenceReadFailures=1,
+                       referenceReadFailureDetails=[detail])
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                mock.patch.object(MODULE, "_proc_targets", return_value=process):
+            plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+        candidate_error = next(item for item in plan["errors"] if item["ordinal"] == 1)
+        self.assertEqual(candidate_error["predicate"], "PROCESS_REFERENCE_SCAN_INCOMPLETE")
+        self.assertEqual(candidate_error["processScan"]["referenceReadFailureDetails"], [detail])
+        self.assertNotIn("cmdline", json.dumps(candidate_error))
+
+    def test_schema_two_consumer_invokes_authenticated_observer_for_audit_and_prepare(self):
+        value = self.request_value([self.npm_candidate()])
+        value["schemaVersion"] = 2
+        value["procObserver"] = {"path": str(MODULE.PROC_OBSERVER_PATH), "sha256": "a" * 64}
+        private_json(self.request, value)
+        phases = []
+        def privileged(_binding, paths, phase):
+            phases.append((phase, paths))
+            return scan(), {"phase": phase, "responseSha256": phase[0] * 64}
+        patches = (
+            mock.patch.object(MODULE, "NPM_CACHE", self.cache),
+            mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent),
+            mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())),
+            mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]),
+            mock.patch.object(MODULE, "_privileged_proc_targets", side_effect=privileged),
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+            self.assertEqual(plan["schemaVersion"], 2)
+            MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
+                                self.commands, self.seal_manifest)
+        intent = json.loads(self.intent.read_text())
+        self.assertEqual(intent["procObserver"], value["procObserver"])
+        self.assertEqual([item[0] for item in phases], ["audit", "prepare"])
 
     def test_execute_recaptures_new_open_transaction_reference_after_locks(self):
         intent_sha, authorization = self.seal_and_authorize()
@@ -666,6 +772,229 @@ class CapacityRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_EQUIVALENCE_INCOMPLETE"):
             MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
                                        json.loads(self.operational.read_text()), scan())
+
+    def _add_runtime_symlink(self, target="app.js"):
+        output_link = self.runtime / "app-link"
+        release_link = self.release / "api-runtime" / "app-link"
+        output_link.symlink_to(target)
+        release_link.symlink_to(target)
+        value = json.loads(self.index.read_text())
+        value["entries"].append({"path": "api-runtime/app-link", "type": "symlink",
+                                 "mode": "0777", "target": target})
+        private_json(self.index, value)
+        contract = json.loads(self.contract.read_text())
+        index_artifact = next(item for item in contract["artifacts"]
+                              if item["path"] == str(self.index))
+        index_artifact["digest"] = {"sha256": sha(self.index)}
+        private_json(self.contract, contract)
+        return output_link, release_link
+
+    def test_index_comparison_matches_producer_symlink_contract(self):
+        self._add_runtime_symlink()
+        observed = MODULE.authenticate_output(
+            self.output_candidate(), json.loads(self.policy.read_text()),
+            json.loads(self.operational.read_text()), scan())
+        self.assertEqual(observed["equivalence"]["indexEntryCount"], 3)
+
+    def test_index_comparison_accepts_current_producer_inventory_for_both_runtimes(self):
+        output_root = self.base / "producer-parity-output"
+        release_root = self.base / "producer-parity-release"
+        for root in (output_root, release_root):
+            for runtime in PRODUCER.RUNTIMES:
+                runtime_root = root / runtime
+                runtime_root.mkdir(parents=True)
+                (runtime_root / "entry.js").write_bytes(b"producer parity")
+                (runtime_root / "entry.js").chmod(0o644)
+                (runtime_root / "entry-link").symlink_to("entry.js")
+        entries, overlay = PRODUCER.scan_runtime(output_root)
+        self.assertIsNone(overlay)
+        index = {"schemaVersion": 1, "scope": list(PRODUCER.RUNTIMES),
+                 "entries": entries}
+        for relative in PRODUCER.RUNTIMES:
+            observed = MODULE.compare_index(
+                output_root / relative, release_root, relative, index, set())
+            expected = len([entry for entry in index["entries"]
+                            if entry["path"] == relative or
+                            entry["path"].startswith(relative + "/")])
+            self.assertEqual(observed["indexEntryCount"], expected)
+
+    def test_index_comparison_denies_symlink_target_drift(self):
+        _, release_link = self._add_runtime_symlink()
+        (release_link.parent / "other.js").write_bytes(b"other")
+        release_link.unlink()
+        release_link.symlink_to("other.js")
+        with self.assertRaisesRegex(MODULE.Denied, "release:symlink_target:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_broken_symlink(self):
+        _, release_link = self._add_runtime_symlink()
+        release_link.unlink()
+        release_link.symlink_to("missing.js")
+        with self.assertRaisesRegex(MODULE.Denied, "release:symlink_broken:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_symlink_escape(self):
+        outside = self.base / "outside.js"
+        outside.write_bytes(b"outside")
+        output_link, release_link = self._add_runtime_symlink(str(outside))
+        value = json.loads(self.index.read_text())
+        value["entries"][-1]["target"] = str(outside)
+        private_json(self.index, value)
+        contract = json.loads(self.contract.read_text())
+        next(item for item in contract["artifacts"]
+             if item["path"] == str(self.index))["digest"] = {"sha256": sha(self.index)}
+        private_json(self.contract, contract)
+        self.assertTrue(output_link.is_symlink() and release_link.is_symlink())
+        with self.assertRaisesRegex(MODULE.Denied, "output:symlink_escape:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_symlink_mode_contract_drift(self):
+        self._add_runtime_symlink()
+        value = json.loads(self.index.read_text())
+        value["entries"][-1]["mode"] = "0755"
+        private_json(self.index, value)
+        contract = json.loads(self.contract.read_text())
+        next(item for item in contract["artifacts"]
+             if item["path"] == str(self.index))["digest"] = {"sha256": sha(self.index)}
+        private_json(self.contract, contract)
+        with self.assertRaisesRegex(MODULE.Denied, "output:identity:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_unindexed_entry_and_allows_declared_release_extra(self):
+        unexpected = self.runtime / "unexpected"
+        unexpected.write_bytes(b"unexpected")
+        with self.assertRaisesRegex(MODULE.Denied, "output:entry_set"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+        unexpected.unlink()
+        private_data = self.release / "api-runtime" / ".data"
+        private_data.mkdir()
+        (private_data / "mutable").write_bytes(b"allowed")
+        observed = MODULE.authenticate_output(
+            self.output_candidate(), json.loads(self.policy.read_text()),
+            json.loads(self.operational.read_text()), scan())
+        self.assertEqual(observed["equivalence"]["allowedReleaseExtras"], [".data"])
+
+    def changing_process_patch(self, **_kwargs):
+        return mock.patch.object(MODULE, "_proc_targets", side_effect=lambda: scan(
+            processesObserved=next(self.process_counts)))
+
+    def run_lifecycle_with_changing_telemetry(self, schema2=False):
+        self.process_counts = iter((8, 9, 10))
+        self.process_patch = self.changing_process_patch
+        if schema2:
+            original_request = self.request_value
+            self.request_value = lambda *args, **kwargs: {
+                **original_request(*args, **kwargs), "schemaVersion": 2,
+                "procObserver": {"path": str(MODULE.PROC_OBSERVER_PATH), "sha256": "a" * 64}}
+
+        def privileged(_binding, _paths, phase):
+            count = next(self.process_counts)
+            return scan(processesObserved=count), {"phase": phase, "processesObserved": count}
+
+        with mock.patch.object(MODULE, "_privileged_proc_targets", side_effect=privileged):
+            intent_sha, authorization = self.seal_and_authorize()
+            intent = json.loads(self.intent.read_text())
+            self.assertEqual(intent["candidates"][0]["processScan"]["processesObserved"], 9)
+            receipt = self.base / "receipts" / "changing-telemetry"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                    mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                    mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                    mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                    self.process_patch():
+                result = MODULE.execute_intent(
+                    self.intent, intent_sha, authorization, sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertEqual(result["completedCommands"], 2)
+        self.assertFalse(self.cache.exists())
+        self.assertFalse(self.runtime.exists())
+        self.assertTrue(self.release.exists())
+        self.assertTrue(self.package.exists())
+        recapture = json.loads((receipt / "pre-attempt-recapture.private.json").read_text())
+        self.assertEqual(recapture["candidates"][0]["processScan"]["processesObserved"], 10)
+
+    def test_legacy_lifecycle_accepts_fresh_safe_telemetry_at_every_phase(self):
+        self.run_lifecycle_with_changing_telemetry()
+
+    def test_schema2_lifecycle_accepts_fresh_safe_telemetry_at_every_phase(self):
+        self.run_lifecycle_with_changing_telemetry(schema2=True)
+
+    def assert_schema2_execute_rejects_fresh_unsafe_state(self, *, unsafe_scan=None,
+                                                        mutation=None, predicate):
+        original_request = self.request_value
+        self.request_value = lambda *args, **kwargs: {
+            **original_request(*args, **kwargs), "schemaVersion": 2,
+            "procObserver": {"path": str(MODULE.PROC_OBSERVER_PATH), "sha256": "a" * 64}}
+
+        def privileged(_binding, _paths, phase):
+            process = unsafe_scan if phase == "execute" and unsafe_scan is not None else scan(
+                processesObserved={"audit": 8, "prepare": 9, "execute": 10}[phase])
+            return process, {"phase": phase, "summary": process[3]}
+
+        with mock.patch.object(MODULE, "_privileged_proc_targets", side_effect=privileged):
+            intent_sha, authorization = self.seal_and_authorize()
+            if mutation is not None:
+                mutation()
+            receipt = self.base / "receipts" / "unsafe-recapture"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                    mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                    mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                    mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                    self.assertRaises(SystemExit):
+                MODULE.execute_intent(self.intent, intent_sha, authorization, sha(authorization), receipt)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual(result["attemptedCommands"], 0)
+        self.assertIn(predicate, result["failurePredicate"])
+        self.assertTrue(self.cache.exists())
+        self.assertTrue(self.runtime.exists())
+        recapture = json.loads((receipt / "pre-attempt-recapture.private.json").read_text())
+        self.assertEqual(recapture["event"], "RECAPTURE_DENY")
+        self.assertEqual(recapture["processObservation"]["phase"], "execute")
+
+    def test_schema2_telemetry_projection_still_denies_new_process_reference(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            unsafe_scan=scan(targets=[(77, 88, "fd/9", str(self.cache / "cache.bin"))],
+                             processesObserved=10), predicate="NPM_CACHE_REFERENCED")
+
+    def test_schema2_telemetry_projection_still_denies_active_writer(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            unsafe_scan=scan(writers=[{"pid": 77}], processesObserved=10),
+            predicate="NPM_OR_BUILD_ACTIVE")
+
+    def test_schema2_telemetry_projection_still_denies_incomplete_scan(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            unsafe_scan=scan(complete=False, processesObserved=10, referenceReadFailures=1),
+            predicate="PROCESS_REFERENCE_SCAN_INCOMPLETE")
+
+    def test_schema2_telemetry_projection_still_denies_artifact_identity_change(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            mutation=lambda: self.cache.chmod(0o750), predicate="CANDIDATE_CHANGED")
+
+    def test_schema2_telemetry_projection_still_denies_file_content_change(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            mutation=lambda: (self.runtime / "app.js").write_bytes(b"same runtimf"),
+            predicate="DERIVED_OUTPUT_EQUIVALENCE_INCOMPLETE")
+
+    def test_prepare_denial_reports_changed_fields_and_fresh_process_evidence(self):
+        self.audit()
+        self.cache.chmod(0o750)
+        self.process_patch = lambda **_kwargs: mock.patch.object(
+            MODULE, "_proc_targets", return_value=scan(processesObserved=11))
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output), self.assertRaises(SystemExit):
+            self.prepare()
+        denial = json.loads(output.getvalue())
+        comparisons = denial["processObservation"]["candidateComparisons"]
+        cache = next(item for item in comparisons if item["path"] == str(self.cache))
+        self.assertIn("identity", cache["changedFields"])
+        self.assertEqual(cache["currentProcessScan"]["processesObserved"], 11)
+        self.assertFalse(self.intent.exists())
 
     def seal_and_authorize(self):
         self.audit(); self.prepare()

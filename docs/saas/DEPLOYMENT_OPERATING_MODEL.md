@@ -256,9 +256,11 @@ Os itens abaixo são históricos e **não utilizáveis**:
   socket com amostra única logo após `pm2 start`;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
 
-## Release produtiva relatada em 28/10/2026
+## Histórico de produção — observação de 28/10/2026 (superada)
 
-A produção usa uma topologia deliberadamente dividida por componente:
+Naquela observação histórica, a produção usava a topologia abaixo. A seleção
+vigente relatada é API 754281d3 / frontend aa9527cc / worker e2e7; consulte
+CURRENT_STATE.json e o registro ativo para as identidades atuais.
 
 - API: target `708f018cb853a06fd6f0f1d5d920b8b35d8fb06a`, release
   `immutable-708f018c-vps-20261027T152109Z`;
@@ -269,7 +271,7 @@ A produção usa uma topologia deliberadamente dividida por componente:
 
 O registro operacional ativo do frontend é
 [`CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json`](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json).
-O registro que continua autenticando a API e a implantação técnica de mídia é
+O registro histórico que autenticava a API e a implantação técnica de mídia era
 [`FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json`](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
 Não se deve forçar um único release ID sobre componentes que foram promovidos em
 janelas diferentes.

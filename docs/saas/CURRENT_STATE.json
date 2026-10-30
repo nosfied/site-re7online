@@ -1,20 +1,33 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-30T00:09:02.675Z",
+  "updatedAtUtc": "2026-10-30T13:05:53Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/P00_DB_FIRST_API_754281D3_2026-10-29_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "capacityRecoveryControlPlane": {
-    "state": "VERSIONED_NOT_EXECUTED",
+    "state": "COMPLETED_REPORTED",
     "script": "scripts/capacity-recovery.py",
     "policy": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
-    "phases": ["audit", "prepare", "execute"],
-    "classes": ["NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME"],
+    "phases": [
+      "audit",
+      "prepare",
+      "execute"
+    ],
+    "classes": [
+      "NPM_CACHE_MAINTENANCE",
+      "DERIVED_OUTPUT_RUNTIME"
+    ],
     "executeLiveRecaptureAfterLocks": true,
-    "npmCacheGroupPrincipals": ["deploy"],
-    "npmCacheAllowedModes": ["0700", "0750", "0755"],
+    "npmCacheGroupPrincipals": [
+      "deploy"
+    ],
+    "npmCacheAllowedModes": [
+      "0700",
+      "0750",
+      "0755"
+    ],
     "processScan": {
       "deployUidFullInspectionRequired": true,
       "pidStartTicksStableRequired": true,
@@ -29,7 +42,21 @@
       "unknownLayout": "DENY",
       "nonTerminalReferences": "PROTECTED"
     },
-    "productionEffectsInThisChange": false
+    "productionEffectsInThisChange": false,
+    "lastCompleted": {
+      "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+      "independentVpsInspectionByDocumentationEditor": false,
+      "reportedDate": "2026-10-30",
+      "state": "COMPLETED",
+      "commandsCompleted": 3,
+      "pathsVerifiedAbsent": 3,
+      "planSha256": "23a3d7968457131f623c160bfe8e95e52ef3636061b6ad88771d793751a07833",
+      "receiptSha256": "97a121df8fab427ada569652c7d9f45ee04fe4d9a5c93c032daa65dfd1b817f8",
+      "journalSha256": "9baa07a07f14bdc00e2c62d1374547dd41e8ed534d6968ed554d346e596dc338",
+      "freeBytesAtCheckpoint": 9672007680,
+      "capacityIsCurrent": false,
+      "repeatPermitted": false
+    }
   },
   "production": {
     "status": "DEPLOYED_SANITIZED",
@@ -870,6 +897,23 @@
       "completeSealPredicateAuditBeforeExecution": true
     }
   },
-  "updatedAtDate": "2026-10-29",
-  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_FROM_OWNER_RELAYED_AA9527_DEPLOYED_SANITIZED_REPORT"
+  "updatedAtDate": "2026-10-30",
+  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_FROM_OWNER_RELAYED_CAPACITY_COMPLETED_AND_TENDENCIA_INERT_REPORT",
+  "pendingOperationalChange": {
+    "state": "BUILT_INSTALLED_INERT_RETENTION_PREPARATION_BLOCKED",
+    "front": "TENDENCIA_HANDOFF_P00",
+    "record": "docs/saas/backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md",
+    "releaseId": "immutable-059ea95a-vps-20261030T122714Z",
+    "targetCommit": "059ea95aaf73f3e143774d60a8fef4df88c7c0ba",
+    "buildCount": 1,
+    "installedInertVerified": true,
+    "active": false,
+    "blocker": "GENERATION_RETIREMENT_DENY:operational_pm2_observation",
+    "missingField": "observations.pm2.fingerprintSha256",
+    "nextAction": "FRESH_AUTHENTICATED_OPERATIONAL_SNAPSHOT_AND_CONSUMER_VALIDATION",
+    "repeatBuildOrInstallation": false,
+    "freeBytesAtCheckpoint": 6186803200,
+    "capacityIsCurrent": false,
+    "preparationAdmissionConsumerIntegration": "OPEN_P00_D"
+  }
 }

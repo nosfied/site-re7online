@@ -20,10 +20,10 @@
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
-  — frontend ativo, aceite visual integral, um save e derivados retirados 3/3.
+  — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
 - [Release fixed-current 708f implantada e sanitizada](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json)
 - [Release API-only fixed-current 0fdec implantada e sanitizada](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json)
-  — API ativa e retorno do frontend; registro histórico da promoção API/frontend.
+  — API histórica substituída por 754281d3; registro preservado da promoção API-only.
 - [Layout de mídia em campanhas: deploy frontend f160](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json)
   — registro histórico do frontend anterior, preservado como retorno.
 - [Disponibilidade e admissão de mídia de campanhas: deploy a959](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json)
@@ -62,9 +62,9 @@
 ## Backlog ativo separado
 
 - [Loop de handoff da Tendência — persistência P00](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md)
-  — correção multitenant do fence de estado, contrato de rota/fluxo e exceção de capacidade limitada; produção ainda não alterada.
+  — build único e release inerte verificada; retomada por fotografia PM2 completa, sem rebuild ou instalação repetida; produção ainda não alterada.
 - [Plano P00 de convergência da preparação de deploy](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md)
-  — bloqueia repetição de gates previsíveis; exige admissão integral, materialização canônica do control plane e regressão ponta a ponta antes de nova geração normal.
+  — inclui revisão de 30/10, referências profissionais e P00-D aberto: contrato real entre materializador e consumidor; não declara a dívida integralmente encerrada.
 - [Disponibilidade, mídia e homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md)
   — IMAGE e VIDEO manuais PASS; inventário global concluído e reabertura geral autorizada pelo owner,
   executada pelo Codex local na geração 41. Agendamento/multilote e aceites específicos seguem separados.

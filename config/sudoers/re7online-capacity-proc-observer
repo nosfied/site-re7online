@@ -1,0 +1,2 @@
+# Installed as /etc/sudoers.d/re7online-capacity-proc-observer, root:root 0440.
+deploy ALL=(root) NOPASSWD:NOEXEC: /usr/bin/python3 -I -B -E -s /usr/local/libexec/re7online/capacity-proc-observer.py collect

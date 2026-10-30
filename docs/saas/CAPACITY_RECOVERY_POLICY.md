@@ -37,6 +37,21 @@ admitido é:
 Glob, expansão, `force`, `prune`, caminho alternativo e descoberta destrutiva em
 `execute` são negados.
 
+### Identidade do candidato e observação de processos
+
+A identidade comparável do candidato inclui todos os campos da observação, exceto
+`processScan`. Contadores e detalhes de uma varredura são evidência fresca de cada
+fase; não são atributos imutáveis do artefato. Tanto `prepare` quanto `execute`
+validam novamente a completude, referências e escritores antes dessa comparação.
+Nenhuma referência real, varredura incompleta ou escritor é dispensado pela projeção.
+Caminhos, identidades, métricas físicas, bindings e equivalência continuam comparados.
+
+O `prepare` negado conserva na saída privada a observação atual e os nomes dos
+campos que divergiram. A recaptura de `execute` é persistida, inclusive quando nega,
+antes de qualquer `ATTEMPT`. Planos PASS existentes permanecem imutáveis e podem
+ser reabertos pelo hash original; sua reutilização exige toda a revalidação fresca,
+sem repetir a auditoria somente para igualar contadores.
+
 ### Formatos transacionais autenticados
 
 A recaptura reconhece de forma fechada os dois formatos canônicos vigentes:
@@ -78,13 +93,69 @@ mapa ou argumento no próprio candidato ou abaixo dele continuam negando. Para
 operacionais: um HOME, root ou diretório ancestral genérico não prova uso do cache.
 A sobreposição bidirecional permanece obrigatória para referências operacionais da
 classe `DERIVED_OUTPUT_RUNTIME`, onde um caminho ancestral pode proteger todo o
-output. Thread de kernel sem `cmdline` é ignorada nominalmente; o fechamento de um
-FD entre a enumeração e o `readlink` é registrado como transiente e aceito somente
+output. `cmdline` vazio, isoladamente, nunca torna um processo dispensável:
+processos de usuário nessa condição ainda têm `cwd`, `root`, `exe`, FDs e mapas
+integralmente inspecionados. Uma thread de kernel só é ignorada após autenticar UIDs
+root, o bit `PF_KTHREAD`, PID/start ticks e flags estáveis; desaparecimento durante
+a coleta só é classificado como processo encerrado após confirmar a ausência do
+diretório do PID. `ENOENT` em `stat`, revalidação sem cmdline ou revalidação final,
+com o PID ainda presente ou de ausência inconclusiva, permanece falha nominal e
+mantém a coleta incompleta.
+O fechamento de um FD entre a enumeração e o `readlink` é registrado como transiente e aceito somente
 com PID/start ticks estáveis. Qualquer outra falha de leitura de referência de
 processo `deploy` mantém a varredura incompleta e passa a ser contada nominalmente.
 Limitação esperada em processo de outro UID não bloqueia, mas qualquer comando
 npm/build ou referência legível desse processo continua negando. Essa regra não é
 compartilhada com ancestrais de `generation-retirement.py`.
+
+Quando a varredura de um processo `deploy` permanece incompleta, o plano negado
+preserva junto ao predicado somente o diagnóstico sanitizado necessário: PID,
+start ticks, quatro UIDs, operação, errno e nome do errno. Cmdline, ambiente,
+alvos de FD e credenciais não integram esse diagnóstico. Fechamento transitório de
+FD é registrado separadamente; permissão negada, mudança de identidade ou outra
+leitura realmente incompleta continuam fail-closed.
+
+### Observador privilegiado de `/proc`
+
+Quando a política de montagem de `/proc` impede `deploy` de inspecionar até seus
+próprios processos, o schema 2 do pedido deve vincular por SHA-256 o observador
+versionado `scripts/capacity-proc-observer.py`. Ele não decide elegibilidade e não
+remove arquivos: aceita apenas a operação literal `collect`, recebe pela entrada
+padrão uma lista fechada de candidatos e devolve na saída padrão evidência
+sanitizada. Não aceita comando, módulo, executável, caminho de saída ou argumento
+de descoberta fornecido pelo operador.
+
+O próprio helper aceita somente o cache literal `/home/deploy/.npm/_cacache` e
+runtimes `api-runtime`/`frontend-runtime` no layout fechado
+`/opt/re7online/build-output/<release>-producer/<release>/<runtime>`. `/`, raízes,
+ancestrais genéricos, outros descendentes e caminhos externos são negados antes da
+varredura.
+
+A instalação proposta é imutável para `deploy`:
+
+- `/usr/local/libexec/re7online` — `root:root 0755`;
+- `/usr/local/libexec/re7online/capacity-proc-observer.py` — `root:root 0500`;
+- `/etc/sudoers.d/re7online-capacity-proc-observer` — `root:root 0440`.
+
+A única regra sudoers é versionada em
+`config/sudoers/re7online-capacity-proc-observer` e permite somente:
+
+```text
+/usr/bin/python3 -I -B -E -s /usr/local/libexec/re7online/capacity-proc-observer.py collect
+```
+
+O consumidor executa essa linha literalmente com `sudo -n --`, autentica antes e
+depois o arquivo e todos os ancestrais root-controlled, e confere no retorno o SHA,
+device/inode, nonce, SHA do request, candidatos, fase, PID/start ticks do consumidor
+e limites de tempo e volume. JSON reapresentado ou fornecido à parte não é aceito.
+Falha, timeout, identidade alterada, truncagem que represente incompletude ou
+referência real continuam negando.
+
+`audit` e `prepare` coletam evidência própria. Em `execute`, a coleta ocorre outra
+vez somente depois da aquisição dos dois locks canônicos e antes do primeiro
+`ATTEMPT`, junto à recaptura das demais fontes vivas. O processo privilegiado não
+executa `capacity-recovery.py`, não recebe o lock e jamais possui autoridade de
+retirada.
 
 ### `DERIVED_OUTPUT_RUNTIME`
 

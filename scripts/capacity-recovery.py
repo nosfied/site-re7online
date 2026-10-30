@@ -10,6 +10,7 @@ intent plus an exact AUTHORIZE_ONCE document.
 from __future__ import annotations
 
 import argparse
+import errno
 import fcntl
 import grp
 import hashlib
@@ -18,9 +19,11 @@ import os
 from pathlib import Path
 import pwd
 import re
+import secrets
 import stat
 import subprocess
 import sys
+import time
 from typing import Any, Iterable
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -33,6 +36,15 @@ AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
 }
+AUDIT_REQUEST_V2_KEYS = AUDIT_REQUEST_KEYS | {"procObserver"}
+PROC_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
+PROC_OBSERVER_COMMAND = (
+    "/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
+    str(PROC_OBSERVER_PATH), "collect",
+)
+PROC_OBSERVER_TIMEOUT_SECONDS = 15
+PROC_OBSERVER_MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+PROC_OBSERVER_BINDING_KEYS = {"path", "sha256"}
 COMMON_CANDIDATE_KEYS = {"class", "path"}
 NPM_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS
 OUTPUT_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {
@@ -258,7 +270,46 @@ def physical_usage(paths: Iterable[Path]) -> dict[str, dict[str, int]]:
     return result
 
 
-ProcessScan = tuple[list[tuple[int, int, str, str]], list[dict[str, Any]], bool, dict[str, int]]
+ProcessScan = tuple[list[tuple[int, int, str, str]], list[dict[str, Any]], bool, dict[str, Any]]
+PROCESS_FAILURE_DETAIL_LIMIT = 256
+PF_KTHREAD = 0x00200000
+
+
+def _record_process_reference_failure(summary: dict[str, Any], pid: int, start_ticks: int,
+                                      uids: tuple[int, int, int, int], operation: str,
+                                      error: OSError) -> None:
+    summary["referenceReadFailures"] += 1
+    details = summary["referenceReadFailureDetails"]
+    if len(details) >= PROCESS_FAILURE_DETAIL_LIMIT:
+        summary["referenceReadFailureDetailsTruncated"] += 1
+        return
+    details.append({
+        "pid": pid,
+        "startTicks": start_ticks,
+        "uids": {"real": uids[0], "effective": uids[1],
+                 "saved": uids[2], "fs": uids[3]},
+        "operation": operation,
+        "errno": error.errno,
+        "errnoName": errno.errorcode.get(error.errno),
+    })
+
+
+def _record_transient_fd_closure(summary: dict[str, Any], pid: int, start_ticks: int,
+                                 uids: tuple[int, int, int, int], operation: str) -> None:
+    summary["transientFdClosures"] += 1
+    details = summary["transientFdClosureDetails"]
+    if len(details) >= PROCESS_FAILURE_DETAIL_LIMIT:
+        summary["transientFdClosureDetailsTruncated"] += 1
+        return
+    details.append({
+        "pid": pid,
+        "startTicks": start_ticks,
+        "uids": {"real": uids[0], "effective": uids[1],
+                 "saved": uids[2], "fs": uids[3]},
+        "operation": operation,
+        "errno": errno.ENOENT,
+        "errnoName": "ENOENT",
+    })
 
 
 def _process_still_exists(proc: Path) -> bool:
@@ -282,7 +333,7 @@ def _is_active_npm_or_build(arguments: list[str]) -> bool:
             ("converta-release.py" in command and " build" in command))
 
 
-def _proc_start_ticks(raw: str) -> int:
+def _proc_stat_identity(raw: str) -> tuple[int, int]:
     closing = raw.rfind(") ")
     if closing < 0:
         deny("PROCESS_STAT_SCHEMA")
@@ -290,13 +341,21 @@ def _proc_start_ticks(raw: str) -> int:
     if len(fields) <= 19:
         deny("PROCESS_STAT_SCHEMA")
     try:
-        return int(fields[19])
+        return int(fields[6]), int(fields[19])
     except ValueError:
         deny("PROCESS_STAT_SCHEMA")
 
 
+def _proc_start_ticks(raw: str) -> int:
+    return _proc_stat_identity(raw)[1]
+
+
 def _read_start_ticks(proc: Path) -> int:
     return _proc_start_ticks((proc / "stat").read_text(errors="strict"))
+
+
+def _read_proc_identity(proc: Path) -> tuple[int, int]:
+    return _proc_stat_identity((proc / "stat").read_text(errors="strict"))
 
 
 def _status_uids(proc: Path) -> tuple[int, int, int, int]:
@@ -322,11 +381,15 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
         "deployProcessesInspected": 0,
         "otherProcessesInspected": 0,
         "permissionLimitedOtherProcesses": 0,
-        "kernelThreadsIgnored": 0,
+        "kernelThreadsIgnored": 0, "emptyCmdlineProcessesInspected": 0,
         "vanishedProcesses": 0,
         "identityFailures": 0,
         "referenceReadFailures": 0,
         "transientFdClosures": 0,
+        "referenceReadFailureDetails": [],
+        "referenceReadFailureDetailsTruncated": 0,
+        "transientFdClosureDetails": [],
+        "transientFdClosureDetailsTruncated": 0,
     }
     try:
         processes = list(proc_root.iterdir())
@@ -340,7 +403,7 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
         local_targets: list[tuple[int, int, str, str]] = []
         local_writers: list[dict[str, Any]] = []
         try:
-            before_ticks = _read_start_ticks(proc)
+            before_flags, before_ticks = _read_proc_identity(proc)
             try:
                 uids = _status_uids(proc)
             except Denied:
@@ -406,13 +469,20 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
             command = " ".join(item.decode(errors="replace") for item in command_parts if item)
             arguments = [item.decode(errors="replace") for item in command_parts if item]
             if not arguments:
-                after_ticks = _read_start_ticks(proc)
-                if after_ticks != before_ticks:
+                after_flags, after_ticks = _read_proc_identity(proc)
+                if after_ticks != before_ticks or after_flags != before_flags:
                     complete = False
                     summary["identityFailures"] += 1
+                    continue
+                if before_flags & PF_KTHREAD:
+                    if uids != (0, 0, 0, 0):
+                        complete = False
+                        summary["identityFailures"] += 1
+                    else:
+                        summary["kernelThreadsIgnored"] += 1
+                    continue
                 else:
-                    summary["kernelThreadsIgnored"] += 1
-                continue
+                    summary["emptyCmdlineProcessesInspected"] += 1
             for argument in arguments:
                 possible_path = argument.split("=", 1)[-1]
                 if possible_path.startswith("/"):
@@ -423,16 +493,18 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
             for leaf in ("cwd", "root", "exe"):
                 try:
                     local_targets.append((pid, before_ticks, leaf, os.readlink(proc / leaf)))
-                except FileNotFoundError:
+                except FileNotFoundError as exc:
                     if deploy_process and _process_still_exists(proc):
                         complete = False
-                        summary["referenceReadFailures"] += 1
+                        _record_process_reference_failure(
+                            summary, pid, before_ticks, uids, f"readlink:{leaf}", exc)
                     elif not deploy_process and _process_still_exists(proc):
                         other_limited = True
-                except OSError:
+                except OSError as exc:
                     if deploy_process:
                         complete = False
-                        summary["referenceReadFailures"] += 1
+                        _record_process_reference_failure(
+                            summary, pid, before_ticks, uids, f"readlink:{leaf}", exc)
                     else:
                         other_limited = True
             try:
@@ -442,43 +514,50 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
                     except FileNotFoundError:
                         # An FD may close between directory enumeration and readlink.
                         # The final start-ticks check still authenticates the process.
-                        summary["transientFdClosures"] += 1
-                    except OSError:
+                        _record_transient_fd_closure(
+                            summary, pid, before_ticks, uids, f"readlink:fd/{fd.name}")
+                    except OSError as exc:
                         if deploy_process:
                             complete = False
-                            summary["referenceReadFailures"] += 1
+                            _record_process_reference_failure(
+                                summary, pid, before_ticks, uids,
+                                f"readlink:fd/{fd.name}", exc)
                         else:
                             other_limited = True
-            except FileNotFoundError:
+            except FileNotFoundError as exc:
                 if deploy_process and _process_still_exists(proc):
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "listdir:fd", exc)
                 elif not deploy_process and _process_still_exists(proc):
                     other_limited = True
-            except OSError:
+            except OSError as exc:
                 if deploy_process:
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "listdir:fd", exc)
                 else:
                     other_limited = True
             try:
                 for line in (proc / "maps").read_text(errors="replace").splitlines():
                     if "/" in line:
                         local_targets.append((pid, before_ticks, "maps", line.split(None, 5)[-1]))
-            except FileNotFoundError:
+            except FileNotFoundError as exc:
                 if deploy_process and _process_still_exists(proc):
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "read:maps", exc)
                 elif not deploy_process and _process_still_exists(proc):
                     other_limited = True
-            except OSError:
+            except OSError as exc:
                 if deploy_process:
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "read:maps", exc)
                 else:
                     other_limited = True
-            after_ticks = _read_start_ticks(proc)
-            if after_ticks != before_ticks:
+            after_flags, after_ticks = _read_proc_identity(proc)
+            if after_ticks != before_ticks or after_flags != before_flags:
                 complete = False
                 summary["identityFailures"] += 1
                 continue
@@ -505,6 +584,123 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
             complete = False
             summary["identityFailures"] += 1
     return targets, writers, complete, summary
+
+
+def _validate_proc_observer_binding(value: Any) -> dict[str, str]:
+    if (not isinstance(value, dict) or set(value) != PROC_OBSERVER_BINDING_KEYS or
+            value.get("path") != str(PROC_OBSERVER_PATH) or not valid_sha(value.get("sha256"))):
+        deny("PROC_OBSERVER_BINDING")
+    return {"path": value["path"], "sha256": value["sha256"]}
+
+
+def _proc_observer_installation(binding: dict[str, str]) -> dict[str, Any]:
+    path = Path(binding["path"])
+    try:
+        info = path.lstat()
+        if (path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or
+                info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o500):
+            deny("PROC_OBSERVER_INSTALLATION_IDENTITY")
+        ancestors = []
+        for parent in (Path("/usr"), Path("/usr/local"), Path("/usr/local/libexec"), path.parent):
+            parent_info = parent.lstat()
+            if (parent.is_symlink() or not stat.S_ISDIR(parent_info.st_mode) or
+                    parent_info.st_uid != 0 or parent_info.st_gid != 0 or
+                    stat.S_IMODE(parent_info.st_mode) & 0o022):
+                deny("PROC_OBSERVER_ANCESTOR_IDENTITY")
+            ancestors.append({"path": str(parent), "identity": stat_identity(parent_info)})
+    except OSError:
+        deny("PROC_OBSERVER_INSTALLATION_READ")
+    return {"path": str(path), "identity": stat_identity(info), "ancestors": ancestors}
+
+
+def _privileged_proc_targets(binding_value: Any, candidate_paths: list[str],
+                             phase: str) -> tuple[ProcessScan, dict[str, Any]]:
+    binding = _validate_proc_observer_binding(binding_value)
+    installed = _proc_observer_installation(binding)
+    consumer = {"pid": os.getpid(), "startTicks": _read_start_ticks(Path("/proc/self"))}
+    request = {
+        "schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
+        "phase": phase, "nonce": secrets.token_hex(32), "deployUid": deploy_identity()[0],
+        "candidatePaths": sorted(set(candidate_paths)), "consumer": consumer,
+    }
+    request_raw = canonical(request)
+    started = time.time_ns()
+    try:
+        result = subprocess.run(
+            PROC_OBSERVER_COMMAND, input=request_raw, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False, timeout=PROC_OBSERVER_TIMEOUT_SECONDS,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        )
+    except subprocess.TimeoutExpired:
+        deny("PROC_OBSERVER_TIMEOUT")
+    except OSError:
+        deny("PROC_OBSERVER_INVOCATION")
+    finished = time.time_ns()
+    if result.stderr or len(result.stdout) > PROC_OBSERVER_MAX_RESPONSE_BYTES:
+        deny("PROC_OBSERVER_OUTPUT")
+    try:
+        response = json.loads(result.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny("PROC_OBSERVER_RESPONSE_JSON")
+    if result.returncode != 0:
+        predicate = response.get("predicate") if isinstance(response, dict) else None
+        deny("PROC_OBSERVER_DENY:" + (predicate if isinstance(predicate, str) else "UNKNOWN"))
+    required = {"schemaVersion", "kind", "state", "phase", "nonce", "requestSha256",
+                "candidatePaths", "deployUid", "consumer", "mechanism", "capturedAtNs",
+                "finishedAtNs", "durationMs", "observation"}
+    if (not isinstance(response, dict) or set(response) != required or
+            response.get("schemaVersion") != 1 or
+            response.get("kind") != "CAPACITY_PROC_OBSERVATION" or
+            canonical(response) != result.stdout or response.get("state") not in {"COMPLETE", "INCOMPLETE"} or
+            response.get("phase") != phase or response.get("nonce") != request["nonce"] or
+            response.get("requestSha256") != digest_bytes(request_raw) or
+            response.get("candidatePaths") != request["candidatePaths"] or
+            response.get("deployUid") != request["deployUid"] or response.get("consumer") != consumer):
+        deny("PROC_OBSERVER_RESPONSE_BINDING")
+    captured = response.get("capturedAtNs")
+    completed = response.get("finishedAtNs")
+    duration = response.get("durationMs")
+    if (not isinstance(captured, int) or not isinstance(completed, int) or
+            not isinstance(duration, int) or captured < started or completed > finished or
+            captured > completed or duration < 0 or duration > PROC_OBSERVER_TIMEOUT_SECONDS * 1000):
+        deny("PROC_OBSERVER_RESPONSE_TIME")
+    mechanism = response.get("mechanism")
+    if (not isinstance(mechanism, dict) or mechanism.get("path") != binding["path"] or
+            mechanism.get("sha256") != binding["sha256"] or
+            mechanism.get("identity") != installed["identity"] or
+            mechanism.get("ancestors") != installed["ancestors"]):
+        deny("PROC_OBSERVER_MECHANISM")
+    observation = response.get("observation")
+    observation_keys = {"complete", "references", "activeWriters", "failures",
+                        "failureDetailsTruncated", "summary"}
+    if (not isinstance(observation, dict) or set(observation) != observation_keys or
+            not isinstance(observation.get("complete"), bool) or
+            response["state"] != ("COMPLETE" if observation["complete"] else "INCOMPLETE") or
+            not isinstance(observation.get("references"), list) or
+            not isinstance(observation.get("activeWriters"), list) or
+            not isinstance(observation.get("failures"), list) or
+            not isinstance(observation.get("failureDetailsTruncated"), int) or
+            not isinstance(observation.get("summary"), dict)):
+        deny("PROC_OBSERVER_OBSERVATION_SCHEMA")
+    targets: list[tuple[int, int, str, str]] = []
+    for ref in observation["references"]:
+        if (not isinstance(ref, dict) or set(ref) != {"candidatePath", "pid", "startTicks", "uids", "source", "target"} or
+                ref["candidatePath"] not in request["candidatePaths"] or
+                not isinstance(ref["pid"], int) or not isinstance(ref["startTicks"], int) or
+                not isinstance(ref["source"], str) or not isinstance(ref["target"], str)):
+            deny("PROC_OBSERVER_REFERENCE_SCHEMA")
+        targets.append((ref["pid"], ref["startTicks"], ref["source"], ref["target"]))
+    summary = dict(observation["summary"])
+    summary["referenceReadFailureDetails"] = observation["failures"]
+    summary["referenceReadFailureDetailsTruncated"] = observation["failureDetailsTruncated"]
+    evidence = {
+        "mechanism": mechanism, "phase": phase, "requestSha256": digest_bytes(request_raw),
+        "responseSha256": digest_bytes(result.stdout), "nonce": request["nonce"],
+        "capturedAtNs": captured, "finishedAtNs": completed,
+        "complete": observation["complete"], "candidatePaths": request["candidatePaths"],
+        "request": request, "response": response,
+    }
+    return (targets, observation["activeWriters"], observation["complete"], summary), evidence
 
 
 def path_overlap(left: str, right: str) -> bool:
@@ -987,7 +1183,11 @@ def compare_index(runtime: Path, release_root: Path, relative: str,
             except OSError:
                 errors.append(f"{label}:missing:{name}")
                 continue
-            actual_type = "directory" if stat.S_ISDIR(info.st_mode) else "file" if stat.S_ISREG(info.st_mode) else "other"
+            # Reuse the producer's scan_runtime()/validate_index() entry model:
+            # symlinks are authenticated by mode, literal target and confinement.
+            actual_type = ("directory" if stat.S_ISDIR(info.st_mode) else
+                           "file" if stat.S_ISREG(info.st_mode) else
+                           "symlink" if stat.S_ISLNK(info.st_mode) else "other")
             if actual_type != entry.get("type") or stat.S_IMODE(info.st_mode) != _entry_mode(entry):
                 errors.append(f"{label}:identity:{name}")
                 continue
@@ -995,6 +1195,25 @@ def compare_index(runtime: Path, release_root: Path, relative: str,
                 checked_files += 1
                 if info.st_size != entry.get("size") or sha256(target) != entry.get("sha256"):
                     errors.append(f"{label}:content:{name}")
+            elif actual_type == "symlink":
+                before = (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+                          info.st_mtime_ns, info.st_ctime_ns)
+                try:
+                    link = os.readlink(target)
+                    resolved = target.resolve(strict=True)
+                    comparison_root = (runtime.parent if label == "output" else release_root).resolve(strict=True)
+                    after_info = target.lstat()
+                except OSError:
+                    errors.append(f"{label}:symlink_broken:{name}")
+                    continue
+                after = (after_info.st_dev, after_info.st_ino, after_info.st_mode,
+                         after_info.st_size, after_info.st_mtime_ns, after_info.st_ctime_ns)
+                if before != after:
+                    errors.append(f"{label}:symlink_changed:{name}")
+                elif resolved != comparison_root and comparison_root not in resolved.parents:
+                    errors.append(f"{label}:symlink_escape:{name}")
+                elif link != entry.get("target"):
+                    errors.append(f"{label}:symlink_target:{name}")
     expected_suffixes = {Path(name).relative_to(relative).as_posix() for name in selected}
     expected_suffixes.discard(".")
     for label, base in (("output", runtime), ("release", release_root / relative)):
@@ -1114,13 +1333,18 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
 
 
 def validate_audit_request(value: dict[str, Any]) -> None:
-    if set(value) != AUDIT_REQUEST_KEYS or value.get("schemaVersion") != 1 or value.get("kind") != "CAPACITY_RECOVERY_AUDIT_REQUEST":
+    version = value.get("schemaVersion")
+    expected = AUDIT_REQUEST_KEYS if version == 1 else AUDIT_REQUEST_V2_KEYS
+    if (version not in {1, 2} or set(value) != expected or
+            value.get("kind") != "CAPACITY_RECOVERY_AUDIT_REQUEST"):
         deny("AUDIT_REQUEST_SCHEMA")
     for key in ("minimumRecoveryBytes", "targetAvailableBytes"):
         if not isinstance(value.get(key), int) or value[key] <= 0:
             deny(f"AUDIT_REQUEST_{key}")
     if not isinstance(value.get("candidates"), list) or not value["candidates"]:
         deny("AUDIT_REQUEST_CANDIDATES")
+    if version == 2:
+        _validate_proc_observer_binding(value["procObserver"])
 
 
 def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[str, Any]:
@@ -1131,7 +1355,15 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     op_path, op_sha, op_raw, _ = load_binding(value["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
     operational, live_recapture = capture_live_operational(operational)
-    process_data = _proc_targets()
+    candidate_paths = [str(normalized_absolute(item.get("path"), "CANDIDATE_PATH"))
+                       for item in value["candidates"] if isinstance(item, dict)]
+    if len(candidate_paths) != len(value["candidates"]):
+        deny("CANDIDATE_SCHEMA")
+    if value["schemaVersion"] == 2:
+        process_data, process_evidence = _privileged_proc_targets(
+            value["procObserver"], candidate_paths, "audit")
+    else:
+        process_data, process_evidence = _proc_targets(), {"mechanism": "unprivileged-legacy"}
     observations: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -1143,7 +1375,10 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
             seen_paths.add(observed["path"])
             observations.append({"ordinal": ordinal, "source": candidate, "observation": observed})
         except Denied as exc:
-            errors.append({"ordinal": ordinal, "predicate": str(exc)})
+            error: dict[str, Any] = {"ordinal": ordinal, "predicate": str(exc)}
+            if str(exc) == "PROCESS_REFERENCE_SCAN_INCOMPLETE":
+                error["processScan"] = process_data[3]
+            errors.append(error)
     qualified_paths = [Path(item["observation"]["path"]) for item in observations]
     usage = physical_usage(qualified_paths) if qualified_paths else {}
     total = 0
@@ -1162,7 +1397,7 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         errors.append({"ordinal": 0, "predicate": "TARGET_AVAILABLE_NOT_MET"})
     state = "P00_CAPACITY_RECOVERY_AUDIT_PASS" if not errors else "P00_CAPACITY_RECOVERY_AUDIT_DENY"
     plan = {
-        "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_PLAN", "state": state,
+        "schemaVersion": value["schemaVersion"], "kind": "CAPACITY_RECOVERY_PLAN", "state": state,
         "requestSha256": request_sha, "minimumRecoveryBytes": value["minimumRecoveryBytes"],
         "targetAvailableBytes": value["targetAvailableBytes"], "qualifiedBytes": total,
         "qualifiedInodes": inodes, "availableBytesBefore": available_before,
@@ -1181,18 +1416,39 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         "commands": [[*LITERAL_RM, item["observation"]["path"]] for item in observations],
         "automaticExecutionPermitted": False,
     }
+    if value["schemaVersion"] == 2:
+        plan["procObserver"] = value["procObserver"]
+        plan["processObservation"] = process_evidence
     write_exclusive(plan_output, canonical(plan))
     return plan
 
 
-def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+def candidate_binding(observation: dict[str, Any]) -> dict[str, Any]:
+    """Compare artifact state, while retaining fresh process telemetry as evidence.
+
+    validate_candidate must authenticate every new scan before this projection:
+    completeness, live references and active writers are never waived here.
+    Only processScan counters/details are observational rather than artifact state.
+    """
+    return {key: value for key, value in observation.items() if key != "processScan"}
+
+
+def candidate_bindings(observations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [candidate_binding(item) for item in observations]
+
+
+def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
+                    phase: str = "prepare", include_process_evidence: bool = False) -> Any:
     required = {"schemaVersion", "kind", "state", "requestSha256", "minimumRecoveryBytes",
                 "targetAvailableBytes", "qualifiedBytes", "qualifiedInodes", "availableBytesBefore",
                 "projectedAvailableBytes", "minimumRecoverySatisfied", "targetAvailableSatisfied",
                 "classificationPolicy", "rootPolicy",
                 "operationalState", "liveRecapture", "deploymentLock", "writerLock", "candidates", "errors",
                 "commands", "automaticExecutionPermitted"}
-    if set(plan) != required or plan.get("schemaVersion") != 1 or plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or plan.get("errors") != [] or plan.get("automaticExecutionPermitted") is not False:
+    version = plan.get("schemaVersion")
+    if version == 2:
+        required |= {"procObserver", "processObservation"}
+    if set(plan) != required or version not in {1, 2} or plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or plan.get("errors") != [] or plan.get("automaticExecutionPermitted") is not False:
         deny("PLAN_SCHEMA_OR_STATE")
     policy, _, _ = root_policy(plan["rootPolicy"])
     _, _, op_raw, _ = load_binding(plan["operationalState"], "OPERATIONAL_STATE")
@@ -1205,7 +1461,14 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[
         operational, live_recapture = capture_live_operational(operational)
     except Denied as exc:
         errors.append(str(exc))
-    process_data = _proc_targets()
+    candidate_paths = [item.get("observation", {}).get("path") for item in plan.get("candidates", [])]
+    if not candidate_paths or any(not isinstance(item, str) for item in candidate_paths):
+        deny("PLAN_CANDIDATE_PATHS")
+    if version == 2:
+        process_data, process_evidence = _privileged_proc_targets(
+            plan["procObserver"], candidate_paths, phase)
+    else:
+        process_data, process_evidence = _proc_targets(), {"mechanism": "unprivileged-legacy"}
     for item in plan.get("candidates", []):
         try:
             source = item["source"]
@@ -1215,12 +1478,21 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[
             priors.append(prior)
         except (Denied, KeyError, TypeError) as exc:
             errors.append(str(exc))
+    comparisons: list[dict[str, Any]] = []
     if refreshed:
         usage = physical_usage(Path(item["path"]) for item in refreshed)
         for observed, prior in zip(refreshed, priors):
             observed["physical"] = usage[observed["path"]]
-            if observed != prior:
+            current_binding, prior_binding = candidate_binding(observed), candidate_binding(prior)
+            changed_fields = sorted(key for key in current_binding.keys() | prior_binding.keys()
+                                    if key not in current_binding or key not in prior_binding or
+                                    current_binding[key] != prior_binding[key])
+            comparisons.append({"path": observed["path"], "changedFields": changed_fields,
+                                "previousProcessScan": prior.get("processScan"),
+                                "currentProcessScan": observed.get("processScan")})
+            if changed_fields:
                 errors.append(f"CANDIDATE_CHANGED:{observed['path']}")
+    process_evidence["candidateComparisons"] = comparisons
     if check_locks:
         for lock in (Path(plan["deploymentLock"]), Path(plan["writerLock"])):
             try:
@@ -1230,21 +1502,24 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[
     expected_commands = [[*LITERAL_RM, item["path"]] for item in refreshed]
     if expected_commands != plan.get("commands"):
         errors.append("PLAN_COMMANDS_DIVERGED")
-    return refreshed, sorted(set(errors)), live_recapture
+    base = (refreshed, sorted(set(errors)), live_recapture)
+    return (*base, process_evidence) if include_process_evidence else base
 
 
 def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
                  commands_output: Path, manifest_output: Path) -> dict[str, Any]:
     raw, _ = stable_regular(plan_path, plan_sha)
     plan = object_json(raw, "PLAN_JSON")
-    refreshed, errors, live_recapture = revalidate_plan(plan)
+    refreshed, errors, live_recapture, process_evidence = revalidate_plan(
+        plan, include_process_evidence=True)
     if errors:
-        result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors}
+        result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors,
+                  "processObservation": process_evidence}
         print(json.dumps(result, sort_keys=True))
         raise SystemExit(2)
     commands_raw = b"".join((" ".join(command) + "\n").encode() for command in plan["commands"])
     intent = {
-        "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_INTENT",
+        "schemaVersion": plan["schemaVersion"], "kind": "CAPACITY_RECOVERY_INTENT",
         "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION", "plan": {"path": str(plan_path), "sha256": plan_sha},
         "operationalState": plan["operationalState"], "rootPolicy": plan["rootPolicy"],
         "deploymentLock": plan["deploymentLock"], "writerLock": plan["writerLock"],
@@ -1254,6 +1529,9 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
         "commands": plan["commands"], "commandsSha256": digest_bytes(commands_raw),
         "automaticRetry": False, "forceAllowed": False, "pruneAllowed": False, "pathExpansionAllowed": False,
     }
+    if plan["schemaVersion"] == 2:
+        intent["procObserver"] = plan["procObserver"]
+        intent["preparedProcessObservation"] = process_evidence
     intent_raw = canonical(intent)
     manifest = {
         "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_SEAL_MANIFEST",
@@ -1317,7 +1595,10 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
                 "deploymentLock", "writerLock", "minimumRecoveryBytes", "expectedRecoveryBytes",
                 "expectedRecoveryInodes", "candidates", "preparedLiveRecapture", "commands", "commandsSha256", "automaticRetry",
                 "forceAllowed", "pruneAllowed", "pathExpansionAllowed"}
-    if (set(intent) != required or intent.get("schemaVersion") != 1 or
+    version = intent.get("schemaVersion")
+    if version == 2:
+        required |= {"procObserver", "preparedProcessObservation"}
+    if (set(intent) != required or version not in {1, 2} or
             intent.get("kind") != "CAPACITY_RECOVERY_INTENT" or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
             any(intent.get(key) is not False for key in ("automaticRetry", "forceAllowed", "pruneAllowed", "pathExpansionAllowed"))):
@@ -1350,14 +1631,23 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
         # before the first durable ATTEMPT.
         plan_path = Path(intent["plan"]["path"])
         plan_raw, _ = stable_regular(plan_path, intent["plan"]["sha256"])
-        refreshed, errors, live_recapture = revalidate_plan(
-            object_json(plan_raw, "PLAN_JSON"), check_locks=False)
-        if errors or refreshed != intent["candidates"]:
-            deny("EXECUTE_RECAPTURE_DENY:" + (errors[0] if errors else "CANDIDATE_CHANGED"))
-        pre_attempt = {"event": "RECAPTURE_PASS", "intentSha256": intent_sha,
+        plan_value = object_json(plan_raw, "PLAN_JSON")
+        if version == 2 and intent["procObserver"] != plan_value.get("procObserver"):
+            deny("PROC_OBSERVER_BINDING_DIVERGED")
+        refreshed, errors, live_recapture, process_evidence = revalidate_plan(
+            plan_value, check_locks=False, phase="execute", include_process_evidence=True)
+        candidates_changed = candidate_bindings(refreshed) != candidate_bindings(intent["candidates"])
+        pre_attempt = {"event": "RECAPTURE_DENY" if errors or candidates_changed else "RECAPTURE_PASS",
+                       "intentSha256": intent_sha,
                        "commandsSha256": intent["commandsSha256"], "candidates": refreshed,
-                       "liveOperational": live_recapture}
+                       "liveOperational": live_recapture,
+                       "processObservation": process_evidence, "errors": errors,
+                       "intentCandidatesChanged": candidates_changed}
         write_exclusive(receipt_root / "pre-attempt-recapture.private.json", canonical(pre_attempt))
+        if errors or candidates_changed:
+            primary = next((error for error in errors if error != "PLAN_COMMANDS_DIVERGED"),
+                           errors[0] if errors else "CANDIDATE_CHANGED")
+            deny("EXECUTE_RECAPTURE_DENY:" + primary)
         for ordinal, (command, candidate) in enumerate(zip(intent["commands"], intent["candidates"]), 1):
             expected = [*LITERAL_RM, candidate["path"]]
             if command != expected:

@@ -14,6 +14,9 @@ atividade npm. Após adquirir ambos os locks, `execute` recaptura ao vivo curren
 PM2, dump, transações não terminais e grafo antes do primeiro `ATTEMPT`.
 Em `/proc`, UID e start ticks autenticam o PID; inspeção integral é obrigatória
 para `deploy`, enquanto limitação esperada de outro UID é apenas registrada.
+Quando essa inspeção exige privilégio, somente o observador root read-only de
+[CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md) pode ser usado; decisão,
+locks, journal e retirada permanecem no control plane executado por `deploy`.
 O scanner transacional autentica tanto `transaction.v1.private.json` quanto
 `window-state.private.json`; layouts pré-canônicos só entram por classificadores
 fechados e layouts desconhecidos continuam fail-closed. Janelas abertas contribuem
@@ -972,3 +975,30 @@ Retenção: 3/3, zero remanescentes, sem retry; recibo
 e log `af4a7b0f7290c5b1ecee07c9085d749bd7b40211005f932693d94738f2cdf2df`.
 Não repetir build, instalação, ativação, save ou retirada desta geração.
 
+
+
+## Recuperação mínima de 30/10/2026 — COMPLETED
+
+Fonte: relato operacional do owner/Codex local; o editor não reinspecionou a VPS.
+O lote do cache npm e runtimes derivados d7de concluiu 3/3, com os três caminhos
+verificados ausentes. Não repetir auditoria, prepare ou retirada desse lote.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| Plano PASS reutilizado | `23a3d7968457131f623c160bfe8e95e52ef3636061b6ad88771d793751a07833` |
+| Intenção | `c765121c7c38c8b8774214b3c721d79e2483a22a9ee0c05c3b270a226485a7e1` |
+| Comandos | `5d55ee88992feb3a8ed23fdd5621d8675210b641119f635ee15f02346e451015` |
+| Autorização consumida | `eb2196d8ab2243d131a716b4df99c3dd95511f9f155d13296a526c4211894a48` |
+| Receipt COMPLETED | `97a121df8fab427ada569652c7d9f45ee04fe4d9a5c93c032daa65dfd1b817f8` |
+| Journal | `9baa07a07f14bdc00e2c62d1374547dd41e8ed534d6968ed554d346e596dc338` |
+
+Controle integrado pelo PR #288, merge
+`9b2169d4e74c0d1c7ae5fb363f31ea753112b326`; ferramenta
+`d9ad6327c9dec5a7aafd3a0da9bf2c9cdc484c82089bf75b14781ce59dd27fda`.
+Saldo informado após o lote: 9.672.007.680 bytes. É uma medição histórica daquele
+checkpoint, não capacidade atual reservada. O valor de recuperação qualificada do
+plano não deve ser apresentado como medição independente do ganho líquido final.
+
+A geração Tendência foi depois construída/instalada inertemente e consumiu espaço;
+seu estado está no [registro da frente](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md).
+O acervo maior de preparações/releases continua sem saneamento global concluído.

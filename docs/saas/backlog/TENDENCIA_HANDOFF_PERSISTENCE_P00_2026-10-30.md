@@ -1,16 +1,6 @@
 # Tendência handoff persistence loop — P00
 
-Status: `MERGED / CI 4/4 PASS / PRODUCTION CHANGE PENDING CAPACITY`.
-
-PR `#280` was merged as
-`059ea95aaf73f3e143774d60a8fef4df88c7c0ba`, tree
-`afae4a544f50e3516437e17c67fc5e48b894433d`, from tested head
-`2d3634d5ff37daba8e804ae984bb3be532ab7c59` with CI run
-`40981724130` at `4/4 PASS`. The active API release still predates this merge;
-no package or inert release for this target has been produced. The next build
-remains blocked until the fresh aggregate capacity contract passes. The P00
-authorization below continues to waive only the static floor, never the real
-coexistence budget, operational reserve or inode budget.
+Status: `BUILT / INSTALLED_INERT_VERIFIED / RETENTION_PREPARATION_BLOCKED_PM2_FINGERPRINT / PRODUCTION UNCHANGED`.
 
 ## Evidence and scope
 
@@ -85,3 +75,54 @@ Code acceptance:
 Operational acceptance requires a separately authorized Tendência test proving
 one acceptance, one human pending state, no AI re-entry and a visible
 tenant-owned flow/route when configured. No Meta send is part of this PR.
+
+
+## Checkpoint operacional — 30/10/2026
+
+Fonte: execução relatada pelo owner/Codex local, sem inspeção independente da VPS
+pelo editor. A correção #280 está integrada e sua CI 40981724130 passou 4/4.
+A recuperação mínima anterior terminou COMPLETED 3/3; recibos no
+[lifecycle](../DEPLOY_ARTIFACT_LIFECYCLE.md). Não reabrir essa retirada.
+
+A admissão agregada passou; um único build terminou exit 0. A release foi instalada
+inertemente e verificada integralmente, com 34.370 entradas. Ela ainda não está ativa.
+
+| Identidade/evidência | Valor |
+| --- | --- |
+| Release | `immutable-059ea95a-vps-20261030T122714Z` |
+| Target | `059ea95aaf73f3e143774d60a8fef4df88c7c0ba` |
+| BUILD_ID | `pYwUYAQ0Hg8HcPcEvwRr6` |
+| Capacity contract | `c9a1580373defc5be8eca24568273e5546441432f64434d9728c77ad6b15164e` |
+| Override P00 emitido | `9595dd88f5dfce75661867a069bb45a1f4c948088d263a42a5a3cdf7903cf589` |
+| Pacote (hash relatado) | `f8e06961db3e2ace0f24eef33d5ba856e633697f59b549f4682fccf5bdcc7b1c` |
+| Tar | `5eef6f940406f30374175dacdd5341389ae1bb18a7168a7f32d8ec695766fe17` |
+| Manifesto | `8e6ceea7ee5c4cd3c9e579ca32956a5472bc141f8ccfe391844a91f0be641441` |
+| Índice | `6e0f8b0394bb674cced6ae6b1336fa3651b81d31e399328c75cf999a99211d77` |
+| API entrypoint | `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1` |
+
+A retenção prepare negou uma vez com
+`GENERATION_RETIREMENT_DENY:operational_pm2_observation`: a fotografia omitiu
+`observations.pm2.fingerprintSha256`. Não houve intenção/comandos/review de
+retenção, preflight, transação, seleção, restart, save ou Meta. Produção relatada:
+API 754281d3 (PID 1176373, restart 9), frontend aa9527cc (PID 1210937, restart 13),
+worker e2e7 (PID 2233, restart 0), health local/público ok=true/db=ok e locks livres.
+Saldo naquele checkpoint: 6.186.803.200 bytes; exige medição fresca para decisão futura.
+
+### Próxima ação, com reuso obrigatório
+
+1. Nova leitura operacional e custódia privada, preservando a fotografia negada.
+   Calcular o fingerprint sobre PM2 jlist pelo algoritmo do consumidor autenticado;
+   distinguir do SHA do executável. Recapturar current/dump/grafo conforme contrato.
+2. Validar o schema inteiro e todos os predicados conhecidos do consumidor antes
+   da nova invocação, incluindo modos, cópias do control plane e estado operacional.
+3. Preparar retenção uma vez com a fotografia corrigida e destinos exclusivos,
+   reutilizando contrato, lifecycle, pacote e release inerte desta geração.
+4. Prosseguir ao preflight e à janela API-only conforme autorizações aplicáveis;
+   revalidar capacidade, retorno, health e validade dos documentos temporários.
+   O override emitido não é declarado vigente por este registro.
+5. Fazer o aceite mínimo já definido, um save quando cabível e retenção da geração.
+
+Não repetir build, extração ou instalação. Nenhuma criação de fluxo ou alteração
+de configuração tenant-scoped foi demonstrada necessária. A nova leitura não
+amplia autorização de deploy, envio ou exclusão. A lacuna preventiva da admissão
+permanece no [P00-D](DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md).

@@ -16,18 +16,14 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 
 - target e control plane aprovados em CI;
 - release imutável de API/frontend selada por `scripts/converta-release.py`;
-- build único na VPS em worktree Linux x86_64 isolado, Node v20.20.0, com
-  capacidade conferida; esse local de build já está autorizado pelo owner;
-- builder externo somente como alternativa decidida separadamente; a autorização
-  da janela de ativação continua obrigatória;
+- build único na VPS em worktree Linux x86_64 isolado, Node v20.20.0, com capacidade conferida; esse local de build já está autorizado pelo owner;
+- builder externo somente como alternativa decidida separadamente; a autorização da janela de ativação continua obrigatória;
 - pacote, manifesto, índice, BUILD_ID e entrypoint integralmente verificados;
 - release extraída em destino novo sob `/opt/re7online/releases`;
 - configuração privada e retorno autenticados, dump anterior e symlinks capturados;
 - PM2 6.0.14, worker fora do impacto, lock global livre e autorização da janela;
 - migration/SQL classificados antes da janela.
-- contrato privado de capacidade revisado conforme
-  [ciclo de vida dos artefatos](DEPLOY_ARTIFACT_LIFECYCLE.md), incluindo pico
-  temporário e reserva operacional.
+- contrato privado de capacidade revisado conforme [ciclo de vida dos artefatos](DEPLOY_ARTIFACT_LIFECYCLE.md), incluindo pico temporário e reserva operacional.
 - recuperação extraordinária segue a [política canônica](CAPACITY_RECOVERY_POLICY.md) e `scripts/capacity-recovery.py`, que autentica journals fixed-current e frontend-only.
 
 Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
@@ -37,6 +33,23 @@ shell, derivar definição executável de introspecção, usar `--update-env`, e
 Antes de consumir uma tentativa, consultar exclusivamente o health público da API em
 `https://converta.re7online.com/agent-api/health`: exigir HTTP 200, JSON, `ok=true`
 e `db="ok"`. Host administrativo ou `/health` do frontend não comprova a API.
+
+## Preparação e retomada sem reiniciar a geração
+
+A automação integral das fronteiras permanece aberta no [P00-D](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md); a documentação não a declara entregue.
+
+| Fronteira | Prova antes da próxima fase | Retomada |
+| --- | --- | --- |
+| Admissão → materialização | schema completo aceito pelo consumidor; hashes/modos/identidades | corrigir origem; publicar destino novo |
+| Produtor → instalação | mesmo pacote, índice, manifesto e target | reutilizar pacote; sem segundo build |
+| Fotografia → retenção prepare | contrato/lifecycle, raízes e observações current/PM2/dump/grafo válidas | nova custódia apenas do estado volátil |
+| Plano PASS → capacity prepare | artefato estável e inspeção fresca completa e segura | reabrir plano original; contadores são evidência |
+| Intenção → execute | autorização delimitada e recaptura sob locks | preservar parciais; continuar só remanescentes |
+| Ativação → fechamento | health/identidade/aceite, um save e retenção | retomar journal sem repetir efeitos |
+
+`observations.pm2` exige exatamente `path`, `sha256` e `fingerprintSha256`. O SHA autentica o executável; o fingerprint vem de jlist pela projeção `_pm2_fingerprint()` do consumidor, nunca do hash do binário/dump/JSON bruto. Recapturar também current/dump/grafo e preservar a fotografia negada. Antes de retenção prepare, confrontar a fotografia inteira com `generation-retirement.py::validate_operational()`. A admissão deve ser corrigida/testada contra o consumidor real antes da próxima geração normal; fixtures sem blocos obrigatórios não qualificam a fronteira.
+
+Negativa de schema exige correção e regressão; fotografia vencida exige leitura dirigida; mudança real exige requalificação; capacidade exige separar orçamento/reserva de meta adicional; efeito parcial exige journal/receipt. Retomada após causa corrigida é registrada; retry cego, edição de prova para forçar PASS e repetição de efeitos concluídos são proibidos.
 
 ## Build once
 
@@ -208,17 +221,11 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 
 1. Adquirir o lock e confirmar ausência de outra janela.
 2. Revalidar pacote/release, target, BUILD_ID, entrypoint, symlinks e retornos; autenticar o contrato do overlay literal `api-runtime/.data` e sua projeção antes de qualquer seleção.
-3. Reabrir cada insumo privado e validar tipo, symlink, hash, owner/group e modo
-   exigido pelo driver; modo do checkout não substitui o da cópia privada. Antes da
-   autorização, exigir pai físico do receipt `deploy:deploy 0700` e receipt ausente.
-4. Capturar PID, start ticks, CWD, script, argumentos, sockets e restart count do
-   trio. Em `/proc/<pid>/stat`, separar pela última `) ` e usar o campo 20 da
-   cauda; tokenizar o registro inteiro não serve quando o nome contém espaços.
+3. Reabrir cada insumo privado e validar tipo, symlink, hash, owner/group e modo exigido pelo driver; modo do checkout não substitui o da cópia privada. Antes da autorização, exigir pai físico do receipt `deploy:deploy 0700` e receipt ausente.
+4. Capturar PID, start ticks, CWD, script, argumentos, sockets e restart count do trio. Em `/proc/<pid>/stat`, separar pela última `) ` e usar o campo 20 da cauda; tokenizar o registro inteiro não serve quando o nome contém espaços.
 5. Confirmar health, espaço/inodes, zero trabalho impeditivo e migration.
-6. Criar evidência/destinos exclusivos e executar o preflight com exatamente os
-   argumentos da ativação; só `PREFLIGHT PASS` autoriza pedir a frase do owner.
-7. Autenticar o executor versionado; bloco inline/efêmero não é procedimento. Não
-   executar `pm2 save` no preflight.
+6. Criar evidência/destinos exclusivos e executar o preflight com exatamente os argumentos da ativação; só `PREFLIGHT PASS` autoriza pedir a frase do owner.
+7. Autenticar o executor versionado; bloco inline/efêmero não é procedimento. Não executar `pm2 save` no preflight.
 
 Bindings privados são obrigatórios somente quando a janela cria, substitui ou
 executa uma definição PM2, ou altera ambiente/argumentos. Eles não são pré-requisito
@@ -247,10 +254,8 @@ A matriz é vinculante: `config/deploy-artifact-roots.json` e `config/legacy-gen
 qualquer outro `config/` permanece desconhecido. Para impacto somente frontend:
 
 1. preservar o symlink e o processo da API, sem restart;
-2. capturar antes e depois PID, start ticks, restart count, CWD/script físicos,
-   entrypoint e health da API;
-3. promover e reiniciar somente o frontend, aplicando integralmente os gates de
-   readiness, BUILD_ID e smoke previstos abaixo;
+2. capturar antes e depois PID, start ticks, restart count, CWD/script físicos, entrypoint e health da API;
+3. promover e reiniciar somente o frontend, aplicando integralmente os gates de readiness, BUILD_ID e smoke previstos abaixo;
 4. preservar o worker byte-operacionalmente;
 5. em negativa posterior à seleção, retornar somente o frontend ao destino autenticado.
 
@@ -265,13 +270,10 @@ Para impacto API+frontend, seguir a sequência completa; para impacto API-only, 
 
 1. Promover atomicamente `/opt/re7online/current/api` ao runtime candidato.
 2. Reiniciar `re7-whatsapp-agent` pelo registro PM2 existente, sem `--update-env`.
-3. Exigir três amostras consecutivas com PID/start ticks estáveis, symlink correto,
-   um listener 3001 DIRECT ou DESCENDANT, sem restart novo; então health local/público.
+3. Exigir três amostras consecutivas com PID/start ticks estáveis, symlink correto, um listener 3001 DIRECT ou DESCENDANT, sem restart novo; então health local/público.
 4. Só após API PASS, promover `/opt/re7online/current/frontend` atomicamente.
 5. Reiniciar `re7-admin-front` pelo registro existente, sem `--update-env`.
-6. Exigir três amostras estáveis, listener 3000, BUILD_ID, Login, Inbox, CRM
-   e asset. Não acessar Modelos/Campanhas no smoke sem autorização Meta:
-   suas leituras podem disparar sincronização de templates.
+6. Exigir três amostras estáveis, listener 3000, BUILD_ID, Login, Inbox, CRM e asset. Não acessar Modelos/Campanhas no smoke sem autorização Meta: suas leituras podem disparar sincronização de templates.
 7. Provar os componentes fora do escopo byte-operacionalmente preservados e parar em aceite técnico.
 
 O driver implementa a sequência sem `pm2 delete/start` ou `--update-env`; manifesto e journal selam nomes, retornos, PM2/allowlist, identidades e hash do ambiente permitido.
@@ -316,11 +318,8 @@ valores brutos. No PM2 6.0.14, campos/aliases e variáveis permitidas podem fica
 topo do registro ou em `pm2_env`; consultar ambos sem inventar outros defaults:
 
 - ambiente permitido: propriedade presente no topo prevalece inclusive para `false`, `0`, vazio ou `null`; usar `pm2_env` só quando ausente, sem ampliar chaves, e negar divergência real;
-- `instances` ausente/nulo no processo vivo e ausente/nulo no dump são equivalentes,
-  sem normalização; esse é o caso comprovado do worker;
-- `instances=1` no processo vivo e ausente/nulo no dump pode equivaler ao default 1
-  somente em `fork_mode`, com exatamente um processo vivo e todos os demais campos
-  equivalentes; esse é o caso comprovado de API/frontend.
+- `instances` ausente/nulo no processo vivo e ausente/nulo no dump são equivalentes, sem normalização; esse é o caso comprovado do worker;
+- `instances=1` no processo vivo e ausente/nulo no dump pode equivaler ao default 1 somente em `fork_mode`, com exatamente um processo vivo e todos os demais campos equivalentes; esse é o caso comprovado de API/frontend.
 
 Não confundir campo com processo ausente, editar o dump ou repetir o save. Campo
 ausente nas duas representações continua ausente; divergência real continua `DENY`.
