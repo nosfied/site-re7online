@@ -54,6 +54,36 @@ if record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE":
     require(record["retention"]["attempted"] ==
             record["retention"]["completed"] == 3,
             "frontend closure retirement")
+elif record.get("recordType") == "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
+    require(record["schemaVersion"] == 1 and
+            record["status"] == "DEPLOYED_SANITIZED",
+            "API-only fixed-current record schema")
+    require(production["targetCommit"] == record["release"]["target"] and
+            production["releaseId"] == record["release"]["id"] and
+            production["api"]["selectedReleaseId"] == record["release"]["id"] and
+            production["api"]["entrySha256"] ==
+            record["release"]["apiEntrypointSha256"],
+            "API-only release identity")
+    require(record["selection"]["frontendPreserved"] is True and
+            production["frontend"]["selectedReleaseId"] ==
+            record["selection"]["frontendReleaseId"] and
+            record["selection"]["workerPreserved"] is True and
+            production["worker"]["preserved"] is True and
+            production["worker"]["changed"] is False,
+            "API-only preserved topology")
+    require(production["database"]["lastDeploymentMigration"] ==
+            record["release"]["migration"] ==
+            "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+            "API-only no-schema-change deployment")
+    require(production["pm2"]["dumpSha256"] ==
+            record["finalization"]["dumpSha256"] and
+            record["finalization"]["pm2SaveCount"] == 1,
+            "API-only PM2 finalization")
+    require(record["retirement"]["state"] == "SANITIZED" and
+            record["retirement"]["remainingDerivedArtifacts"] == 0 and
+            record["retirement"]["commandsCompleted"] ==
+            record["retirement"]["commandsAttempted"] == 3,
+            "API-only generation retirement")
 elif record.get("recordType") == "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
     require(record["schemaVersion"] == 1, "fixed-current record schema")
     require(record["status"] == "DEPLOYED_SANITIZED", "fixed-current terminal state")
@@ -159,6 +189,10 @@ if record.get("recordType") in ("FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT",
             media["frontendPresentationDeploymentRecord"] ==
             state["activeDeploymentRecord"],
             "media split deployment records")
+elif record.get("recordType") == "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
+    require(media["deploymentRecord"] == state["activeDeploymentRecord"] and
+            (ROOT / media["frontendPresentationDeploymentRecord"]).is_file(),
+            "media API-only deployment and preserved frontend record")
 else:
     require(media["deploymentRecord"] == state["activeDeploymentRecord"],
             "media active record")

@@ -2,12 +2,52 @@
 
 **DEPLOYED_SANITIZED / CONSENT VISIBILITY ACCEPTED / PRODUCTION HEALTHY**
 
+## Estado vigente — Tendência concluída e sanitização P00 liberada
+
+Fonte: relatório final do owner/Codex local; este editor não reinspecionou a VPS.
+
+A release API-only `immutable-fa63994a-vps-20261030T153352Z`, target
+`fa63994acd5655bd499a328679a0f8c11e0740e2`, está
+`DEPLOYED_SANITIZED`. O owner confirmou PASS no teste do final `9614`:
+confirmação de encaminhamento, estado humano, fila/Inbox, ausência de reentrada da
+IA e frontend. Frontend `aa9527cc` e worker `e2e7f17a` foram preservados.
+
+A finalização executou um único `pm2 save`, validou o dump
+`440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280`,
+criou o marker, retirou 3/3 derivados e removeu o lock canônico. Registro:
+[TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json).
+
+Não repetir qualquer fase dessa geração. O saldo final relatado foi
+8.012.804.096 bytes; é checkpoint histórico, não capacidade reservada. A prioridade
+vigente é o [plano P00 de sanitização e retenção](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md),
+com limpeza classificada de VPS, preparações, releases, outputs, worktrees,
+branches e PRs, seguida da prevenção permanente de novo acúmulo.
+
+## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
+
+Fonte: relato do owner/Codex local, sem nova inspeção da VPS pelo editor. O lote
+mínimo concluiu 3/3 e não deve ser repetido; recibos e saldo histórico estão no
+[lifecycle](DEPLOY_ARTIFACT_LIFECYCLE.md#recuperação-mínima-de-30102026--completed).
+A sanitização global do acervo ainda não terminou.
+
+A release Tendência `immutable-059ea95a-vps-20261030T122714Z` teve build único e
+instalação inerte verificada. A retenção prepare negou por fingerprint PM2 ausente;
+não houve preflight/ativação. Reutilizar o pacote e a release, renovar somente a
+fotografia operacional e validar o contrato do consumidor. Identidades, hashes e
+retomada estão na [frente Tendência](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md).
+Produção relatada permanece API 754281d3 / frontend aa9527cc / worker e2e7.
+
+A revisão de prevenção e a lacuna da admissão estão no
+[plano de convergência P00-D](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md).
+As regras de retomada estão no runbook existente; não há segundo procedimento
+executável criado por esta atualização.
+
 ## Control plane de recuperação de capacidade
 
 O repositório contém `scripts/capacity-recovery.py`, com fases separadas de
-auditoria, preparação e execução autorizada. O contrato inicial cobre somente o
-cache literal `/home/deploy/.npm/_cacache` e runtimes derivados autenticados sob
-`build-output`; nenhuma execução produtiva ou exclusão integra esta alteração.
+auditoria, preparação e execução autorizada. O escopo cobre somente o cache literal `/home/deploy/.npm/_cacache` e runtimes
+derivados autenticados sob `build-output`. A execução relatada de 30/10 está no
+checkpoint acima; suas retiradas não devem ser repetidas.
 O `execute` recaptura referências operacionais ao vivo somente depois dos locks;
 o cache exige allowlist canônica de grupo e modo próprio não gravável por
 grupo/outros.
@@ -57,12 +97,12 @@ O control plane admite autorização P00 privada e temporária que dispensa
 exclusivamente o piso estático de 12 GiB, sem relaxar capacity contract, reserva,
 inodes ou checkpoints. Ela não autoriza build, deploy ou ativação por si só.
 
-## Implantação vigente — 29/10/2026
+## Histórico superado — API 0fdec / frontend b96
 
 Fonte: relatório do Codex local encaminhado pelo owner, com hashes das evidências
 privadas; o editor documental não realizou nova inspeção independente da VPS.
 
-API está na release `immutable-0fdec8b0-vps-20261028T224726Z`; frontend está
+Na observação histórica, a API estava na release `immutable-0fdec8b0-vps-20261028T224726Z`; o frontend estava
 na `immutable-b96eb779-vps-20261028T025159Z`, target
 `b96eb779f4ce091a79cf67e97bcd25be255e1af3`, BUILD_ID
 `jRFzvE9WaHEtDCwGbV-EH`. A identidade de processo da API foi recapturada na

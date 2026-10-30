@@ -1,8 +1,9 @@
 # Plano P00 — convergência da preparação de deploy
 
-**Status:** P00 / IMPLEMENTADO / USO CONDICIONADO A MERGE AUTENTICADO  
+**Status:** P00 / PARCIALMENTE IMPLEMENTADO / PREVENÇÃO E2E AINDA ABERTA  
 **Data de abertura:** 29/10/2026  
-**Atualização:** admissão agregada e materialização atômica do control plane implementadas no PR #277; ciclo do lock resolvido pelo PR #275 / merge `3d7604800ee62ef236a7985f7279306f4085a307`  
+**Atualização de 30/10/2026:** convergência ainda aberta; nova lacuna confirmada entre admissão e schema de observações do consumidor. Entregas #275/#277/#278/#285/#287/#288 são preservadas; não comprovam fechamento integral da dívida.
+
 **Autoridade:** [princípios fundamentais de trabalho](../WORKING_PRINCIPLES.md)
 
 Este plano registra uma dívida operacional evidenciada durante a preparação da
@@ -213,3 +214,130 @@ preserva o inode e promove atomicamente. Não há rebuild nem extração repetid
 A asserção fechada `installation-route-qualified` é obrigatória no gate agregado.
 Assim, ausência da rota, extração ad hoc ou identidade de raiz incompatível negam
 antes da criação de worktree/output.
+
+
+## Revisão de 30/10 — causas e ações verificáveis
+
+Fonte operacional: relato do owner/Codex local, sem inspeção independente da VPS
+pelo editor. Revisão do código na base `9b2169d4e74c0d1c7ae5fb363f31ea753112b326`.
+
+| Ocorrência | Causa no procedimento | Resultado e prevenção |
+| --- | --- | --- |
+| /proc inacessível a deploy | privilégio de leitura insuficiente e diagnóstico incompleto | #285: observador restrito; ausência/erro/identidade continuam fail-closed |
+| Symlink válido negado | comparador diferente do schema já aceito pelo produtor | #287: paridade e regressão com inventário real do produtor |
+| Todos os candidatos mudaram entre fases | contadores de processos comparados como identidade do artefato | #288: projeção estável, recaptura fresca e testes audit → prepare → execute |
+| Meta adicional impediu lote seguro | objetivo de recuperação confundido com orçamento real | decisão explícita de alvo; orçamento e reserva preservados |
+| Retenção 059ea negada por PM2 | admissão materializou snapshot sem fingerprint exigido pelo consumidor | P00-D abaixo permanece aberto; não repetir build/instalação |
+
+### P00-D — contrato real entre materializador e consumidor (ABERTO)
+
+`deploy-preparation-admission.py::validate_request()` verifica a identidade geral
+do template; não valida integralmente `observations`. Sua fixture positiva atual
+nem contém esse bloco. Já `generation-retirement.py::validate_operational()`
+exige `observations.pm2={path,sha256,fingerprintSha256}`. A admissão pode passar
+e o consumidor negar um documento produzido por ela. Isso é uma lacuna de
+integração, não uma necessidade de ampliar a exceção de capacidade.
+
+Responsabilidade de implementação: Codex executor; revisão: mantenedor do control
+plane; decisão operacional: owner, dentro do escopo já concedido. Prazo de aceite:
+antes da próxima geração normal, reutilizando a release inerte 059ea nesta recuperação.
+
+Entrega mínima necessária:
+
+1. Reutilizar o contrato/validador do consumidor autenticado, separando sua checagem
+   pura de schema das observações frescas e das verificações que dependem de arquivos
+   já materializados. Evitar uma segunda definição manual divergente do schema.
+2. Materializador produz snapshot completo e valida seu resultado antes de publicar
+   o destino consumível. Falta de qualquer campo obrigatório deve negar na admissão,
+   agregando todos os defeitos previsíveis, sem adivinhar hashes ou fingerprints.
+3. Fixture de integração gera os arquivos pelo materializador real e chama o
+   consumidor real com raízes/contrato válidos em ambiente isolado. Testar falta,
+   formato inválido e drift do fingerprint, além de modos, hashes, copied e raízes.
+4. Provar materialização → retenção prepare → preflight com APIs/PM2 simulados e
+   sem seleção, rede produtiva, envio ou exclusão fora dos temporários. Complementar
+   com ensaio no ambiente compatível quando a prova depender de permissões reais.
+5. Manter diagnóstico privado completo no sucesso e na negativa, com campo exato,
+   estado dos efeitos e checkpoint reutilizável. CI deve executar essas transições.
+
+O item só termina com código, regressão de fronteira, CI, runbook e aplicação
+operacional coerentes. Esta atualização documental não implementa nem encerra P00-D.
+
+### Organização e medição do trabalho
+
+- Princípios: autoridade em WORKING_PRINCIPLES; comandos: somente DEPLOY_RUNBOOK.
+- Estado atual: CURRENT_STATE; incidente/ação ainda aberta: este plano; recibos:
+  lifecycle e evidência privada. Histórico não concorre como instrução atual.
+- Cada retomada registra fase inicial/final, tempo ativo/espera, predicado, versão
+  do controle, provas reutilizadas e bytes/inodes criados/retirados.
+- Medir tentativas produtivas negadas por defeitos já conhecidos (meta zero), builds
+  por release (um), gerações com fechamento/recibo e volume retido por classe.
+- Após merge de um PR, revisar branch/worktree e PRs superados contra commits únicos,
+  alterações locais, dependências e retenção. Fechar/excluir só o que estiver
+  qualificado; não usar idade, prune ou force como classificação.
+- Mudança apenas documental pode otimizar a CI por impacto; os contratos de
+  documentação e links continuam obrigatórios. Isso é evolução pendente, não
+  autorização para ignorar checks atuais.
+
+### Referências profissionais e aplicação ao Converta
+
+- [DORA — Deployment automation](https://dora.dev/capabilities/deployment-automation/):
+  processo versionado, pacote separado da configuração e mesmo mecanismo ensaiado
+  antes de produção. Aplicação: testar o materializador junto com seus consumidores,
+  reutilizar o pacote e reduzir intervenção manual entre fases comprovadas.
+- [Google SRE — Postmortem culture](https://sre.google/workbook/postmortem-culture/):
+  converter causas em ações acompanháveis. Aplicação: cada falha acima tem controle,
+  responsável por papel e critério de aceite; contagem de relatórios não é melhoria.
+- [SLSA 1.2 — Verifying artifacts](https://slsa.dev/spec/v1.2/verifying-artifacts):
+  verificar proveniência e identidade esperada do artefato. Aplicação: manter o vínculo
+  target/pacote/builder/hashes; não declarar conformidade SLSA, assinaturas ou níveis
+  que o Converta ainda não implementou.
+
+Retenção automática por dependência e orçamento, armazenamento externo de artefatos
+com política de ciclo de vida e builder externo são evoluções a avaliar após esta
+entrega. Não se altera a arquitetura produtiva durante a retomada da Tendência.
+
+## Fechamento da janela fa63994a e dívida remanescente
+
+A janela terminou em `DEPLOYED_SANITIZED`, mas não prova que o procedimento normal
+está livre de intervenção. As negativas e retomadas desta execução devem reduzir o
+próximo fluxo, não virar precedentes manuais.
+
+| Fronteira | Defeito observado | Aceite preventivo antes da próxima geração normal |
+| --- | --- | --- |
+| Capacidade | meta adicional bloqueou lote seguro por 4.067.328 bytes | orçamento obrigatório e meta adicional são campos e decisões distintas |
+| Audit → prepare | `processScan` volátil entrou na identidade integral | comparação usa projeção estável; observação fresca permanece fail-closed |
+| Índice → runtime | symlink válido foi classificado como `other` | produtor e consumidor usam a mesma semântica, com regressão de target/mode/escape |
+| Snapshot → retention | faltou `pm2.fingerprintSha256` | materializador chama o validador real do consumidor antes de publicar |
+| Rollback → retirement | executor exigiu lock fisicamente ausente/existente em fases incompatíveis | teste integrado cobre criação, aquisição, fechamento e remoção terminal |
+| Package → publish | transporte SSH caiu após compressão | observar lifecycle/processo; retomar pacote existente; rebuild é último recurso |
+| Handoff → outbound | `ok=false` descartado sem causa nominal | evento sanitizado obrigatório e teste aceite → envio real |
+| Módulos → fluxo | CI 4/4 não cobriu contratos entre ferramentas | fixture atravessa admissão → materialização → prepare → preflight → fechamento |
+
+### Regra de não patinação
+
+Após uma negativa, o executor registra apenas quatro informações: predicado,
+efeitos já ocorridos, provas ainda reutilizáveis e menor ação corretiva. A próxima
+execução começa no último checkpoint válido. Não se repete leitura cara, build,
+compressão, instalação, ativação, save ou retirada apenas para descobrir qual campo
+mudou.
+
+A autorização acompanha o escopo e os efeitos já aprovados; não deve ser pedida
+novamente por cada etapa interna. Nova autorização é necessária somente para ampliar
+escopo, privilégio ou efeito produtivo.
+
+### Entregas bloqueadoras
+
+Antes de outra geração normal:
+
+1. implementar e testar a integração do schema P00-D com o consumidor real;
+2. corrigir o ciclo autônomo do lock criado por `generation-retirement`, garantindo
+   remoção terminal sob o mesmo `flock`;
+3. decidir o PR #291 como melhoria de retomada, sem reabrir a release concluída;
+4. executar a fixture ponta a ponta sem correção intermediária;
+5. manter o [plano P00 de sanitização](PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md)
+   acima do backlog de novos builds enquanto o orçamento de disco não estiver
+   satisfeito.
+
+A documentação deste PR registra o contrato; seu fechamento operacional depende de
+código, regressões, CI e uma execução normal sem adaptação. Portanto, não declarar
+esta dívida concluída apenas porque a Tendência foi entregue.

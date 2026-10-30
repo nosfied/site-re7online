@@ -137,6 +137,20 @@ ambiente de experimentação, depuração improvisada ou validação destrutiva.
 Nenhuma entrega é considerada correta se resolver a novidade quebrando um fluxo que já
 funcionava ou reduzindo a segurança da produção viva.
 
+## Qualificação do procedimento antes de produção
+
+Os princípios também se aplicam ao próprio control plane. Antes de recomendar uma
+nova tentativa, o executor deve localizar a versão e a evidência do procedimento
+que já funcionou, identificar a diferença atual e testar a transição completa afetada.
+CI verde de módulos isolados não prova compatibilidade entre produtor e consumidor.
+Dados de diagnóstico voláteis não são identidade imutável do artefato.
+
+Falha previsível exige regressão e correção na origem. A retomada começa na última
+fase válida, com seus hashes preservados e somente as observações vencidas
+recapturadas. Cada negativa deve informar causa, efeito ocorrido, prova reaproveitável
+e menor próxima ação. O mesmo escopo já autorizado não exige nova confirmação a
+cada etapa; uma ampliação real de escopo ou efeito continua exigindo decisão própria.
+
 ## Ordem obrigatória de decisão
 
 Toda nova frente segue esta ordem:

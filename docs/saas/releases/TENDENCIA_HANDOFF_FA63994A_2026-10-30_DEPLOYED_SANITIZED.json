@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+    "reportedDate": "2026-10-30",
+    "timezone": "America/Fortaleza",
+    "independentVpsInspectionByDocumentationEditor": false
+  },
+  "release": {
+    "id": "immutable-fa63994a-vps-20261030T153352Z",
+    "target": "fa63994acd5655bd499a328679a0f8c11e0740e2",
+    "tree": "aa4cf6bedfc1c0cbd7bab5dcbda4f5ded06e0161",
+    "buildId": "1b-P3r73eOn-H8gNJeas_",
+    "packageSha256": "c397b392ced3c3e676b028adb3cc1002c35f3baab4c62a199e0585e82644ca11",
+    "manifestSha256": "dd3fdf37f6182f616a6c0dc3ec49d35f0e7a60adb489630e9e77ab505f073f3d",
+    "indexSha256": "b347956578e1652b4de104d031620a050860b57af2f238ffdc632b3848ab35e7",
+    "artifactContractSha256": "9f55b2346b45d01035e8a6cc28ddb6600dcb44c4c4fb7181490b448dc98dc872",
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "selection": {
+    "components": [
+      "api"
+    ],
+    "apiReleaseId": "immutable-fa63994a-vps-20261030T153352Z",
+    "frontendReleaseId": "immutable-aa9527cc-vps-20261029T222733Z",
+    "workerReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "frontendPreserved": true,
+    "workerPreserved": true
+  },
+  "acceptance": {
+    "tenant": "tendencia-modas",
+    "recipientSuffix": "9614",
+    "handoffConfirmationDelivered": true,
+    "humanMode": true,
+    "queueAndInboxVisible": true,
+    "aiReentryObserved": false,
+    "frontendValidation": "PASS",
+    "ownerAcceptance": "PASS"
+  },
+  "finalization": {
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280",
+    "markerSha256": "99bdae5577e9f205ae030ed46770224e1dde6795b6a97fd3967fa3be24d50614",
+    "journalSha256": "cfb74cd7ad5c58bceaae1ca5b8b9f93d4186ad4c2592f4b9bf9039f0becf2f2c",
+    "retirementReceiptSha256": "d7c7630bb4ca7b9a9ee47fdb3fb45e726af0832120229faabaee9636657ac7fc"
+  },
+  "runtime": {
+    "api": {
+      "pid": 1371244,
+      "restartCount": 12
+    },
+    "frontend": {
+      "pid": 1210937,
+      "restartCount": 13,
+      "preserved": true
+    },
+    "worker": {
+      "pid": 2233,
+      "restartCount": 0,
+      "preserved": true
+    },
+    "health": {
+      "local": {
+        "ok": true,
+        "db": "ok"
+      },
+      "public": {
+        "ok": true,
+        "db": "ok"
+      }
+    }
+  },
+  "retirement": {
+    "state": "SANITIZED",
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "remainingDerivedArtifacts": 0,
+    "debt": false
+  },
+  "locks": {
+    "deploymentCanonicalRemoved": true
+  },
+  "capacity": {
+    "freeBytesAfterFinalization": 8012804096,
+    "capacityIsCurrent": false
+  },
+  "forbiddenEffects": {
+    "repeatedBuilds": 0,
+    "extraRestarts": 0,
+    "secondPm2Save": 0,
+    "repeatedRetention": 0
+  },
+  "nextPermittedAct": "PROJECT_SANITATION_AND_PROCEDURE_STANDARDIZATION"
+}

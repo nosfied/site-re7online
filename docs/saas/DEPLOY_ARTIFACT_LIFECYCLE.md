@@ -979,3 +979,59 @@ Retenção: 3/3, zero remanescentes, sem retry; recibo
 e log `af4a7b0f7290c5b1ecee07c9085d749bd7b40211005f932693d94738f2cdf2df`.
 Não repetir build, instalação, ativação, save ou retirada desta geração.
 
+
+
+## Recuperação mínima de 30/10/2026 — COMPLETED
+
+Fonte: relato operacional do owner/Codex local; o editor não reinspecionou a VPS.
+O lote do cache npm e runtimes derivados d7de concluiu 3/3, com os três caminhos
+verificados ausentes. Não repetir auditoria, prepare ou retirada desse lote.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| Plano PASS reutilizado | `23a3d7968457131f623c160bfe8e95e52ef3636061b6ad88771d793751a07833` |
+| Intenção | `c765121c7c38c8b8774214b3c721d79e2483a22a9ee0c05c3b270a226485a7e1` |
+| Comandos | `5d55ee88992feb3a8ed23fdd5621d8675210b641119f635ee15f02346e451015` |
+| Autorização consumida | `eb2196d8ab2243d131a716b4df99c3dd95511f9f155d13296a526c4211894a48` |
+| Receipt COMPLETED | `97a121df8fab427ada569652c7d9f45ee04fe4d9a5c93c032daa65dfd1b817f8` |
+| Journal | `9baa07a07f14bdc00e2c62d1374547dd41e8ed534d6968ed554d346e596dc338` |
+
+Controle integrado pelo PR #288, merge
+`9b2169d4e74c0d1c7ae5fb363f31ea753112b326`; ferramenta
+`d9ad6327c9dec5a7aafd3a0da9bf2c9cdc484c82089bf75b14781ce59dd27fda`.
+Saldo informado após o lote: 9.672.007.680 bytes. É uma medição histórica daquele
+checkpoint, não capacidade atual reservada. O valor de recuperação qualificada do
+plano não deve ser apresentado como medição independente do ganho líquido final.
+
+A geração Tendência foi depois construída/instalada inertemente e consumiu espaço;
+seu estado está no [registro da frente](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md).
+O acervo maior de preparações/releases continua sem saneamento global concluído.
+
+## Tendência fa63994a — DEPLOYED_SANITIZED
+
+Fonte: relato final do owner/Codex local em 30/10/2026; sem reinspeção da VPS
+pelo editor documental.
+
+A release `immutable-fa63994a-vps-20261030T153352Z` foi construída uma única vez.
+A perda do transporte SSH não provocou rebuild: o produtor sobrevivente concluiu a
+compressão e publicou o lifecycle `COMPLETE`. Após aceite integral do owner, a
+transação executou um único save e fechou com retenção 3/3.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| Pacote | `c397b392ced3c3e676b028adb3cc1002c35f3baab4c62a199e0585e82644ca11` |
+| Manifesto | `dd3fdf37f6182f616a6c0dc3ec49d35f0e7a60adb489630e9e77ab505f073f3d` |
+| Índice | `b347956578e1652b4de104d031620a050860b57af2f238ffdc632b3848ab35e7` |
+| Dump final | `440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280` |
+| Marker | `99bdae5577e9f205ae030ed46770224e1dde6795b6a97fd3967fa3be24d50614` |
+| Retention receipt | `d7c7630bb4ca7b9a9ee47fdb3fb45e726af0832120229faabaee9636657ac7fc` |
+| Journal final | `cfb74cd7ad5c58bceaae1ca5b8b9f93d4186ad4c2592f4b9bf9039f0becf2f2c` |
+
+O lock canônico foi removido e os três caminhos derivados foram verificados
+ausentes. O saldo final relatado de 8.012.804.096 bytes é histórico. Não repetir
+build, instalação, preflight, ativação, save ou retenção.
+
+A próxima classificação de artefatos segue
+[PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
+Ela separa ativo, rollback, evidência, dado único, derivado e duplicado; idade ou
+tamanho isolados não autorizam retirada.

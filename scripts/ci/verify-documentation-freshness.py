@@ -30,8 +30,12 @@ require(state["templateCampaignMedia"]["state"] == "TECHNICALLY_DEPLOYED",
 media = state["templateCampaignMedia"]
 require(media["deploymentRecord"] == state["activeApiDeploymentRecord"],
         "media API deployment record")
-require(media["frontendPresentationDeploymentRecord"] == record_value,
-        "media frontend presentation deployment record")
+if record.get("recordType") == "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
+    require((ROOT / media["frontendPresentationDeploymentRecord"]).is_file(),
+            "preserved frontend presentation deployment record")
+else:
+    require(media["frontendPresentationDeploymentRecord"] == record_value,
+            "media frontend presentation deployment record")
 require(media["metaFunctionalAcceptance"] == "PASS_IMAGE_VIDEO_CONTROLLED" and
         media["commercialOperationalRelease"] == "GENERAL_OPERATIONS_OPEN",
         "media functional acceptance and general operations")
@@ -64,6 +68,29 @@ active_by_path = {p: (ROOT / p).read_text() for p in active_paths}
 active = "\n".join(active_by_path.values())
 
 production = state["production"]
+recovery = state.get("capacityRecoveryControlPlane", {})
+if recovery.get("state") == "COMPLETED_REPORTED":
+    completed = recovery.get("lastCompleted", {})
+    count = completed.get("commandsCompleted")
+    require(completed.get("state") == "COMPLETED" and isinstance(count, int) and
+            count > 0 and completed.get("pathsVerifiedAbsent") == count and
+            completed.get("repeatPermitted") is False,
+            "reported capacity recovery has a terminal non-repeatable receipt")
+    for key in ("planSha256", "receiptSha256", "journalSha256"):
+        value = completed.get(key)
+        require(isinstance(value, str) and len(value) == 64 and
+                all(char in "0123456789abcdef" for char in value),
+                f"reported capacity recovery binding {key}")
+pending = state.get("pendingOperationalChange")
+if isinstance(pending, dict) and pending.get("active") is False:
+    active_releases = {production.get("releaseId")}
+    active_releases.update(production.get(component, {}).get("selectedReleaseId")
+                           for component in ("api", "frontend", "worker"))
+    worker_path = production.get("worker", {}).get("releasePath")
+    if worker_path:
+        active_releases.add(Path(worker_path).parent.name)
+    require(pending.get("releaseId") not in active_releases,
+            "inert pending release must not be documented as active")
 markers = (
     production["targetCommit"],
     production["releaseId"],
