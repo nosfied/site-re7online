@@ -325,6 +325,8 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
         "kernelThreadsIgnored": 0,
         "vanishedProcesses": 0,
         "identityFailures": 0,
+        "referenceReadFailures": 0,
+        "transientFdClosures": 0,
     }
     try:
         processes = list(proc_root.iterdir())
@@ -424,11 +426,13 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
                 except FileNotFoundError:
                     if deploy_process and _process_still_exists(proc):
                         complete = False
+                        summary["referenceReadFailures"] += 1
                     elif not deploy_process and _process_still_exists(proc):
                         other_limited = True
                 except OSError:
                     if deploy_process:
                         complete = False
+                        summary["referenceReadFailures"] += 1
                     else:
                         other_limited = True
             try:
@@ -436,23 +440,25 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
                     try:
                         local_targets.append((pid, before_ticks, f"fd/{fd.name}", os.readlink(fd)))
                     except FileNotFoundError:
-                        if deploy_process and _process_still_exists(proc):
-                            complete = False
-                        elif not deploy_process and _process_still_exists(proc):
-                            other_limited = True
+                        # An FD may close between directory enumeration and readlink.
+                        # The final start-ticks check still authenticates the process.
+                        summary["transientFdClosures"] += 1
                     except OSError:
                         if deploy_process:
                             complete = False
+                            summary["referenceReadFailures"] += 1
                         else:
                             other_limited = True
             except FileNotFoundError:
                 if deploy_process and _process_still_exists(proc):
                     complete = False
+                    summary["referenceReadFailures"] += 1
                 elif not deploy_process and _process_still_exists(proc):
                     other_limited = True
             except OSError:
                 if deploy_process:
                     complete = False
+                    summary["referenceReadFailures"] += 1
                 else:
                     other_limited = True
             try:
@@ -462,11 +468,13 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
             except FileNotFoundError:
                 if deploy_process and _process_still_exists(proc):
                     complete = False
+                    summary["referenceReadFailures"] += 1
                 elif not deploy_process and _process_still_exists(proc):
                     other_limited = True
             except OSError:
                 if deploy_process:
                     complete = False
+                    summary["referenceReadFailures"] += 1
                 else:
                     other_limited = True
             after_ticks = _read_start_ticks(proc)
@@ -926,7 +934,8 @@ def authenticate_npm(candidate: dict[str, Any],
         live_references = (operational["currentPaths"] + operational["pm2LivePaths"] +
                            operational["pm2DumpPaths"] + operational["openTransactionPaths"] +
                            operational["protectedGraphPaths"])
-        if any(path_overlap(str(path), item) for item in live_references):
+        if any(process_target_references_candidate(str(path), item)
+               for item in live_references):
             deny("NPM_CACHE_OPERATIONALLY_REFERENCED")
     if not complete:
         deny("PROCESS_REFERENCE_SCAN_INCOMPLETE")
