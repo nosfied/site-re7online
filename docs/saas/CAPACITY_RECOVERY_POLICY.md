@@ -73,13 +73,18 @@ Cada PID é vinculado ao UID autenticado em `status` e aos `start ticks` lidos
 antes/depois. Para processos, “referência” significa alvo literal igual ao candidato
 ou localizado abaixo dele; ancestrais genéricos como `root=/`, `cwd=/` ou
 `cwd=/home/deploy` não provam uso do descendente e não negam. CWD, executável, FD,
-mapa ou argumento no próprio candidato ou abaixo dele continuam negando. A
-sobreposição bidirecional permanece obrigatória para referências operacionais de
-`current`, PM2, dump, transação não terminal e grafo protegido. Thread de kernel
-sem `cmdline` é ignorada nominalmente; limitação esperada em processo de outro UID
-não bloqueia, mas qualquer comando npm/build ou referência legível desse processo
-continua negando. Essa regra não é compartilhada com ancestrais de
-`generation-retirement.py`.
+mapa ou argumento no próprio candidato ou abaixo dele continuam negando. Para
+`NPM_CACHE_MAINTENANCE`, a mesma contenção direcional vale para referências
+operacionais: um HOME, root ou diretório ancestral genérico não prova uso do cache.
+A sobreposição bidirecional permanece obrigatória para referências operacionais da
+classe `DERIVED_OUTPUT_RUNTIME`, onde um caminho ancestral pode proteger todo o
+output. Thread de kernel sem `cmdline` é ignorada nominalmente; o fechamento de um
+FD entre a enumeração e o `readlink` é registrado como transiente e aceito somente
+com PID/start ticks estáveis. Qualquer outra falha de leitura de referência de
+processo `deploy` mantém a varredura incompleta e passa a ser contada nominalmente.
+Limitação esperada em processo de outro UID não bloqueia, mas qualquer comando
+npm/build ou referência legível desse processo continua negando. Essa regra não é
+compartilhada com ancestrais de `generation-retirement.py`.
 
 ### `DERIVED_OUTPUT_RUNTIME`
 
