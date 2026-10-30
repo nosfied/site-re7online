@@ -5,7 +5,7 @@
 Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação. Os comandos executáveis estão
 somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
-[registro b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json).
+[registro aa9527 implantado e sanitizado](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json).
 Preparações e executores anteriores são evidência e não autorizam repetição.
 
 ## Topologia canônica
@@ -268,7 +268,7 @@ A produção usa uma topologia deliberadamente dividida por componente:
 - worker: processo anterior preservado, sem restart.
 
 O registro operacional ativo do frontend é
-[`CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json).
+[`CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json`](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json).
 O registro que continua autenticando a API e a implantação técnica de mídia é
 [`FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json`](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
 Não se deve forçar um único release ID sobre componentes que foram promovidos em
