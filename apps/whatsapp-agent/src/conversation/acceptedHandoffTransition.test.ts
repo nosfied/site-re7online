@@ -6,6 +6,13 @@ import {
   persistAcceptedHandoffTransition,
 } from "./acceptedHandoffTransition.js";
 
+function token(version: number) {
+  return {
+    version,
+    updatedAt: new Date(`2026-10-29T00:01:0${version}.000Z`),
+  } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>;
+}
+
 function baseState(): ConversationState {
   return {
     waId: "5584999999999",
@@ -18,53 +25,41 @@ function baseState(): ConversationState {
     mode: "BOT",
     handoff: { status: "none" },
     status: null,
-    runtimeWriteToken: {
-      version: 1,
-      updatedAt: new Date("2026-10-29T00:01:00.000Z"),
-    } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
+    runtimeWriteToken: token(1),
   };
 }
 
-test("accepted handoff carries the fresh runtime token into the activation write", async () => {
-  const seenRevisions: number[] = [];
+test("accepted handoff persists HUMAN/WAITING in one runtime write", async () => {
+  let writes = 0;
   const result = await persistAcceptedHandoffTransition({
-    confirmationState: baseState(),
-    persistConfirmation: async (state) => ({
+    sourceState: baseState(),
+    buildActivatedState: async (state) => ({
       ...state,
-      runtimeWriteToken: {
-        version: 2,
-        updatedAt: new Date("2026-10-29T00:01:01.000Z"),
-      } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
+      mode: "HUMAN",
+      handoff: {
+        status: "active",
+        activatedAt: "2026-10-29T00:01:02.000Z",
+      },
+      status: "WAITING",
+      departmentId: null,
+      queueId: null,
     }),
-    buildActivatedState: async (state) => {
-      seenRevisions.push(state.runtimeWriteToken?.version ?? -1);
-      return {
-        ...state,
-        mode: "HUMAN",
-        handoff: { status: "active", activatedAt: "2026-10-29T00:01:02.000Z" },
-        status: "WAITING",
-        departmentId: null,
-        queueId: null,
-      };
-    },
     persistActivation: async (state) => {
-      seenRevisions.push(state.runtimeWriteToken?.version ?? -1);
+      writes += 1;
+      assert.equal(state.runtimeWriteToken?.version, 1);
       return {
         ...state,
-        runtimeWriteToken: {
-          version: 3,
-          updatedAt: new Date("2026-10-29T00:01:02.000Z"),
-        } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
+        runtimeWriteToken: token(2),
       };
     },
   });
 
-  assert.deepEqual(seenRevisions, [2, 2]);
+  assert.equal(writes, 1);
   assert.equal(result.persisted, true);
   assert.equal(result.state.mode, "HUMAN");
   assert.equal(result.state.handoff.status, "active");
   assert.equal(result.state.status, "WAITING");
-  assert.equal(result.state.runtimeWriteToken?.version, 3);
+  assert.equal(result.state.runtimeWriteToken?.version, 2);
 });
 
 test("missing department or queue does not return a confirmed handoff to the bot", () => {
@@ -81,8 +76,7 @@ test("missing department or queue does not return a confirmed handoff to the bot
 
 test("BOT/NONE cannot be reported as an activated handoff", async () => {
   const result = await persistAcceptedHandoffTransition({
-    confirmationState: baseState(),
-    persistConfirmation: async (state) => state,
+    sourceState: baseState(),
     buildActivatedState: async (state) => ({
       ...state,
       mode: "HUMAN",
