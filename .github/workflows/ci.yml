@@ -116,6 +116,7 @@ jobs:
           src/whatsapp/tenantMetaRuntimeConfig.test.ts
           src/whatsapp/tenantMetaReactiveOutboundGate.test.ts
           src/whatsapp/tenantMetaRuntimeContract.test.ts
+          src/conversation/acceptedHandoffTransition.test.ts
 
   csv-critical:
     name: CSV recovery and tenant isolation
