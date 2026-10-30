@@ -62,7 +62,9 @@
 ## Backlog ativo separado
 
 - [Loop de handoff da Tendência — persistência P00](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md)
-  — build único e release inerte verificada; retomada por fotografia PM2 completa, sem rebuild ou instalação repetida; produção ainda não alterada.
+  — encerrado em DEPLOYED_SANITIZED, aceite do owner PASS e repetição de qualquer fase proibida.
+- [Plano P00 de sanitização, retenção e higiene do projeto](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md)
+  — prioridade vigente: recuperar orçamento de disco, classificar preparações/releases e reconciliar Git sem perda de trabalho.
 - [Plano P00 de convergência da preparação de deploy](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md)
   — inclui revisão de 30/10, referências profissionais e P00-D aberto: contrato real entre materializador e consumidor; não declara a dívida integralmente encerrada.
 - [Disponibilidade, mídia e homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md)
