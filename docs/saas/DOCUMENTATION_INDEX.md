@@ -111,3 +111,5 @@ específica. Nenhum
 documento histórico prevalece sobre o modelo operacional canônico.
 - [Fechamento frontend aa9527 — consentimento visível e retenção sanitizada](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json)
 - [Fechamento API 754281d3 — DB-first e retenção sanitizada](releases/P00_DB_FIRST_API_754281D3_2026-10-29_DEPLOYED_SANITIZED.json)
+- [Registro ativo API-only da Tendência — fa63994a](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json)
+  — DEPLOYED_SANITIZED; frontend aa9527cc e worker e2e7f17a preservados.
