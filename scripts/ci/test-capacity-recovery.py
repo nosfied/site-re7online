@@ -642,6 +642,31 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(candidate_error["processScan"]["referenceReadFailureDetails"], [detail])
         self.assertNotIn("cmdline", json.dumps(candidate_error))
 
+    def test_schema_two_consumer_invokes_authenticated_observer_for_audit_and_prepare(self):
+        value = self.request_value([self.npm_candidate()])
+        value["schemaVersion"] = 2
+        value["procObserver"] = {"path": str(MODULE.PROC_OBSERVER_PATH), "sha256": "a" * 64}
+        private_json(self.request, value)
+        phases = []
+        def privileged(_binding, paths, phase):
+            phases.append((phase, paths))
+            return scan(), {"phase": phase, "responseSha256": phase[0] * 64}
+        patches = (
+            mock.patch.object(MODULE, "NPM_CACHE", self.cache),
+            mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent),
+            mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())),
+            mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]),
+            mock.patch.object(MODULE, "_privileged_proc_targets", side_effect=privileged),
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+            self.assertEqual(plan["schemaVersion"], 2)
+            MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
+                                self.commands, self.seal_manifest)
+        intent = json.loads(self.intent.read_text())
+        self.assertEqual(intent["procObserver"], value["procObserver"])
+        self.assertEqual([item[0] for item in phases], ["audit", "prepare"])
+
     def test_execute_recaptures_new_open_transaction_reference_after_locks(self):
         intent_sha, authorization = self.seal_and_authorize()
         transaction = self.transactions / "new-window"

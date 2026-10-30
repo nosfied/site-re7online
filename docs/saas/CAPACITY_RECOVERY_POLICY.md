@@ -93,6 +93,42 @@ alvos de FD e credenciais não integram esse diagnóstico. Fechamento transitór
 FD é registrado separadamente; permissão negada, mudança de identidade ou outra
 leitura realmente incompleta continuam fail-closed.
 
+### Observador privilegiado de `/proc`
+
+Quando a política de montagem de `/proc` impede `deploy` de inspecionar até seus
+próprios processos, o schema 2 do pedido deve vincular por SHA-256 o observador
+versionado `scripts/capacity-proc-observer.py`. Ele não decide elegibilidade e não
+remove arquivos: aceita apenas a operação literal `collect`, recebe pela entrada
+padrão uma lista fechada de candidatos e devolve na saída padrão evidência
+sanitizada. Não aceita comando, módulo, executável, caminho de saída ou argumento
+de descoberta fornecido pelo operador.
+
+A instalação proposta é imutável para `deploy`:
+
+- `/usr/local/libexec/re7online` — `root:root 0755`;
+- `/usr/local/libexec/re7online/capacity-proc-observer.py` — `root:root 0500`;
+- `/etc/sudoers.d/re7online-capacity-proc-observer` — `root:root 0440`.
+
+A única regra sudoers é versionada em
+`config/sudoers/re7online-capacity-proc-observer` e permite somente:
+
+```text
+/usr/bin/python3 -I -B -E -s /usr/local/libexec/re7online/capacity-proc-observer.py collect
+```
+
+O consumidor executa essa linha literalmente com `sudo -n --`, autentica antes e
+depois o arquivo e todos os ancestrais root-controlled, e confere no retorno o SHA,
+device/inode, nonce, SHA do request, candidatos, fase, PID/start ticks do consumidor
+e limites de tempo e volume. JSON reapresentado ou fornecido à parte não é aceito.
+Falha, timeout, identidade alterada, truncagem que represente incompletude ou
+referência real continuam negando.
+
+`audit` e `prepare` coletam evidência própria. Em `execute`, a coleta ocorre outra
+vez somente depois da aquisição dos dois locks canônicos e antes do primeiro
+`ATTEMPT`, junto à recaptura das demais fontes vivas. O processo privilegiado não
+executa `capacity-recovery.py`, não recebe o lock e jamais possui autoridade de
+retirada.
+
 ### `DERIVED_OUTPUT_RUNTIME`
 
 Admite somente descendente estrito da raiz `outputs` da política versionada.

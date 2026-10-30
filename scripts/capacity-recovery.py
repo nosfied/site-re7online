@@ -19,9 +19,11 @@ import os
 from pathlib import Path
 import pwd
 import re
+import secrets
 import stat
 import subprocess
 import sys
+import time
 from typing import Any, Iterable
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -34,6 +36,15 @@ AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
 }
+AUDIT_REQUEST_V2_KEYS = AUDIT_REQUEST_KEYS | {"procObserver"}
+PROC_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
+PROC_OBSERVER_COMMAND = (
+    "/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
+    str(PROC_OBSERVER_PATH), "collect",
+)
+PROC_OBSERVER_TIMEOUT_SECONDS = 15
+PROC_OBSERVER_MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+PROC_OBSERVER_BINDING_KEYS = {"path", "sha256"}
 COMMON_CANDIDATE_KEYS = {"class", "path"}
 NPM_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS
 OUTPUT_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {
@@ -557,6 +568,123 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
             complete = False
             summary["identityFailures"] += 1
     return targets, writers, complete, summary
+
+
+def _validate_proc_observer_binding(value: Any) -> dict[str, str]:
+    if (not isinstance(value, dict) or set(value) != PROC_OBSERVER_BINDING_KEYS or
+            value.get("path") != str(PROC_OBSERVER_PATH) or not valid_sha(value.get("sha256"))):
+        deny("PROC_OBSERVER_BINDING")
+    return {"path": value["path"], "sha256": value["sha256"]}
+
+
+def _proc_observer_installation(binding: dict[str, str]) -> dict[str, Any]:
+    path = Path(binding["path"])
+    try:
+        info = path.lstat()
+        if (path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or
+                info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o500):
+            deny("PROC_OBSERVER_INSTALLATION_IDENTITY")
+        ancestors = []
+        for parent in (Path("/usr"), Path("/usr/local"), Path("/usr/local/libexec"), path.parent):
+            parent_info = parent.lstat()
+            if (parent.is_symlink() or not stat.S_ISDIR(parent_info.st_mode) or
+                    parent_info.st_uid != 0 or parent_info.st_gid != 0 or
+                    stat.S_IMODE(parent_info.st_mode) & 0o022):
+                deny("PROC_OBSERVER_ANCESTOR_IDENTITY")
+            ancestors.append({"path": str(parent), "identity": stat_identity(parent_info)})
+    except OSError:
+        deny("PROC_OBSERVER_INSTALLATION_READ")
+    return {"path": str(path), "identity": stat_identity(info), "ancestors": ancestors}
+
+
+def _privileged_proc_targets(binding_value: Any, candidate_paths: list[str],
+                             phase: str) -> tuple[ProcessScan, dict[str, Any]]:
+    binding = _validate_proc_observer_binding(binding_value)
+    installed = _proc_observer_installation(binding)
+    consumer = {"pid": os.getpid(), "startTicks": _read_start_ticks(Path("/proc/self"))}
+    request = {
+        "schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
+        "phase": phase, "nonce": secrets.token_hex(32), "deployUid": deploy_identity()[0],
+        "candidatePaths": sorted(set(candidate_paths)), "consumer": consumer,
+    }
+    request_raw = canonical(request)
+    started = time.time_ns()
+    try:
+        result = subprocess.run(
+            PROC_OBSERVER_COMMAND, input=request_raw, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False, timeout=PROC_OBSERVER_TIMEOUT_SECONDS,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        )
+    except subprocess.TimeoutExpired:
+        deny("PROC_OBSERVER_TIMEOUT")
+    except OSError:
+        deny("PROC_OBSERVER_INVOCATION")
+    finished = time.time_ns()
+    if result.stderr or len(result.stdout) > PROC_OBSERVER_MAX_RESPONSE_BYTES:
+        deny("PROC_OBSERVER_OUTPUT")
+    try:
+        response = json.loads(result.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny("PROC_OBSERVER_RESPONSE_JSON")
+    if result.returncode != 0:
+        predicate = response.get("predicate") if isinstance(response, dict) else None
+        deny("PROC_OBSERVER_DENY:" + (predicate if isinstance(predicate, str) else "UNKNOWN"))
+    required = {"schemaVersion", "kind", "state", "phase", "nonce", "requestSha256",
+                "candidatePaths", "deployUid", "consumer", "mechanism", "capturedAtNs",
+                "finishedAtNs", "durationMs", "observation"}
+    if (not isinstance(response, dict) or set(response) != required or
+            response.get("schemaVersion") != 1 or
+            response.get("kind") != "CAPACITY_PROC_OBSERVATION" or
+            canonical(response) != result.stdout or response.get("state") not in {"COMPLETE", "INCOMPLETE"} or
+            response.get("phase") != phase or response.get("nonce") != request["nonce"] or
+            response.get("requestSha256") != digest_bytes(request_raw) or
+            response.get("candidatePaths") != request["candidatePaths"] or
+            response.get("deployUid") != request["deployUid"] or response.get("consumer") != consumer):
+        deny("PROC_OBSERVER_RESPONSE_BINDING")
+    captured = response.get("capturedAtNs")
+    completed = response.get("finishedAtNs")
+    duration = response.get("durationMs")
+    if (not isinstance(captured, int) or not isinstance(completed, int) or
+            not isinstance(duration, int) or captured < started or completed > finished or
+            captured > completed or duration < 0 or duration > PROC_OBSERVER_TIMEOUT_SECONDS * 1000):
+        deny("PROC_OBSERVER_RESPONSE_TIME")
+    mechanism = response.get("mechanism")
+    if (not isinstance(mechanism, dict) or mechanism.get("path") != binding["path"] or
+            mechanism.get("sha256") != binding["sha256"] or
+            mechanism.get("identity") != installed["identity"] or
+            mechanism.get("ancestors") != installed["ancestors"]):
+        deny("PROC_OBSERVER_MECHANISM")
+    observation = response.get("observation")
+    observation_keys = {"complete", "references", "activeWriters", "failures",
+                        "failureDetailsTruncated", "summary"}
+    if (not isinstance(observation, dict) or set(observation) != observation_keys or
+            not isinstance(observation.get("complete"), bool) or
+            response["state"] != ("COMPLETE" if observation["complete"] else "INCOMPLETE") or
+            not isinstance(observation.get("references"), list) or
+            not isinstance(observation.get("activeWriters"), list) or
+            not isinstance(observation.get("failures"), list) or
+            not isinstance(observation.get("failureDetailsTruncated"), int) or
+            not isinstance(observation.get("summary"), dict)):
+        deny("PROC_OBSERVER_OBSERVATION_SCHEMA")
+    targets: list[tuple[int, int, str, str]] = []
+    for ref in observation["references"]:
+        if (not isinstance(ref, dict) or set(ref) != {"candidatePath", "pid", "startTicks", "uids", "source", "target"} or
+                ref["candidatePath"] not in request["candidatePaths"] or
+                not isinstance(ref["pid"], int) or not isinstance(ref["startTicks"], int) or
+                not isinstance(ref["source"], str) or not isinstance(ref["target"], str)):
+            deny("PROC_OBSERVER_REFERENCE_SCHEMA")
+        targets.append((ref["pid"], ref["startTicks"], ref["source"], ref["target"]))
+    summary = dict(observation["summary"])
+    summary["referenceReadFailureDetails"] = observation["failures"]
+    summary["referenceReadFailureDetailsTruncated"] = observation["failureDetailsTruncated"]
+    evidence = {
+        "mechanism": mechanism, "phase": phase, "requestSha256": digest_bytes(request_raw),
+        "responseSha256": digest_bytes(result.stdout), "nonce": request["nonce"],
+        "capturedAtNs": captured, "finishedAtNs": completed,
+        "complete": observation["complete"], "candidatePaths": request["candidatePaths"],
+        "request": request, "response": response,
+    }
+    return (targets, observation["activeWriters"], observation["complete"], summary), evidence
 
 
 def path_overlap(left: str, right: str) -> bool:
@@ -1166,13 +1294,18 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
 
 
 def validate_audit_request(value: dict[str, Any]) -> None:
-    if set(value) != AUDIT_REQUEST_KEYS or value.get("schemaVersion") != 1 or value.get("kind") != "CAPACITY_RECOVERY_AUDIT_REQUEST":
+    version = value.get("schemaVersion")
+    expected = AUDIT_REQUEST_KEYS if version == 1 else AUDIT_REQUEST_V2_KEYS
+    if (version not in {1, 2} or set(value) != expected or
+            value.get("kind") != "CAPACITY_RECOVERY_AUDIT_REQUEST"):
         deny("AUDIT_REQUEST_SCHEMA")
     for key in ("minimumRecoveryBytes", "targetAvailableBytes"):
         if not isinstance(value.get(key), int) or value[key] <= 0:
             deny(f"AUDIT_REQUEST_{key}")
     if not isinstance(value.get("candidates"), list) or not value["candidates"]:
         deny("AUDIT_REQUEST_CANDIDATES")
+    if version == 2:
+        _validate_proc_observer_binding(value["procObserver"])
 
 
 def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[str, Any]:
@@ -1183,7 +1316,15 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     op_path, op_sha, op_raw, _ = load_binding(value["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
     operational, live_recapture = capture_live_operational(operational)
-    process_data = _proc_targets()
+    candidate_paths = [str(normalized_absolute(item.get("path"), "CANDIDATE_PATH"))
+                       for item in value["candidates"] if isinstance(item, dict)]
+    if len(candidate_paths) != len(value["candidates"]):
+        deny("CANDIDATE_SCHEMA")
+    if value["schemaVersion"] == 2:
+        process_data, process_evidence = _privileged_proc_targets(
+            value["procObserver"], candidate_paths, "audit")
+    else:
+        process_data, process_evidence = _proc_targets(), {"mechanism": "unprivileged-legacy"}
     observations: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -1217,7 +1358,7 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         errors.append({"ordinal": 0, "predicate": "TARGET_AVAILABLE_NOT_MET"})
     state = "P00_CAPACITY_RECOVERY_AUDIT_PASS" if not errors else "P00_CAPACITY_RECOVERY_AUDIT_DENY"
     plan = {
-        "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_PLAN", "state": state,
+        "schemaVersion": value["schemaVersion"], "kind": "CAPACITY_RECOVERY_PLAN", "state": state,
         "requestSha256": request_sha, "minimumRecoveryBytes": value["minimumRecoveryBytes"],
         "targetAvailableBytes": value["targetAvailableBytes"], "qualifiedBytes": total,
         "qualifiedInodes": inodes, "availableBytesBefore": available_before,
@@ -1236,18 +1377,25 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         "commands": [[*LITERAL_RM, item["observation"]["path"]] for item in observations],
         "automaticExecutionPermitted": False,
     }
+    if value["schemaVersion"] == 2:
+        plan["procObserver"] = value["procObserver"]
+        plan["processObservation"] = process_evidence
     write_exclusive(plan_output, canonical(plan))
     return plan
 
 
-def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
+                    phase: str = "prepare", include_process_evidence: bool = False) -> Any:
     required = {"schemaVersion", "kind", "state", "requestSha256", "minimumRecoveryBytes",
                 "targetAvailableBytes", "qualifiedBytes", "qualifiedInodes", "availableBytesBefore",
                 "projectedAvailableBytes", "minimumRecoverySatisfied", "targetAvailableSatisfied",
                 "classificationPolicy", "rootPolicy",
                 "operationalState", "liveRecapture", "deploymentLock", "writerLock", "candidates", "errors",
                 "commands", "automaticExecutionPermitted"}
-    if set(plan) != required or plan.get("schemaVersion") != 1 or plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or plan.get("errors") != [] or plan.get("automaticExecutionPermitted") is not False:
+    version = plan.get("schemaVersion")
+    if version == 2:
+        required |= {"procObserver", "processObservation"}
+    if set(plan) != required or version not in {1, 2} or plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or plan.get("errors") != [] or plan.get("automaticExecutionPermitted") is not False:
         deny("PLAN_SCHEMA_OR_STATE")
     policy, _, _ = root_policy(plan["rootPolicy"])
     _, _, op_raw, _ = load_binding(plan["operationalState"], "OPERATIONAL_STATE")
@@ -1260,7 +1408,14 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[
         operational, live_recapture = capture_live_operational(operational)
     except Denied as exc:
         errors.append(str(exc))
-    process_data = _proc_targets()
+    candidate_paths = [item.get("observation", {}).get("path") for item in plan.get("candidates", [])]
+    if not candidate_paths or any(not isinstance(item, str) for item in candidate_paths):
+        deny("PLAN_CANDIDATE_PATHS")
+    if version == 2:
+        process_data, process_evidence = _privileged_proc_targets(
+            plan["procObserver"], candidate_paths, phase)
+    else:
+        process_data, process_evidence = _proc_targets(), {"mechanism": "unprivileged-legacy"}
     for item in plan.get("candidates", []):
         try:
             source = item["source"]
@@ -1285,21 +1440,23 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[
     expected_commands = [[*LITERAL_RM, item["path"]] for item in refreshed]
     if expected_commands != plan.get("commands"):
         errors.append("PLAN_COMMANDS_DIVERGED")
-    return refreshed, sorted(set(errors)), live_recapture
+    base = (refreshed, sorted(set(errors)), live_recapture)
+    return (*base, process_evidence) if include_process_evidence else base
 
 
 def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
                  commands_output: Path, manifest_output: Path) -> dict[str, Any]:
     raw, _ = stable_regular(plan_path, plan_sha)
     plan = object_json(raw, "PLAN_JSON")
-    refreshed, errors, live_recapture = revalidate_plan(plan)
+    refreshed, errors, live_recapture, process_evidence = revalidate_plan(
+        plan, include_process_evidence=True)
     if errors:
         result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors}
         print(json.dumps(result, sort_keys=True))
         raise SystemExit(2)
     commands_raw = b"".join((" ".join(command) + "\n").encode() for command in plan["commands"])
     intent = {
-        "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_INTENT",
+        "schemaVersion": plan["schemaVersion"], "kind": "CAPACITY_RECOVERY_INTENT",
         "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION", "plan": {"path": str(plan_path), "sha256": plan_sha},
         "operationalState": plan["operationalState"], "rootPolicy": plan["rootPolicy"],
         "deploymentLock": plan["deploymentLock"], "writerLock": plan["writerLock"],
@@ -1309,6 +1466,9 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
         "commands": plan["commands"], "commandsSha256": digest_bytes(commands_raw),
         "automaticRetry": False, "forceAllowed": False, "pruneAllowed": False, "pathExpansionAllowed": False,
     }
+    if plan["schemaVersion"] == 2:
+        intent["procObserver"] = plan["procObserver"]
+        intent["preparedProcessObservation"] = process_evidence
     intent_raw = canonical(intent)
     manifest = {
         "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_SEAL_MANIFEST",
@@ -1372,7 +1532,10 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
                 "deploymentLock", "writerLock", "minimumRecoveryBytes", "expectedRecoveryBytes",
                 "expectedRecoveryInodes", "candidates", "preparedLiveRecapture", "commands", "commandsSha256", "automaticRetry",
                 "forceAllowed", "pruneAllowed", "pathExpansionAllowed"}
-    if (set(intent) != required or intent.get("schemaVersion") != 1 or
+    version = intent.get("schemaVersion")
+    if version == 2:
+        required |= {"procObserver", "preparedProcessObservation"}
+    if (set(intent) != required or version not in {1, 2} or
             intent.get("kind") != "CAPACITY_RECOVERY_INTENT" or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
             any(intent.get(key) is not False for key in ("automaticRetry", "forceAllowed", "pruneAllowed", "pathExpansionAllowed"))):
@@ -1405,13 +1568,17 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
         # before the first durable ATTEMPT.
         plan_path = Path(intent["plan"]["path"])
         plan_raw, _ = stable_regular(plan_path, intent["plan"]["sha256"])
-        refreshed, errors, live_recapture = revalidate_plan(
-            object_json(plan_raw, "PLAN_JSON"), check_locks=False)
+        plan_value = object_json(plan_raw, "PLAN_JSON")
+        if version == 2 and intent["procObserver"] != plan_value.get("procObserver"):
+            deny("PROC_OBSERVER_BINDING_DIVERGED")
+        refreshed, errors, live_recapture, process_evidence = revalidate_plan(
+            plan_value, check_locks=False, phase="execute", include_process_evidence=True)
         if errors or refreshed != intent["candidates"]:
             deny("EXECUTE_RECAPTURE_DENY:" + (errors[0] if errors else "CANDIDATE_CHANGED"))
         pre_attempt = {"event": "RECAPTURE_PASS", "intentSha256": intent_sha,
                        "commandsSha256": intent["commandsSha256"], "candidates": refreshed,
-                       "liveOperational": live_recapture}
+                       "liveOperational": live_recapture,
+                       "processObservation": process_evidence}
         write_exclusive(receipt_root / "pre-attempt-recapture.private.json", canonical(pre_attempt))
         for ordinal, (command, candidate) in enumerate(zip(intent["commands"], intent["candidates"]), 1):
             expected = [*LITERAL_RM, candidate["path"]]

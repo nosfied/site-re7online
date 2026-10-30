@@ -14,6 +14,9 @@ atividade npm. Após adquirir ambos os locks, `execute` recaptura ao vivo curren
 PM2, dump, transações não terminais e grafo antes do primeiro `ATTEMPT`.
 Em `/proc`, UID e start ticks autenticam o PID; inspeção integral é obrigatória
 para `deploy`, enquanto limitação esperada de outro UID é apenas registrada.
+Quando essa inspeção exige privilégio, somente o observador root read-only de
+[CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md) pode ser usado; decisão,
+locks, journal e retirada permanecem no control plane executado por `deploy`.
 O scanner transacional autentica tanto `transaction.v1.private.json` quanto
 `window-state.private.json`; layouts pré-canônicos só entram por classificadores
 fechados e layouts desconhecidos continuam fail-closed. Janelas abertas contribuem
