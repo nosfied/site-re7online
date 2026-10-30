@@ -126,7 +126,7 @@ A release `0fdec` foi produzida antes do campo explícito. Sua única continuaç
 
 No fluxo fixed-current, o `preflight` aceita somente `--components api` ou `--components api,frontend` e exige `--generation-retirement-*` e manifesto privado do runtime, sem bindings PM2/`validate-pair`. O payload permanece API+frontend integralmente verificado; no modo API-only, frontend e worker são dependências preservadas. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
-`generation-retirement.py execute`. Sucesso encerra em `DEPLOYED_SANITIZED`.
+`generation-retirement.py execute`. Sucesso encerra em `DEPLOYED_SANITIZED`. Na retirada autônoma pós-rollback terminal, `execute` cria o `deploy.lock` ausente por `O_CREAT|O_EXCL|O_NOFOLLOW`, `0600`, binding à intenção, `fsync` e `flock`; existente continua autenticado, ocupado nega e o arquivo criado permanece físico/livre após o recibo.
 Falha de retirada não reverte o deploy aprovado: encerra em
 `DEPLOYED_RETENTION_INCOMPLETE`, preserva parciais e bloqueia qualquer novo build
 até reconciliação. Os cinco comandos públicos do driver permanecem inalterados.
