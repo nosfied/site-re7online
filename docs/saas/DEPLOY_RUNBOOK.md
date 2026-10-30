@@ -28,6 +28,7 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 - contrato privado de capacidade revisado conforme
   [ciclo de vida dos artefatos](DEPLOY_ARTIFACT_LIFECYCLE.md), incluindo pico
   temporário e reserva operacional.
+- recuperação extraordinária de espaço segue exclusivamente a [política canônica](CAPACITY_RECOVERY_POLICY.md) e `scripts/capacity-recovery.py`.
 
 Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
 shell, derivar definição executável de introspecção, usar `--update-env`, executar

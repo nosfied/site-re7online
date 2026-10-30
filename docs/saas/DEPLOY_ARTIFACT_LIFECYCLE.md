@@ -1,5 +1,24 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Recuperação mínima de capacidade fora da geração
+
+`scripts/capacity-recovery.py` é o control plane versionado para manutenção do
+cache npm e runtimes derivados de output já comprovados. Suas fases `audit`,
+`prepare` e `execute`, classes fechadas, fontes preservadas e protocolo durável
+estão em [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md). O cache npm
+não flexibiliza ancestrais de `generation-retirement.py`; usa exclusivamente a
+classe `NPM_CACHE_MAINTENANCE`, cujo pai canônico é `deploy:deploy 0775`.
+O próprio `_cacache` aceita somente `deploy:deploy 0700/0750/0755`, o grupo
+canônico não pode conter principal além de `deploy`, e `node .../npm-cli.js` é
+atividade npm. Após adquirir ambos os locks, `execute` recaptura ao vivo current,
+PM2, dump, transações não terminais e grafo antes do primeiro `ATTEMPT`.
+Em `/proc`, UID e start ticks autenticam o PID; inspeção integral é obrigatória
+para `deploy`, enquanto limitação esperada de outro UID é apenas registrada.
+
+Worktrees, staging, releases, preparações, transações, evidências e logs só são
+retiráveis quando uma classe versionada futura autenticar seu fechamento. A lista
+de política não transforma esses caminhos em candidatos implícitos.
+
 ## Contrato obrigatório por geração (implementado)
 
 Cada execução de `scripts/converta-release.py build` publica, desde `BUILDING` e
