@@ -4761,12 +4761,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const persistCurrentInboundForHandoff = async (state: ConversationState) => {
         const persistedState = await upsertConversationSafe(state);
         await persistConversationSafe({
-          waId: state.waId,
-          windowIsOpen: state.window.isOpen,
-          windowExpiresAt: state.window.expiresAt,
-          lastInboundAt: state.lastInboundAt ?? null,
-          lastOutboundAt: state.lastOutboundAt ?? null,
-          departmentId: state.departmentId ?? null,
+          waId: persistedState.waId,
+          windowIsOpen: persistedState.window.isOpen,
+          windowExpiresAt: persistedState.window.expiresAt,
+          lastInboundAt: persistedState.lastInboundAt ?? null,
+          lastOutboundAt: persistedState.lastOutboundAt ?? null,
+          departmentId: persistedState.departmentId ?? null,
         });
         await saveIncomingMessageSafe(
           toStoredIncomingMessage(message, status, allowlistHit)
@@ -4844,7 +4844,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         const handoffReply =
           "Perfeito. Vou encaminhar seu atendimento para uma pessoa da equipe.";
         const transition = await persistAcceptedHandoffTransition({
-          confirmationState: {
+          sourceState: {
             ...updatedConversation,
             answers: clearedAnswers,
             mode: "BOT",
@@ -4853,11 +4853,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               status: "none",
             },
           },
-          persistConfirmation: persistCurrentInboundForHandoff,
-          buildActivatedState: async (confirmationPersistedState) => {
+          buildActivatedState: async (sourceState) => {
             const activatedHandoff = activateHumanHandoff(
               clearChatbotRuntime({
-                ...confirmationPersistedState,
+                ...sourceState,
                 answers: clearedAnswers,
               }),
               message.timestamp,
@@ -4873,20 +4872,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               closedAt: null,
             });
           },
-          persistActivation: async (activationCandidate) => {
-            const activationPersisted = await upsertConversationSafe(
-              activationCandidate
-            );
-            await persistConversationSafe({
-              waId: activationPersisted.waId,
-              windowIsOpen: activationPersisted.window.isOpen,
-              windowExpiresAt: activationPersisted.window.expiresAt,
-              lastInboundAt: activationPersisted.lastInboundAt ?? null,
-              lastOutboundAt: activationPersisted.lastOutboundAt ?? null,
-              departmentId: activationPersisted.departmentId ?? null,
-            });
-            return activationPersisted;
-          },
+          persistActivation: persistCurrentInboundForHandoff,
         });
         updatedConversation = transition.state;
         if (!transition.persisted) {
