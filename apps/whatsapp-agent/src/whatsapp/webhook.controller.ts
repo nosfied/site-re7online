@@ -39,6 +39,7 @@ import {
   isWindowOpen,
 } from "../conversation/conversation.service.js";
 import { shouldResetClosedConversationForBotReentry } from "../conversation/automationRuntime.js";
+import { persistAcceptedHandoffTransition } from "../conversation/acceptedHandoffTransition.js";
 import {
   ensureActiveServiceCycle,
   getActiveServiceCycle,
@@ -4758,14 +4759,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const normalizedConfirmation = normalizeHandoffConfirmationText(message.text);
       const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
       const persistCurrentInboundForHandoff = async (state: ConversationState) => {
-        await upsertConversationSafe(state);
+        const persistedState = await upsertConversationSafe(state);
         await persistConversationSafe({
-          waId: state.waId,
-          windowIsOpen: state.window.isOpen,
-          windowExpiresAt: state.window.expiresAt,
-          lastInboundAt: state.lastInboundAt ?? null,
-          lastOutboundAt: state.lastOutboundAt ?? null,
-          departmentId: state.departmentId ?? null,
+          waId: persistedState.waId,
+          windowIsOpen: persistedState.window.isOpen,
+          windowExpiresAt: persistedState.window.expiresAt,
+          lastInboundAt: persistedState.lastInboundAt ?? null,
+          lastOutboundAt: persistedState.lastOutboundAt ?? null,
+          departmentId: persistedState.departmentId ?? null,
         });
         await saveIncomingMessageSafe(
           toStoredIncomingMessage(message, status, allowlistHit)
@@ -4794,6 +4795,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           method: meta?.method,
           requestId: meta?.requestId,
         });
+        return persistedState;
       };
       logger.info({
         event: "ai.orchestrator.handoff_confirmation.received",
@@ -4839,42 +4841,66 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             lastNextActionAt: new Date().toISOString(),
           },
         };
-        const confirmationPersistedState: ConversationState = {
-          ...updatedConversation,
-          answers: clearedAnswers,
-          mode: "BOT",
-          handoff: {
-            ...updatedConversation.handoff,
-            status: "none",
-          },
-        };
-        await persistCurrentInboundForHandoff(confirmationPersistedState);
-        const activatedHandoff = activateHumanHandoff(
-          clearChatbotRuntime({
-            ...confirmationPersistedState,
+        const handoffReply =
+          "Perfeito. Vou encaminhar seu atendimento para uma pessoa da equipe.";
+        const transition = await persistAcceptedHandoffTransition({
+          sourceState: {
+            ...updatedConversation,
             answers: clearedAnswers,
-          }),
-          message.timestamp,
-          "Perfeito. Vou encaminhar seu atendimento para uma pessoa da equipe."
-        );
-        updatedConversation = await ensurePendingHandoffRouting({
-          ...activatedHandoff.state,
-          mode: "HUMAN" as const,
-          assignedUserId: null,
-          assignedTo: null,
-          assignedAt: null,
-          status: "WAITING",
-          closedAt: null,
+            mode: "BOT",
+            handoff: {
+              ...updatedConversation.handoff,
+              status: "none",
+            },
+          },
+          buildActivatedState: async (sourceState) => {
+            const activatedHandoff = activateHumanHandoff(
+              clearChatbotRuntime({
+                ...sourceState,
+                answers: clearedAnswers,
+              }),
+              message.timestamp,
+              handoffReply
+            );
+            return ensurePendingHandoffRouting({
+              ...activatedHandoff.state,
+              mode: "HUMAN" as const,
+              assignedUserId: null,
+              assignedTo: null,
+              assignedAt: null,
+              status: "WAITING",
+              closedAt: null,
+            });
+          },
+          persistActivation: persistCurrentInboundForHandoff,
         });
-        updatedConversation = await upsertConversationSafe(updatedConversation);
-        await persistConversationSafe({
-          waId: updatedConversation.waId,
-          windowIsOpen: updatedConversation.window.isOpen,
-          windowExpiresAt: updatedConversation.window.expiresAt,
-          lastInboundAt: updatedConversation.lastInboundAt ?? null,
-          lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
-          departmentId: updatedConversation.departmentId ?? null,
-        });
+        updatedConversation = transition.state;
+        if (!transition.persisted) {
+          logger.error({
+            event: "ai.orchestrator.handoff_activation.persistence_failed",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            waId: maskNumber(normalizedFrom),
+            mode: updatedConversation.mode,
+            handoffStatus: updatedConversation.handoff.status,
+            status: updatedConversation.status ?? null,
+            requestId: meta?.requestId,
+          });
+          await persistEventSafe(
+            "ai.orchestrator.handoff_activation.persistence_failed",
+            {
+              action: "ai.orchestrator.handoff_activation.persistence_failed",
+              clientId: tenantClientId || null,
+              clientKey: tenantClientKey || null,
+              mode: updatedConversation.mode ?? null,
+              handoffStatus: updatedConversation.handoff.status,
+              status: updatedConversation.status ?? null,
+            } as Prisma.InputJsonValue,
+            normalizedFrom,
+            message.messageId
+          );
+          continue;
+        }
         if (tenantClientId) {
           const aiCrmArtifacts = buildAiHandoffCrmArtifacts({
             state: updatedConversation,
@@ -4966,7 +4992,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.messageId
         );
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-          const handoffReply = activatedHandoff.replyText;
           const result = await sendPassiveOutboundText({
             runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || inboundProviderWaId : inboundProviderWaId,

@@ -59,6 +59,8 @@
 
 ## Backlog ativo separado
 
+- [Loop de handoff da Tendência — persistência P00](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md)
+  — correção multitenant do fence de estado, contrato de rota/fluxo e exceção de capacidade limitada; produção ainda não alterada.
 - [Plano P00 de convergência da preparação de deploy](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md)
   — bloqueia repetição de gates previsíveis; exige admissão integral, materialização canônica do control plane e regressão ponta a ponta antes de nova geração normal.
 - [Disponibilidade, mídia e homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md)

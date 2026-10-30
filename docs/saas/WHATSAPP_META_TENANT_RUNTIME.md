@@ -197,3 +197,28 @@ apresentaram regressão. O comportamento do fluxo, IA, handoff, transporte e gat
 permaneceu inalterado; a entrega modifica somente a projeção visual já autorizada
 pelo backend. Estado: `DEPLOYED_VISUALLY_ACCEPTED`.
 
+
+
+## Handoff aceito: persistência e bloqueio de reentrada
+
+O aceite de encaminhamento é uma transição persistida, não apenas um evento. O
+runtime deve encadear o token de escrita retornado pela persistência do inbound
+antes de gravar a transição humana. A confirmação só pode publicar
+`handoff_confirmation.accepted`, `handoff_activated`, notificar a fila ou enviar
+a resposta de encaminhamento depois que o estado efetivamente persistido
+satisfizer simultaneamente:
+
+- `mode=HUMAN`;
+- `handoffStatus=pending|active`;
+- `status=WAITING|IN_PROGRESS`.
+
+A ausência momentânea de atendente, departamento ou fila não devolve a conversa
+ao bot. Ela permanece `HUMAN/PENDING|ACTIVE/WAITING`, sem nova execução de IA,
+até que a rota humana seja reconciliada. Se o fence de escrita rejeitar a
+transição, o runtime registra
+`ai.orchestrator.handoff_activation.persistence_failed` e não publica
+`handoff_activated`.
+
+Esse contrato é multitenant e vale para Meta, Demo, CRA e novos tenants que usem
+a mesma automação. A configuração operacional continua tenant-scoped: fluxo,
+departamento e fila não podem ser copiados silenciosamente de outro tenant.
