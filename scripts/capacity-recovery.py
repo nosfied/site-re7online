@@ -47,6 +47,74 @@ LIVE_OBSERVATION_KEYS = {"currentLinks", "pm2", "dump", "transactionsRoot", "rel
 TERMINAL_TRANSACTION_STATES = {
     "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE", "ROLLED_BACK",
 }
+FIXED_CURRENT_TRANSACTION_STATES = {
+    "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
+    "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
+    "ROLLING_BACK", "ROLLED_BACK", "FAILED",
+}
+WINDOW_TRANSACTION_STATES = {
+    "AWAITING_ACCEPTANCE": {"terminal": False, "saveCount": 0},
+    "FINALIZATION_INCOMPLETE": {"terminal": False, "saveCount": 1},
+    "ROLLBACK_INCOMPLETE": {"terminal": False, "saveCount": 0},
+    "DENIED_BEFORE_MUTATION": {"terminal": True, "saveCount": 0},
+    "ROLLED_BACK": {"terminal": True, "saveCount": 0},
+    "ROLLED_BACK_TECHNICAL_REJECTION": {"terminal": True, "saveCount": 0},
+    "DEPLOYED": {"terminal": True, "saveCount": 1},
+    "DEPLOYED_SANITIZED": {"terminal": True, "saveCount": 1},
+    "DEPLOYED_RETENTION_INCOMPLETE": {"terminal": True, "saveCount": 1},
+}
+WINDOW_STATE_KEYSETS = {
+    "AWAITING_ACCEPTANCE": {frozenset({
+        "state", "target", "release", "buildId", "api", "frontend", "worker",
+        "availableBytes", "guard", "retirement", "saveCount", "acceptance",
+        "deployedMarker",
+    })},
+    "FINALIZATION_INCOMPLETE": {frozenset({
+        "state", "target", "release", "buildId", "api", "frontend", "worker",
+        "availableBytes", "guard", "retirement", "saveCount", "acceptance",
+        "deployedMarker", "failurePredicate", "automaticRetry", "lockHolderPid",
+    })},
+    "ROLLBACK_INCOMPLETE": {frozenset({
+        "state", "failurePredicate", "restored", "saveCount", "automaticRetry",
+        "lockHandoffMetadataComplete",
+    })},
+    "DENIED_BEFORE_MUTATION": {frozenset({
+        "state", "failurePredicate", "productionUnchanged", "intent", "saveCount",
+        "automaticRetry",
+    })},
+    "ROLLED_BACK": {frozenset({
+        "state", "failurePredicate", "restored", "saveCount", "automaticRetry",
+    })},
+    "ROLLED_BACK_TECHNICAL_REJECTION": {frozenset({
+        "state", "failurePredicate", "restored", "frontend", "release", "saveCount",
+        "automaticRetry", "deployedMarker", "apiPreserved", "workerPreserved",
+        "lockReleasedOnControllerExit",
+    })},
+    "DEPLOYED": {frozenset({
+        "state", "target", "release", "buildId", "api", "frontend", "worker",
+        "guard", "saveCount", "acceptance", "acceptanceSha256", "deployedMarker",
+        "markerSha256", "dumpSha256", "dumpValidationSha256", "saveExecutionSha256",
+        "automaticRetry",
+    })},
+    "DEPLOYED_SANITIZED": {frozenset({
+        "state", "saveCount", "acceptance", "deployedMarker", "dumpSha256",
+        "retirementReceiptSha256", "restartCountDuringFinalize",
+    })},
+    "DEPLOYED_RETENTION_INCOMPLETE": {frozenset({
+        "state", "saveCount", "acceptance", "deployedMarker", "dumpSha256",
+        "retirementReceiptSha256", "restartCountDuringFinalize",
+    })},
+}
+LEGACY_ROLLBACK_SENTINELS = {
+    "final-state.private.txt": b"ROLLED_BACK\n",
+    "rollback-result.private.txt": b"ROLLED_BACK\n",
+    "pm2-save-count.private.txt": b"0\n",
+}
+LEGACY_PROTECTED_SENTINELS = {
+    "identity-before.json", "pm2-before.private.json",
+    "api-return.private.json", "frontend-return.private.json",
+}
+EMPTY_PREFLIGHT = re.compile(r"^preflight-[0-9a-f]{8}-[0-9]{8}T[0-9]{6}Z$")
 
 
 class Denied(RuntimeError):
@@ -558,6 +626,99 @@ def _stable_observed_private(path: Path) -> tuple[bytes, dict[str, Any], str]:
     return raw, identity, expected
 
 
+def _stable_private_json(path: Path, predicate: str) -> tuple[Any, str]:
+    raw, _, observed_sha = _stable_observed_private(path)
+    try:
+        return json.loads(raw), observed_sha
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny(predicate)
+
+
+def _protected_json_paths(root: Path) -> list[str]:
+    """Read every JSON evidence file without following a legacy symlink."""
+    paths: set[str] = set()
+    try:
+        descendants = sorted(root.rglob("*.json"), key=lambda item: str(item))
+    except OSError:
+        deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+    for evidence in descendants:
+        if evidence.is_symlink():
+            deny("LIVE_LEGACY_TRANSACTION_JSON_SYMLINK")
+        value, _ = _stable_private_json(evidence, "LIVE_LEGACY_TRANSACTION_JSON")
+        paths.update(_json_absolute_paths(value))
+    return sorted(paths)
+
+
+def _classify_transaction(child: Path) -> tuple[list[str], dict[str, Any]]:
+    journal = child / "transaction.v1.private.json"
+    window = child / "window-state.private.json"
+    if journal.exists() or journal.is_symlink():
+        if window.exists() or window.is_symlink():
+            deny("LIVE_TRANSACTION_LAYOUT_AMBIGUOUS")
+        if journal.is_symlink():
+            deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+        journal_value, journal_sha = _stable_private_json(journal, "LIVE_TRANSACTION_JOURNAL")
+        if not isinstance(journal_value, dict):
+            deny("LIVE_TRANSACTION_JOURNAL")
+        state = journal_value.get("state")
+        if (journal_value.get("schemaVersion") != 1 or not isinstance(state, str) or
+                state not in FIXED_CURRENT_TRANSACTION_STATES):
+            deny("LIVE_TRANSACTION_JOURNAL")
+        references = [] if state in TERMINAL_TRANSACTION_STATES else _json_absolute_paths(journal_value)
+        return references, {"path": str(journal), "sha256": journal_sha,
+                            "state": state, "format": "FIXED_CURRENT_V1",
+                            "terminal": state in TERMINAL_TRANSACTION_STATES}
+
+    if window.exists() or window.is_symlink():
+        if window.is_symlink():
+            deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+        window_value, window_sha = _stable_private_json(window, "LIVE_WINDOW_STATE")
+        if not isinstance(window_value, dict):
+            deny("LIVE_WINDOW_STATE")
+        state = window_value.get("state")
+        rule = WINDOW_TRANSACTION_STATES.get(state)
+        if (rule is None or window_value.get("saveCount") != rule["saveCount"] or
+                frozenset(window_value) not in WINDOW_STATE_KEYSETS[state]):
+            deny("LIVE_WINDOW_STATE_CONTRACT")
+        references = [] if rule["terminal"] else _protected_json_paths(child)
+        return references, {"path": str(window), "sha256": window_sha,
+                            "state": state, "format": "FRONTEND_WINDOW_STATE",
+                            "terminal": rule["terminal"]}
+
+    try:
+        present = {item.name for item in child.iterdir()}
+    except OSError:
+        deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+    if LEGACY_ROLLBACK_SENTINELS.keys() <= present:
+        hashes: dict[str, str] = {}
+        for name, expected in LEGACY_ROLLBACK_SENTINELS.items():
+            raw, _, observed_sha = _stable_observed_private(child / name)
+            if raw != expected:
+                deny("LIVE_LEGACY_ROLLBACK_CONTRACT")
+            hashes[name] = observed_sha
+        return [], {"path": str(child), "sha256": digest_bytes(canonical(hashes)),
+                    "state": "ROLLED_BACK", "format": "LEGACY_ROLLBACK_SENTINELS",
+                    "terminal": True}
+
+    if not present and EMPTY_PREFLIGHT.fullmatch(child.name):
+        return [], {"path": str(child), "sha256": digest_bytes(canonical([])),
+                    "state": "PREFLIGHT_EMPTY", "format": "LEGACY_EMPTY_PREFLIGHT",
+                    "terminal": True}
+
+    if LEGACY_PROTECTED_SENTINELS <= present and child.name.startswith("immutable-"):
+        references = _protected_json_paths(child)
+        sentinel_hashes = {}
+        for name in sorted(LEGACY_PROTECTED_SENTINELS):
+            _, _, sentinel_hashes[name] = _stable_observed_private(child / name)
+        return references, {"path": str(child),
+                            "sha256": digest_bytes(canonical(sentinel_hashes)),
+                            "state": "PROTECTED_NONTERMINAL",
+                            "format": "LEGACY_PRE_CANONICAL_PROTECTED",
+                            "terminal": False}
+
+    deny("LIVE_TRANSACTION_LAYOUT_UNKNOWN")
+
+
 def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recapture mutable operational references while both canonical locks are held."""
     observations = operational["liveObservations"]
@@ -646,17 +807,9 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
         if (child_info.st_uid != transaction_info.st_uid or child_info.st_gid != transaction_info.st_gid or
                 stat.S_IMODE(child_info.st_mode) & 0o022):
             deny("LIVE_TRANSACTION_IDENTITY")
-        journal = child / "transaction.v1.private.json"
-        if not journal.exists() or journal.is_symlink():
-            deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
-        journal_raw, _, journal_sha = _stable_observed_private(journal)
-        journal_value = object_json(journal_raw, "LIVE_TRANSACTION_JOURNAL")
-        state = journal_value.get("state")
-        if not isinstance(state, str):
-            deny("LIVE_TRANSACTION_JOURNAL")
-        if state not in TERMINAL_TRANSACTION_STATES:
-            transaction_paths.extend(_json_absolute_paths(journal_value))
-        transaction_evidence.append({"path": str(journal), "sha256": journal_sha, "state": state})
+        references, evidence = _classify_transaction(child)
+        transaction_paths.extend(references)
+        transaction_evidence.append(evidence)
 
     fresh = dict(operational)
     fresh["currentPaths"] = sorted(set(current_paths))

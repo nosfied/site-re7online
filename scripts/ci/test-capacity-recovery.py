@@ -141,6 +141,72 @@ class CapacityRecoveryTests(unittest.TestCase):
         value.update(overrides)
         private_json(self.operational, value)
 
+    def window_value(self, state, save_count):
+        keys = {
+            "AWAITING_ACCEPTANCE": {
+                "state", "target", "release", "buildId", "api", "frontend", "worker",
+                "availableBytes", "guard", "retirement", "saveCount", "acceptance",
+                "deployedMarker",
+            },
+            "DEPLOYED": {
+                "state", "target", "release", "buildId", "api", "frontend", "worker",
+                "guard", "saveCount", "acceptance", "acceptanceSha256", "deployedMarker",
+                "markerSha256", "dumpSha256", "dumpValidationSha256", "saveExecutionSha256",
+                "automaticRetry",
+            },
+            "DEPLOYED_SANITIZED": {
+                "state", "saveCount", "acceptance", "deployedMarker", "dumpSha256",
+                "retirementReceiptSha256", "restartCountDuringFinalize",
+            },
+            "ROLLED_BACK_TECHNICAL_REJECTION": {
+                "state", "failurePredicate", "restored", "frontend", "release", "saveCount",
+                "automaticRetry", "deployedMarker", "apiPreserved", "workerPreserved",
+                "lockReleasedOnControllerExit",
+            },
+        }.get(state, {"state", "saveCount"})
+        value = {key: None for key in keys}
+        value.update(state=state, saveCount=save_count)
+        return value
+
+    def window_transaction(self, name, state, save_count):
+        transaction = self.transactions / name
+        transaction.mkdir(mode=0o700)
+        private_json(transaction / "window-state.private.json",
+                     self.window_value(state, save_count))
+        return transaction
+
+    def real_legacy_transaction_layouts(self):
+        self.window_transaction(
+            "immutable-aa9527cc-vps-20261029T222733Z-frontend-final-aa9527cc-v1-once",
+            "DEPLOYED_SANITIZED", 1)
+        self.window_transaction(
+            "immutable-b96eb779-vps-20261028T025159Z-frontend-final-b96eb779-v1-once",
+            "DEPLOYED_SANITIZED", 1)
+        self.window_transaction(
+            "immutable-d436239e-vps-20261026T131821Z-frontend-final-da2cd8fb-v2-once",
+            "DEPLOYED", 1)
+        rollback = self.transactions / "immutable-d436239e-vps-20261026T131821Z-frontend-once"
+        rollback.mkdir(mode=0o700)
+        for name, raw in MODULE.LEGACY_ROLLBACK_SENTINELS.items():
+            path = rollback / name
+            path.write_bytes(raw)
+            path.chmod(0o600)
+        self.window_transaction(
+            "immutable-ef3a2128-vps-20261028T001820Z-frontend-final-1908284e-v1-once",
+            "ROLLED_BACK_TECHNICAL_REJECTION", 0)
+        self.window_transaction(
+            "immutable-f1602787-vps-20261026T174702Z-frontend-final-c48cb303-v1-once",
+            "DEPLOYED", 1)
+        protected = self.transactions / "immutable-f5028de1-20261020T181603Z"
+        protected.mkdir(mode=0o700)
+        for name in MODULE.LEGACY_PROTECTED_SENTINELS:
+            private_json(protected / name, {
+                "legacyReference": "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
+            })
+        (protected / "probe-pm2-home").mkdir(mode=0o700)
+        (protected / "probe-pm2").symlink_to(protected / "probe-pm2-home")
+        (self.transactions / "preflight-7e968da7-20261023T164304Z").mkdir(mode=0o700)
+
     def npm_candidate(self, path=None, principals=None):
         return {"class": "NPM_CACHE_MAINTENANCE", "path": str(path or self.cache)}
 
@@ -234,6 +300,108 @@ class CapacityRecoveryTests(unittest.TestCase):
                   "writerLock": str(self.writer_lock)}
         with self.assertRaisesRegex(MODULE.Denied, "OPERATIONAL_STATE_SCHEMA"):
             MODULE.validate_operational(json.dumps(legacy).encode())
+
+    def test_eight_observed_legacy_directories_are_classified_closed(self):
+        self.real_legacy_transaction_layouts()
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        fresh, evidence = MODULE.capture_live_operational(operational)
+        self.assertEqual(len(evidence["transactions"]), 8)
+        formats = [item["format"] for item in evidence["transactions"]]
+        self.assertEqual(formats.count("FRONTEND_WINDOW_STATE"), 5)
+        self.assertEqual(formats.count("LEGACY_ROLLBACK_SENTINELS"), 1)
+        self.assertEqual(formats.count("LEGACY_PRE_CANONICAL_PROTECTED"), 1)
+        self.assertEqual(formats.count("LEGACY_EMPTY_PREFLIGHT"), 1)
+        self.assertEqual(fresh["openTransactionPaths"], [
+            "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
+        ])
+
+    def test_fixed_current_and_frontend_window_formats_coexist(self):
+        fixed = self.transactions / "fixed-current"
+        fixed.mkdir(mode=0o700)
+        private_json(fixed / "transaction.v1.private.json", {
+            "schemaVersion": 1, "state": "AWAITING_ACCEPTANCE",
+            "candidate": "/opt/re7online/releases/immutable-fixed",
+        })
+        self.window_transaction("frontend-window", "AWAITING_ACCEPTANCE", 0)
+        private_json(self.transactions / "frontend-window" / "binding.private.json", {
+            "candidate": "/opt/re7online/releases/immutable-frontend",
+        })
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        fresh, evidence = MODULE.capture_live_operational(operational)
+        self.assertEqual(
+            [item["format"] for item in evidence["transactions"]],
+            ["FIXED_CURRENT_V1", "FRONTEND_WINDOW_STATE"],
+        )
+        self.assertEqual(fresh["openTransactionPaths"], [
+            "/opt/re7online/releases/immutable-fixed",
+            "/opt/re7online/releases/immutable-frontend",
+        ])
+
+    def test_unknown_transaction_layout_is_denied(self):
+        unknown = self.transactions / "unknown-layout"
+        unknown.mkdir(mode=0o700)
+        (unknown / "unrecognized.private.txt").write_text("state\n")
+        (unknown / "unrecognized.private.txt").chmod(0o600)
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_TRANSACTION_LAYOUT_UNKNOWN"):
+            MODULE.capture_live_operational(operational)
+
+    def test_unknown_fixed_current_state_is_denied(self):
+        transaction = self.transactions / "fixed-current"
+        transaction.mkdir(mode=0o700)
+        private_json(transaction / "transaction.v1.private.json", {
+            "schemaVersion": 1, "state": "UNKNOWN",
+        })
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_TRANSACTION_JOURNAL"):
+            MODULE.capture_live_operational(operational)
+
+    def test_unknown_window_state_or_wrong_save_count_is_denied(self):
+        transaction = self.window_transaction("frontend-window", "UNKNOWN", 0)
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_WINDOW_STATE_CONTRACT"):
+            MODULE.capture_live_operational(operational)
+
+    def test_frontend_window_schema_is_closed(self):
+        transaction = self.window_transaction("frontend-window", "DEPLOYED_SANITIZED", 1)
+        value = self.window_value("DEPLOYED_SANITIZED", 1)
+        value["invented"] = True
+        private_json(transaction / "window-state.private.json", value)
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_WINDOW_STATE_CONTRACT"):
+            MODULE.capture_live_operational(operational)
+        private_json(transaction / "window-state.private.json",
+                     self.window_value("AWAITING_ACCEPTANCE", 1))
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_WINDOW_STATE_CONTRACT"):
+            MODULE.capture_live_operational(operational)
+
+    def test_legacy_rollback_sentinel_drift_is_denied(self):
+        rollback = self.transactions / "immutable-legacy-frontend-once"
+        rollback.mkdir(mode=0o700)
+        for name, raw in MODULE.LEGACY_ROLLBACK_SENTINELS.items():
+            path = rollback / name
+            path.write_bytes(raw)
+            path.chmod(0o600)
+        (rollback / "rollback-result.private.txt").write_text("FAILED\n")
+        (rollback / "rollback-result.private.txt").chmod(0o600)
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_LEGACY_ROLLBACK_CONTRACT"):
+            MODULE.capture_live_operational(operational)
+
+    def test_empty_unknown_directory_is_not_silently_accepted(self):
+        (self.transactions / "empty-but-unknown").mkdir(mode=0o700)
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_TRANSACTION_LAYOUT_UNKNOWN"):
+            MODULE.capture_live_operational(operational)
+
+    def test_both_canonical_state_files_are_ambiguous(self):
+        transaction = self.window_transaction("ambiguous", "DEPLOYED", 1)
+        private_json(transaction / "transaction.v1.private.json", {
+            "schemaVersion": 1, "state": "DEPLOYED_SANITIZED",
+        })
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_TRANSACTION_LAYOUT_AMBIGUOUS"):
+            MODULE.capture_live_operational(operational)
 
     def test_cache_symlink_and_owner_divergence_are_denied(self):
         link = self.cache_parent / "linked-cache"
