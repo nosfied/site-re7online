@@ -1183,7 +1183,11 @@ def compare_index(runtime: Path, release_root: Path, relative: str,
             except OSError:
                 errors.append(f"{label}:missing:{name}")
                 continue
-            actual_type = "directory" if stat.S_ISDIR(info.st_mode) else "file" if stat.S_ISREG(info.st_mode) else "other"
+            # Reuse the producer's scan_runtime()/validate_index() entry model:
+            # symlinks are authenticated by mode, literal target and confinement.
+            actual_type = ("directory" if stat.S_ISDIR(info.st_mode) else
+                           "file" if stat.S_ISREG(info.st_mode) else
+                           "symlink" if stat.S_ISLNK(info.st_mode) else "other")
             if actual_type != entry.get("type") or stat.S_IMODE(info.st_mode) != _entry_mode(entry):
                 errors.append(f"{label}:identity:{name}")
                 continue
@@ -1191,6 +1195,25 @@ def compare_index(runtime: Path, release_root: Path, relative: str,
                 checked_files += 1
                 if info.st_size != entry.get("size") or sha256(target) != entry.get("sha256"):
                     errors.append(f"{label}:content:{name}")
+            elif actual_type == "symlink":
+                before = (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+                          info.st_mtime_ns, info.st_ctime_ns)
+                try:
+                    link = os.readlink(target)
+                    resolved = target.resolve(strict=True)
+                    comparison_root = (runtime.parent if label == "output" else release_root).resolve(strict=True)
+                    after_info = target.lstat()
+                except OSError:
+                    errors.append(f"{label}:symlink_broken:{name}")
+                    continue
+                after = (after_info.st_dev, after_info.st_ino, after_info.st_mode,
+                         after_info.st_size, after_info.st_mtime_ns, after_info.st_ctime_ns)
+                if before != after:
+                    errors.append(f"{label}:symlink_changed:{name}")
+                elif resolved != comparison_root and comparison_root not in resolved.parents:
+                    errors.append(f"{label}:symlink_escape:{name}")
+                elif link != entry.get("target"):
+                    errors.append(f"{label}:symlink_target:{name}")
     expected_suffixes = {Path(name).relative_to(relative).as_posix() for name in selected}
     expected_suffixes.discard(".")
     for label, base in (("output", runtime), ("release", release_root / relative)):
