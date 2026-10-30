@@ -20,8 +20,8 @@ function baseState(): ConversationState {
     status: null,
     runtimeWriteToken: {
       revision: 1,
-      updatedAt: "2026-10-29T00:01:00.000Z",
-    },
+      updatedAt: new Date("2026-10-29T00:01:00.000Z"),
+    } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
   };
 }
 
@@ -33,8 +33,8 @@ test("accepted handoff carries the fresh runtime token into the activation write
       ...state,
       runtimeWriteToken: {
         revision: 2,
-        updatedAt: "2026-10-29T00:01:01.000Z",
-      },
+        updatedAt: new Date("2026-10-29T00:01:01.000Z"),
+      } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
     }),
     buildActivatedState: async (state) => {
       seenRevisions.push(state.runtimeWriteToken?.revision ?? -1);
@@ -53,8 +53,8 @@ test("accepted handoff carries the fresh runtime token into the activation write
         ...state,
         runtimeWriteToken: {
           revision: 3,
-          updatedAt: "2026-10-29T00:01:02.000Z",
-        },
+          updatedAt: new Date("2026-10-29T00:01:02.000Z"),
+        } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
       };
     },
   });
