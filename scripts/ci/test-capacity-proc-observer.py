@@ -233,8 +233,15 @@ class ProcObserverTests(unittest.TestCase):
                 OBSERVER.validate_request(request([path]))
         release = "immutable-d7de6453-vps-20261024T221500Z"
         producer = f"/opt/re7online/build-output/{release}-producer/{release}"
-        accepted = [OBSERVER.NPM_CACHE, producer + "/api-runtime", producer + "/frontend-runtime"]
+        preparation = "/opt/re7online/backups/converta-persistent/preparations/automation-20260929T220203Z"
+        accepted = [OBSERVER.NPM_CACHE, producer + "/api-runtime", producer + "/frontend-runtime",
+                    preparation + "/api-frontend-return.private.tar.gz",
+                    preparation + "/worker-return.private.tar.gz"]
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
+        for path in (preparation, preparation + "/content.private.tar.gz",
+                     preparation + "/nested/api-frontend-return.private.tar.gz"):
+            with self.subTest(path=path), self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path]))
 
     def test_failure_detail_limit_is_explicit_and_never_implies_completeness(self):
         failures = []; truncated = [0]

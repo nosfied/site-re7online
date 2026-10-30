@@ -8,6 +8,7 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import tarfile
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -68,6 +69,21 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.runtime.mkdir(mode=0o755)
         (self.runtime / "app.js").write_bytes(b"same runtime")
         (self.runtime / "app.js").chmod(0o644)
+        self.preparations = self.base / "preparations"
+        self.preparations.mkdir(mode=0o700)
+        self.preparation = self.preparations / "automation-20260929T220203Z"
+        self.preparation.mkdir(mode=0o700)
+        self.archive = self.preparation / "api-frontend-return.private.tar.gz"
+        with tarfile.open(self.archive, "w:gz") as archive:
+            payload = b"derived runtime"
+            item = tarfile.TarInfo("apps/whatsapp-agent/dist/index.js")
+            item.size = len(payload)
+            archive.addfile(item, io.BytesIO(payload))
+        self.archive.chmod(0o600)
+        self.docs = self.base / "control" / "docs" / "saas"
+        self.docs.mkdir(parents=True, mode=0o755)
+        self.archive_record = self.docs / "AUTOMATION_RELEASE_PREPARATION_2026-09-29.md"
+        self.write_archive_record(self.archive)
         self.releases = self.base / "releases"
         self.releases.mkdir(mode=0o755)
         self.release = self.releases / "immutable-abc"
@@ -229,6 +245,22 @@ class CapacityRecoveryTests(unittest.TestCase):
                 "manifest": {"path": str(self.manifest), "sha256": sha(self.manifest)},
                 "index": {"path": str(self.index), "sha256": sha(self.index)}}
 
+    def write_archive_record(self, archive):
+        self.archive_record.write_text(
+            f"| {archive.name} | {archive.stat().st_size} | `{sha(archive)}` |\n\n"
+            "`tar -tzf` dos arquivos compactados PASS\n")
+        self.archive_record.chmod(0o644)
+
+    def archive_candidate(self, path=None, record=None):
+        selected = path or self.archive
+        evidence = record or self.archive_record
+        return {"class": "CLOSED_PREPARATION_DERIVED_ARCHIVE", "path": str(selected),
+                "sha256": sha(selected), "proof": {
+                    "kind": "VERSIONED_PREPARATION_RECORD",
+                    "record": {"path": str(evidence), "sha256": sha(evidence)},
+                    "recordEntry": selected.name,
+                }}
+
     def request_value(self, candidates=None, minimum=1):
         return {"schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",
                 "minimumRecoveryBytes": minimum, "targetAvailableBytes": minimum,
@@ -267,6 +299,7 @@ class CapacityRecoveryTests(unittest.TestCase):
         private_json(self.request, self.request_value(candidates))
         with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
                 mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "PREPARATIONS_ROOT", self.preparations), \
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
                 self.process_patch():
@@ -275,6 +308,7 @@ class CapacityRecoveryTests(unittest.TestCase):
     def prepare(self):
         with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
                 mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "PREPARATIONS_ROOT", self.preparations), \
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
                 self.process_patch():
@@ -289,6 +323,127 @@ class CapacityRecoveryTests(unittest.TestCase):
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]):
             observed = MODULE.authenticate_npm(candidate, scan())
         self.assertEqual(observed["parentIdentity"]["mode"], "0775")
+
+    def authenticate_archive(self, candidate=None, operational=None, process=None):
+        with mock.patch.object(MODULE, "PREPARATIONS_ROOT", self.preparations):
+            return MODULE.authenticate_preparation_archive(
+                candidate or self.archive_candidate(),
+                operational or json.loads(self.operational.read_text()),
+                process or scan())
+
+    def test_closed_preparation_derived_archive_passes(self):
+        observed = self.authenticate_archive()
+        self.assertEqual(observed["class"], "CLOSED_PREPARATION_DERIVED_ARCHIVE")
+        self.assertEqual(observed["identity"]["nlink"], 1)
+        self.assertFalse(observed["archive"]["protectedMaterialFound"])
+
+    def test_closed_preparation_archive_symlink_is_denied(self):
+        link = self.preparation / "worker-return.private.tar.gz"
+        link.symlink_to(self.archive)
+        candidate = self.archive_candidate(self.archive)
+        candidate.update(path=str(link), sha256=sha(self.archive))
+        candidate["proof"]["recordEntry"] = link.name
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_TYPE"):
+            self.authenticate_archive(candidate)
+
+    def test_closed_preparation_archive_hardlink_is_denied(self):
+        link = self.preparation / "worker-return.private.tar.gz"
+        os.link(self.archive, link)
+        self.write_archive_record(link)
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_HARDLINK"):
+            self.authenticate_archive(self.archive_candidate(link))
+
+    def test_closed_preparation_archive_hash_or_inode_change_is_denied(self):
+        candidate = self.archive_candidate()
+        candidate["sha256"] = "0" * 64
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            self.authenticate_archive(candidate)
+        candidate = self.archive_candidate()
+        original = MODULE._archive_structure
+        def replace_during_scan(path, identity):
+            replacement = path.with_suffix(".replacement")
+            replacement.write_bytes(path.read_bytes())
+            replacement.chmod(0o600)
+            replacement.replace(path)
+            return original(path, identity)
+        with mock.patch.object(MODULE, "_archive_structure", side_effect=replace_during_scan), \
+                self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_CHANGED"):
+            self.authenticate_archive(candidate)
+
+    def test_closed_preparation_archive_escape_reference_and_authority_are_denied(self):
+        outside = self.base / "api-frontend-return.private.tar.gz"
+        outside.write_bytes(self.archive.read_bytes()); outside.chmod(0o600)
+        candidate = self.archive_candidate(self.archive)
+        candidate.update(path=str(outside), sha256=sha(outside))
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_SCOPE"):
+            self.authenticate_archive(candidate)
+        operational = json.loads(self.operational.read_text())
+        operational["openTransactionPaths"] = [str(self.archive)]
+        with self.assertRaisesRegex(MODULE.Denied, "REFERENCED_OR_PROTECTED"):
+            self.authenticate_archive(operational=operational)
+        missing = self.docs / "AUTOMATION_RELEASE_PREPARATION_2026-09-29.md.missing"
+        candidate = self.archive_candidate()
+        candidate["proof"]["record"]["path"] = str(missing)
+        with self.assertRaisesRegex(MODULE.Denied, "RECORD_SCOPE"):
+            self.authenticate_archive(candidate)
+        self.archive_record.unlink()
+        candidate = {"class": "CLOSED_PREPARATION_DERIVED_ARCHIVE",
+                     "path": str(self.archive), "sha256": sha(self.archive), "proof": {
+                         "kind": "VERSIONED_PREPARATION_RECORD",
+                         "record": {"path": str(self.archive_record), "sha256": "0" * 64},
+                         "recordEntry": self.archive.name,
+                     }}
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_READ"):
+            self.authenticate_archive(candidate)
+
+    def test_closed_preparation_archive_duplicate_authority_is_preserved_or_denied(self):
+        authority_dir = self.preparations / "authoritative-20260929T220203Z"
+        authority_dir.mkdir(mode=0o700)
+        authority = authority_dir / self.archive.name
+        authority.write_bytes(self.archive.read_bytes()); authority.chmod(0o600)
+        candidate = {"class": "CLOSED_PREPARATION_DERIVED_ARCHIVE",
+                     "path": str(self.archive), "sha256": sha(self.archive), "proof": {
+                         "kind": "DUPLICATE_COPY",
+                         "authoritativeCopy": {"path": str(authority), "sha256": sha(authority)},
+                     }}
+        observed = self.authenticate_archive(candidate)
+        self.assertEqual(observed["proof"]["kind"], "DUPLICATE_COPY")
+        authority.unlink()
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_READ"):
+            self.authenticate_archive(candidate)
+
+    def test_closed_preparation_archive_protected_names_and_material_are_denied(self):
+        protected = self.preparation / "content.private.tar.gz"
+        protected.write_bytes(self.archive.read_bytes()); protected.chmod(0o600)
+        candidate = self.archive_candidate(self.archive)
+        candidate.update(path=str(protected), sha256=sha(protected))
+        with self.assertRaisesRegex(MODULE.Denied, "PROTECTED_NAME"):
+            self.authenticate_archive(candidate)
+        with tarfile.open(self.archive, "w:gz") as archive:
+            payload = b"tenant data"
+            item = tarfile.TarInfo("apps/whatsapp-agent/.data/tenants.json")
+            item.size = len(payload); archive.addfile(item, io.BytesIO(payload))
+        self.archive.chmod(0o600)
+        self.write_archive_record(self.archive)
+        with self.assertRaisesRegex(MODULE.Denied, "PROTECTED_MATERIAL"):
+            self.authenticate_archive(self.archive_candidate())
+
+    def test_incremental_batch_can_pass_below_final_target(self):
+        value = self.request_value([self.archive_candidate()], minimum=1)
+        value.update(schemaVersion=3, procObserver={"path": str(self.base / "observer"),
+                     "sha256": "1" * 64}, incrementalBatch=True,
+                     targetAvailableBytes=2**62)
+        private_json(self.request, value)
+        observation = {"mechanism": "privileged", "phase": "audit"}
+        with mock.patch.object(MODULE, "PREPARATIONS_ROOT", self.preparations), \
+                mock.patch.object(MODULE, "_validate_proc_observer_binding"), \
+                mock.patch.object(MODULE, "_privileged_proc_targets",
+                                  return_value=(scan(), observation)):
+            result = MODULE.audit_request(self.request, sha(self.request), self.plan)
+        self.assertEqual(result["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+        self.assertTrue(result["minimumRecoverySatisfied"])
+        self.assertFalse(result["targetAvailableSatisfied"])
+        self.assertEqual(result["commands"], [["/usr/bin/unlink", "--", str(self.archive)]])
 
     def test_process_target_containment_excludes_generic_ancestors(self):
         self.assertFalse(MODULE.process_target_references_candidate(str(self.cache), "/"))
@@ -996,8 +1151,8 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(cache["currentProcessScan"]["processesObserved"], 11)
         self.assertFalse(self.intent.exists())
 
-    def seal_and_authorize(self):
-        self.audit(); self.prepare()
+    def seal_and_authorize(self, candidates=None):
+        self.audit(candidates); self.prepare()
         intent_sha = sha(self.intent)
         intent = json.loads(self.intent.read_text())
         authorization = self.base / "authorization.private.json"
@@ -1006,6 +1161,38 @@ class CapacityRecoveryTests(unittest.TestCase):
                     "commandsSha256": intent["commandsSha256"],
                     "paths": [item["path"] for item in intent["candidates"]]})
         return intent_sha, authorization
+
+    def test_closed_preparation_archive_executes_literal_unlink_and_measures_actual_gain(self):
+        intent_sha, authorization = self.seal_and_authorize([self.archive_candidate()])
+        receipt = self.base / "receipts" / "archive-once"
+        receipt.parent.mkdir(mode=0o700)
+        with mock.patch.object(MODULE, "PREPARATIONS_ROOT", self.preparations), \
+                self.process_patch():
+            result = MODULE.execute_intent(
+                self.intent, intent_sha, authorization, sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertFalse(self.archive.exists())
+        self.assertTrue(self.archive_record.exists())
+        self.assertIsInstance(result["availableBytesBefore"], int)
+        self.assertIsInstance(result["availableBytesAfter"], int)
+        events = [json.loads(line) for line in
+                  (receipt / "command-journal.private.jsonl").read_text().splitlines()]
+        self.assertEqual(events[0]["argv"], ["/usr/bin/unlink", "--", str(self.archive)])
+
+    def test_closed_preparation_archive_execute_recapture_denies_new_live_reference(self):
+        intent_sha, authorization = self.seal_and_authorize([self.archive_candidate()])
+        receipt = self.base / "receipts" / "archive-reference-once"
+        receipt.parent.mkdir(mode=0o700)
+        live_reference = scan(targets=[(72, 901, "fd/9", str(self.archive))])
+        with mock.patch.object(MODULE, "PREPARATIONS_ROOT", self.preparations), \
+                mock.patch.object(MODULE, "_proc_targets", return_value=live_reference), \
+                self.assertRaises(SystemExit):
+            MODULE.execute_intent(
+                self.intent, intent_sha, authorization, sha(authorization), receipt)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual(result["attemptedCommands"], 0)
+        self.assertIn("PREPARATION_ARCHIVE_PROCESS_REFERENCE", result["failurePredicate"])
+        self.assertTrue(self.archive.exists())
 
     def test_execute_stops_first_failure_and_preserves_sources(self):
         intent_sha, authorization = self.seal_and_authorize()

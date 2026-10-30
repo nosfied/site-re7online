@@ -37,6 +37,12 @@ admitido é:
 Glob, expansão, `force`, `prune`, caminho alternativo e descoberta destrutiva em
 `execute` são negados.
 
+O schema 3 admite `incrementalBatch=true`: o lote ainda precisa satisfazer
+`minimumRecoveryBytes`, mas pode terminar abaixo de `targetAvailableBytes`. O alvo
+continua registrado e `targetAvailableSatisfied=false`; somente a medição posterior
+do receipt conta como capacidade recuperada. Isso permite lotes pequenos sem
+converter ganho estimado em saldo real nem ampliar candidatos silenciosamente.
+
 ### Identidade do candidato e observação de processos
 
 A identidade comparável do candidato inclui todos os campos da observação, exceto
@@ -125,11 +131,12 @@ padrão uma lista fechada de candidatos e devolve na saída padrão evidência
 sanitizada. Não aceita comando, módulo, executável, caminho de saída ou argumento
 de descoberta fornecido pelo operador.
 
-O próprio helper aceita somente o cache literal `/home/deploy/.npm/_cacache` e
+O próprio helper aceita somente o cache literal `/home/deploy/.npm/_cacache`,
 runtimes `api-runtime`/`frontend-runtime` no layout fechado
-`/opt/re7online/build-output/<release>-producer/<release>/<runtime>`. `/`, raízes,
-ancestrais genéricos, outros descendentes e caminhos externos são negados antes da
-varredura.
+`/opt/re7online/build-output/<release>-producer/<release>/<runtime>` e os dois
+basenames fechados da classe `CLOSED_PREPARATION_DERIVED_ARCHIVE` como filhos
+diretos de uma preparação. `/`, raízes, ancestrais genéricos, outros descendentes
+e caminhos externos são negados antes da varredura.
 
 A instalação proposta é imutável para `deploy`:
 
@@ -172,6 +179,29 @@ contrato podem existir apenas na release.
 Referência por `current`, PM2 live/dump, transação aberta, grafo protegido ou
 processo nega o candidato. Pacote, manifesto, índice e release instalada nunca
 entram no comando da classe.
+
+### `CLOSED_PREPARATION_DERIVED_ARCHIVE`
+
+Admite somente os arquivos literais `api-frontend-return.private.tar.gz` e
+`worker-return.private.tar.gz`, como filhos diretos de uma preparação física sob
+`/opt/re7online/backups/converta-persistent/preparations`. Diretórios, outros
+basenames, symlinks, hardlinks, escapes e ancestrais graváveis por grupo/outros são
+negados. O arquivo exige owner/group canônicos, modo privado, device/inode, tamanho,
+blocos, SHA-256 e `nlink=1` estáveis em todas as fases.
+
+A prova fechada é o registro versionado autenticado da preparação, que vincula
+literalmente basename, bytes, SHA-256 e a verificação histórica por `tar -tzf`, ou
+uma cópia autoritativa byte-idêntica que permanece preservada. Arquivos ou membros
+de archive classificados como `content`,
+DB, runtime-data, configuração privada, `.data`, uploads tenant-scoped, credenciais
+ou evidência são negados. A listagem do tar é inspecionada sem extração.
+
+O observador privilegiado aceita apenas esses dois layouts literais adicionais. A
+recaptura de referências continua ocorrendo em `audit`, `prepare` e, novamente sob
+os locks, em `execute`. O único efeito é
+`/usr/bin/unlink -- <arquivo-autenticado>`; não há `rm -r`, glob ou exclusão do
+diretório da preparação. Journal e receipt registram a medição física anterior e
+posterior, e o diretório-pai recebe `fsync` após a ausência comprovada.
 
 ## Fontes de verdade preservadas
 

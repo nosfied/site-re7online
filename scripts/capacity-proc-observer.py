@@ -40,6 +40,10 @@ SHA256_LENGTH = 64
 NPM_CACHE = "/home/deploy/.npm/_cacache"
 BUILD_OUTPUT_ROOT = Path("/opt/re7online/build-output")
 RUNTIME_NAMES = {"api-runtime", "frontend-runtime"}
+PREPARATIONS_ROOT = Path("/opt/re7online/backups/converta-persistent/preparations")
+PREPARATION_ARCHIVE_NAMES = {
+    "api-frontend-return.private.tar.gz", "worker-return.private.tar.gz",
+}
 PF_KTHREAD = 0x00200000
 
 
@@ -124,6 +128,14 @@ def canonical_candidate(value: Any) -> str:
     if candidate == NPM_CACHE:
         return candidate
     path = Path(candidate)
+    try:
+        preparation_relative = path.relative_to(PREPARATIONS_ROOT)
+    except ValueError:
+        preparation_relative = None
+    if (preparation_relative is not None and len(preparation_relative.parts) == 2 and
+            preparation_relative.parts[0] not in {"", ".", ".."} and
+            preparation_relative.parts[1] in PREPARATION_ARCHIVE_NAMES):
+        return candidate
     try:
         relative = path.relative_to(BUILD_OUTPUT_ROOT)
     except ValueError:
