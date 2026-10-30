@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import fcntl
 import importlib.util
 import io
 import json
@@ -1539,6 +1540,33 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(json.loads(fixture.review.read_text())["state"], "SANITIZED")
             saved = json.loads((receipt / "execution-receipt.private.json").read_text())
             self.assertEqual(saved["attemptedCommands"], saved["completedCommands"])
+        finally:
+            fixture.close()
+
+    def test_terminal_rollback_absent_lock_is_created_and_four_of_four_are_retired(self):
+        fixture = Fixture()
+        try:
+            prepared = fixture.prepare(); self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            intent = json.loads(fixture.intent.read_text())
+            self.assertEqual(len(intent["commands"]), 4)
+            authorization = fixture.authorize("post-rollback-once")
+            fixture.deploy_lock.unlink()
+
+            result, receipt = fixture.execute(authorization, "post-rollback-receipt")
+
+            self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+            saved = json.loads((receipt / "execution-receipt.private.json").read_text())
+            self.assertEqual(saved["attemptedCommands"], 4)
+            self.assertEqual(saved["completedCommands"], 4)
+            self.assertTrue(fixture.deploy_lock.is_file())
+            self.assertEqual(stat.S_IMODE(fixture.deploy_lock.stat().st_mode), 0o600)
+            self.assertEqual(fixture.deploy_lock.read_text(), sha(fixture.intent) + "\n")
+            probe = os.open(fixture.deploy_lock, os.O_RDWR | os.O_NOFOLLOW)
+            try:
+                fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(probe, fcntl.LOCK_UN)
+            finally:
+                os.close(probe)
         finally:
             fixture.close()
 
