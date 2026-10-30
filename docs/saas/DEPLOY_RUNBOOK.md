@@ -171,7 +171,7 @@ python3 scripts/converta-release.py verify \
 
 `RELEASE BUILT` e `RELEASE VERIFIED` são obrigatórios. Diagnosticar primeiro
 `failure-evidence.private`; seu conteúdo não vai para stdout ou Git. Rebuild cria
-nova release. Retry reutiliza o mesmo pacote autenticado.
+nova release. Retry reutiliza o mesmo pacote autenticado. Se o transporte cair exatamente em `BUILDING/before_package`, a única continuação admitida é `converta-release.py resume-package` com manifesto privado fechado aos hashes e identidades do release root, lifecycle, contrato, tar e XZ temporários; ela não executa npm, build nem cópia de runtime e deve rodar desacoplada da sessão SSH.
 
 O produtor nega antes do primeiro `npm` quando a soma do crescimento do worktree,
 payload, temporários de pacote, extração de verificação, evidência e reserva excede

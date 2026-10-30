@@ -75,6 +75,19 @@ INSTALL_RECOVERY_FIELDS = {
     "stagingPath", "stagingDevice", "stagingInode", "ownerUid", "groupGid",
     "mode", "finalPath",
 }
+PACKAGE_RESUME_KIND = "BUILDING_BEFORE_PACKAGE_RESUME"
+PACKAGE_RESUME_FIELDS = {
+    "schemaVersion", "kind", "action", "targetCommit", "releaseId",
+    "sourceDateEpoch", "repoPath", "outputPath", "installedReleasesRoot",
+    "lifecycle", "artifactContract", "capacityContract", "p00Override",
+    "releaseRoot", "tarTemporary", "xzTemporary", "finalPackagePath",
+    "expectedLastCheckpoint",
+}
+PACKAGE_RESUME_FILE_BINDING_FIELDS = {"path", "sha256"}
+PACKAGE_RESUME_TEMP_FIELDS = {"path", "sha256", "device", "inode", "size"}
+PACKAGE_RESUME_ROOT_FIELDS = {
+    "path", "device", "inode", "manifestSha256", "indexSha256",
+}
 
 
 class Denied(RuntimeError):
@@ -381,7 +394,8 @@ def artifact_entry(path: Path, release_id: str, target: str, expected_type: str,
 def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
                             state: str, verified: dict[str, Any] | None = None,
                             package_sha: str | None = None,
-                            staging: dict[str, Any] | None = None) -> dict[str, Any]:
+                            staging: dict[str, Any] | None = None,
+                            recovery_evidence: list[tuple[Path, str]] | None = None) -> dict[str, Any]:
     release_root = args.output / args.release_id
     installed_release_root = args.installed_releases_root / args.release_id
     package = args.output / f"{args.release_id}.tar.xz"
@@ -438,6 +452,12 @@ def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
         ))
     if staging is not None:
         entries.append(staging)
+    for evidence_path, evidence_sha in recovery_evidence or []:
+        entries.append(artifact_entry(
+            evidence_path, args.release_id, args.target, "regular_file",
+            "EVIDENCE_PRESERVE", "NEVER_AUTOMATIC",
+            ["interrupted_package_resume"], {"sha256": evidence_sha},
+        ))
     previous_initial: dict[str, Any] = {}
     contract_path = args.output / "generation-artifacts.private.json"
     if contract_path.exists() and not contract_path.is_symlink():
@@ -1055,6 +1075,273 @@ def write_package(release_root: Path, package_path: Path, epoch: int) -> dict[st
     return {"tarSha256": tar_sha, "packageSha256": package_sha}
 
 
+def _resume_binding(value: Any, fields: set[str], predicate: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != fields:
+        deny(predicate)
+    return value
+
+
+def _resume_stable_file(value: Any, predicate: str) -> tuple[Path, bytes, os.stat_result]:
+    binding = _resume_binding(value, PACKAGE_RESUME_FILE_BINDING_FIELDS, predicate)
+    path = Path(str(binding.get("path", "")))
+    expected = str(binding.get("sha256", ""))
+    if not path.is_absolute() or not SHA256.fullmatch(expected):
+        deny(predicate)
+    raw, info = stable_bytes(path)
+    if (info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+            stat.S_IMODE(info.st_mode) != 0o600 or sha256_bytes(raw) != expected):
+        deny(predicate)
+    return path, raw, info
+
+
+def _resume_temporary(value: Any, output: Path, suffix: str,
+                      predicate: str) -> tuple[Path, bytes, os.stat_result]:
+    binding = _resume_binding(value, PACKAGE_RESUME_TEMP_FIELDS, predicate)
+    path = Path(str(binding.get("path", "")))
+    expected = str(binding.get("sha256", ""))
+    if (not path.is_absolute() or path.parent != output or not path.name.endswith(suffix) or
+            not SHA256.fullmatch(expected)):
+        deny(predicate)
+    raw, info = stable_bytes(path)
+    if (info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+            stat.S_IMODE(info.st_mode) not in {0o600, 0o644} or
+            sha256_bytes(raw) != expected or info.st_dev != binding.get("device") or
+            info.st_ino != binding.get("inode") or info.st_size != binding.get("size")):
+        deny(predicate)
+    return path, raw, info
+
+
+def _release_tree_projection(root: Path) -> list[dict[str, Any]]:
+    projection: list[dict[str, Any]] = []
+    for path in sorted([root, *root.rglob("*")], key=lambda item: os.fsencode(str(item.relative_to(root.parent)))):
+        info = path.lstat()
+        relative = "." if path == root else path.relative_to(root).as_posix()
+        if stat.S_ISREG(info.st_mode):
+            entry = {"path": relative, "type": "regular", "mode": stat.S_IMODE(info.st_mode),
+                     "size": info.st_size, "sha256": sha256_bytes(stable_bytes(path)[0])}
+        elif stat.S_ISDIR(info.st_mode):
+            entry = {"path": relative, "type": "directory", "mode": stat.S_IMODE(info.st_mode)}
+        elif stat.S_ISLNK(info.st_mode):
+            entry = {"path": relative, "type": "symlink", "mode": stat.S_IMODE(info.st_mode),
+                     "link": os.readlink(path)}
+        else:
+            deny("resume_release_entry_type")
+        projection.append(entry)
+    return projection
+
+
+def _tar_tree_projection(tar_path: Path, release_id: str) -> list[dict[str, Any]]:
+    projection: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    try:
+        with tarfile.open(tar_path, "r:") as archive:
+            for member in archive.getmembers():
+                name = PurePosixPath(member.name)
+                if (not name.parts or name.parts[0] != release_id or name.is_absolute() or
+                        any(part in {"", ".", ".."} for part in name.parts)):
+                    deny("resume_tar_path")
+                relative = "." if len(name.parts) == 1 else PurePosixPath(*name.parts[1:]).as_posix()
+                if relative in seen:
+                    deny("resume_tar_duplicate")
+                seen.add(relative)
+                if member.isfile():
+                    handle = archive.extractfile(member)
+                    if handle is None:
+                        deny("resume_tar_read")
+                    digest = hashlib.sha256()
+                    size = 0
+                    while chunk := handle.read(1024 * 1024):
+                        digest.update(chunk); size += len(chunk)
+                    if size != member.size:
+                        deny("resume_tar_size")
+                    entry = {"path": relative, "type": "regular", "mode": member.mode,
+                             "size": member.size, "sha256": digest.hexdigest()}
+                elif member.isdir():
+                    entry = {"path": relative, "type": "directory", "mode": member.mode}
+                elif member.issym():
+                    entry = {"path": relative, "type": "symlink", "mode": member.mode,
+                             "link": member.linkname}
+                else:
+                    deny("resume_tar_entry_type")
+                projection.append(entry)
+    except Denied:
+        raise
+    except (OSError, tarfile.TarError):
+        deny("resume_tar_integrity")
+    return sorted(projection, key=lambda item: os.fsencode(item["path"]))
+
+
+def _xz_contains_tar(xz_path: Path, expected_tar_sha: str) -> bool:
+    for command in (("xz", "-t", "--", str(xz_path)), ("tar", "-tJf", str(xz_path))):
+        result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if result.returncode:
+            return False
+    digest = hashlib.sha256()
+    try:
+        with lzma.open(xz_path, "rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+    except (OSError, EOFError, lzma.LZMAError):
+        return False
+    return digest.hexdigest() == expected_tar_sha
+
+
+def resume_package(args: argparse.Namespace) -> None:
+    manifest_raw, manifest_info = stable_bytes(args.recovery_manifest)
+    if (manifest_info.st_uid != os.geteuid() or manifest_info.st_gid != os.getegid() or
+            stat.S_IMODE(manifest_info.st_mode) != 0o600 or
+            sha256_bytes(manifest_raw) != args.recovery_manifest_sha256):
+        deny("resume_manifest_identity")
+    manifest = json_object(manifest_raw, "resume-manifest")
+    if set(manifest) != PACKAGE_RESUME_FIELDS:
+        deny("resume_manifest_schema")
+    output = Path(str(manifest.get("outputPath", "")))
+    roots = authenticated_build_roots(args.root_policy, args.root_policy_sha256)
+    if output.parent != roots["outputs"]:
+        deny("resume_manifest_paths")
+    with generation_build_window(output.parent):
+        resume_package_in_generation_window(args)
+
+
+def resume_package_in_generation_window(args: argparse.Namespace) -> None:
+    manifest_raw, manifest_info = stable_bytes(args.recovery_manifest)
+    if (manifest_info.st_uid != os.geteuid() or manifest_info.st_gid != os.getegid() or
+            stat.S_IMODE(manifest_info.st_mode) != 0o600 or
+            sha256_bytes(manifest_raw) != args.recovery_manifest_sha256):
+        deny("resume_manifest_identity")
+    manifest = json_object(manifest_raw, "resume-manifest")
+    if (set(manifest) != PACKAGE_RESUME_FIELDS or manifest.get("schemaVersion") != 1 or
+            manifest.get("kind") != PACKAGE_RESUME_KIND or manifest.get("action") != "resume-package" or
+            manifest.get("expectedLastCheckpoint") != "before_package"):
+        deny("resume_manifest_schema")
+    target = str(manifest.get("targetCommit", "")); release_id = str(manifest.get("releaseId", ""))
+    if not SHA40.fullmatch(target) or not RELEASE_ID.fullmatch(release_id):
+        deny("resume_manifest_binding")
+    roots = authenticated_build_roots(args.root_policy, args.root_policy_sha256)
+    output = Path(str(manifest.get("outputPath", "")))
+    repo = Path(str(manifest.get("repoPath", "")))
+    installed = Path(str(manifest.get("installedReleasesRoot", "")))
+    release_root_binding = _resume_binding(manifest.get("releaseRoot"), PACKAGE_RESUME_ROOT_FIELDS,
+                                           "resume_release_binding")
+    release_root = Path(str(release_root_binding.get("path", "")))
+    final_package = Path(str(manifest.get("finalPackagePath", "")))
+    epoch = manifest.get("sourceDateEpoch")
+    if (not isinstance(epoch, int) or epoch < 0 or output.parent != roots["outputs"] or
+            repo.parent != roots["worktrees"] or installed != roots["releases"] or
+            release_root != output / release_id or final_package != output / f"{release_id}.tar.xz" or
+            final_package.exists() or final_package.is_symlink()):
+        deny("resume_manifest_paths")
+    ensure_clean_repo(repo, target)
+    lifecycle_path, lifecycle_raw, _ = _resume_stable_file(manifest.get("lifecycle"), "resume_lifecycle")
+    contract_path, contract_raw, _ = _resume_stable_file(manifest.get("artifactContract"), "resume_contract")
+    capacity_path, _, _ = _resume_stable_file(manifest.get("capacityContract"), "resume_capacity")
+    override_path, _, _ = _resume_stable_file(manifest.get("p00Override"), "resume_override")
+    lifecycle = json_object(lifecycle_raw, "resume-lifecycle")
+    contract = json_object(contract_raw, "resume-contract")
+    checkpoints = lifecycle.get("capacityCheckpoints")
+    if (lifecycle.get("state") != "BUILDING" or lifecycle.get("generationId") != release_id or
+            lifecycle.get("targetCommit") != target or lifecycle.get("classification") != "PENDING" or
+            not isinstance(checkpoints, list) or not checkpoints or
+            checkpoints[-1].get("phase") != "before_package" or
+            contract.get("state") != "BUILDING" or contract.get("releaseId") != release_id or
+            contract.get("targetCommit") != target):
+        deny("resume_state_or_checkpoint")
+    root_info = release_root.lstat()
+    if (release_root.is_symlink() or not stat.S_ISDIR(root_info.st_mode) or
+            root_info.st_dev != release_root_binding.get("device") or
+            root_info.st_ino != release_root_binding.get("inode")):
+        deny("resume_release_identity")
+    verified = verify_root(release_root, target, release_id)
+    if (verified["manifestSha256"] != release_root_binding.get("manifestSha256") or
+            verified["indexSha256"] != release_root_binding.get("indexSha256")):
+        deny("resume_release_hashes")
+    tar_path, tar_raw, _ = _resume_temporary(manifest.get("tarTemporary"), output, ".tar.tmp",
+                                             "resume_tar_identity")
+    xz_path, _, xz_info = _resume_temporary(manifest.get("xzTemporary"), output, ".tmp",
+                                            "resume_xz_identity")
+    tar_sha = sha256_bytes(tar_raw)
+    if _tar_tree_projection(tar_path, release_id) != _release_tree_projection(release_root):
+        deny("resume_tar_release_mismatch")
+    capacity = lifecycle.get("capacity")
+    budgets = capacity.get("budgets") if isinstance(capacity, dict) else None
+    if not isinstance(budgets, dict):
+        deny("resume_capacity_contract")
+    reserve = budgets.get("operationalReserveBytes"); independent = budgets.get("independentVerificationBytes")
+    inode_reserve = budgets.get("operationalReserveInodes"); peak_inodes = budgets.get("peakInodes")
+    if any(not isinstance(item, int) or item < 0 for item in (reserve, independent, inode_reserve, peak_inodes)):
+        deny("resume_capacity_contract")
+    xz_complete = _xz_contains_tar(xz_path, tar_sha)
+    additional_package = 0 if xz_complete else xz_info.st_size
+    usage = shutil.disk_usage(output)
+    available_inodes = os.statvfs(output).f_favail
+    required = reserve + independent + additional_package
+    if usage.free < required or available_inodes < inode_reserve + peak_inodes:
+        deny("resume_capacity")
+    lifecycle["capacityCheckpoints"].append({"phase": "resume_before_package_validation",
+        "availableBytes": usage.free, "availableInodes": available_inodes,
+        "requiredBytes": required})
+    write_lifecycle(lifecycle_path, lifecycle)
+    if xz_complete:
+        os.replace(xz_path, final_package)
+        fsync_directory(output)
+        package_sha = sha256_bytes(stable_bytes(final_package)[0])
+        resume_mode = "PROMOTED_VERIFIED_XZ"
+    else:
+        package_sha = compress_tar(tar_path, final_package)
+        resume_mode = "RECOMPRESSED_VERIFIED_TAR"
+    usage = shutil.disk_usage(output)
+    required = reserve + independent
+    if usage.free < required:
+        deny("resume_independent_extraction_capacity")
+    lifecycle["capacityCheckpoints"].append({"phase": "resume_before_independent_extraction",
+        "availableBytes": usage.free, "availableInodes": os.statvfs(output).f_favail,
+        "requiredBytes": required})
+    write_lifecycle(lifecycle_path, lifecycle)
+    temporary = Path(tempfile.mkdtemp(prefix=f".{release_id}.resume-verify-", dir=output.parent))
+    staging_artifact = None
+    try:
+        extracted = safe_extract(final_package, temporary, release_id)
+        extracted_verified = verify_root(extracted, target, release_id)
+        if (extracted_verified != verified or
+                canonical_json(scan_runtime(extracted)) != canonical_json(scan_runtime(release_root))):
+            deny("resume_independent_extraction_mismatch")
+        staging_artifact = artifact_entry(
+            temporary, release_id, target, "directory", "DERIVED_STAGING",
+            "INDEPENDENT_VERIFICATION_COMPLETE", ["verification_in_progress"],
+            {"packageSha256": package_sha}, "RETIREMENT_READY",
+        )
+    finally:
+        shutil.rmtree(temporary)
+    staging_artifact["state"] = "SANITIZED"
+    staging_artifact["removedAtProducerCompletion"] = True
+    lifecycle["capacityCheckpoints"].append({"phase": "resume_after_independent_extraction",
+        "availableBytes": shutil.disk_usage(output).free,
+        "availableInodes": os.statvfs(output).f_favail, "requiredBytes": reserve})
+    lifecycle.update(state="COMPLETE", classification="PENDING", packageSha256=package_sha,
+                     manifestSha256=verified["manifestSha256"], indexSha256=verified["indexSha256"],
+                     allocatedBytes=allocated_bytes(output),
+                     packageResume={"mode": resume_mode, "manifestSha256": args.recovery_manifest_sha256,
+                                    "tarSha256": tar_sha,
+                                    "interruptedXzSha256": manifest["xzTemporary"]["sha256"]})
+    write_lifecycle(lifecycle_path, lifecycle)
+    synthetic = argparse.Namespace(
+        output=output, release_id=release_id, target=target, installed_releases_root=installed,
+        repo=repo, capacity_contract=capacity_path, p00_static_floor_override=override_path,
+        p00_static_floor_override_sha256=manifest["p00Override"]["sha256"],
+    )
+    recovery_evidence = [(tar_path, manifest["tarTemporary"]["sha256"])]
+    if xz_path.exists():
+        recovery_evidence.append((xz_path, manifest["xzTemporary"]["sha256"]))
+    write_lifecycle(contract_path, build_artifact_contract(
+        synthetic, lifecycle_path, "COMPLETE", verified, package_sha, staging_artifact,
+        recovery_evidence,
+    ))
+    print(canonical_json({"result": "RELEASE BUILT", "releaseId": release_id,
+                          "targetCommit": target, "package": str(final_package),
+                          "tarSha256": tar_sha, "packageSha256": package_sha,
+                          "resumeMode": resume_mode, **verified}).decode().strip())
+
+
 def safe_extract(package: Path, destination: Path, expected_release: str) -> Path:
     if not package.is_file() or package.is_symlink():
         deny("package_missing")
@@ -1630,14 +1917,20 @@ def parser() -> argparse.ArgumentParser:
     install_parser.add_argument("--recovery-manifest", type=Path)
     install_parser.add_argument("--recovery-manifest-sha256")
     install_parser.set_defaults(handler=install)
+    resume_parser = commands.add_parser("resume-package")
+    resume_parser.add_argument("--recovery-manifest", type=Path, required=True)
+    resume_parser.add_argument("--recovery-manifest-sha256", required=True)
+    resume_parser.add_argument("--root-policy", type=Path, required=True)
+    resume_parser.add_argument("--root-policy-sha256", required=True)
+    resume_parser.set_defaults(handler=resume_package)
     return root
 
 
 def main() -> int:
     args = parser().parse_args()
-    if not SHA40.fullmatch(args.target):
+    if hasattr(args, "target") and not SHA40.fullmatch(args.target):
         deny("target_format")
-    if not RELEASE_ID.fullmatch(args.release_id):
+    if hasattr(args, "release_id") and not RELEASE_ID.fullmatch(args.release_id):
         deny("release_id_format")
     if getattr(args, "source_date_epoch", 0) < 0:
         deny("source_date_epoch")

@@ -7,6 +7,7 @@ import hashlib
 import datetime as dt
 import importlib.util
 import json
+import lzma
 import os
 from pathlib import Path
 import shutil
@@ -1182,6 +1183,106 @@ class ReleaseProducerTest(unittest.TestCase):
         index = json.loads((self.release / "index.sha256").read_text())
         self.assertEqual(set(index), {"schemaVersion", "scope", "entries"})
         self.assertEqual(index["scope"], ["api-runtime", "frontend-runtime"])
+
+    def make_resume_fixture(self, label: str, *, checkpoint: str = "before_package",
+                            complete_xz: bool = False):
+        output = self.outputs / f"resume-{label}"
+        shutil.copytree(self.output_a, output, symlinks=True)
+        release = output / self.release_id
+        package = output / f"{self.release_id}.tar.xz"
+        package.unlink()
+        tar_path = output / f".{package.name}.4242.tar.tmp"
+        MODULE.write_tar(release, tar_path, int(EPOCH))
+        xz_path = output / f".{package.name}.4242.tmp"
+        with tar_path.open("rb") as source, lzma.open(xz_path, "wb", preset=0) as compressed:
+            shutil.copyfileobj(source, compressed)
+        if not complete_xz:
+            xz_path.write_bytes(xz_path.read_bytes()[:max(1, xz_path.stat().st_size // 2)])
+        xz_path.chmod(0o644)
+        lifecycle_path = output / "generation-lifecycle.private.json"
+        lifecycle = json.loads(lifecycle_path.read_text())
+        for key in ("packageSha256", "manifestSha256", "indexSha256", "allocatedBytes"):
+            lifecycle.pop(key, None)
+        lifecycle.update(state="BUILDING", classification="PENDING",
+                         releaseRoot=str(release), package=str(package),
+                         artifactContract=str(output / "generation-artifacts.private.json"))
+        lifecycle["capacityCheckpoints"] = [{"phase": checkpoint}]
+        write(lifecycle_path, json.dumps(lifecycle, sort_keys=True) + "\n", 0o600)
+        contract_path = output / "generation-artifacts.private.json"
+        contract = json.loads(contract_path.read_text())
+        contract["state"] = "BUILDING"
+        write(contract_path, json.dumps(contract, sort_keys=True) + "\n", 0o600)
+        override, override_sha = p00_static_floor_override(
+            self.base / f"resume-{label}-override.private.json", self.capacity,
+            self.target, self.release_id,
+        )
+        verified = MODULE.verify_root(release, self.target, self.release_id)
+        manifest = {
+            "schemaVersion": 1, "kind": MODULE.PACKAGE_RESUME_KIND,
+            "action": "resume-package", "targetCommit": self.target,
+            "releaseId": self.release_id, "sourceDateEpoch": int(EPOCH),
+            "repoPath": str(self.repo), "outputPath": str(output),
+            "installedReleasesRoot": str(self.releases),
+            "lifecycle": {"path": str(lifecycle_path),
+                          "sha256": hashlib.sha256(lifecycle_path.read_bytes()).hexdigest()},
+            "artifactContract": {"path": str(contract_path),
+                                 "sha256": hashlib.sha256(contract_path.read_bytes()).hexdigest()},
+            "capacityContract": {"path": str(self.capacity),
+                                 "sha256": hashlib.sha256(self.capacity.read_bytes()).hexdigest()},
+            "p00Override": {"path": str(override), "sha256": override_sha},
+            "releaseRoot": {"path": str(release), "device": release.stat().st_dev,
+                            "inode": release.stat().st_ino,
+                            "manifestSha256": verified["manifestSha256"],
+                            "indexSha256": verified["indexSha256"]},
+            "tarTemporary": {"path": str(tar_path),
+                             "sha256": hashlib.sha256(tar_path.read_bytes()).hexdigest(),
+                             "device": tar_path.stat().st_dev, "inode": tar_path.stat().st_ino,
+                             "size": tar_path.stat().st_size},
+            "xzTemporary": {"path": str(xz_path),
+                            "sha256": hashlib.sha256(xz_path.read_bytes()).hexdigest(),
+                            "device": xz_path.stat().st_dev, "inode": xz_path.stat().st_ino,
+                            "size": xz_path.stat().st_size},
+            "finalPackagePath": str(package), "expectedLastCheckpoint": "before_package",
+        }
+        manifest_path = self.base / f"resume-{label}.private.json"
+        write(manifest_path, json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+        args = MODULE.parser().parse_args([
+            "resume-package", "--recovery-manifest", str(manifest_path),
+            "--recovery-manifest-sha256", hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+            "--root-policy", str(self.root_policy), "--root-policy-sha256", self.root_policy_sha,
+        ])
+        return output, package, tar_path, xz_path, lifecycle_path, args
+
+    def test_resume_package_recompresses_verified_tar_without_build(self) -> None:
+        output, package, tar_path, xz_path, lifecycle, args = self.make_resume_fixture("pass")
+        MODULE.resume_package(args)
+        self.assertTrue(package.is_file())
+        self.assertTrue(tar_path.is_file())
+        self.assertTrue(xz_path.is_file())
+        self.assertEqual(json.loads(lifecycle.read_text())["state"], "COMPLETE")
+        self.assertEqual(json.loads(lifecycle.read_text())["packageResume"]["mode"],
+                         "RECOMPRESSED_VERIFIED_TAR")
+        MODULE.verify_root(output / self.release_id, self.target, self.release_id)
+
+    def test_resume_package_denies_wrong_checkpoint_and_temporary_drift(self) -> None:
+        _, _, _, _, _, wrong_state = self.make_resume_fixture("wrong-state", checkpoint="after_api_build")
+        with self.assertRaisesRegex(MODULE.Denied, "resume_state_or_checkpoint"):
+            MODULE.resume_package(wrong_state)
+        _, _, tar_path, _, _, drift = self.make_resume_fixture("drift")
+        tar_path.write_bytes(tar_path.read_bytes() + b"drift")
+        with self.assertRaisesRegex(MODULE.Denied, "resume_tar_identity"):
+            MODULE.resume_package(drift)
+
+    def test_resume_package_promotes_integral_xz_atomically(self) -> None:
+        _, package, tar_path, xz_path, lifecycle, args = self.make_resume_fixture(
+            "complete-xz", complete_xz=True)
+        xz_inode = xz_path.stat().st_ino
+        MODULE.resume_package(args)
+        self.assertFalse(xz_path.exists())
+        self.assertEqual(package.stat().st_ino, xz_inode)
+        self.assertTrue(tar_path.exists())
+        self.assertEqual(json.loads(lifecycle.read_text())["packageResume"]["mode"],
+                         "PROMOTED_VERIFIED_XZ")
 
 
 if __name__ == "__main__":

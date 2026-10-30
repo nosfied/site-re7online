@@ -2,6 +2,8 @@
 
 ## Recuperação mínima de capacidade fora da geração
 
+Uma interrupção de transporte no checkpoint literal `BUILDING/before_package` não autoriza rebuild. A ação fechada `converta-release.py resume-package` exige manifesto privado autenticado, worktree limpo no mesmo target e identidades/hashes estáveis do release root, lifecycle, contrato, tar e XZ temporários. XZ íntegro é promovido atomicamente; XZ incompleto preservado leva à recompressão exclusiva do tar autenticado. A ação repete somente verificação independente, publica `COMPLETE` e registra os temporários preservados como `EVIDENCE_PRESERVE`; qualquer outro estado ou checkpoint nega.
+
 `scripts/capacity-recovery.py` é o control plane versionado para manutenção do
 cache npm e runtimes derivados de output já comprovados. Suas fases `audit`,
 `prepare` e `execute`, classes fechadas, fontes preservadas e protocolo durável
