@@ -303,8 +303,33 @@ def acquire_existing_lock(path: Path):
     return fd
 
 
-def acquire_or_authenticate_lock(path: Path, inherited_fd: int | None):
+def acquire_or_authenticate_lock(path: Path, inherited_fd: int | None,
+                                 creation_binding: str | None = None):
     if inherited_fd is None:
+        if not path.exists() and not path.is_symlink():
+            if not isinstance(creation_binding, str) or not SHA256.fullmatch(creation_binding):
+                deny("lock_creation_binding")
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            try:
+                fd = os.open(path, flags, 0o600)
+            except FileExistsError:
+                deny(f"lock_creation_race:{path.name}")
+            try:
+                value = (creation_binding + "\n").encode()
+                if os.write(fd, value) != len(value):
+                    deny(f"lock_short_write:{path.name}")
+                os.fsync(fd)
+                opened = os.fstat(fd)
+                if (not stat.S_ISREG(opened.st_mode) or opened.st_uid != os.geteuid() or
+                        opened.st_gid != os.getegid() or stat.S_IMODE(opened.st_mode) != 0o600):
+                    deny(f"lock_identity:{path.name}")
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fsync_dir(path.parent)
+                return fd
+            except Exception:
+                os.close(fd)
+                raise
         return acquire_existing_lock(path)
     try:
         before = path.lstat()
@@ -2441,7 +2466,8 @@ def execute(args: argparse.Namespace) -> None:
     canonical_review_destination(args.review_output, contract_path, lifecycle_path, policy)
     if str(args.review_output) != intent["reviewOutput"]:
         deny("intent_review_output")
-    canonical_fd = acquire_or_authenticate_lock(args.deployment_lock, getattr(args, "deployment_lock_fd", None))
+    canonical_fd = acquire_or_authenticate_lock(
+        args.deployment_lock, getattr(args, "deployment_lock_fd", None), args.intent_sha256)
     writer_fd = acquire_existing_lock(Path(intent["executionContract"]["writerLock"]))
     attempted = completed = 0
     removed: list[str] = []

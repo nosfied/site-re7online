@@ -69,7 +69,11 @@ fechado `bootstrap-legacy`:
 - `execute` exige intenção e autorização externas autenticadas, mantém lock
   canônico e writer lock, recaptura `current`, PM2 live, dump e grafo sob esses
   locks antes do primeiro `ATTEMPT`, para na primeira falha, verifica ausência
-  após cada retirada e publica recibo/review com fsync;
+  após cada retirada e publica recibo/review com fsync; se um rollback terminal
+  removeu o nome canônico do lock, a execução autônoma cria-o exclusivamente em
+  `0600`, vincula seu conteúdo ao SHA da intenção, faz `fsync` e adquire `flock`;
+  o arquivo permanece após o fechamento, livre de `flock`; existência insegura,
+  identidade divergente ou holder concorrente continuam negando;
 - conclusão posterior a deploy é `DEPLOYED_SANITIZED`; parcial é
   `DEPLOYED_RETENTION_INCOMPLETE`, não desfaz o deploy aprovado e bloqueia o
   próximo build. Não há retry automático.
