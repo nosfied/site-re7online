@@ -1,6 +1,7 @@
 import { persistCampaignProviderStatus } from "../campaigns/campaignProviderStatusPersistence.js";
 import { campaignFailureDiagnostic } from "../campaigns/campaignFailureDiagnostic.js";
 import { createReactiveBotTextOutboundMessage } from "./reactiveBotOutbound.js";
+import { sanitizeHandoffConfirmationOutboundError } from "./handoffConfirmationOutbound.js";
 import { updateRuntimeIfUnchanged } from "../conversation/runtimeWriteFence.js";
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
@@ -1012,6 +1013,38 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
     }
     return sendOutboundText(params);
+  };
+
+  const persistHandoffConfirmationOutboundFailure = async (params: {
+    waId: string;
+    inboundMessageId: string;
+    idempotencyKey: string;
+    errorBody?: unknown;
+  }) => {
+    const errorBody = sanitizeHandoffConfirmationOutboundError(params.errorBody);
+    logger.warn({
+      event: "ai.orchestrator.handoff_confirmation.outbound_failed",
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
+      requestId: meta?.requestId,
+      inboundMessageId: params.inboundMessageId,
+      idempotencyKey: params.idempotencyKey,
+      errorBody,
+    });
+    await persistEventSafe(
+      "ai.orchestrator.handoff_confirmation.outbound_failed",
+      {
+        action: "ai.orchestrator.handoff_confirmation.outbound_failed",
+        clientId: tenantClientId || null,
+        clientKey: tenantClientKey || null,
+        requestId: meta?.requestId ?? null,
+        inboundMessageId: params.inboundMessageId,
+        idempotencyKey: params.idempotencyKey,
+        errorBody,
+      } as Prisma.InputJsonValue,
+      params.waId,
+      params.idempotencyKey
+    );
   };
 
   const sendReactiveTemplateMessage = async (params: {
@@ -4795,7 +4828,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           method: meta?.method,
           requestId: meta?.requestId,
         });
-        return persistedState;
+        // persistConversationWindow may legitimately assign the newly accepted handoff
+        // and therefore advance the runtime revision. Refresh only when the same inbound
+        // still owns an active HUMAN handoff; later inbound, close or BOT re-entry stays
+        // fenced by the stale token returned above.
+        const postPersistenceState = await storage.getConversation(
+          persistedState.waId,
+          tenantClientKey
+        );
+        const sameAcceptedInbound =
+          postPersistenceState?.lastInboundMessageId === message.messageId &&
+          postPersistenceState.mode === "HUMAN" &&
+          postPersistenceState.handoff.status === "active" &&
+          (postPersistenceState.status === "WAITING" ||
+            postPersistenceState.status === "IN_PROGRESS");
+        return sameAcceptedInbound ? postPersistenceState : persistedState;
       };
       logger.info({
         event: "ai.orchestrator.handoff_confirmation.received",
@@ -4992,12 +5039,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.messageId
         );
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+          const idempotencyKey = `ai.handoff.confirmation.${message.messageId}`;
           const result = await sendPassiveOutboundText({
             runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || inboundProviderWaId : inboundProviderWaId,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
-            messageId: `ai.handoff.confirmation.${message.messageId}`,
+            messageId: idempotencyKey,
             replyText: handoffReply,
             guard: inboundGuard,
           });
@@ -5006,6 +5054,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               updatedConversation,
               result.messageId
             );
+          } else {
+            await persistHandoffConfirmationOutboundFailure({
+              waId: normalizedFrom,
+              inboundMessageId: message.messageId,
+              idempotencyKey,
+              errorBody: result.errorBody,
+            });
           }
         }
         continue;
