@@ -337,6 +337,17 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(observed["identity"]["nlink"], 1)
         self.assertFalse(observed["archive"]["protectedMaterialFound"])
 
+    def test_default_identity_schema_matches_privileged_observer_protocol(self):
+        observer_spec = importlib.util.spec_from_file_location(
+            "capacity_proc_observer_identity_parity", TOOL.with_name("capacity-proc-observer.py"))
+        observer = importlib.util.module_from_spec(observer_spec)
+        assert observer_spec.loader is not None
+        observer_spec.loader.exec_module(observer)
+        info = self.archive.lstat()
+        self.assertEqual(MODULE.stat_identity(info), observer.identity(info))
+        self.assertNotIn("nlink", MODULE.stat_identity(info))
+        self.assertEqual(MODULE.stat_identity(info, include_nlink=True)["nlink"], 1)
+
     def test_closed_preparation_archive_symlink_is_denied(self):
         link = self.preparation / "worker-return.private.tar.gz"
         link.symlink_to(self.archive)
