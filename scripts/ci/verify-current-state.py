@@ -45,11 +45,11 @@ if record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE":
             production["worker"]["changed"] is False,
             "frontend closure preservation")
     require(record["finalization"]["saveCount"] == 1, "frontend closure PM2 save")
-    api_finalization = api_record.get("finalization", {})
-    expected_current_dump = (api_finalization.get("dumpSha256")
-                             if api_record.get("status") == "DEPLOYED_SANITIZED"
-                             else record["finalization"]["dumpSha256"])
-    require(production["pm2"]["dumpSha256"] == expected_current_dump,
+    # The active API record authenticates the preserved API release. A later
+    # frontend-only finalization legitimately writes a newer topology dump, so the
+    # current dump authority is the active frontend closure, not the historical
+    # API finalization.
+    require(production["pm2"]["dumpSha256"] == record["finalization"]["dumpSha256"],
             "current topology PM2 dump")
     require(record["retention"]["attempted"] ==
             record["retention"]["completed"] == 3,
