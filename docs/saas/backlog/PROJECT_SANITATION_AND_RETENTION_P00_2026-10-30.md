@@ -1,8 +1,8 @@
 # Plano P00 — sanitização, retenção e higiene do projeto
 
-**Status:** P00 / EXECUÇÃO LIBERADA APÓS TENDÊNCIA `DEPLOYED_SANITIZED`  
-**Abertura:** 30/10/2026  
-**Autoridade:** [princípios fundamentais](../WORKING_PRINCIPLES.md)  
+**Status:** P00 / EXECUÇÃO LIBERADA APÓS TENDÊNCIA `DEPLOYED_SANITIZED`
+**Abertura:** 30/10/2026
+**Autoridade:** [princípios fundamentais](../WORKING_PRINCIPLES.md)
 **Execução produtiva:** somente pelo [runbook canônico](../DEPLOY_RUNBOOK.md)
 
 ## Estado de partida
