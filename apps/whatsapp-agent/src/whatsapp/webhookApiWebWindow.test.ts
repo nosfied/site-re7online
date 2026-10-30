@@ -31,7 +31,7 @@ let sends = 0;
 const clientIds: string[] = [];
 
 test.before(async () => {
-  assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/re7_/);
+  assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/[^@]+@127\.0\.0\.1:\d+\/re7_/);
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "re7-api-web-window-"));
   process.chdir(cwd);
   const db = await import("../db.js");
@@ -40,9 +40,18 @@ test.before(async () => {
   ({ saveTenants } = await import("../config/tenantConfig.js"));
   ({ getChatbotFlowStructureHash, validateChatbotFlowDefinition } = await import("../chatbot/chatbotFlow.js"));
   globalThis.fetch = (async (url: unknown) => {
-    assert.equal(String(url), "http://worker.invalid/web-session/send-text");
+    const target = String(url);
+    assert.ok(
+      target === "http://worker.invalid/web-session/send-text" ||
+        target.startsWith("https://graph.facebook.com/"),
+      target
+    );
     sends += 1;
-    return new Response(JSON.stringify({ ok: true, externalMessageId: `synthetic-web-${sends}` }), {
+    return new Response(JSON.stringify(
+      target.startsWith("https://graph.facebook.com/")
+        ? { messages: [{ id: `synthetic-meta-${sends}` }] }
+        : { ok: true, externalMessageId: `synthetic-web-${sends}` }
+    ), {
       status: 200,
     });
   }) as typeof fetch;
@@ -173,6 +182,163 @@ async function fixture(name: string) {
   return { client, phoneNumberId, waId };
 }
 
+async function metaHandoffFixture(name: string) {
+  const client = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-${name}`,
+      name: "Synthetic Meta handoff",
+      status: "ACTIVE",
+    },
+  });
+  clientIds.push(client.id);
+  const phoneNumberId = `meta-${name}-${crypto.randomUUID()}`;
+  const waId = `558499${String(clientIds.length).padStart(7, "0")}`;
+  await prisma.waPhoneNumber.create({
+    data: { clientId: client.id, phoneNumberId, display: "5584999000000" },
+  });
+  await prisma.tenantMetaConfig.create({
+    data: {
+      clientId: client.id,
+      phoneNumberId,
+      wabaId: "synthetic-waba",
+      businessToken: "synthetic-token",
+      rawPayload: { publicWhatsappIdentity: { canonicalNumber: "5584999000000" } },
+    },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: client.id,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: phoneNumberId,
+      enabled: true,
+      automationEnabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      aiEnabled: true,
+      handoffEnabled: true,
+      status: "connected",
+      tokenStatus: "configured",
+    },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      config: {
+        baseConfig: {
+          allowlist: [waId],
+          handoffAttendantWaid: "",
+          defaultLanguage: "pt_BR",
+          disableAutoReply: false,
+        },
+        aiAssistantConfig: {
+          aiAssistantEnabled: true,
+          aiAssistantFallbackToHandoff: true,
+          aiAssistantSystemPrompt: "Synthetic handoff prompt",
+          aiBusinessContext: "",
+          aiAssistantGreetingMessage: "",
+          aiAssistantFallbackMessage: "",
+          aiAssistantHandoffPrompt: "",
+          aiAssistantAllowedTopics: [],
+          aiAssistantSecondaryTopics: [],
+          aiAssistantBlockedTerms: [],
+          aiAssistantHandoffKeywords: [],
+          aiAssistantMaxReplies: 2,
+          aiAssistantProfile: "business",
+        },
+        queueAssignmentPolicy: {
+          enabled: true,
+          mode: "round_robin",
+          scope: "tenant",
+          includeSupervisors: false,
+          maxActivePerAgent: 10,
+          presenceMode: "IGNORE",
+          notifyAssignedOnly: false,
+        },
+      },
+    },
+  });
+  const department = await prisma.department.create({
+    data: { clientId: client.id, name: "Support", slug: `support-${name}` },
+  });
+  const queue = await prisma.queue.create({
+    data: { clientId: client.id, departmentId: department.id, name: "Support queue" },
+  });
+  await prisma.department.update({
+    where: { id: department.id },
+    data: { operationalQueueId: queue.id },
+  });
+  const agent = await prisma.user.create({
+    data: {
+      clientId: client.id,
+      departmentId: department.id,
+      name: "Synthetic support agent",
+      email: `${prefix}-${name}@example.test`,
+      role: "AGENT",
+      isActive: true,
+    },
+  });
+  await prisma.userDepartmentMembership.create({
+    data: {
+      clientId: client.id,
+      userId: agent.id,
+      departmentId: department.id,
+      isPrimary: true,
+      isActive: true,
+    },
+  });
+  const now = new Date();
+  await prisma.conversation.create({
+    data: {
+      clientId: client.id,
+      waId,
+      waIdCanonical: waId,
+      phoneNumberId,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: phoneNumberId,
+      departmentId: department.id,
+      windowIsOpen: true,
+      windowExpiresAt: new Date(now.getTime() + 60_000),
+      lastInboundAt: now,
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: client.id,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: phoneNumberId,
+      departmentId: department.id,
+      queueId: queue.id,
+      mode: "BOT",
+      handoffStatus: "NONE",
+      status: null,
+      firstSeenAt: now,
+      lastInboundAt: now,
+      windowIsOpen: true,
+      windowExpiresAt: new Date(now.getTime() + 60_000),
+      answers: {
+        aiOrchestrator: {
+          handoffPrompt: {
+            prompted: true,
+            promptedAt: now.toISOString(),
+            messageId: `prompt-${name}`,
+            reason: "explicit_human_request",
+            score: 3,
+            awaitingConfirmation: true,
+            confirmationRetryCount: 0,
+          },
+        },
+      },
+    },
+  });
+  return { client, phoneNumberId, waId };
+}
+
 function setWebhookControllerTestHooks(hooks: unknown) {
   (globalThis as typeof globalThis & { __re7WebhookControllerTestHooks?: unknown }).__re7WebhookControllerTestHooks = hooks;
 }
@@ -238,6 +404,164 @@ function metaWebhook(params: { phoneNumberId: string; waId: string; text: string
 async function waitForAsyncReply() {
   await new Promise((resolve) => setTimeout(resolve, 80));
 }
+
+test("accepted Meta handoff survives the HUMAN/WAITING queue-assignment revision before its confirmation outbound", async () => {
+  const fixture = await metaHandoffFixture("accepted-confirmation");
+  const isolatedTenant = await metaHandoffFixture("accepted-confirmation-isolated");
+  const beforeSends = sends;
+  const webhook = metaWebhook({
+    phoneNumberId: fixture.phoneNumberId,
+    waId: fixture.waId,
+    text: "sim",
+    timestamp: new Date(),
+  });
+  const inboundMessageId = webhook.entry[0]!.changes[0]!.value.messages[0]!.id;
+
+  await receiveWebhook(webhook, {
+    requestId: "accepted-handoff-confirmation",
+    route: "/webhook",
+    method: "POST",
+    rawBodyLength: 0,
+  });
+
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: fixture.client.id, waId: fixture.waId } },
+  });
+  const queueEvents = await prisma.event.findMany({
+    where: { clientId: fixture.client.id, eventName: { startsWith: "queue.assignment." } },
+  });
+  assert.equal(
+    queueEvents[0]?.eventName,
+    "queue.assignment.round_robin_applied",
+    JSON.stringify(queueEvents[0]?.payloadJson)
+  );
+  assert.equal(runtime.mode, "HUMAN");
+  assert.equal(runtime.status, "IN_PROGRESS");
+  assert.equal(runtime.handoffStatus, "ACTIVE");
+  const idempotencyKey = `ai.handoff.confirmation.${inboundMessageId}`;
+  const outbound = await prisma.outboundMessage.findFirst({
+    where: {
+      clientId: fixture.client.id,
+      OR: [
+        { messageId: { contains: idempotencyKey } },
+        { requestId: { contains: idempotencyKey } },
+      ],
+    },
+  });
+  const event = await prisma.event.findFirst({
+    where: {
+      clientId: fixture.client.id,
+      eventName: "outbound.text.sent",
+      OR: [
+        { messageId: { contains: idempotencyKey } },
+        { requestId: { contains: idempotencyKey } },
+      ],
+    },
+  });
+  const accepted = await prisma.event.findFirst({
+    where: {
+      clientId: fixture.client.id,
+      eventName: "ai.orchestrator.handoff_confirmation.accepted",
+      messageId: inboundMessageId,
+    },
+  });
+  assert.equal((accepted?.payloadJson as Record<string, unknown> | null)?.mode, "HUMAN");
+  assert.equal((accepted?.payloadJson as Record<string, unknown> | null)?.status, "IN_PROGRESS");
+  assert.equal(sends, beforeSends + 1);
+  assert.ok(outbound);
+  assert.equal(outbound.status, "SENT");
+  assert.equal(outbound.provider, "meta");
+  assert.ok(event);
+  const isolatedRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: {
+      clientId_waId: {
+        clientId: isolatedTenant.client.id,
+        waId: isolatedTenant.waId,
+      },
+    },
+  });
+  assert.equal(isolatedRuntime.mode, "BOT");
+  assert.equal(isolatedRuntime.handoffStatus, "NONE");
+  assert.equal(
+    await prisma.outboundMessage.count({ where: { clientId: isolatedTenant.client.id } }),
+    0
+  );
+});
+
+test("accepted Meta handoff keeps the late-inbound fence and records a sanitized confirmation failure", async () => {
+  const fixture = await metaHandoffFixture("accepted-confirmation-late");
+  const beforeSends = sends;
+  const webhook = metaWebhook({
+    phoneNumberId: fixture.phoneNumberId,
+    waId: fixture.waId,
+    text: "sim",
+    timestamp: new Date(),
+  });
+  const inboundMessageId = webhook.entry[0]!.changes[0]!.value.messages[0]!.id;
+  const idempotencyKey = `ai.handoff.confirmation.${inboundMessageId}`;
+  setWebhookControllerTestHooks({
+    beforePassiveWindowRevalidation: async (params: {
+      clientId: string;
+      waId: string;
+      messageId: string;
+    }) => {
+      if (params.messageId !== idempotencyKey) return;
+      await prisma.conversationRuntimeState.update({
+        where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
+        data: {
+          lastInboundMessageId: `later-${crypto.randomUUID()}`,
+          lastInboundAt: new Date(Date.now() - 1),
+          windowIsOpen: true,
+          windowExpiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+    },
+  });
+  try {
+    await receiveWebhook(webhook, {
+      requestId: "accepted-handoff-confirmation-late",
+      route: "/webhook",
+      method: "POST",
+      rawBodyLength: 0,
+    });
+  } finally {
+    clearWebhookControllerTestHooks();
+  }
+
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: fixture.client.id, waId: fixture.waId } },
+  });
+  assert.equal(runtime.mode, "HUMAN");
+  assert.equal(runtime.handoffStatus, "ACTIVE");
+  assert.equal(sends, beforeSends);
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: fixture.client.id, messageId: { contains: idempotencyKey } },
+    }),
+    0
+  );
+  const failure = await prisma.event.findFirstOrThrow({
+    where: {
+      clientId: fixture.client.id,
+      eventName: "ai.orchestrator.handoff_confirmation.outbound_failed",
+      messageId: idempotencyKey,
+    },
+  });
+  assert.deepEqual(Object.keys(failure.payloadJson as Record<string, unknown>).sort(), [
+    "action",
+    "clientId",
+    "clientKey",
+    "correlationId",
+    "errorBody",
+    "idempotencyKey",
+    "inboundMessageId",
+    "requestId",
+    "waId",
+  ]);
+  assert.equal((failure.payloadJson as Record<string, unknown>).errorBody, "late_reply_dropped");
+  assert.equal((failure.payloadJson as Record<string, unknown>).inboundMessageId, inboundMessageId);
+  assert.equal((failure.payloadJson as Record<string, unknown>).idempotencyKey, idempotencyKey);
+});
 
 test("API to WEB handler keeps chatbot node recoverable when window closes before provider", async () => {
   const f = await fixture("closed");
