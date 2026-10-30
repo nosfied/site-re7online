@@ -17,7 +17,8 @@
     ],
     "classes": [
       "NPM_CACHE_MAINTENANCE",
-      "DERIVED_OUTPUT_RUNTIME"
+      "DERIVED_OUTPUT_RUNTIME",
+      "CLOSED_PREPARATION_DERIVED_ARCHIVE"
     ],
     "executeLiveRecaptureAfterLocks": true,
     "npmCacheGroupPrincipals": [

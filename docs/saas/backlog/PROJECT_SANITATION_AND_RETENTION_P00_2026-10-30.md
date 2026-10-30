@@ -69,6 +69,13 @@ Priorizar somente itens já comprovados por manifesto, começando pelos maiores 
 A cópia autoritativa é nomeada antes do plano. DB dumps, runtime-data, configuração
 privada e dados de tenant ficam fora dos comandos.
 
+Archives individuais derivados dentro de preparações usam exclusivamente a classe
+`CLOSED_PREPARATION_DERIVED_ARCHIVE` do control plane de capacidade. A classe não
+remove diretórios e admite somente os basenames fechados de retorno de runtime,
+com registro versionado/cópia autoritativa autenticados e `unlink` literal. Lotes incrementais
+podem recuperar parte do alvo, mas o receipt deve medir o ganho físico real antes
+de qualificar o lote seguinte.
+
 ### Lote 3 — releases e preparações históricas
 
 - classificar releases como ativa, rollback imediato, dependência transitiva,

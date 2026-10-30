@@ -3,7 +3,8 @@
 ## Recuperação mínima de capacidade fora da geração
 
 `scripts/capacity-recovery.py` é o control plane versionado para manutenção do
-cache npm e runtimes derivados de output já comprovados. Suas fases `audit`,
+cache npm, runtimes derivados de output já comprovados e archives derivados
+individuais de preparações fechadas. Suas fases `audit`,
 `prepare` e `execute`, classes fechadas, fontes preservadas e protocolo durável
 estão em [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md). O cache npm
 não flexibiliza ancestrais de `generation-retirement.py`; usa exclusivamente a
@@ -21,6 +22,12 @@ O scanner transacional autentica tanto `transaction.v1.private.json` quanto
 `window-state.private.json`; layouts pré-canônicos só entram por classificadores
 fechados e layouts desconhecidos continuam fail-closed. Janelas abertas contribuem
 suas referências privadas para o conjunto protegido.
+
+A classe `CLOSED_PREPARATION_DERIVED_ARCHIVE` não retira diretórios. Ela exige
+registro versionado ou duplicata autoritativa, identidade estável e ausência de
+material protegido, e produz somente `unlink` literal. Um lote incremental pode
+ficar abaixo do alvo global, mas precisa satisfazer seu mínimo próprio e registrar
+no receipt a medição física anterior/posterior; projeção nunca equivale a ganho.
 
 Worktrees, staging, releases, preparações, transações, evidências e logs só são
 retiráveis quando uma classe versionada futura autenticar seu fechamento. A lista

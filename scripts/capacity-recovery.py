@@ -23,6 +23,7 @@ import secrets
 import stat
 import subprocess
 import sys
+import tarfile
 import time
 from typing import Any, Iterable
 
@@ -31,12 +32,21 @@ NPM_CACHE = Path("/home/deploy/.npm/_cacache")
 NPM_PARENT = Path("/home/deploy/.npm")
 NPM_CACHE_ALLOWED_MODES = {0o700, 0o750, 0o755}
 LITERAL_RM = ("/usr/bin/rm", "-r", "--")
-CLASSES = {"NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME"}
+LITERAL_UNLINK = ("/usr/bin/unlink", "--")
+PREPARATIONS_ROOT = Path("/opt/re7online/backups/converta-persistent/preparations")
+PREPARATION_DERIVED_ARCHIVE_NAMES = {
+    "api-frontend-return.private.tar.gz", "worker-return.private.tar.gz",
+}
+CLASSES = {
+    "NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME",
+    "CLOSED_PREPARATION_DERIVED_ARCHIVE",
+}
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
 }
 AUDIT_REQUEST_V2_KEYS = AUDIT_REQUEST_KEYS | {"procObserver"}
+AUDIT_REQUEST_V3_KEYS = AUDIT_REQUEST_V2_KEYS | {"incrementalBatch"}
 PROC_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 PROC_OBSERVER_COMMAND = (
     "/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
@@ -50,6 +60,9 @@ NPM_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS
 OUTPUT_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {
     "runtimeRelativePath", "releaseRoot", "contract", "package", "manifest", "index",
 }
+PREPARATION_ARCHIVE_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {"sha256", "proof"}
+DERIVED_ARCHIVE_PROOF_KEYS = {"kind", "record", "recordEntry"}
+DUPLICATE_ARCHIVE_PROOF_KEYS = {"kind", "authoritativeCopy"}
 OPERATIONAL_KEYS = {
     "schemaVersion", "currentPaths", "pm2LivePaths", "pm2DumpPaths",
     "openTransactionPaths", "protectedGraphPaths", "deploymentLock", "writerLock",
@@ -176,6 +189,7 @@ def stat_identity(info: os.stat_result) -> dict[str, Any]:
                  "regular" if stat.S_ISREG(info.st_mode) else
                  "symlink" if stat.S_ISLNK(info.st_mode) else "other"),
         "size": info.st_size, "mtimeNs": info.st_mtime_ns, "ctimeNs": info.st_ctime_ns,
+        "nlink": info.st_nlink,
     }
 
 
@@ -206,7 +220,8 @@ def stable_regular(path: Path, expected_sha: str, *, private: bool = True,
     except OSError:
         deny(f"FILE_READ:{path}")
     identities = [(item.st_dev, item.st_ino, item.st_mode, item.st_size,
-                   item.st_mtime_ns, item.st_ctime_ns) for item in (before, opened, after, current)]
+                   item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
+                  for item in (before, opened, after, current)]
     if len(set(identities)) != 1:
         deny(f"FILE_CHANGED:{path}")
     raw = b"".join(blocks)
@@ -1323,19 +1338,167 @@ def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], opera
             "processScan": scan_summary}
 
 
+def _preparation_archive_ancestors(path: Path) -> None:
+    if path.parent == PREPARATIONS_ROOT or PREPARATIONS_ROOT not in path.parents:
+        deny("PREPARATION_ARCHIVE_SCOPE")
+    root_info = physical_directory(PREPARATIONS_ROOT, "PREPARATION_ARCHIVE_ROOT")
+    expected = (root_info.st_uid, root_info.st_gid)
+    current = path.parent
+    while True:
+        info = physical_directory(current, "PREPARATION_ARCHIVE_ANCESTOR")
+        if (info.st_uid, info.st_gid) != expected or stat.S_IMODE(info.st_mode) & 0o022:
+            deny("PREPARATION_ARCHIVE_ANCESTOR_IDENTITY")
+        if current == PREPARATIONS_ROOT:
+            break
+        current = current.parent
+
+
+def _archive_structure(path: Path, identity: dict[str, Any]) -> dict[str, Any]:
+    protected = False
+    entries = 0
+    try:
+        with tarfile.open(path, mode="r:gz") as archive:
+            for member in archive:
+                entries += 1
+                name = member.name[2:] if member.name.startswith("./") else member.name
+                pure = Path(name)
+                if (not name or pure.is_absolute() or ".." in pure.parts or
+                        member.isdev() or member.isfifo()):
+                    deny("PREPARATION_ARCHIVE_MEMBER_UNSAFE")
+                parts = tuple(part for part in pure.parts if part not in {"", "."})
+                lowered = tuple(part.lower() for part in parts)
+                if (any(part == ".data" or part == ".env" or part.startswith(".env.")
+                        for part in lowered) or
+                        (lowered and lowered[0] in {
+                            "content", "database", "runtime-data", "configuration",
+                            "uploads", "media", "evidence", "receipts",
+                        }) or
+                        any(part in {"tenant-data", "tenant-scoped", "secrets"}
+                            for part in lowered) or
+                        any(lowered[index:index + 3] in {
+                            ("apps", "whatsapp-agent", ".data"),
+                            ("apps", "whatsapp-agent", "uploads"),
+                        } for index in range(max(0, len(lowered) - 2)))):
+                    protected = True
+    except (tarfile.TarError, OSError):
+        deny("PREPARATION_ARCHIVE_READ")
+    after = path.lstat()
+    if ((after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns,
+         after.st_nlink) !=
+            (identity["device"], identity["inode"], identity["size"],
+             identity["mtimeNs"], identity["ctimeNs"], identity["nlink"])):
+        deny("PREPARATION_ARCHIVE_CHANGED")
+    if protected:
+        deny("PREPARATION_ARCHIVE_PROTECTED_MATERIAL")
+    return {"memberCount": entries, "protectedMaterialFound": False}
+
+
+def _preparation_archive_proof(candidate: dict[str, Any], path: Path,
+                               expected_sha: str, expected_size: int) -> dict[str, Any]:
+    proof = candidate.get("proof")
+    if not isinstance(proof, dict):
+        deny("PREPARATION_ARCHIVE_PROOF_SCHEMA")
+    if proof.get("kind") == "VERSIONED_PREPARATION_RECORD":
+        if set(proof) != DERIVED_ARCHIVE_PROOF_KEYS or proof.get("recordEntry") != path.name:
+            deny("PREPARATION_ARCHIVE_PROOF_SCHEMA")
+        binding = proof.get("record")
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            deny("PREPARATION_ARCHIVE_RECORD_BINDING")
+        record_path = normalized_absolute(binding.get("path"),
+                                          "PREPARATION_ARCHIVE_RECORD_PATH")
+        if (record_path.name != "AUTOMATION_RELEASE_PREPARATION_2026-09-29.md" or
+                record_path.parent.name != "saas" or record_path.parent.parent.name != "docs"):
+            deny("PREPARATION_ARCHIVE_RECORD_SCOPE")
+        raw, _ = stable_regular(record_path, binding.get("sha256"), private=False,
+                                allowed_modes={0o600, 0o640, 0o644})
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            deny("PREPARATION_ARCHIVE_RECORD_ENCODING")
+        row = f"| {path.name} | {expected_size} | `{expected_sha}` |"
+        if text.count(row) != 1:
+            deny("PREPARATION_ARCHIVE_RECORD_DIVERGED")
+        if "`tar -tzf` dos arquivos compactados PASS" not in text:
+            deny("PREPARATION_ARCHIVE_RECORD_READBACK")
+        return {"kind": proof["kind"], "record": {
+            "path": str(record_path), "sha256": binding["sha256"],
+        }, "recordEntry": path.name}
+    if proof.get("kind") == "DUPLICATE_COPY":
+        if set(proof) != DUPLICATE_ARCHIVE_PROOF_KEYS:
+            deny("PREPARATION_ARCHIVE_PROOF_SCHEMA")
+        binding = proof.get("authoritativeCopy")
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            deny("PREPARATION_ARCHIVE_AUTHORITY_BINDING")
+        authority = normalized_absolute(binding.get("path"),
+                                        "PREPARATION_ARCHIVE_AUTHORITY_PATH")
+        if authority == path or PREPARATIONS_ROOT not in authority.parents:
+            deny("PREPARATION_ARCHIVE_AUTHORITY_SCOPE")
+        authority_raw, authority_identity = stable_regular(
+            authority, binding.get("sha256"), allowed_modes={0o600, 0o640, 0o644})
+        if (binding.get("sha256") != expected_sha or len(authority_raw) != expected_size or
+                authority_identity["nlink"] != 1):
+            deny("PREPARATION_ARCHIVE_AUTHORITY_DIVERGED")
+        return {"kind": proof["kind"], "authoritativeCopy": {
+            "path": str(authority), "sha256": binding["sha256"],
+            "identity": authority_identity,
+        }}
+    deny("PREPARATION_ARCHIVE_PROOF_KIND")
+
+
+def authenticate_preparation_archive(candidate: dict[str, Any], operational: dict[str, Any],
+                                     process_data: ProcessScan) -> dict[str, Any]:
+    if set(candidate) != PREPARATION_ARCHIVE_CANDIDATE_KEYS:
+        deny("PREPARATION_ARCHIVE_SCHEMA")
+    path = normalized_absolute(candidate.get("path"), "PREPARATION_ARCHIVE_PATH")
+    if path.name not in PREPARATION_DERIVED_ARCHIVE_NAMES:
+        deny("PREPARATION_ARCHIVE_PROTECTED_NAME")
+    _preparation_archive_ancestors(path)
+    raw, identity = stable_regular(path, candidate.get("sha256"),
+                                   allowed_modes={0o600, 0o640, 0o644})
+    if identity["nlink"] != 1:
+        deny("PREPARATION_ARCHIVE_HARDLINK")
+    references = (operational["currentPaths"] + operational["pm2LivePaths"] +
+                  operational["pm2DumpPaths"] + operational["openTransactionPaths"] +
+                  operational["protectedGraphPaths"])
+    if any(path_overlap(str(path), item) for item in references):
+        deny("PREPARATION_ARCHIVE_REFERENCED_OR_PROTECTED")
+    targets, writers, complete, scan_summary = process_data
+    if any(process_target_references_candidate(str(path), target)
+           for _, _, _, target in targets):
+        deny("PREPARATION_ARCHIVE_PROCESS_REFERENCE")
+    if any(writer.get("candidatePath") == str(path) for writer in writers):
+        deny("PREPARATION_ARCHIVE_WRITER")
+    if not complete:
+        deny("PROCESS_REFERENCE_SCAN_INCOMPLETE")
+    structure = _archive_structure(path, identity)
+    proof = _preparation_archive_proof(candidate, path, candidate["sha256"], len(raw))
+    return {"class": candidate["class"], "path": str(path), "sha256": candidate["sha256"],
+            "identity": identity, "proof": proof, "archive": structure,
+            "processScan": scan_summary}
+
+
 def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict[str, Any],
                        process_data: ProcessScan) -> dict[str, Any]:
     if not isinstance(candidate, dict) or candidate.get("class") not in CLASSES:
         deny("CANDIDATE_CLASS")
     if candidate["class"] == "NPM_CACHE_MAINTENANCE":
         return authenticate_npm(candidate, process_data, operational)
-    return authenticate_output(candidate, policy, operational, process_data)
+    if candidate["class"] == "DERIVED_OUTPUT_RUNTIME":
+        return authenticate_output(candidate, policy, operational, process_data)
+    return authenticate_preparation_archive(candidate, operational, process_data)
+
+
+def removal_command(observation: dict[str, Any]) -> list[str]:
+    if observation.get("class") == "CLOSED_PREPARATION_DERIVED_ARCHIVE":
+        return [*LITERAL_UNLINK, observation["path"]]
+    return [*LITERAL_RM, observation["path"]]
 
 
 def validate_audit_request(value: dict[str, Any]) -> None:
     version = value.get("schemaVersion")
-    expected = AUDIT_REQUEST_KEYS if version == 1 else AUDIT_REQUEST_V2_KEYS
-    if (version not in {1, 2} or set(value) != expected or
+    expected = (AUDIT_REQUEST_KEYS if version == 1 else
+                AUDIT_REQUEST_V2_KEYS if version == 2 else AUDIT_REQUEST_V3_KEYS)
+    if (version not in {1, 2, 3} or set(value) != expected or
             value.get("kind") != "CAPACITY_RECOVERY_AUDIT_REQUEST"):
         deny("AUDIT_REQUEST_SCHEMA")
     for key in ("minimumRecoveryBytes", "targetAvailableBytes"):
@@ -1343,8 +1506,10 @@ def validate_audit_request(value: dict[str, Any]) -> None:
             deny(f"AUDIT_REQUEST_{key}")
     if not isinstance(value.get("candidates"), list) or not value["candidates"]:
         deny("AUDIT_REQUEST_CANDIDATES")
-    if version == 2:
+    if version in {2, 3}:
         _validate_proc_observer_binding(value["procObserver"])
+    if version == 3 and value.get("incrementalBatch") is not True:
+        deny("AUDIT_REQUEST_INCREMENTAL_BATCH")
 
 
 def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[str, Any]:
@@ -1359,7 +1524,7 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
                        for item in value["candidates"] if isinstance(item, dict)]
     if len(candidate_paths) != len(value["candidates"]):
         deny("CANDIDATE_SCHEMA")
-    if value["schemaVersion"] == 2:
+    if value["schemaVersion"] in {2, 3}:
         process_data, process_evidence = _privileged_proc_targets(
             value["procObserver"], candidate_paths, "audit")
     else:
@@ -1393,7 +1558,8 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     projected = available_before + total
     if total < value["minimumRecoveryBytes"]:
         errors.append({"ordinal": 0, "predicate": "MINIMUM_RECOVERY_NOT_MET"})
-    if projected < value["targetAvailableBytes"]:
+    incremental = value.get("incrementalBatch") is True
+    if projected < value["targetAvailableBytes"] and not incremental:
         errors.append({"ordinal": 0, "predicate": "TARGET_AVAILABLE_NOT_MET"})
     state = "P00_CAPACITY_RECOVERY_AUDIT_PASS" if not errors else "P00_CAPACITY_RECOVERY_AUDIT_DENY"
     plan = {
@@ -1413,12 +1579,14 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         "liveRecapture": live_recapture,
         "deploymentLock": operational["deploymentLock"], "writerLock": operational["writerLock"],
         "candidates": observations, "errors": errors,
-        "commands": [[*LITERAL_RM, item["observation"]["path"]] for item in observations],
+        "commands": [removal_command(item["observation"]) for item in observations],
         "automaticExecutionPermitted": False,
     }
-    if value["schemaVersion"] == 2:
+    if value["schemaVersion"] in {2, 3}:
         plan["procObserver"] = value["procObserver"]
         plan["processObservation"] = process_evidence
+    if value["schemaVersion"] == 3:
+        plan["incrementalBatch"] = True
     write_exclusive(plan_output, canonical(plan))
     return plan
 
@@ -1446,9 +1614,11 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
                 "operationalState", "liveRecapture", "deploymentLock", "writerLock", "candidates", "errors",
                 "commands", "automaticExecutionPermitted"}
     version = plan.get("schemaVersion")
-    if version == 2:
+    if version in {2, 3}:
         required |= {"procObserver", "processObservation"}
-    if set(plan) != required or version not in {1, 2} or plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or plan.get("errors") != [] or plan.get("automaticExecutionPermitted") is not False:
+    if version == 3:
+        required |= {"incrementalBatch"}
+    if set(plan) != required or version not in {1, 2, 3} or plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or plan.get("errors") != [] or plan.get("automaticExecutionPermitted") is not False or (version == 3 and plan.get("incrementalBatch") is not True):
         deny("PLAN_SCHEMA_OR_STATE")
     policy, _, _ = root_policy(plan["rootPolicy"])
     _, _, op_raw, _ = load_binding(plan["operationalState"], "OPERATIONAL_STATE")
@@ -1464,7 +1634,7 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
     candidate_paths = [item.get("observation", {}).get("path") for item in plan.get("candidates", [])]
     if not candidate_paths or any(not isinstance(item, str) for item in candidate_paths):
         deny("PLAN_CANDIDATE_PATHS")
-    if version == 2:
+    if version in {2, 3}:
         process_data, process_evidence = _privileged_proc_targets(
             plan["procObserver"], candidate_paths, phase)
     else:
@@ -1499,7 +1669,7 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
                 validate_lock_free(lock)
             except Denied as exc:
                 errors.append(str(exc))
-    expected_commands = [[*LITERAL_RM, item["path"]] for item in refreshed]
+    expected_commands = [removal_command(item) for item in refreshed]
     if expected_commands != plan.get("commands"):
         errors.append("PLAN_COMMANDS_DIVERGED")
     base = (refreshed, sorted(set(errors)), live_recapture)
@@ -1529,9 +1699,11 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
         "commands": plan["commands"], "commandsSha256": digest_bytes(commands_raw),
         "automaticRetry": False, "forceAllowed": False, "pruneAllowed": False, "pathExpansionAllowed": False,
     }
-    if plan["schemaVersion"] == 2:
+    if plan["schemaVersion"] in {2, 3}:
         intent["procObserver"] = plan["procObserver"]
         intent["preparedProcessObservation"] = process_evidence
+    if plan["schemaVersion"] == 3:
+        intent["incrementalBatch"] = True
     intent_raw = canonical(intent)
     manifest = {
         "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_SEAL_MANIFEST",
@@ -1596,11 +1768,14 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
                 "expectedRecoveryInodes", "candidates", "preparedLiveRecapture", "commands", "commandsSha256", "automaticRetry",
                 "forceAllowed", "pruneAllowed", "pathExpansionAllowed"}
     version = intent.get("schemaVersion")
-    if version == 2:
+    if version in {2, 3}:
         required |= {"procObserver", "preparedProcessObservation"}
-    if (set(intent) != required or version not in {1, 2} or
+    if version == 3:
+        required |= {"incrementalBatch"}
+    if (set(intent) != required or version not in {1, 2, 3} or
             intent.get("kind") != "CAPACITY_RECOVERY_INTENT" or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            (version == 3 and intent.get("incrementalBatch") is not True) or
             any(intent.get(key) is not False for key in ("automaticRetry", "forceAllowed", "pruneAllowed", "pathExpansionAllowed"))):
         deny("INTENT_SCHEMA_OR_STATE")
     commands_raw = b"".join((" ".join(command) + "\n").encode() for command in intent["commands"])
@@ -1624,6 +1799,8 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
     held: list[int] = []
     attempted = 0; completed = 0; removed: list[str] = []
     failure: str | None = None
+    available_before: int | None = None
+    available_after: int | None = None
     try:
         for lock_path in (Path(intent["deploymentLock"]), Path(intent["writerLock"])):
             held.append(acquire_lock(lock_path))
@@ -1632,7 +1809,7 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
         plan_path = Path(intent["plan"]["path"])
         plan_raw, _ = stable_regular(plan_path, intent["plan"]["sha256"])
         plan_value = object_json(plan_raw, "PLAN_JSON")
-        if version == 2 and intent["procObserver"] != plan_value.get("procObserver"):
+        if version in {2, 3} and intent["procObserver"] != plan_value.get("procObserver"):
             deny("PROC_OBSERVER_BINDING_DIVERGED")
         refreshed, errors, live_recapture, process_evidence = revalidate_plan(
             plan_value, check_locks=False, phase="execute", include_process_evidence=True)
@@ -1648,8 +1825,11 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
             primary = next((error for error in errors if error != "PLAN_COMMANDS_DIVERGED"),
                            errors[0] if errors else "CANDIDATE_CHANGED")
             deny("EXECUTE_RECAPTURE_DENY:" + primary)
+        policy, _, _ = root_policy(intent["rootPolicy"])
+        filesystem = os.statvfs(policy["canonicalRoots"]["outputs"]["path"])
+        available_before = filesystem.f_bavail * filesystem.f_frsize
         for ordinal, (command, candidate) in enumerate(zip(intent["commands"], intent["candidates"]), 1):
-            expected = [*LITERAL_RM, candidate["path"]]
+            expected = removal_command(candidate)
             if command != expected:
                 deny("COMMAND_LITERAL_DIVERGED")
             append_event(journal, {"event": "ATTEMPT", "ordinal": ordinal,
@@ -1679,10 +1859,15 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
             completed += 1; removed.append(candidate["path"])
             append_event(journal, {"event": "VERIFIED", "ordinal": ordinal,
                                    "path": candidate["path"], "result": "ABSENT"})
+        filesystem = os.statvfs(policy["canonicalRoots"]["outputs"]["path"])
+        available_after = filesystem.f_bavail * filesystem.f_frsize
     except (Denied, OSError) as exc:
         failure = str(exc)
         append_event(journal, {"event": "DENY", "predicate": failure,
                                "attemptedCommands": attempted, "completedCommands": completed})
+    if available_before is not None and available_after is None:
+        filesystem = os.statvfs(policy["canonicalRoots"]["outputs"]["path"])
+        available_after = filesystem.f_bavail * filesystem.f_frsize
     receipt = {"schemaVersion": 1, "kind": "CAPACITY_RECOVERY_RECEIPT",
                "state": "COMPLETED" if failure is None else "FAILED",
                "failurePredicate": failure, "intentSha256": intent_sha,
@@ -1691,6 +1876,13 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
                "completedCommands": completed, "removedPaths": removed,
                "automaticRetry": False, "forceUsed": False, "pruneUsed": False,
                "pathExpansion": False, "journalSha256": sha256(journal)}
+    receipt.update({
+        "expectedRecoveryBytes": intent["expectedRecoveryBytes"],
+        "availableBytesBefore": available_before,
+        "availableBytesAfter": available_after,
+        "recoveredBytes": (available_after - available_before
+                           if available_before is not None and available_after is not None else None),
+    })
     receipt_path = receipt_root / "execution-receipt.private.json"
     write_exclusive(receipt_path, canonical(receipt))
     write_exclusive(receipt_root / "execution-receipt.sha256",
