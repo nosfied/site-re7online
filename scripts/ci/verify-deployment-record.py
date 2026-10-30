@@ -737,6 +737,97 @@ def verify_frontend_only(record_path: Path, record: dict) -> None:
 
 
 
+def verify_api_only_fixed_current_sanitized(record_path: Path, record: dict) -> None:
+    require(record.get("schemaVersion") == 1 and
+            record.get("recordType") ==
+            "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT" and
+            record.get("status") == "DEPLOYED_SANITIZED",
+            "API-only fixed-current identity")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "API-only fixed-current sensitive keys")
+
+    release = record.get("release", {})
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))) and
+            bool(re.fullmatch(r"[0-9a-f]{40}", release.get("tree", ""))),
+            "API-only target and tree")
+    require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*",
+                              release.get("id", ""))) and
+            bool(release.get("buildId")) and
+            release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+            "API-only release identity")
+    for field in ("packageSha256", "manifestSha256", "indexSha256",
+                  "artifactContractSha256", "apiEntrypointSha256"):
+        require(bool(SHA256.fullmatch(release.get(field, ""))),
+                f"API-only release {field}")
+
+    selection = record.get("selection", {})
+    require(selection.get("components") == ["api"] and
+            selection.get("apiReleaseId") == release.get("id") and
+            selection.get("frontendPreserved") is True and
+            selection.get("workerPreserved") is True,
+            "API-only component selection")
+
+    acceptance = record.get("acceptance", {})
+    require(acceptance.get("ownerAcceptance") == "PASS" and
+            acceptance.get("handoffConfirmationDelivered") is True and
+            acceptance.get("humanMode") is True and
+            acceptance.get("queueAndInboxVisible") is True and
+            acceptance.get("aiReentryObserved") is False and
+            acceptance.get("frontendValidation") == "PASS",
+            "API-only owner acceptance")
+
+    finalization = record.get("finalization", {})
+    require(finalization.get("pm2SaveCount") == 1 and
+            finalization.get("secondSaveExecuted") is False,
+            "API-only save count")
+    for field in ("dumpSha256", "markerSha256", "journalSha256",
+                  "retirementReceiptSha256"):
+        require(bool(SHA256.fullmatch(finalization.get(field, ""))),
+                f"API-only finalization {field}")
+
+    runtime = record.get("runtime", {})
+    require(positive_int(runtime.get("api", {}).get("pid")) and
+            runtime.get("api", {}).get("restartCount") == 12 and
+            runtime.get("frontend", {}).get("preserved") is True and
+            runtime.get("worker", {}).get("preserved") is True and
+            runtime.get("health") == {
+                "local": {"ok": True, "db": "ok"},
+                "public": {"ok": True, "db": "ok"},
+            }, "API-only runtime and health")
+
+    retirement = record.get("retirement", {})
+    require(retirement.get("state") == "SANITIZED" and
+            retirement.get("commandsAttempted") ==
+            retirement.get("commandsCompleted") == 3 and
+            retirement.get("remainingDerivedArtifacts") == 0 and
+            retirement.get("debt") is False,
+            "API-only retirement")
+    require(record.get("locks", {}).get("deploymentCanonicalRemoved") is True and
+            record.get("capacity", {}).get("freeBytesAfterFinalization", 0) > 0 and
+            record.get("capacity", {}).get("capacityIsCurrent") is False and
+            all(value == 0 for value in record.get("forbiddenEffects", {}).values()),
+            "API-only closure guards")
+
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(), "API-only active record")
+    production = state.get("production", {})
+    require(production.get("status") == "DEPLOYED_SANITIZED" and
+            production.get("releaseId") == release.get("id") and
+            production.get("targetCommit") == release.get("target") and
+            production.get("api", {}).get("selectedReleaseId") ==
+            release.get("id") and
+            production.get("frontend", {}).get("selectedReleaseId") ==
+            selection.get("frontendReleaseId"),
+            "API-only active topology")
+    require(production.get("pm2", {}).get("dumpSha256") ==
+            finalization.get("dumpSha256") and
+            production.get("currentMarkerSha256") ==
+            finalization.get("markerSha256"),
+            "API-only active evidence")
+    print("DEPLOYMENT_RECORD_OK: API-only Tendencia release deployed and sanitized")
+
+
 def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
     require(record.get("schemaVersion") == 1, "fixed-current schema")
     require(record.get("recordType") ==
@@ -827,6 +918,12 @@ def main() -> None:
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "record outside repository or missing")
     record = read_json(record_path)
+
+    if (record.get("schemaVersion") == 1 and
+            record.get("recordType") ==
+            "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT"):
+        verify_api_only_fixed_current_sanitized(record_path, record)
+        return
 
     if (record.get("schemaVersion") == 1 and
             record.get("recordType") ==
