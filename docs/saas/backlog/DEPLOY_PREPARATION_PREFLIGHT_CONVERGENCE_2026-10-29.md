@@ -1,6 +1,6 @@
 # Plano P00 — convergência da preparação de deploy
 
-**Status:** P00 / IMPLEMENTADO / USO CONDICIONADO A MERGE AUTENTICADO  
+**Status:** P00 / PARCIALMENTE IMPLEMENTADO / PREVENÇÃO E2E AINDA ABERTA  
 **Data de abertura:** 29/10/2026  
 **Atualização de 30/10/2026:** convergência ainda aberta; nova lacuna confirmada entre admissão e schema de observações do consumidor. Entregas #275/#277/#278/#285/#287/#288 são preservadas; não comprovam fechamento integral da dívida.
 
@@ -295,3 +295,49 @@ operacional coerentes. Esta atualização documental não implementa nem encerra
 Retenção automática por dependência e orçamento, armazenamento externo de artefatos
 com política de ciclo de vida e builder externo são evoluções a avaliar após esta
 entrega. Não se altera a arquitetura produtiva durante a retomada da Tendência.
+
+## Fechamento da janela fa63994a e dívida remanescente
+
+A janela terminou em `DEPLOYED_SANITIZED`, mas não prova que o procedimento normal
+está livre de intervenção. As negativas e retomadas desta execução devem reduzir o
+próximo fluxo, não virar precedentes manuais.
+
+| Fronteira | Defeito observado | Aceite preventivo antes da próxima geração normal |
+| --- | --- | --- |
+| Capacidade | meta adicional bloqueou lote seguro por 4.067.328 bytes | orçamento obrigatório e meta adicional são campos e decisões distintas |
+| Audit → prepare | `processScan` volátil entrou na identidade integral | comparação usa projeção estável; observação fresca permanece fail-closed |
+| Índice → runtime | symlink válido foi classificado como `other` | produtor e consumidor usam a mesma semântica, com regressão de target/mode/escape |
+| Snapshot → retention | faltou `pm2.fingerprintSha256` | materializador chama o validador real do consumidor antes de publicar |
+| Rollback → retirement | executor exigiu lock fisicamente ausente/existente em fases incompatíveis | teste integrado cobre criação, aquisição, fechamento e remoção terminal |
+| Package → publish | transporte SSH caiu após compressão | observar lifecycle/processo; retomar pacote existente; rebuild é último recurso |
+| Handoff → outbound | `ok=false` descartado sem causa nominal | evento sanitizado obrigatório e teste aceite → envio real |
+| Módulos → fluxo | CI 4/4 não cobriu contratos entre ferramentas | fixture atravessa admissão → materialização → prepare → preflight → fechamento |
+
+### Regra de não patinação
+
+Após uma negativa, o executor registra apenas quatro informações: predicado,
+efeitos já ocorridos, provas ainda reutilizáveis e menor ação corretiva. A próxima
+execução começa no último checkpoint válido. Não se repete leitura cara, build,
+compressão, instalação, ativação, save ou retirada apenas para descobrir qual campo
+mudou.
+
+A autorização acompanha o escopo e os efeitos já aprovados; não deve ser pedida
+novamente por cada etapa interna. Nova autorização é necessária somente para ampliar
+escopo, privilégio ou efeito produtivo.
+
+### Entregas bloqueadoras
+
+Antes de outra geração normal:
+
+1. implementar e testar a integração do schema P00-D com o consumidor real;
+2. corrigir o ciclo autônomo do lock criado por `generation-retirement`, garantindo
+   remoção terminal sob o mesmo `flock`;
+3. decidir o PR #291 como melhoria de retomada, sem reabrir a release concluída;
+4. executar a fixture ponta a ponta sem correção intermediária;
+5. manter o [plano P00 de sanitização](PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md)
+   acima do backlog de novos builds enquanto o orçamento de disco não estiver
+   satisfeito.
+
+A documentação deste PR registra o contrato; seu fechamento operacional depende de
+código, regressões, CI e uma execução normal sem adaptação. Portanto, não declarar
+esta dívida concluída apenas porque a Tendência foi entregue.
