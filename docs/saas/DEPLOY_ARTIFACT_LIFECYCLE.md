@@ -14,6 +14,10 @@ atividade npm. Após adquirir ambos os locks, `execute` recaptura ao vivo curren
 PM2, dump, transações não terminais e grafo antes do primeiro `ATTEMPT`.
 Em `/proc`, UID e start ticks autenticam o PID; inspeção integral é obrigatória
 para `deploy`, enquanto limitação esperada de outro UID é apenas registrada.
+O scanner transacional autentica tanto `transaction.v1.private.json` quanto
+`window-state.private.json`; layouts pré-canônicos só entram por classificadores
+fechados e layouts desconhecidos continuam fail-closed. Janelas abertas contribuem
+suas referências privadas para o conjunto protegido.
 
 Worktrees, staging, releases, preparações, transações, evidências e logs só são
 retiráveis quando uma classe versionada futura autenticar seu fechamento. A lista

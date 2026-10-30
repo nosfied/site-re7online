@@ -20,6 +20,15 @@
       "pidStartTicksStableRequired": true,
       "otherUidExpectedPermissionLimits": "RECORDED_NOT_GLOBAL_DENY"
     },
+    "transactionScan": {
+      "canonicalFormats": [
+        "transaction.v1.private.json",
+        "window-state.private.json"
+      ],
+      "legacyLayouts": "CLOSED_CLASSIFIERS_ONLY",
+      "unknownLayout": "DENY",
+      "nonTerminalReferences": "PROTECTED"
+    },
     "productionEffectsInThisChange": false
   },
   "production": {

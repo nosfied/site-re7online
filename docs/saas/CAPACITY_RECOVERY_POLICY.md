@@ -37,6 +37,23 @@ admitido é:
 Glob, expansão, `force`, `prune`, caminho alternativo e descoberta destrutiva em
 `execute` são negados.
 
+### Formatos transacionais autenticados
+
+A recaptura reconhece de forma fechada os dois formatos canônicos vigentes:
+`transaction.v1.private.json`, do fixed-current/API-only, e
+`window-state.private.json`, do frontend-only. O segundo exige estado conhecido e
+`saveCount` coerente; janelas não terminais protegem todas as referências absolutas
+dos JSON privados da transação. A presença simultânea dos dois formatos é ambígua e
+nega.
+
+Os layouts pré-canônicos observados antes dessa convergência possuem classificadores
+fechados: rollback com os três sentinelas byte-exatos, transação antiga com os quatro
+JSON de identidade/retorno tratada sempre como não terminal e protegida, e preflight
+vazio cujo nome segue o formato autenticado. Diretório vazio com outro nome, estado
+desconhecido, sentinela divergente, JSON inválido/symlink ou qualquer layout não
+classificado resulta em `LIVE_TRANSACTION_LAYOUT_UNKNOWN` ou negativa mais
+específica. Nenhum diretório é ignorado por idade ou ausência de journal novo.
+
 ## Classes removíveis
 
 ### `NPM_CACHE_MAINTENANCE`
