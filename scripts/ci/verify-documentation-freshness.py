@@ -30,8 +30,12 @@ require(state["templateCampaignMedia"]["state"] == "TECHNICALLY_DEPLOYED",
 media = state["templateCampaignMedia"]
 require(media["deploymentRecord"] == state["activeApiDeploymentRecord"],
         "media API deployment record")
-require(media["frontendPresentationDeploymentRecord"] == record_value,
-        "media frontend presentation deployment record")
+if record.get("recordType") == "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
+    require((ROOT / media["frontendPresentationDeploymentRecord"]).is_file(),
+            "preserved frontend presentation deployment record")
+else:
+    require(media["frontendPresentationDeploymentRecord"] == record_value,
+            "media frontend presentation deployment record")
 require(media["metaFunctionalAcceptance"] == "PASS_IMAGE_VIDEO_CONTROLLED" and
         media["commercialOperationalRelease"] == "GENERAL_OPERATIONS_OPEN",
         "media functional acceptance and general operations")
