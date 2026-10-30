@@ -393,3 +393,28 @@ Decision: create this document as the canonical private-tenant activation playbo
 - Keep `instagram_business_manage_comments` out of scope until comments/private replies receive their own sprint.
 - Keep Messenger/Instagram AI, automation and handoff disabled until a formal multichannel automation sprint.
 - For Webchat onboarding, confirm minimized-widget badge/status behavior and document that read receipts are limited to local `sent/received` states until a future backend read-receipt capability exists.
+
+
+## 8. Automação, handoff e fluxo visível
+
+Antes de habilitar `automationEnabled` e `handoffEnabled` em um tenant:
+
+1. comprove no PostgreSQL exatamente um fluxo de entrada `isActive=true` e
+   `entryPoint=true`, ou documente explicitamente que o tenant usa apenas a
+   orquestração AI sem `ChatbotFlow`;
+2. confirme que `GET /app/chatbot/flows` e `/app/chatbot` exibem o mesmo fluxo
+   para ADMIN/SUPERVISOR do tenant;
+3. autentique departamento e fila operacionais tenant-scoped;
+4. execute dry-run do plano de configuração antes de qualquer escrita;
+5. valide um aceite de handoff: o estado deve ficar
+   `HUMAN/PENDING|ACTIVE/WAITING` mesmo sem atendente disponível;
+6. negue o go-live se um evento `handoff_activated` puder coexistir com
+   `BOT/NONE`.
+
+O incidente antigo de visibilidade do CRA foi causado por falha de hidratação:
+`/app/chatbot/settings` retornava 404 e abortava a lista de fluxos. Esse defeito
+já foi corrigido com fonte DB-first e carregamento independente. Não se deve
+reaplicar a mesma correção nem recriar fluxo quando o tenant realmente não possui
+uma linha `ChatbotFlow`. Nesse caso, a criação exige fonte autenticada, plano
+tenant-scoped e autorização própria; Demo ou CRA podem servir como modelo
+revisável, nunca como autoridade implícita.
