@@ -16,6 +16,11 @@ SPEC = importlib.util.spec_from_file_location("capacity_recovery", TOOL)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
+PRODUCER_TOOL = Path(__file__).resolve().parents[1] / "converta-release.py"
+PRODUCER_SPEC = importlib.util.spec_from_file_location("converta_release", PRODUCER_TOOL)
+PRODUCER = importlib.util.module_from_spec(PRODUCER_SPEC)
+assert PRODUCER_SPEC.loader is not None
+PRODUCER_SPEC.loader.exec_module(PRODUCER)
 
 
 def sha(path: Path) -> str:
@@ -766,6 +771,112 @@ class CapacityRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_EQUIVALENCE_INCOMPLETE"):
             MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
                                        json.loads(self.operational.read_text()), scan())
+
+    def _add_runtime_symlink(self, target="app.js"):
+        output_link = self.runtime / "app-link"
+        release_link = self.release / "api-runtime" / "app-link"
+        output_link.symlink_to(target)
+        release_link.symlink_to(target)
+        value = json.loads(self.index.read_text())
+        value["entries"].append({"path": "api-runtime/app-link", "type": "symlink",
+                                 "mode": "0777", "target": target})
+        private_json(self.index, value)
+        contract = json.loads(self.contract.read_text())
+        index_artifact = next(item for item in contract["artifacts"]
+                              if item["path"] == str(self.index))
+        index_artifact["digest"] = {"sha256": sha(self.index)}
+        private_json(self.contract, contract)
+        return output_link, release_link
+
+    def test_index_comparison_matches_producer_symlink_contract(self):
+        self._add_runtime_symlink()
+        observed = MODULE.authenticate_output(
+            self.output_candidate(), json.loads(self.policy.read_text()),
+            json.loads(self.operational.read_text()), scan())
+        self.assertEqual(observed["equivalence"]["indexEntryCount"], 3)
+
+    def test_index_comparison_accepts_current_producer_inventory_for_both_runtimes(self):
+        output_root = self.base / "producer-parity-output"
+        release_root = self.base / "producer-parity-release"
+        for root in (output_root, release_root):
+            for runtime in PRODUCER.RUNTIMES:
+                runtime_root = root / runtime
+                runtime_root.mkdir(parents=True)
+                (runtime_root / "entry.js").write_bytes(b"producer parity")
+                (runtime_root / "entry.js").chmod(0o644)
+                (runtime_root / "entry-link").symlink_to("entry.js")
+        entries, overlay = PRODUCER.scan_runtime(output_root)
+        self.assertIsNone(overlay)
+        index = {"schemaVersion": 1, "scope": list(PRODUCER.RUNTIMES),
+                 "entries": entries}
+        for relative in PRODUCER.RUNTIMES:
+            observed = MODULE.compare_index(
+                output_root / relative, release_root, relative, index, set())
+            expected = len([entry for entry in index["entries"]
+                            if entry["path"] == relative or
+                            entry["path"].startswith(relative + "/")])
+            self.assertEqual(observed["indexEntryCount"], expected)
+
+    def test_index_comparison_denies_symlink_target_drift(self):
+        _, release_link = self._add_runtime_symlink()
+        (release_link.parent / "other.js").write_bytes(b"other")
+        release_link.unlink()
+        release_link.symlink_to("other.js")
+        with self.assertRaisesRegex(MODULE.Denied, "release:symlink_target:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_broken_symlink(self):
+        _, release_link = self._add_runtime_symlink()
+        release_link.unlink()
+        release_link.symlink_to("missing.js")
+        with self.assertRaisesRegex(MODULE.Denied, "release:symlink_broken:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_symlink_escape(self):
+        outside = self.base / "outside.js"
+        outside.write_bytes(b"outside")
+        output_link, release_link = self._add_runtime_symlink(str(outside))
+        value = json.loads(self.index.read_text())
+        value["entries"][-1]["target"] = str(outside)
+        private_json(self.index, value)
+        contract = json.loads(self.contract.read_text())
+        next(item for item in contract["artifacts"]
+             if item["path"] == str(self.index))["digest"] = {"sha256": sha(self.index)}
+        private_json(self.contract, contract)
+        self.assertTrue(output_link.is_symlink() and release_link.is_symlink())
+        with self.assertRaisesRegex(MODULE.Denied, "output:symlink_escape:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_symlink_mode_contract_drift(self):
+        self._add_runtime_symlink()
+        value = json.loads(self.index.read_text())
+        value["entries"][-1]["mode"] = "0755"
+        private_json(self.index, value)
+        contract = json.loads(self.contract.read_text())
+        next(item for item in contract["artifacts"]
+             if item["path"] == str(self.index))["digest"] = {"sha256": sha(self.index)}
+        private_json(self.contract, contract)
+        with self.assertRaisesRegex(MODULE.Denied, "output:identity:api-runtime/app-link"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+
+    def test_index_comparison_denies_unindexed_entry_and_allows_declared_release_extra(self):
+        unexpected = self.runtime / "unexpected"
+        unexpected.write_bytes(b"unexpected")
+        with self.assertRaisesRegex(MODULE.Denied, "output:entry_set"):
+            MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
+                                       json.loads(self.operational.read_text()), scan())
+        unexpected.unlink()
+        private_data = self.release / "api-runtime" / ".data"
+        private_data.mkdir()
+        (private_data / "mutable").write_bytes(b"allowed")
+        observed = MODULE.authenticate_output(
+            self.output_candidate(), json.loads(self.policy.read_text()),
+            json.loads(self.operational.read_text()), scan())
+        self.assertEqual(observed["equivalence"]["allowedReleaseExtras"], [".data"])
 
     def seal_and_authorize(self):
         self.audit(); self.prepare()
