@@ -1,14 +1,34 @@
 # Estado canônico do Converta
 
-**DEPLOYED / GENERAL CAMPAIGN OPERATIONS OPEN / IMAGE AND VIDEO ACCEPTANCE PASS / PRODUCTION HEALTHY**
+**DEPLOYED_SANITIZED / CONSENT VISIBILITY ACCEPTED / PRODUCTION HEALTHY**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
-[modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
-no [registro de fechamento frontend b96](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json);
-o componente API vigente está no
-[registro de fechamento 0fdec](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json).
-Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
+[modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e o fechamento ativo está
+no [registro aa9527](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json).
+Registros anteriores permanecem no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
+
+## Fechamento frontend aa9527 — 29/10/2026
+
+Fonte: relatório operacional e aceite visual encaminhados pelo owner; o editor
+documental não realizou inspeção independente da VPS.
+
+A release frontend `immutable-aa9527cc-vps-20261029T222733Z`, target
+`aa9527cc39ae24efcd8c2bb6e653a8e04655009b`, BUILD_ID
+`lHKJnVlp6Onz0FpycKR_Z`, terminou `DEPLOYED_SANITIZED`. O owner validou na
+interface a pergunta e as respostas positiva e negativa de consentimento no filtro
+Automação, sem regressão nos demais filtros. API `754281d3` e worker `e2e7`
+permaneceram preservados.
+
+A finalização executou exatamente um `pm2 save`, sem restart, e validou o dump
+`c7ace2d4d8c8d7edf7ab39e6195bbb9f2318720c6e1e0c08f7f52a149b9f141b`.
+Marker: `79e761dbfa404f8a932661550aba7d2a4ab3f1e08815dbefdc3018a3a059634c`;
+estado transacional: `9c86b6ebfa6308ee4ea00ef3bbc412c70b60513239cf7dc2cc3a02fc79cb2989`;
+recibo final: `c80e37abc9448ed1edf78eec40f420cb1ac595c0ee470964bed84fe139e74a23`.
+A retenção concluiu 3/3, sem retry, e deixou zero derivados; recibo
+`5693ae8ba680e7ac411a8eb8647916d641d77870bd95e96a8ba4b064df7a64ba`.
+Guarda aberta na geração 41, tarefas zero e sem fault; health local/público
+`ok=true`, `db=ok`.
 
 ## Correção P00 de configuração WhatsApp Meta — API implantada
 
