@@ -181,20 +181,23 @@ def normalized_absolute(value: Any, predicate: str) -> Path:
     return path
 
 
-def stat_identity(info: os.stat_result) -> dict[str, Any]:
-    return {
+def stat_identity(info: os.stat_result, *, include_nlink: bool = False) -> dict[str, Any]:
+    identity = {
         "device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
         "gid": info.st_gid, "mode": f"0{stat.S_IMODE(info.st_mode):03o}",
         "type": ("directory" if stat.S_ISDIR(info.st_mode) else
                  "regular" if stat.S_ISREG(info.st_mode) else
                  "symlink" if stat.S_ISLNK(info.st_mode) else "other"),
         "size": info.st_size, "mtimeNs": info.st_mtime_ns, "ctimeNs": info.st_ctime_ns,
-        "nlink": info.st_nlink,
     }
+    if include_nlink:
+        identity["nlink"] = info.st_nlink
+    return identity
 
 
 def stable_regular(path: Path, expected_sha: str, *, private: bool = True,
-                   allowed_modes: set[int] | None = None) -> tuple[bytes, dict[str, Any]]:
+                   allowed_modes: set[int] | None = None,
+                   include_nlink: bool = False) -> tuple[bytes, dict[str, Any]]:
     if not valid_sha(expected_sha):
         deny(f"FILE_SHA_SCHEMA:{path.name}")
     try:
@@ -227,7 +230,7 @@ def stable_regular(path: Path, expected_sha: str, *, private: bool = True,
     raw = b"".join(blocks)
     if digest_bytes(raw) != expected_sha:
         deny(f"FILE_SHA256:{path}")
-    return raw, stat_identity(current)
+    return raw, stat_identity(current, include_nlink=include_nlink)
 
 
 def object_json(raw: bytes, predicate: str) -> dict[str, Any]:
@@ -1434,7 +1437,8 @@ def _preparation_archive_proof(candidate: dict[str, Any], path: Path,
         if authority == path or PREPARATIONS_ROOT not in authority.parents:
             deny("PREPARATION_ARCHIVE_AUTHORITY_SCOPE")
         authority_raw, authority_identity = stable_regular(
-            authority, binding.get("sha256"), allowed_modes={0o600, 0o640, 0o644})
+            authority, binding.get("sha256"), allowed_modes={0o600, 0o640, 0o644},
+            include_nlink=True)
         if (binding.get("sha256") != expected_sha or len(authority_raw) != expected_size or
                 authority_identity["nlink"] != 1):
             deny("PREPARATION_ARCHIVE_AUTHORITY_DIVERGED")
@@ -1454,7 +1458,8 @@ def authenticate_preparation_archive(candidate: dict[str, Any], operational: dic
         deny("PREPARATION_ARCHIVE_PROTECTED_NAME")
     _preparation_archive_ancestors(path)
     raw, identity = stable_regular(path, candidate.get("sha256"),
-                                   allowed_modes={0o600, 0o640, 0o644})
+                                   allowed_modes={0o600, 0o640, 0o644},
+                                   include_nlink=True)
     if identity["nlink"] != 1:
         deny("PREPARATION_ARCHIVE_HARDLINK")
     references = (operational["currentPaths"] + operational["pm2LivePaths"] +
