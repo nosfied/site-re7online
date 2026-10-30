@@ -1002,3 +1002,32 @@ plano não deve ser apresentado como medição independente do ganho líquido fi
 A geração Tendência foi depois construída/instalada inertemente e consumiu espaço;
 seu estado está no [registro da frente](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md).
 O acervo maior de preparações/releases continua sem saneamento global concluído.
+
+## Tendência fa63994a — DEPLOYED_SANITIZED
+
+Fonte: relato final do owner/Codex local em 30/10/2026; sem reinspeção da VPS
+pelo editor documental.
+
+A release `immutable-fa63994a-vps-20261030T153352Z` foi construída uma única vez.
+A perda do transporte SSH não provocou rebuild: o produtor sobrevivente concluiu a
+compressão e publicou o lifecycle `COMPLETE`. Após aceite integral do owner, a
+transação executou um único save e fechou com retenção 3/3.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| Pacote | `c397b392ced3c3e676b028adb3cc1002c35f3baab4c62a199e0585e82644ca11` |
+| Manifesto | `dd3fdf37f6182f616a6c0dc3ec49d35f0e7a60adb489630e9e77ab505f073f3d` |
+| Índice | `b347956578e1652b4de104d031620a050860b57af2f238ffdc632b3848ab35e7` |
+| Dump final | `440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280` |
+| Marker | `99bdae5577e9f205ae030ed46770224e1dde6795b6a97fd3967fa3be24d50614` |
+| Retention receipt | `d7c7630bb4ca7b9a9ee47fdb3fb45e726af0832120229faabaee9636657ac7fc` |
+| Journal final | `cfb74cd7ad5c58bceaae1ca5b8b9f93d4186ad4c2592f4b9bf9039f0becf2f2c` |
+
+O lock canônico foi removido e os três caminhos derivados foram verificados
+ausentes. O saldo final relatado de 8.012.804.096 bytes é histórico. Não repetir
+build, instalação, preflight, ativação, save ou retenção.
+
+A próxima classificação de artefatos segue
+[PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
+Ela separa ativo, rollback, evidência, dado único, derivado e duplicado; idade ou
+tamanho isolados não autorizam retirada.
