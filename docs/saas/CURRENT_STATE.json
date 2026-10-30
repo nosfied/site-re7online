@@ -6,6 +6,14 @@
   "activeOperationalRecord": "docs/saas/releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/P00_DB_FIRST_API_754281D3_2026-10-29_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+  "capacityRecoveryControlPlane": {
+    "state": "VERSIONED_NOT_EXECUTED",
+    "script": "scripts/capacity-recovery.py",
+    "policy": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
+    "phases": ["audit", "prepare", "execute"],
+    "classes": ["NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME"],
+    "productionEffectsInThisChange": false
+  },
   "production": {
     "status": "DEPLOYED_SANITIZED",
     "certifiedByThisFile": false,

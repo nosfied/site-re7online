@@ -2,6 +2,14 @@
 
 **DEPLOYED_SANITIZED / CONSENT VISIBILITY ACCEPTED / PRODUCTION HEALTHY**
 
+## Control plane de recuperação de capacidade
+
+O repositório contém `scripts/capacity-recovery.py`, com fases separadas de
+auditoria, preparação e execução autorizada. O contrato inicial cobre somente o
+cache literal `/home/deploy/.npm/_cacache` e runtimes derivados autenticados sob
+`build-output`; nenhuma execução produtiva ou exclusão integra esta alteração.
+Consulte [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md).
+
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e o fechamento ativo está
 no [registro aa9527](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json).

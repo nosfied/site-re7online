@@ -35,6 +35,8 @@
 - [Ciclo de vida dos artefatos de implantação](DEPLOY_ARTIFACT_LIFECYCLE.md): capacidade, encerramento por geração, diagnóstico dirigido e retiradas históricas relatadas.
   — contrato de capacidade/classificação, inventário consolidado e novo lote pequeno
   proposto; não autoriza limpeza.
+- [Política canônica de recuperação mínima de capacidade](CAPACITY_RECOVERY_POLICY.md)
+  — `audit`, `prepare` e `execute` fail-closed para cache npm e runtimes derivados autenticados.
 - [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
   — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
   homologação funcional Meta permanece pendente.

@@ -55,6 +55,7 @@ require("scripts/frontend-finalization-continuation.py" in model and
 runbook = (ROOT / "docs/saas/DEPLOY_RUNBOOK.md").read_text()
 driver = (ROOT / "scripts/converta-deploy.py").read_text()
 producer = (ROOT / "scripts/converta-release.py").read_text()
+capacity_recovery = (ROOT / "scripts/capacity-recovery.py").read_text()
 root_policy = json.loads((ROOT / "config/deploy-artifact-roots.json").read_text())
 require(root_policy.get("schemaVersion") == 1, "deployment artifact root policy schema")
 require({key: value["path"] for key, value in root_policy["canonicalRoots"].items() if key != "evidence"} == {
@@ -94,6 +95,13 @@ for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH
                'repo_outside_canonical_build_worktrees',
                '--p00-static-floor-override', 'P00_TENANT_ISOLATION_RECOVERY'):
     require(marker in producer, f"external release producer marker {marker}")
+for marker in ('add_parser("audit")', 'add_parser("prepare")', 'add_parser("execute")',
+               'NPM_CACHE_MAINTENANCE', 'DERIVED_OUTPUT_RUNTIME',
+               'LITERAL_RM = ("/usr/bin/rm", "-r", "--")',
+               'SEALED_FOR_EXPLICIT_AUTHORIZATION', 'AUTHORIZE_ONCE'):
+    require(marker in capacity_recovery, f"capacity recovery marker {marker}")
+require("CAPACITY_RECOVERY_POLICY.md" in runbook,
+        "runbook canonical capacity recovery policy")
 control = (ROOT / "scripts/pm2-definition-control.py").read_text()
 for marker in (
     'READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0}',
