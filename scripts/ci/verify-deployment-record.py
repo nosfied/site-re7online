@@ -371,61 +371,84 @@ def verify_frontend_operational_closure(record_path: Path, record: dict) -> None
     require(not (walk_keys(record) & FORBIDDEN_KEYS),
             "frontend closure sensitive keys")
     release = record.get("release", {})
-    require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))) and
-            release.get("id") == "immutable-b96eb779-vps-20261028T025159Z" and
-            release.get("buildId") == "jRFzvE9WaHEtDCwGbV-EH",
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))),
+            "frontend closure target")
+    closure = release.get("id")
+    known = {
+        "immutable-b96eb779-vps-20261028T025159Z": {
+            "buildId": "jRFzvE9WaHEtDCwGbV-EH",
+            "api": "immutable-708f018c-vps-20261027T152109Z",
+            "scope": "CAMPAIGN_AUDIENCE_AND_TERMINAL_PRESENTATION_FULLY_ACCEPTED",
+        },
+        "immutable-aa9527cc-vps-20261029T222733Z": {
+            "buildId": "lHKJnVlp6Onz0FpycKR_Z",
+            "api": "immutable-754281d3-vps-20261029T174145Z",
+            "scope": "CONSENT_PROMPT_POSITIVE_AND_NEGATIVE_VISIBLE_IN_AUTHORIZED_AUTOMATION_WITHOUT_REGRESSION_IN_OTHER_FILTERS",
+        },
+    }
+    require(closure in known and release.get("buildId") == known[closure]["buildId"],
             "frontend closure release")
     topology = record.get("topology", {})
-    require(topology.get("frontend") == release.get("id") and
-            topology.get("api") == "immutable-708f018c-vps-20261027T152109Z" and
+    require(topology.get("frontend") == closure and
+            topology.get("api") == known[closure]["api"] and
             topology.get("apiPreserved") is True and
             topology.get("workerPreserved") is True,
             "frontend closure topology")
-    require(record.get("acceptance") == {
-        "technical": "PASS", "visual": "PASS",
-        "scope": "CAMPAIGN_AUDIENCE_AND_TERMINAL_PRESENTATION_FULLY_ACCEPTED",
-    }, "frontend closure acceptance")
+    acceptance = record.get("acceptance", {})
+    require(acceptance.get("technical") == acceptance.get("visual") == "PASS" and
+            acceptance.get("scope") == known[closure]["scope"],
+            "frontend closure acceptance")
     finalization = record.get("finalization", {})
     require(finalization.get("state") == "DEPLOYED_SANITIZED" and
             finalization.get("saveCount") == 1,
             "frontend closure finalization")
-    for field in ("dumpSha256", "saveIntentSha256", "saveExecutionSha256",
-                  "dumpValidationSha256", "journalSha256", "receiptSha256",
-                  "markerSha256"):
+    common_hashes = ("dumpSha256", "saveIntentSha256", "saveExecutionSha256",
+                     "dumpValidationSha256", "receiptSha256", "markerSha256")
+    for field in common_hashes:
         require(bool(SHA256.fullmatch(finalization.get(field, ""))),
                 f"frontend closure {field}")
+    journal_field = ("journalSha256" if closure.startswith("immutable-b96")
+                     else "transactionStateSha256")
+    require(bool(SHA256.fullmatch(finalization.get(journal_field, ""))),
+            f"frontend closure {journal_field}")
     retirement = record.get("retention", {})
     require(retirement.get("state") == "SANITIZED" and
             retirement.get("attempted") == retirement.get("completed") == 3 and
-            bool(SHA256.fullmatch(retirement.get("receiptSha256", ""))) and
-            bool(SHA256.fullmatch(retirement.get("reviewSha256", ""))),
+            bool(SHA256.fullmatch(retirement.get("receiptSha256", ""))),
             "frontend closure retention")
-    capacity = record.get("capacity", {})
-    require(capacity == {
-        "availableBytes": 12402286592, "availableGiB": 11.55,
-        "minimumBuildBytes": 12884901888, "minimumBuildGiB": 12,
-        "newBuildAllowed": False,
-        "readOnlyAuditsAndNoBuildAcceptanceAllowed": True,
-    }, "frontend closure capacity")
-    require(record.get("effects") == {
-        "metaCalls": 0, "additionalRestartsDuringFinalization": 0,
-        "guardChanges": 0,
-    }, "frontend closure effects")
+    if closure.startswith("immutable-b96"):
+        require(bool(SHA256.fullmatch(retirement.get("reviewSha256", ""))),
+                "frontend closure review")
+        capacity = record.get("capacity", {})
+        require(capacity == {
+            "availableBytes": 12402286592, "availableGiB": 11.55,
+            "minimumBuildBytes": 12884901888, "minimumBuildGiB": 12,
+            "newBuildAllowed": False,
+            "readOnlyAuditsAndNoBuildAcceptanceAllowed": True,
+        }, "frontend closure capacity")
+    else:
+        require(retirement.get("remaining") == 0 and
+                bool(SHA256.fullmatch(retirement.get("commandLogSha256", ""))),
+                "frontend closure command log")
+    effects = record.get("effects", {})
+    require(effects.get("metaCalls") == 0 and
+            effects.get("additionalRestartsDuringFinalization") == 0 and
+            effects.get("guardChanges") == 0,
+            "frontend closure effects")
     state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
     require(state.get("activeDeploymentRecord") ==
             record_path.relative_to(ROOT).as_posix(), "frontend closure active record")
     production = state.get("production", {})
     active_api_record = read_json(ROOT / state.get("activeApiDeploymentRecord", ""))
-    require(production.get("releaseId") == release.get("id") and
+    require(production.get("releaseId") == closure and
             production.get("targetCommit") == release.get("target") and
             production.get("frontend", {}).get("buildId") == release.get("buildId") and
             production.get("api", {}).get("selectedReleaseId") ==
             active_api_record.get("release", {}).get("id") and
             production.get("pm2", {}).get("dumpSha256") ==
-            active_api_record.get("finalization", {}).get("dumpSha256"),
+            finalization.get("dumpSha256"),
             "frontend closure current state")
-    print("DEPLOYMENT_RECORD_OK: b96 frontend closure, save and retention agree")
-
+    print(f"DEPLOYMENT_RECORD_OK: {closure} frontend closure, save and retention agree")
 
 def verify_template_media_release(record_path: Path, record: dict) -> None:
     require(record.get("recordType") == "IMMUTABLE_RELEASE_DEPLOYMENT",

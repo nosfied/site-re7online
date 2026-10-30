@@ -933,3 +933,19 @@ local e as limitações de recuperação de conteúdo não versionado continuam 
 tratamento próprio; o sucesso desta limpeza não comprova sua recuperação. Outputs
 e releases fora dos sete caminhos, inclusive os runtimes d7de6453 pendentes, seguem
 sem autorização adicional de retirada.
+
+## Encerramento aa9527 — 29/10/2026
+
+A geração `immutable-aa9527cc-vps-20261029T222733Z` terminou
+`DEPLOYED_SANITIZED`. Frontend aa9527 ficou ativo; API 754281d3 e worker e2e7
+foram preservados. O owner aceitou a visibilidade de consentimento positivo e
+negativo no filtro Automação, sem regressão nos demais filtros.
+
+A finalização executou um único `pm2 save`, publicou marker
+`79e761dbfa404f8a932661550aba7d2a4ab3f1e08815dbefdc3018a3a059634c` e
+validou o dump `c7ace2d4d8c8d7edf7ab39e6195bbb9f2318720c6e1e0c08f7f52a149b9f141b`.
+Retenção: 3/3, zero remanescentes, sem retry; recibo
+`5693ae8ba680e7ac411a8eb8647916d641d77870bd95e96a8ba4b064df7a64ba`
+e log `af4a7b0f7290c5b1ecee07c9085d749bd7b40211005f932693d94738f2cdf2df`.
+Não repetir build, instalação, ativação, save ou retirada desta geração.
+

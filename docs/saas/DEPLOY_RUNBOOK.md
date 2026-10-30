@@ -332,8 +332,8 @@ não declarar sucesso nem liberar exclusão por ausência de recibo. O handoff n
 expira por prazo nem encerra por token inválido/EOF. Liberar somente pelo protocolo
 privado após comprovar PID, start ticks e FD; nunca remover o arquivo do lock.
 
-Um GET não garante ausência de efeito: `/app/campaigns/availability` ocorre somente após readiness/health da API candidata.
-Ele não chama Meta, mas a autenticação pode atualizar metadados de sessão. A API d7
-não continha essa rota. Modelos/Campanhas ficam no roteiro funcional separado.
+Um GET não garante ausência de efeito: `/app/campaigns/availability` só ocorre após readiness/health; não chama Meta, mas a autenticação pode atualizar a sessão. Modelos/Campanhas seguem roteiro próprio. Tentativas históricas, Deploy V2, `deploy-normal-release.sh` e executores em `/tmp` não são rotas.
 
-Tentativas históricas são preservadas, não repetidas; preparações anteriores, Deploy V2, `deploy-normal-release.sh` e executores em `/tmp` não são rotas.
+## Admissão agregada e selagem integral — obrigatória
+
+Antes de worktree/output/npm, validar conjuntamente target/tree/CI, impacto, migration, reviews, grafo, PM2, health, guarda, locks, capacidade, inodes, ancestrais, parciais, instalador inerte canônico e control plane privado com `copied=true`. `converta-release.py install` é a única rota: recuperação exige manifesto vinculado a pacote/target/release/path/device/inode/owner/group/mode, sem rebuild/reextração; pacote é `deploy:deploy 0644` e raiz instalada `0755`. Antes da selagem, avaliar e testar todos os predicados de uma vez; guarda vazia significa `open=true`, geração esperada, `(.tasks | length)==0` e `fault=null`, sem fixar `[]` contra o schema `{}`. Reportar todas as divergências antes de executar; reuso autenticado não repete build, extração, instalação nem `generation-retirement prepare`.

@@ -103,3 +103,5 @@ e Next em `cluster_mode` estão obsoletos. O padrão autorizado é build isolado
 VPS, com capacidade conferida; builder externo é alternativa mediante decisão
 específica. Nenhum
 documento histórico prevalece sobre o modelo operacional canônico.
+- [Fechamento frontend aa9527 — consentimento visível e retenção sanitizada](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json)
+- [Fechamento API 754281d3 — DB-first e retenção sanitizada](releases/P00_DB_FIRST_API_754281D3_2026-10-29_DEPLOYED_SANITIZED.json)

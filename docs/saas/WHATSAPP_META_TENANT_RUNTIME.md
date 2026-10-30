@@ -187,3 +187,13 @@ externo. Se um build local for indispensável para restaurar isolamento tenant,
 somente o piso estático de 12 GiB pode receber autorização temporária, selada e
 com expiração; orçamento real de coexistência/pico, reserva operacional, inodes,
 evidências e encerramento/retenção da geração continuam obrigatórios.
+
+## Aceite produtivo da visibilidade — aa9527
+
+Em 29/10/2026, o owner validou na release frontend
+`immutable-aa9527cc-vps-20261029T222733Z` a exibição da pergunta e das respostas
+positiva e negativa de consentimento no filtro Automação. Os demais filtros não
+apresentaram regressão. O comportamento do fluxo, IA, handoff, transporte e gates
+permaneceu inalterado; a entrega modifica somente a projeção visual já autorizada
+pelo backend. Estado: `DEPLOYED_VISUALLY_ACCEPTED`.
+

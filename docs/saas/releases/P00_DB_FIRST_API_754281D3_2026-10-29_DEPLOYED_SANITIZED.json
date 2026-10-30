@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+    "reportedDate": "2026-10-29",
+    "timezone": "America/Fortaleza",
+    "independentVpsInspectionByDocumentationEditor": false
+  },
+  "release": {
+    "id": "immutable-754281d3-vps-20261029T174145Z",
+    "target": "754281d321b254bef9ee13cdb46595ea868703a7",
+    "buildId": "EbLzVwI6NLjQKtLNYnHWS",
+    "packageSha256": "2e640995821cfdfbe16cd03044ee81824ad6d432be2fb4043ab8913d44beaa61",
+    "manifestSha256": "b906710db105a6eaec7a3e2d5055bd61cc18d335410d1a07ca30bde54220bb61",
+    "indexSha256": "5cbab62779fea56f6692ca2074ed4f562c1d07ac968cb9308238ec0305c0d3a1",
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "contractSha256": "f300737a300af7f68b3b05fc1f4dd40fb3a49b06274b2cefe5312443816e78e6",
+    "lifecycleSha256": "672911256966274300a6533349edeea23b92030544876c9615b52df04233001a",
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "selection": {
+    "components": [
+      "api"
+    ],
+    "apiReleaseId": "immutable-754281d3-vps-20261029T174145Z",
+    "frontendReleaseId": "immutable-b96eb779-vps-20261028T025159Z",
+    "workerReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "frontendPreserved": true,
+    "workerPreserved": true
+  },
+  "finalization": {
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "6a490e260861aa35cb5cb262520f7adfaed6f95673c96cfba1d22b71193d4bb8",
+    "markerSha256": "f39949cfc177d1f43d9b7a844202d03ac2ed5fc8c678cb55e3a316d71ca2f46c",
+    "journalSha256": "e5e708d273cdea063d87d6624d5102626d5ee0ed7fe74f801aa25201b1456735",
+    "retirementReceiptSha256": "7e66a400a2804d2b6ec7bb92d7c090818719f0e8c626b1ce6095833078d6dcb3"
+  },
+  "retirement": {
+    "state": "SANITIZED",
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "remainingDerivedArtifacts": 0,
+    "debt": false
+  },
+  "locks": {
+    "deploymentFree": true,
+    "writerFree": true
+  },
+  "forbiddenEffects": {
+    "extraRestarts": 0,
+    "secondPm2Save": 0,
+    "metaCalls": 0,
+    "guardChanges": 0
+  },
+  "nextPermittedAct": "DO_NOT_REOPEN_754281D3_TRANSACTION"
+}
