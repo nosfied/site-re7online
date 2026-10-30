@@ -19,7 +19,7 @@ function baseState(): ConversationState {
     handoff: { status: "none" },
     status: null,
     runtimeWriteToken: {
-      revision: 1,
+      version: 1,
       updatedAt: new Date("2026-10-29T00:01:00.000Z"),
     } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
   };
@@ -32,12 +32,12 @@ test("accepted handoff carries the fresh runtime token into the activation write
     persistConfirmation: async (state) => ({
       ...state,
       runtimeWriteToken: {
-        revision: 2,
+        version: 2,
         updatedAt: new Date("2026-10-29T00:01:01.000Z"),
       } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
     }),
     buildActivatedState: async (state) => {
-      seenRevisions.push(state.runtimeWriteToken?.revision ?? -1);
+      seenRevisions.push(state.runtimeWriteToken?.version ?? -1);
       return {
         ...state,
         mode: "HUMAN",
@@ -48,11 +48,11 @@ test("accepted handoff carries the fresh runtime token into the activation write
       };
     },
     persistActivation: async (state) => {
-      seenRevisions.push(state.runtimeWriteToken?.revision ?? -1);
+      seenRevisions.push(state.runtimeWriteToken?.version ?? -1);
       return {
         ...state,
         runtimeWriteToken: {
-          revision: 3,
+          version: 3,
           updatedAt: new Date("2026-10-29T00:01:02.000Z"),
         } as unknown as NonNullable<ConversationState["runtimeWriteToken"]>,
       };
@@ -64,7 +64,7 @@ test("accepted handoff carries the fresh runtime token into the activation write
   assert.equal(result.state.mode, "HUMAN");
   assert.equal(result.state.handoff.status, "active");
   assert.equal(result.state.status, "WAITING");
-  assert.equal(result.state.runtimeWriteToken?.revision, 3);
+  assert.equal(result.state.runtimeWriteToken?.version, 3);
 });
 
 test("missing department or queue does not return a confirmed handoff to the bot", () => {
