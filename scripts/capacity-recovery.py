@@ -507,6 +507,23 @@ def path_overlap(left: str, right: str) -> bool:
     return common in {os.path.normpath(left), os.path.normpath(right)}
 
 
+def process_target_references_candidate(candidate: str, target: str) -> bool:
+    """A process references a candidate only at or below its literal root.
+
+    Generic ancestors such as root=/ or cwd=/home/deploy do not prove that the
+    process uses a descendant candidate. Operational graph references keep the
+    stricter bidirectional overlap rule through path_overlap().
+    """
+    candidate_path = os.path.normpath(candidate)
+    target_path = os.path.normpath(target)
+    if not os.path.isabs(candidate_path) or not os.path.isabs(target_path):
+        return False
+    try:
+        return os.path.commonpath((candidate_path, target_path)) == candidate_path
+    except ValueError:
+        return False
+
+
 def deploy_identity() -> tuple[int, int]:
     try:
         user = pwd.getpwnam("deploy")
@@ -902,7 +919,7 @@ def authenticate_npm(candidate: dict[str, Any],
         deny("NPM_OR_BUILD_ACTIVE")
     references = [{"pid": pid, "startTicks": ticks, "source": source}
                   for pid, ticks, source, target in targets
-                  if path_overlap(str(path), target)]
+                  if process_target_references_candidate(str(path), target)]
     if references:
         deny("NPM_CACHE_REFERENCED")
     if operational is not None:
@@ -1017,7 +1034,8 @@ def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], opera
     if any(path_overlap(str(path), item) for item in references):
         deny("DERIVED_OUTPUT_REFERENCED_OR_PROTECTED")
     targets, _, complete, scan_summary = process_data
-    if any(path_overlap(str(path), target) for _, _, _, target in targets):
+    if any(process_target_references_candidate(str(path), target)
+           for _, _, _, target in targets):
         deny("DERIVED_OUTPUT_PROCESS_REFERENCE")
     if not complete:
         deny("PROCESS_REFERENCE_SCAN_INCOMPLETE")
