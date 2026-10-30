@@ -332,32 +332,8 @@ não declarar sucesso nem liberar exclusão por ausência de recibo. O handoff n
 expira por prazo nem encerra por token inválido/EOF. Liberar somente pelo protocolo
 privado após comprovar PID, start ticks e FD; nunca remover o arquivo do lock.
 
-Um GET não garante ausência de efeito: `/app/campaigns/availability` ocorre somente após readiness/health da API candidata.
-Ele não chama Meta, mas a autenticação pode atualizar metadados de sessão. A API d7
-não continha essa rota. Modelos/Campanhas ficam no roteiro funcional separado.
-
-Tentativas históricas são preservadas, não repetidas; preparações anteriores, Deploy V2, `deploy-normal-release.sh` e executores em `/tmp` não são rotas.
+Um GET não garante ausência de efeito: `/app/campaigns/availability` só ocorre após readiness/health; não chama Meta, mas a autenticação pode atualizar a sessão. Modelos/Campanhas seguem roteiro próprio. Tentativas históricas, Deploy V2, `deploy-normal-release.sh` e executores em `/tmp` não são rotas.
 
 ## Admissão agregada e selagem integral — obrigatória
 
-Antes de criar worktree, output ou executar npm, uma única admissão deve validar em
-conjunto target/tree/CI, impacto, migration, reviews, grafo de releases, PM2, health,
-guarda, locks, capacidade, inodes, ancestrais e ausência de parciais. Ela também
-deve autenticar a rota canônica de instalação inerte e materializar as cópias
-privadas do control plane com `copied=true`.
-
-A instalação inerte usa exclusivamente `converta-release.py install`. Recuperação
-de staging preexistente exige manifesto privado vinculado a package SHA, target,
-release, caminho, device/inode, owner/group e modo; não autoriza rebuild ou
-reextração. Pacote canônico regular é `deploy:deploy 0644`; raiz instalada deve
-preservar a identidade `0755` do pacote.
-
-Antes de executar a selagem, todos os predicados devem ser avaliados de uma vez e
-cobertos por regressões. A guarda vazia é validada semanticamente por
-`open=true`, geração esperada, `(.tasks | length)==0` e `fault=null`; não se deve
-fixar representação `[]` quando o schema canônico usa `{}`. Divergências devem ser
-relatadas em conjunto antes da execução. É proibido descobrir e corrigir um
-predicado por tentativa produtiva. Reuso de release, intenção e comandos já
-verificados não repete build, extração, instalação ou `generation-retirement
-prepare`.
-
+Antes de worktree/output/npm, validar conjuntamente target/tree/CI, impacto, migration, reviews, grafo, PM2, health, guarda, locks, capacidade, inodes, ancestrais, parciais, instalador inerte canônico e control plane privado com `copied=true`. `converta-release.py install` é a única rota: recuperação exige manifesto vinculado a pacote/target/release/path/device/inode/owner/group/mode, sem rebuild/reextração; pacote é `deploy:deploy 0644` e raiz instalada `0755`. Antes da selagem, avaliar e testar todos os predicados de uma vez; guarda vazia significa `open=true`, geração esperada, `(.tasks | length)==0` e `fault=null`, sem fixar `[]` contra o schema `{}`. Reportar todas as divergências antes de executar; reuso autenticado não repete build, extração, instalação nem `generation-retirement prepare`.
