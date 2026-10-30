@@ -31,7 +31,11 @@ def scan(targets=None, writers=None, complete=True, **summary):
     counts = {"deployProcessesInspected": 0, "otherProcessesInspected": 0,
               "permissionLimitedOtherProcesses": 0, "kernelThreadsIgnored": 0,
               "vanishedProcesses": 0, "identityFailures": 0,
-              "referenceReadFailures": 0, "transientFdClosures": 0}
+              "referenceReadFailures": 0, "transientFdClosures": 0,
+              "referenceReadFailureDetails": [],
+              "referenceReadFailureDetailsTruncated": 0,
+              "transientFdClosureDetails": [],
+              "transientFdClosureDetailsTruncated": 0}
     counts.update(summary)
     return (targets or [], writers or [], complete, counts)
 
@@ -230,12 +234,13 @@ class CapacityRecoveryTests(unittest.TestCase):
         return mock.patch.object(MODULE, "_proc_targets",
                                  return_value=scan(targets, writers, complete))
 
-    def fake_process(self, proc_root, pid, uid, arguments, *, start_ticks=100,
+    def fake_process(self, proc_root, pid, uid, arguments, *, start_ticks=100, flags=0,
                      inaccessible_cmdline=False, include_maps=True):
         process = proc_root / str(pid)
         (process / "fd").mkdir(parents=True)
         (process / "status").write_text(f"Name:\tfixture\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
-        suffix = ["S", *("0" for _ in range(18)), str(start_ticks), "0"]
+        suffix = ["S", "0", "0", "0", "0", "0", str(flags),
+                  *("0" for _ in range(12)), str(start_ticks), "0"]
         (process / "stat").write_text(f"{pid} (fixture process) " + " ".join(suffix) + "\n")
         if inaccessible_cmdline:
             (process / "cmdline").mkdir()
@@ -523,6 +528,12 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertTrue(complete)
         self.assertEqual(summary["transientFdClosures"], 1)
         self.assertEqual(summary["referenceReadFailures"], 0)
+        self.assertEqual(summary["transientFdClosureDetails"], [{
+            "pid": 49, "startTicks": 100,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "readlink:fd/9", "errno": 2, "errnoName": "ENOENT",
+        }])
 
     def test_deploy_process_inaccessible_is_denied(self):
         proc_root = self.base / "proc-deploy-deny"
@@ -554,16 +565,28 @@ class CapacityRecoveryTests(unittest.TestCase):
 
     def test_kernel_thread_is_ignored_nominally(self):
         proc_root = self.base / "proc-kernel"
-        other_uid = 0 if os.geteuid() != 0 else 1
-        self.fake_process(proc_root, 45, other_uid, [])
+        self.fake_process(proc_root, 45, 0, [], flags=MODULE.PF_KTHREAD)
         _, _, complete, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
         self.assertTrue(complete)
         self.assertEqual(summary["kernelThreadsIgnored"], 1)
 
+    def test_empty_cmdline_deploy_process_references_are_inspected(self):
+        proc_root = self.base / "proc-empty-user"
+        process = self.fake_process(proc_root, 451, os.geteuid(), [])
+        (process / "fd" / "9").symlink_to(self.cache / "entry")
+        (process / "maps").write_text(
+            f"0000-1000 r--p 0 00:00 0 {self.cache / 'mapped'}\n")
+        targets, _, complete, summary = MODULE._proc_targets(
+            proc_root, deploy_uid=os.geteuid())
+        self.assertTrue(complete)
+        self.assertEqual(summary["emptyCmdlineProcessesInspected"], 1)
+        self.assertTrue(any(target[2] == "fd/9" for target in targets))
+        self.assertTrue(any(target[2] == "maps" for target in targets))
+
     def test_recycled_pid_is_denied(self):
         proc_root = self.base / "proc-recycled"
         self.fake_process(proc_root, 46, os.geteuid(), ["/usr/bin/node", "service.js"])
-        with mock.patch.object(MODULE, "_read_start_ticks", side_effect=[100, 101]):
+        with mock.patch.object(MODULE, "_read_proc_identity", side_effect=[(0, 100), (0, 101)]):
             targets, writers, complete, summary = MODULE._proc_targets(
                 proc_root, deploy_uid=os.geteuid())
         self.assertFalse(complete)
@@ -579,6 +602,83 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertFalse(complete)
         _, _, _, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
         self.assertGreater(summary["referenceReadFailures"], 0)
+        self.assertEqual(summary["referenceReadFailureDetails"], [{
+            "pid": 47, "startTicks": 100,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "read:maps", "errno": 2, "errnoName": "ENOENT",
+        }])
+
+    def test_deploy_fd_permission_denied_is_fail_closed_and_recorded(self):
+        proc_root = self.base / "proc-permission-denied"
+        process = self.fake_process(
+            proc_root, 50, os.geteuid(), ["/usr/bin/sshd", "session"])
+        fd_entry = process / "fd" / "9"
+        fd_entry.symlink_to(self.cache)
+        real_readlink = os.readlink
+
+        def denied_fd(path):
+            if Path(path) == fd_entry:
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_readlink(path)
+
+        with mock.patch.object(MODULE.os, "readlink", side_effect=denied_fd):
+            _, _, complete, summary = MODULE._proc_targets(
+                proc_root, deploy_uid=os.geteuid())
+        self.assertFalse(complete)
+        self.assertEqual(summary["referenceReadFailures"], 1)
+        self.assertEqual(summary["referenceReadFailureDetails"], [{
+            "pid": 50, "startTicks": 100,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "readlink:fd/9", "errno": 13, "errnoName": "EACCES",
+        }])
+
+    def test_audit_denial_preserves_sanitized_process_failure_details(self):
+        detail = {
+            "pid": 777, "startTicks": 12345,
+            "uids": {"real": os.geteuid(), "effective": os.geteuid(),
+                     "saved": os.geteuid(), "fs": os.geteuid()},
+            "operation": "read:maps", "errno": 13, "errnoName": "EACCES",
+        }
+        private_json(self.request, self.request_value([self.npm_candidate()]))
+        process = scan(complete=False, referenceReadFailures=1,
+                       referenceReadFailureDetails=[detail])
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                mock.patch.object(MODULE, "_proc_targets", return_value=process):
+            plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+        candidate_error = next(item for item in plan["errors"] if item["ordinal"] == 1)
+        self.assertEqual(candidate_error["predicate"], "PROCESS_REFERENCE_SCAN_INCOMPLETE")
+        self.assertEqual(candidate_error["processScan"]["referenceReadFailureDetails"], [detail])
+        self.assertNotIn("cmdline", json.dumps(candidate_error))
+
+    def test_schema_two_consumer_invokes_authenticated_observer_for_audit_and_prepare(self):
+        value = self.request_value([self.npm_candidate()])
+        value["schemaVersion"] = 2
+        value["procObserver"] = {"path": str(MODULE.PROC_OBSERVER_PATH), "sha256": "a" * 64}
+        private_json(self.request, value)
+        phases = []
+        def privileged(_binding, paths, phase):
+            phases.append((phase, paths))
+            return scan(), {"phase": phase, "responseSha256": phase[0] * 64}
+        patches = (
+            mock.patch.object(MODULE, "NPM_CACHE", self.cache),
+            mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent),
+            mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())),
+            mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]),
+            mock.patch.object(MODULE, "_privileged_proc_targets", side_effect=privileged),
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+            self.assertEqual(plan["schemaVersion"], 2)
+            MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
+                                self.commands, self.seal_manifest)
+        intent = json.loads(self.intent.read_text())
+        self.assertEqual(intent["procObserver"], value["procObserver"])
+        self.assertEqual([item[0] for item in phases], ["audit", "prepare"])
 
     def test_execute_recaptures_new_open_transaction_reference_after_locks(self):
         intent_sha, authorization = self.seal_and_authorize()
