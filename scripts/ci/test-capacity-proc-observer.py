@@ -76,6 +76,22 @@ class ProcObserverTests(unittest.TestCase):
              mock.patch.object(RECOVERY.subprocess, "run", side_effect=runner):
             return RECOVERY._privileged_proc_targets(self.binding(), ["/tmp/candidate"], "audit")
 
+    def fake_proc(self, root, pid, *, uid=1000, arguments=(), flags=0,
+                  cwd="/", fds=(), maps=()):
+        proc = root / str(pid); (proc / "fd").mkdir(parents=True)
+        fields = ["S", "0", "0", "0", "0", "0", str(flags), *("0" for _ in range(12)), "10"]
+        (proc / "stat").write_text(f"{pid} (fixture) " + " ".join(fields) + "\n")
+        (proc / "status").write_text(f"Uid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
+        (proc / "cmdline").write_bytes(
+            b"\0".join(item.encode() for item in arguments) + (b"\0" if arguments else b""))
+        os.symlink(cwd, proc / "cwd"); os.symlink("/", proc / "root")
+        os.symlink("/usr/bin/node", proc / "exe")
+        for number, target in enumerate(fds, 3):
+            os.symlink(target, proc / "fd" / str(number))
+        (proc / "maps").write_text("".join(
+            f"0000-1000 r--p 0 00:00 0 {target}\n" for target in maps))
+        return proc
+
     def test_unprivileged_eacces_can_be_replaced_only_by_direct_complete_helper_result(self):
         scan, evidence = self.invoke()
         self.assertTrue(scan[2])
@@ -132,11 +148,47 @@ class ProcObserverTests(unittest.TestCase):
             (proc / "maps").write_bytes(b"")
             for leaf in ("cwd", "root", "exe"):
                 os.symlink("/", proc / leaf)
-            ticks = iter((10, 11))
-            with mock.patch.object(OBSERVER, "start_ticks", side_effect=lambda _p: next(ticks)):
+            identities = iter((("S", 0, 10), ("S", 0, 11)))
+            with mock.patch.object(OBSERVER, "process_stat", side_effect=lambda _p: next(identities)):
                 observation = OBSERVER.scan_proc(["/tmp/candidate"], 1000, proc_root)
             self.assertFalse(observation["complete"])
             self.assertEqual(observation["summary"]["identityChanges"], 1)
+
+    def test_empty_cmdline_user_process_is_fully_inspected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); candidate = OBSERVER.NPM_CACHE
+            self.fake_proc(root, 51, cwd=candidate, fds=[candidate + "/fd"],
+                           maps=[candidate + "/mapped"])
+            observation = OBSERVER.scan_proc([candidate], 1000, root)
+        sources = {item["source"] for item in observation["references"]}
+        self.assertTrue({"cwd", "fd/3", "maps"}.issubset(sources))
+        self.assertTrue(observation["complete"])
+        self.assertEqual(observation["summary"]["emptyCmdlineProcessesInspected"], 1)
+
+    def test_kernel_thread_requires_positive_flag_and_root_identity(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.fake_proc(root, 52, uid=0, flags=OBSERVER.PF_KTHREAD)
+            observation = OBSERVER.scan_proc([OBSERVER.NPM_CACHE], 1000, root)
+        self.assertTrue(observation["complete"])
+        self.assertEqual(observation["summary"]["kernelThreadsIgnored"], 1)
+        self.assertEqual(observation["summary"]["emptyCmdlineProcessesInspected"], 0)
+
+    def test_helper_rejects_roots_and_accepts_only_canonical_candidates(self):
+        def request(paths):
+            value = {"schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
+                     "phase": "audit", "nonce": "0" * 64, "deployUid": 1000,
+                     "candidatePaths": sorted(paths), "consumer": {"pid": 99, "startTicks": 1}}
+            return OBSERVER.canonical(value)
+        rejected = ["/", "/home/deploy/.npm", "/tmp/runtime",
+                    "/opt/re7online/build-output"]
+        for path in rejected:
+            with self.subTest(path=path), self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path]))
+        release = "immutable-d7de6453-vps-20261024T221500Z"
+        producer = f"/opt/re7online/build-output/{release}-producer/{release}"
+        accepted = [OBSERVER.NPM_CACHE, producer + "/api-runtime", producer + "/frontend-runtime"]
+        self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
 
     def test_failure_detail_limit_is_explicit_and_never_implies_completeness(self):
         failures = []; truncated = [0]

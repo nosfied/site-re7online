@@ -234,12 +234,13 @@ class CapacityRecoveryTests(unittest.TestCase):
         return mock.patch.object(MODULE, "_proc_targets",
                                  return_value=scan(targets, writers, complete))
 
-    def fake_process(self, proc_root, pid, uid, arguments, *, start_ticks=100,
+    def fake_process(self, proc_root, pid, uid, arguments, *, start_ticks=100, flags=0,
                      inaccessible_cmdline=False, include_maps=True):
         process = proc_root / str(pid)
         (process / "fd").mkdir(parents=True)
         (process / "status").write_text(f"Name:\tfixture\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
-        suffix = ["S", *("0" for _ in range(18)), str(start_ticks), "0"]
+        suffix = ["S", "0", "0", "0", "0", "0", str(flags),
+                  *("0" for _ in range(12)), str(start_ticks), "0"]
         (process / "stat").write_text(f"{pid} (fixture process) " + " ".join(suffix) + "\n")
         if inaccessible_cmdline:
             (process / "cmdline").mkdir()
@@ -564,16 +565,28 @@ class CapacityRecoveryTests(unittest.TestCase):
 
     def test_kernel_thread_is_ignored_nominally(self):
         proc_root = self.base / "proc-kernel"
-        other_uid = 0 if os.geteuid() != 0 else 1
-        self.fake_process(proc_root, 45, other_uid, [])
+        self.fake_process(proc_root, 45, 0, [], flags=MODULE.PF_KTHREAD)
         _, _, complete, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
         self.assertTrue(complete)
         self.assertEqual(summary["kernelThreadsIgnored"], 1)
 
+    def test_empty_cmdline_deploy_process_references_are_inspected(self):
+        proc_root = self.base / "proc-empty-user"
+        process = self.fake_process(proc_root, 451, os.geteuid(), [])
+        (process / "fd" / "9").symlink_to(self.cache / "entry")
+        (process / "maps").write_text(
+            f"0000-1000 r--p 0 00:00 0 {self.cache / 'mapped'}\n")
+        targets, _, complete, summary = MODULE._proc_targets(
+            proc_root, deploy_uid=os.geteuid())
+        self.assertTrue(complete)
+        self.assertEqual(summary["emptyCmdlineProcessesInspected"], 1)
+        self.assertTrue(any(target[2] == "fd/9" for target in targets))
+        self.assertTrue(any(target[2] == "maps" for target in targets))
+
     def test_recycled_pid_is_denied(self):
         proc_root = self.base / "proc-recycled"
         self.fake_process(proc_root, 46, os.geteuid(), ["/usr/bin/node", "service.js"])
-        with mock.patch.object(MODULE, "_read_start_ticks", side_effect=[100, 101]):
+        with mock.patch.object(MODULE, "_read_proc_identity", side_effect=[(0, 100), (0, 101)]):
             targets, writers, complete, summary = MODULE._proc_targets(
                 proc_root, deploy_uid=os.geteuid())
         self.assertFalse(complete)

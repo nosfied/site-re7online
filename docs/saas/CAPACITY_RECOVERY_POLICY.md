@@ -78,8 +78,12 @@ mapa ou argumento no próprio candidato ou abaixo dele continuam negando. Para
 operacionais: um HOME, root ou diretório ancestral genérico não prova uso do cache.
 A sobreposição bidirecional permanece obrigatória para referências operacionais da
 classe `DERIVED_OUTPUT_RUNTIME`, onde um caminho ancestral pode proteger todo o
-output. Thread de kernel sem `cmdline` é ignorada nominalmente; o fechamento de um
-FD entre a enumeração e o `readlink` é registrado como transiente e aceito somente
+output. `cmdline` vazio, isoladamente, nunca torna um processo dispensável:
+processos de usuário nessa condição ainda têm `cwd`, `root`, `exe`, FDs e mapas
+integralmente inspecionados. Uma thread de kernel só é ignorada após autenticar UIDs
+root, o bit `PF_KTHREAD`, PID/start ticks e flags estáveis; desaparecimento durante
+a coleta só é classificado como processo encerrado após confirmar a ausência do PID.
+O fechamento de um FD entre a enumeração e o `readlink` é registrado como transiente e aceito somente
 com PID/start ticks estáveis. Qualquer outra falha de leitura de referência de
 processo `deploy` mantém a varredura incompleta e passa a ser contada nominalmente.
 Limitação esperada em processo de outro UID não bloqueia, mas qualquer comando
@@ -102,6 +106,12 @@ remove arquivos: aceita apenas a operação literal `collect`, recebe pela entra
 padrão uma lista fechada de candidatos e devolve na saída padrão evidência
 sanitizada. Não aceita comando, módulo, executável, caminho de saída ou argumento
 de descoberta fornecido pelo operador.
+
+O próprio helper aceita somente o cache literal `/home/deploy/.npm/_cacache` e
+runtimes `api-runtime`/`frontend-runtime` no layout fechado
+`/opt/re7online/build-output/<release>-producer/<release>/<runtime>`. `/`, raízes,
+ancestrais genéricos, outros descendentes e caminhos externos são negados antes da
+varredura.
 
 A instalação proposta é imutável para `deploy`:
 

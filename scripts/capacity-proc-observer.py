@@ -37,6 +37,10 @@ MAX_REFERENCES = 16384
 MAX_FAILURE_DETAILS = 256
 MAX_SECONDS = 12
 SHA256_LENGTH = 64
+NPM_CACHE = "/home/deploy/.npm/_cacache"
+BUILD_OUTPUT_ROOT = Path("/opt/re7online/build-output")
+RUNTIME_NAMES = {"api-runtime", "frontend-runtime"}
+PF_KTHREAD = 0x00200000
 
 
 class Refused(RuntimeError):
@@ -66,7 +70,7 @@ def identity(info: os.stat_result) -> dict[str, Any]:
     }
 
 
-def start_ticks(proc: Path) -> int:
+def process_stat(proc: Path) -> tuple[str, int, int]:
     raw = (proc / "stat").read_text(errors="strict")
     closing = raw.rfind(") ")
     if closing < 0:
@@ -75,9 +79,13 @@ def start_ticks(proc: Path) -> int:
     if len(fields) <= 19:
         refuse("PROCESS_STAT_SCHEMA")
     try:
-        return int(fields[19])
+        return fields[0], int(fields[6]), int(fields[19])
     except ValueError:
         refuse("PROCESS_STAT_SCHEMA")
+
+
+def start_ticks(proc: Path) -> int:
+    return process_stat(proc)[2]
 
 
 def status_uids(proc: Path) -> tuple[int, int, int, int]:
@@ -109,6 +117,23 @@ def normalized_path(value: Any) -> str:
     if path != value or ".." in Path(value).parts or any(ord(char) < 32 for char in value):
         refuse("CANDIDATE_PATH")
     return value
+
+
+def canonical_candidate(value: Any) -> str:
+    candidate = normalized_path(value)
+    if candidate == NPM_CACHE:
+        return candidate
+    path = Path(candidate)
+    try:
+        relative = path.relative_to(BUILD_OUTPUT_ROOT)
+    except ValueError:
+        refuse("CANDIDATE_SCOPE")
+    parts = relative.parts
+    if (len(parts) != 3 or parts[2] not in RUNTIME_NAMES or
+            not parts[0].startswith("immutable-") or not parts[0].endswith("-producer") or
+            parts[1] != parts[0][:-len("-producer")]):
+        refuse("CANDIDATE_SCOPE")
+    return candidate
 
 
 def references_candidate(candidate: str, target: str) -> bool:
@@ -156,7 +181,7 @@ def validate_request(raw: bytes) -> dict[str, Any]:
     candidates = value.get("candidatePaths")
     if not isinstance(candidates, list) or not candidates or len(candidates) > MAX_CANDIDATES:
         refuse("REQUEST_CANDIDATES")
-    normalized = [normalized_path(item) for item in candidates]
+    normalized = [canonical_candidate(item) for item in candidates]
     if normalized != sorted(set(normalized)):
         refuse("REQUEST_CANDIDATES_ORDER")
     consumer = value.get("consumer")
@@ -195,6 +220,7 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
     complete = True
     summary = {
         "processesObserved": 0, "emptyCmdlineProcesses": 0,
+        "emptyCmdlineProcessesInspected": 0, "kernelThreadsIgnored": 0,
         "vanishedProcesses": 0, "transientFdClosures": 0,
         "identityChanges": 0, "referenceReadFailures": 0,
     }
@@ -239,7 +265,7 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
         local_references: list[tuple[str, str]] = []
         local_writer: dict[str, Any] | None = None
         try:
-            ticks = start_ticks(proc)
+            _state, flags, ticks = process_stat(proc)
             uid_values = status_uids(proc)
             command_raw = (proc / "cmdline").read_bytes()
         except FileNotFoundError:
@@ -254,16 +280,23 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
         arguments = [item.decode(errors="replace") for item in command_raw.split(b"\0") if item]
         if not arguments:
             try:
-                after = start_ticks(proc)
+                _after_state, after_flags, after = process_stat(proc)
+                after_uids = status_uids(proc)
             except FileNotFoundError:
                 summary["vanishedProcesses"] += 1
                 continue
-            if after != ticks:
+            if after != ticks or after_flags != flags or after_uids != uid_values:
                 summary["identityChanges"] += 1
                 fail(pid, ticks, uid_values, "identity:after", "PROCESS_IDENTITY_CHANGED")
-            else:
-                summary["emptyCmdlineProcesses"] += 1
-            continue
+                continue
+            summary["emptyCmdlineProcesses"] += 1
+            if flags & PF_KTHREAD:
+                if uid_values != (0, 0, 0, 0):
+                    fail(pid, ticks, uid_values, "classify:kthread", "KERNEL_THREAD_IDENTITY_INVALID")
+                else:
+                    summary["kernelThreadsIgnored"] += 1
+                continue
+            summary["emptyCmdlineProcessesInspected"] += 1
         for argument in arguments:
             possible = argument.split("=", 1)[-1]
             if possible.startswith("/"):
@@ -331,7 +364,7 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
             stable = False
             fail(pid, ticks, uid_values, "read:maps", "PROCESS_REFERENCE_UNREADABLE", exc)
         try:
-            after_ticks = start_ticks(proc)
+            _after_state, after_flags, after_ticks = process_stat(proc)
             after_uids = status_uids(proc)
         except FileNotFoundError:
             summary["vanishedProcesses"] += 1
@@ -339,7 +372,8 @@ def scan_proc(candidate_paths: list[str], deploy_uid: int,
         except (OSError, Refused) as exc:
             fail(pid, ticks, uid_values, "identity:after", "PROCESS_IDENTITY_UNREADABLE", exc)
             continue
-        if after_ticks != ticks or after_uids != uid_values:
+        if (after_ticks != ticks or after_flags != flags or
+                after_uids != uid_values):
             summary["identityChanges"] += 1
             fail(pid, ticks, uid_values, "identity:after", "PROCESS_IDENTITY_CHANGED")
             continue

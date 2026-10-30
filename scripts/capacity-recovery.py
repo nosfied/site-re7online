@@ -272,6 +272,7 @@ def physical_usage(paths: Iterable[Path]) -> dict[str, dict[str, int]]:
 
 ProcessScan = tuple[list[tuple[int, int, str, str]], list[dict[str, Any]], bool, dict[str, Any]]
 PROCESS_FAILURE_DETAIL_LIMIT = 256
+PF_KTHREAD = 0x00200000
 
 
 def _record_process_reference_failure(summary: dict[str, Any], pid: int, start_ticks: int,
@@ -332,7 +333,7 @@ def _is_active_npm_or_build(arguments: list[str]) -> bool:
             ("converta-release.py" in command and " build" in command))
 
 
-def _proc_start_ticks(raw: str) -> int:
+def _proc_stat_identity(raw: str) -> tuple[int, int]:
     closing = raw.rfind(") ")
     if closing < 0:
         deny("PROCESS_STAT_SCHEMA")
@@ -340,13 +341,21 @@ def _proc_start_ticks(raw: str) -> int:
     if len(fields) <= 19:
         deny("PROCESS_STAT_SCHEMA")
     try:
-        return int(fields[19])
+        return int(fields[6]), int(fields[19])
     except ValueError:
         deny("PROCESS_STAT_SCHEMA")
 
 
+def _proc_start_ticks(raw: str) -> int:
+    return _proc_stat_identity(raw)[1]
+
+
 def _read_start_ticks(proc: Path) -> int:
     return _proc_start_ticks((proc / "stat").read_text(errors="strict"))
+
+
+def _read_proc_identity(proc: Path) -> tuple[int, int]:
+    return _proc_stat_identity((proc / "stat").read_text(errors="strict"))
 
 
 def _status_uids(proc: Path) -> tuple[int, int, int, int]:
@@ -372,7 +381,7 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
         "deployProcessesInspected": 0,
         "otherProcessesInspected": 0,
         "permissionLimitedOtherProcesses": 0,
-        "kernelThreadsIgnored": 0,
+        "kernelThreadsIgnored": 0, "emptyCmdlineProcessesInspected": 0,
         "vanishedProcesses": 0,
         "identityFailures": 0,
         "referenceReadFailures": 0,
@@ -394,7 +403,7 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
         local_targets: list[tuple[int, int, str, str]] = []
         local_writers: list[dict[str, Any]] = []
         try:
-            before_ticks = _read_start_ticks(proc)
+            before_flags, before_ticks = _read_proc_identity(proc)
             try:
                 uids = _status_uids(proc)
             except Denied:
@@ -460,13 +469,20 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
             command = " ".join(item.decode(errors="replace") for item in command_parts if item)
             arguments = [item.decode(errors="replace") for item in command_parts if item]
             if not arguments:
-                after_ticks = _read_start_ticks(proc)
-                if after_ticks != before_ticks:
+                after_flags, after_ticks = _read_proc_identity(proc)
+                if after_ticks != before_ticks or after_flags != before_flags:
                     complete = False
                     summary["identityFailures"] += 1
+                    continue
+                if before_flags & PF_KTHREAD:
+                    if uids != (0, 0, 0, 0):
+                        complete = False
+                        summary["identityFailures"] += 1
+                    else:
+                        summary["kernelThreadsIgnored"] += 1
+                    continue
                 else:
-                    summary["kernelThreadsIgnored"] += 1
-                continue
+                    summary["emptyCmdlineProcessesInspected"] += 1
             for argument in arguments:
                 possible_path = argument.split("=", 1)[-1]
                 if possible_path.startswith("/"):
@@ -540,8 +556,8 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
                         summary, pid, before_ticks, uids, "read:maps", exc)
                 else:
                     other_limited = True
-            after_ticks = _read_start_ticks(proc)
-            if after_ticks != before_ticks:
+            after_flags, after_ticks = _read_proc_identity(proc)
+            if after_ticks != before_ticks or after_flags != before_flags:
                 complete = False
                 summary["identityFailures"] += 1
                 continue
