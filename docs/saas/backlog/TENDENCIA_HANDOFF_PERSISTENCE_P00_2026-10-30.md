@@ -1,6 +1,16 @@
 # Tendência handoff persistence loop — P00
 
-Status: `IMPLEMENTED / AWAITING CI AND REVIEW / PRODUCTION UNCHANGED`.
+Status: `MERGED / CI 4/4 PASS / PRODUCTION CHANGE PENDING CAPACITY`.
+
+PR `#280` was merged as
+`059ea95aaf73f3e143774d60a8fef4df88c7c0ba`, tree
+`afae4a544f50e3516437e17c67fc5e48b894433d`, from tested head
+`2d3634d5ff37daba8e804ae984bb3be532ab7c59` with CI run
+`40981724130` at `4/4 PASS`. The active API release still predates this merge;
+no package or inert release for this target has been produced. The next build
+remains blocked until the fresh aggregate capacity contract passes. The P00
+authorization below continues to waive only the static floor, never the real
+coexistence budget, operational reserve or inode budget.
 
 ## Evidence and scope
 
