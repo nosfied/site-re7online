@@ -2,6 +2,27 @@
 
 **DEPLOYED_SANITIZED / CONSENT VISIBILITY ACCEPTED / PRODUCTION HEALTHY**
 
+## Estado vigente — Tendência concluída e sanitização P00 liberada
+
+Fonte: relatório final do owner/Codex local; este editor não reinspecionou a VPS.
+
+A release API-only `immutable-fa63994a-vps-20261030T153352Z`, target
+`fa63994acd5655bd499a328679a0f8c11e0740e2`, está
+`DEPLOYED_SANITIZED`. O owner confirmou PASS no teste do final `9614`:
+confirmação de encaminhamento, estado humano, fila/Inbox, ausência de reentrada da
+IA e frontend. Frontend `aa9527cc` e worker `e2e7f17a` foram preservados.
+
+A finalização executou um único `pm2 save`, validou o dump
+`440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280`,
+criou o marker, retirou 3/3 derivados e removeu o lock canônico. Registro:
+[TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json).
+
+Não repetir qualquer fase dessa geração. O saldo final relatado foi
+8.012.804.096 bytes; é checkpoint histórico, não capacidade reservada. A prioridade
+vigente é o [plano P00 de sanitização e retenção](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md),
+com limpeza classificada de VPS, preparações, releases, outputs, worktrees,
+branches e PRs, seguida da prevenção permanente de novo acúmulo.
+
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 
 Fonte: relato do owner/Codex local, sem nova inspeção da VPS pelo editor. O lote
