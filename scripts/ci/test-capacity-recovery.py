@@ -30,7 +30,8 @@ def private_json(path: Path, value: dict) -> None:
 def scan(targets=None, writers=None, complete=True, **summary):
     counts = {"deployProcessesInspected": 0, "otherProcessesInspected": 0,
               "permissionLimitedOtherProcesses": 0, "kernelThreadsIgnored": 0,
-              "vanishedProcesses": 0, "identityFailures": 0}
+              "vanishedProcesses": 0, "identityFailures": 0,
+              "referenceReadFailures": 0, "transientFdClosures": 0}
     counts.update(summary)
     return (targets or [], writers or [], complete, counts)
 
@@ -298,6 +299,27 @@ class CapacityRecoveryTests(unittest.TestCase):
             observed = MODULE.authenticate_npm(candidate, scan(targets=targets))
         self.assertEqual(observed["references"], [])
 
+    def test_cache_operational_ancestor_does_not_deny(self):
+        operational = json.loads(self.operational.read_text())
+        operational["pm2LivePaths"] = [str(self.cache_parent)]
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]):
+            observed = MODULE.authenticate_npm(
+                self.npm_candidate(), scan(), operational)
+        self.assertEqual(observed["references"], [])
+
+    def test_cache_exact_operational_reference_is_denied(self):
+        operational = json.loads(self.operational.read_text())
+        operational["pm2LivePaths"] = [str(self.cache)]
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_OPERATIONALLY_REFERENCED"):
+            MODULE.authenticate_npm(self.npm_candidate(), scan(), operational)
+
     def test_cache_root_group_writable_is_denied(self):
         self.cache.chmod(0o775)
         with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
@@ -481,6 +503,27 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertTrue(targets)
         self.assertEqual(summary["identityFailures"], 0)
 
+    def test_transient_fd_close_is_recorded_without_incomplete_scan(self):
+        proc_root = self.base / "proc-transient-fd"
+        process = self.fake_process(
+            proc_root, 49, os.geteuid(), ["/usr/bin/node", "service.js"])
+        fd_entry = process / "fd" / "9"
+        fd_entry.symlink_to(self.cache)
+        real_readlink = os.readlink
+
+        def closing_fd(path):
+            if Path(path) == fd_entry:
+                fd_entry.unlink()
+                raise FileNotFoundError(str(path))
+            return real_readlink(path)
+
+        with mock.patch.object(MODULE.os, "readlink", side_effect=closing_fd):
+            _, _, complete, summary = MODULE._proc_targets(
+                proc_root, deploy_uid=os.geteuid())
+        self.assertTrue(complete)
+        self.assertEqual(summary["transientFdClosures"], 1)
+        self.assertEqual(summary["referenceReadFailures"], 0)
+
     def test_deploy_process_inaccessible_is_denied(self):
         proc_root = self.base / "proc-deploy-deny"
         self.fake_process(proc_root, 43, os.geteuid(), [], inaccessible_cmdline=True)
@@ -534,6 +577,8 @@ class CapacityRecoveryTests(unittest.TestCase):
                           include_maps=False)
         _, _, complete, _ = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
         self.assertFalse(complete)
+        _, _, _, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
+        self.assertGreater(summary["referenceReadFailures"], 0)
 
     def test_execute_recaptures_new_open_transaction_reference_after_locks(self):
         intent_sha, authorization = self.seal_and_authorize()
