@@ -337,3 +337,27 @@ Ele não chama Meta, mas a autenticação pode atualizar metadados de sessão. A
 não continha essa rota. Modelos/Campanhas ficam no roteiro funcional separado.
 
 Tentativas históricas são preservadas, não repetidas; preparações anteriores, Deploy V2, `deploy-normal-release.sh` e executores em `/tmp` não são rotas.
+
+## Admissão agregada e selagem integral — obrigatória
+
+Antes de criar worktree, output ou executar npm, uma única admissão deve validar em
+conjunto target/tree/CI, impacto, migration, reviews, grafo de releases, PM2, health,
+guarda, locks, capacidade, inodes, ancestrais e ausência de parciais. Ela também
+deve autenticar a rota canônica de instalação inerte e materializar as cópias
+privadas do control plane com `copied=true`.
+
+A instalação inerte usa exclusivamente `converta-release.py install`. Recuperação
+de staging preexistente exige manifesto privado vinculado a package SHA, target,
+release, caminho, device/inode, owner/group e modo; não autoriza rebuild ou
+reextração. Pacote canônico regular é `deploy:deploy 0644`; raiz instalada deve
+preservar a identidade `0755` do pacote.
+
+Antes de executar a selagem, todos os predicados devem ser avaliados de uma vez e
+cobertos por regressões. A guarda vazia é validada semanticamente por
+`open=true`, geração esperada, `(.tasks | length)==0` e `fault=null`; não se deve
+fixar representação `[]` quando o schema canônico usa `{}`. Divergências devem ser
+relatadas em conjunto antes da execução. É proibido descobrir e corrigir um
+predicado por tentativa produtiva. Reuso de release, intenção e comandos já
+verificados não repete build, extração, instalação ou `generation-retirement
+prepare`.
+
