@@ -97,6 +97,8 @@ for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH
     require(marker in producer, f"external release producer marker {marker}")
 for marker in ('add_parser("audit")', 'add_parser("prepare")', 'add_parser("execute")',
                'NPM_CACHE_MAINTENANCE', 'DERIVED_OUTPUT_RUNTIME',
+               'capture_live_operational', 'npm-cli.js',
+               'NPM_CACHE_ALLOWED_MODES = {0o700, 0o750, 0o755}',
                'LITERAL_RM = ("/usr/bin/rm", "-r", "--")',
                'SEALED_FOR_EXPLICIT_AUTHORIZATION', 'AUTHORIZE_ONCE'):
     require(marker in capacity_recovery, f"capacity recovery marker {marker}")

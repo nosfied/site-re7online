@@ -26,6 +26,7 @@ from typing import Any, Iterable
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 NPM_CACHE = Path("/home/deploy/.npm/_cacache")
 NPM_PARENT = Path("/home/deploy/.npm")
+NPM_CACHE_ALLOWED_MODES = {0o700, 0o750, 0o755}
 LITERAL_RM = ("/usr/bin/rm", "-r", "--")
 CLASSES = {"NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME"}
 AUDIT_REQUEST_KEYS = {
@@ -33,13 +34,18 @@ AUDIT_REQUEST_KEYS = {
     "rootPolicy", "operationalState", "candidates",
 }
 COMMON_CANDIDATE_KEYS = {"class", "path"}
-NPM_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {"expectedDeployGroupPrincipals"}
+NPM_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS
 OUTPUT_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {
     "runtimeRelativePath", "releaseRoot", "contract", "package", "manifest", "index",
 }
 OPERATIONAL_KEYS = {
     "schemaVersion", "currentPaths", "pm2LivePaths", "pm2DumpPaths",
     "openTransactionPaths", "protectedGraphPaths", "deploymentLock", "writerLock",
+    "liveObservations",
+}
+LIVE_OBSERVATION_KEYS = {"currentLinks", "pm2", "dump", "transactionsRoot", "releaseGraph"}
+TERMINAL_TRANSACTION_STATES = {
+    "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE", "ROLLED_BACK",
 }
 
 
@@ -184,43 +190,82 @@ def physical_usage(paths: Iterable[Path]) -> dict[str, dict[str, int]]:
     return result
 
 
-def _proc_targets() -> tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool]:
+def _process_still_exists(proc: Path) -> bool:
+    try:
+        proc.stat()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+
+
+def _is_active_npm_or_build(arguments: list[str]) -> bool:
+    if not arguments:
+        return False
+    executable = Path(arguments[0]).name
+    command = " ".join(arguments)
+    return (executable in {"npm", "npx"} or
+            any(Path(argument).name == "npm-cli.js" for argument in arguments[1:]) or
+            "next build" in command or
+            ("converta-release.py" in command and " build" in command))
+
+
+def _proc_targets(proc_root: Path = Path("/proc")) -> tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool]:
     targets: list[tuple[int, str, str]] = []
     writers: list[dict[str, Any]] = []
     complete = True
-    for proc in Path("/proc").iterdir():
+    try:
+        processes = list(proc_root.iterdir())
+    except OSError:
+        return targets, writers, False
+    for proc in processes:
         if not proc.name.isdigit() or int(proc.name) == os.getpid():
             continue
         pid = int(proc.name)
         try:
             command_parts = (proc / "cmdline").read_bytes().split(b"\0")
             command = " ".join(item.decode(errors="replace") for item in command_parts if item)
-            executable = Path(command_parts[0].decode(errors="replace")).name if command_parts and command_parts[0] else ""
-            if executable in {"npm", "npx"} or "next build" in command or ("converta-release.py" in command and " build" in command):
+            arguments = [item.decode(errors="replace") for item in command_parts if item]
+            if _is_active_npm_or_build(arguments):
                 writers.append({"pid": pid, "commandSha256": digest_bytes(command.encode())})
             for leaf in ("cwd", "root", "exe"):
                 try:
-                    targets.append((pid, leaf, os.path.realpath(proc / leaf)))
+                    targets.append((pid, leaf, os.readlink(proc / leaf)))
+                except FileNotFoundError:
+                    if _process_still_exists(proc):
+                        complete = False
                 except OSError:
-                    pass
+                    complete = False
             try:
                 for fd in (proc / "fd").iterdir():
                     try:
-                        targets.append((pid, f"fd/{fd.name}", os.path.realpath(fd)))
+                        targets.append((pid, f"fd/{fd.name}", os.readlink(fd)))
+                    except FileNotFoundError:
+                        if _process_still_exists(proc):
+                            complete = False
                     except OSError:
-                        pass
+                        complete = False
+            except FileNotFoundError:
+                if _process_still_exists(proc):
+                    complete = False
             except OSError:
-                pass
+                complete = False
             try:
                 for line in (proc / "maps").read_text(errors="replace").splitlines():
                     if "/" in line:
                         targets.append((pid, "maps", line.split(None, 5)[-1]))
+            except FileNotFoundError:
+                if _process_still_exists(proc):
+                    complete = False
             except OSError:
-                pass
+                complete = False
         except PermissionError:
             complete = False
         except FileNotFoundError:
             continue
+        except OSError:
+            complete = False
     return targets, writers, complete
 
 
@@ -263,7 +308,7 @@ def physical_directory(path: Path, predicate: str) -> os.stat_result:
 
 def validate_operational(raw: bytes) -> dict[str, Any]:
     value = object_json(raw, "OPERATIONAL_STATE_JSON")
-    if set(value) != OPERATIONAL_KEYS or value.get("schemaVersion") != 1:
+    if set(value) != OPERATIONAL_KEYS or value.get("schemaVersion") != 2:
         deny("OPERATIONAL_STATE_SCHEMA")
     for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths", "openTransactionPaths", "protectedGraphPaths"):
         items = value.get(key)
@@ -272,7 +317,203 @@ def validate_operational(raw: bytes) -> dict[str, Any]:
         value[key] = [str(normalized_absolute(item, f"OPERATIONAL_STATE_{key}")) for item in items]
     for key in ("deploymentLock", "writerLock"):
         value[key] = str(normalized_absolute(value.get(key), f"OPERATIONAL_STATE_{key}"))
+    observations = value.get("liveObservations")
+    if not isinstance(observations, dict) or set(observations) != LIVE_OBSERVATION_KEYS:
+        deny("OPERATIONAL_STATE_LIVE_OBSERVATIONS")
+    links = observations.get("currentLinks")
+    if (not isinstance(links, list) or any(
+            not isinstance(item, dict) or set(item) != {"path", "target"} or
+            not isinstance(item.get("path"), str) or not isinstance(item.get("target"), str)
+            for item in links)):
+        deny("OPERATIONAL_STATE_CURRENT_LINKS")
+    for item in links:
+        item["path"] = str(normalized_absolute(item["path"], "OPERATIONAL_STATE_CURRENT_LINK"))
+        item["target"] = str(normalized_absolute(item["target"], "OPERATIONAL_STATE_CURRENT_TARGET"))
+    for label in ("pm2", "dump", "releaseGraph"):
+        item = observations.get(label)
+        expected = {"path", "sha256", "fingerprintSha256"} if label == "pm2" else {"path", "sha256"}
+        if not isinstance(item, dict) or set(item) != expected or not valid_sha(item.get("sha256")):
+            deny(f"OPERATIONAL_STATE_{label.upper()}")
+        item["path"] = str(normalized_absolute(item.get("path"), f"OPERATIONAL_STATE_{label.upper()}"))
+        if label == "pm2" and not valid_sha(item.get("fingerprintSha256")):
+            deny("OPERATIONAL_STATE_PM2_FINGERPRINT")
+    transactions = observations.get("transactionsRoot")
+    if (not isinstance(transactions, dict) or set(transactions) !=
+            {"path", "ownerUid", "groupGid", "allowedModes"} or
+            not isinstance(transactions.get("ownerUid"), int) or
+            not isinstance(transactions.get("groupGid"), int) or
+            not isinstance(transactions.get("allowedModes"), list) or
+            any(not isinstance(mode, str) or not re.fullmatch(r"0[0-7]{3}", mode)
+                for mode in transactions["allowedModes"])):
+        deny("OPERATIONAL_STATE_TRANSACTIONS_ROOT")
+    transactions["path"] = str(normalized_absolute(
+        transactions.get("path"), "OPERATIONAL_STATE_TRANSACTIONS_ROOT"))
     return value
+
+
+def _json_absolute_paths(value: Any) -> list[str]:
+    paths: set[str] = set()
+    stack = [value]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
+        elif isinstance(current, str) and current.startswith("/"):
+            try:
+                paths.add(str(normalized_absolute(current, "LIVE_ABSOLUTE_PATH")))
+            except Denied:
+                deny("LIVE_ABSOLUTE_PATH")
+    return sorted(paths)
+
+
+def _pm2_projection(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        deny("LIVE_PM2_SHAPE")
+    projected: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            deny("LIVE_PM2_ROW")
+        environment = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
+        projected.append({
+            "name": row.get("name", environment.get("name")),
+            "pid": row.get("pid"),
+            "status": row.get("status", environment.get("status")),
+            "restart_time": row.get("restart_time", environment.get("restart_time")),
+            "pm_cwd": row.get("pm_cwd", environment.get("pm_cwd")),
+            "pm_exec_path": row.get("pm_exec_path", environment.get("pm_exec_path")),
+        })
+    return sorted(projected, key=lambda item: str(item.get("name")))
+
+
+def _stable_observed_private(path: Path) -> tuple[bytes, dict[str, Any], str]:
+    try:
+        expected = sha256(path)
+    except OSError:
+        deny(f"LIVE_FILE_READ:{path}")
+    raw, identity = stable_regular(path, expected)
+    return raw, identity, expected
+
+
+def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Recapture mutable operational references while both canonical locks are held."""
+    observations = operational["liveObservations"]
+    current_paths: list[str] = []
+    current_evidence: list[dict[str, str]] = []
+    for item in observations["currentLinks"]:
+        link = Path(item["path"])
+        expected_target = Path(item["target"])
+        try:
+            info = link.lstat()
+            target = link.resolve(strict=True)
+            expected = expected_target.resolve(strict=True)
+        except OSError:
+            deny(f"LIVE_CURRENT_LINK:{link}")
+        if not stat.S_ISLNK(info.st_mode) or target != expected:
+            deny(f"LIVE_CURRENT_LINK:{link}")
+        current_paths.append(str(target))
+        current_evidence.append({"path": str(link), "target": str(target)})
+
+    pm2 = observations["pm2"]
+    pm2_path = Path(pm2["path"])
+    raw, _ = stable_regular(pm2_path, pm2["sha256"], allowed_modes={0o500, 0o700})
+    fd = os.open(pm2_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode) or digest_bytes(raw) != pm2["sha256"]:
+            deny("LIVE_PM2_BINARY")
+        try:
+            result = subprocess.run([f"/proc/self/fd/{fd}", "jlist"], text=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    timeout=30, check=False, pass_fds=(fd,))
+        except (OSError, subprocess.TimeoutExpired):
+            deny("LIVE_PM2_JLIST")
+    finally:
+        os.close(fd)
+    if result.returncode != 0:
+        deny("LIVE_PM2_JLIST")
+    try:
+        pm2_rows = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        deny("LIVE_PM2_JLIST")
+    projection = _pm2_projection(pm2_rows)
+    pm2_fingerprint = digest_bytes(canonical(projection))
+    if pm2_fingerprint != pm2["fingerprintSha256"]:
+        deny("LIVE_PM2_CHANGED")
+    pm2_paths = _json_absolute_paths(projection)
+
+    dump = observations["dump"]
+    dump_raw, _ = stable_regular(Path(dump["path"]), dump["sha256"],
+                                 allowed_modes={0o600, 0o644})
+    try:
+        dump_value = json.loads(dump_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny("LIVE_DUMP_JSON")
+    dump_paths = _json_absolute_paths(dump_value)
+
+    graph = observations["releaseGraph"]
+    graph_raw, _ = stable_regular(Path(graph["path"]), graph["sha256"],
+                                  allowed_modes={0o600, 0o644})
+    graph_value = object_json(graph_raw, "LIVE_RELEASE_GRAPH_JSON")
+    if (set(graph_value) != {"schemaVersion", "protectedGraphPaths"} or
+            graph_value.get("schemaVersion") != 1 or
+            not isinstance(graph_value.get("protectedGraphPaths"), list) or
+            any(not isinstance(item, str) for item in graph_value["protectedGraphPaths"])):
+        deny("LIVE_RELEASE_GRAPH_SCHEMA")
+    graph_paths = [str(normalized_absolute(item, "LIVE_RELEASE_GRAPH_PATH"))
+                   for item in graph_value["protectedGraphPaths"]]
+
+    transaction_definition = observations["transactionsRoot"]
+    transaction_root = Path(transaction_definition["path"])
+    transaction_info = physical_directory(transaction_root, "LIVE_TRANSACTIONS_ROOT")
+    transaction_mode = f"0{stat.S_IMODE(transaction_info.st_mode):03o}"
+    if ((transaction_info.st_uid, transaction_info.st_gid) !=
+            (transaction_definition["ownerUid"], transaction_definition["groupGid"]) or
+            transaction_mode not in transaction_definition["allowedModes"] or
+            stat.S_IMODE(transaction_info.st_mode) & 0o022):
+        deny("LIVE_TRANSACTIONS_ROOT_IDENTITY")
+    transaction_paths: list[str] = []
+    transaction_evidence: list[dict[str, Any]] = []
+    try:
+        children = sorted(transaction_root.iterdir(), key=lambda item: item.name)
+    except OSError:
+        deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+    for child in children:
+        child_info = physical_directory(child, "LIVE_TRANSACTION_SCAN_INCOMPLETE")
+        if (child_info.st_uid != transaction_info.st_uid or child_info.st_gid != transaction_info.st_gid or
+                stat.S_IMODE(child_info.st_mode) & 0o022):
+            deny("LIVE_TRANSACTION_IDENTITY")
+        journal = child / "transaction.v1.private.json"
+        if not journal.exists() or journal.is_symlink():
+            deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+        journal_raw, _, journal_sha = _stable_observed_private(journal)
+        journal_value = object_json(journal_raw, "LIVE_TRANSACTION_JOURNAL")
+        state = journal_value.get("state")
+        if not isinstance(state, str):
+            deny("LIVE_TRANSACTION_JOURNAL")
+        if state not in TERMINAL_TRANSACTION_STATES:
+            transaction_paths.extend(_json_absolute_paths(journal_value))
+        transaction_evidence.append({"path": str(journal), "sha256": journal_sha, "state": state})
+
+    fresh = dict(operational)
+    fresh["currentPaths"] = sorted(set(current_paths))
+    fresh["pm2LivePaths"] = sorted(set(pm2_paths))
+    fresh["pm2DumpPaths"] = sorted(set(dump_paths))
+    fresh["openTransactionPaths"] = sorted(set(transaction_paths))
+    fresh["protectedGraphPaths"] = sorted(set(graph_paths))
+    evidence = {
+        "currentLinks": current_evidence,
+        "pm2FingerprintSha256": pm2_fingerprint,
+        "dumpSha256": dump["sha256"],
+        "releaseGraphSha256": graph["sha256"],
+        "transactions": transaction_evidence,
+        "recapturedPathsSha256": digest_bytes(canonical({
+            key: fresh[key] for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths",
+                                        "openTransactionPaths", "protectedGraphPaths")
+        })),
+    }
+    return fresh, evidence
 
 
 def load_binding(value: Any, label: str) -> tuple[Path, str, bytes, dict[str, Any]]:
@@ -321,7 +562,9 @@ def validate_lock_free(path: Path) -> dict[str, Any]:
     return stat_identity(before)
 
 
-def authenticate_npm(candidate: dict[str, Any], process_data: tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool]) -> dict[str, Any]:
+def authenticate_npm(candidate: dict[str, Any],
+                     process_data: tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool],
+                     operational: dict[str, Any] | None = None) -> dict[str, Any]:
     if set(candidate) != NPM_CANDIDATE_KEYS:
         deny("NPM_CACHE_SCHEMA")
     path = normalized_absolute(candidate.get("path"), "NPM_CACHE_PATH")
@@ -334,13 +577,10 @@ def authenticate_npm(candidate: dict[str, Any], process_data: tuple[list[tuple[i
         deny("NPM_CACHE_PARENT_IDENTITY")
     if (root.st_uid, root.st_gid) != (uid, gid):
         deny("NPM_CACHE_OWNER")
-    expected_principals = candidate.get("expectedDeployGroupPrincipals")
-    if (not isinstance(expected_principals, list) or not expected_principals or
-            any(not isinstance(item, str) or not item for item in expected_principals) or
-            expected_principals != sorted(set(expected_principals))):
-        deny("NPM_CACHE_GROUP_PLAN")
+    if stat.S_IMODE(root.st_mode) not in NPM_CACHE_ALLOWED_MODES:
+        deny("NPM_CACHE_MODE")
     actual_principals = deploy_group_principals()
-    if actual_principals != expected_principals:
+    if actual_principals != ["deploy"]:
         deny("NPM_CACHE_GROUP_PRINCIPAL_UNEXPECTED")
     targets, writers, complete = process_data
     if writers:
@@ -349,6 +589,12 @@ def authenticate_npm(candidate: dict[str, Any], process_data: tuple[list[tuple[i
                   if path_overlap(str(path), target)]
     if references:
         deny("NPM_CACHE_REFERENCED")
+    if operational is not None:
+        live_references = (operational["currentPaths"] + operational["pm2LivePaths"] +
+                           operational["pm2DumpPaths"] + operational["openTransactionPaths"] +
+                           operational["protectedGraphPaths"])
+        if any(path_overlap(str(path), item) for item in live_references):
+            deny("NPM_CACHE_OPERATIONALLY_REFERENCED")
     if not complete:
         deny("PROCESS_REFERENCE_SCAN_INCOMPLETE")
     return {"class": candidate["class"], "path": str(path),
@@ -518,7 +764,7 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
     if not isinstance(candidate, dict) or candidate.get("class") not in CLASSES:
         deny("CANDIDATE_CLASS")
     if candidate["class"] == "NPM_CACHE_MAINTENANCE":
-        return authenticate_npm(candidate, process_data)
+        return authenticate_npm(candidate, process_data, operational)
     return authenticate_output(candidate, policy, operational, process_data)
 
 
@@ -539,6 +785,7 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     policy, policy_path, policy_sha = root_policy(value["rootPolicy"])
     op_path, op_sha, op_raw, _ = load_binding(value["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
+    operational, live_recapture = capture_live_operational(operational)
     process_data = _proc_targets()
     observations: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
@@ -583,6 +830,7 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         },
         "rootPolicy": {"path": str(policy_path), "sha256": policy_sha},
         "operationalState": {"path": str(op_path), "sha256": op_sha},
+        "liveRecapture": live_recapture,
         "deploymentLock": operational["deploymentLock"], "writerLock": operational["writerLock"],
         "candidates": observations, "errors": errors,
         "commands": [[*LITERAL_RM, item["observation"]["path"]] for item in observations],
@@ -592,21 +840,26 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     return plan
 
 
-def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[list[dict[str, Any]], list[str]]:
+def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
     required = {"schemaVersion", "kind", "state", "requestSha256", "minimumRecoveryBytes",
                 "targetAvailableBytes", "qualifiedBytes", "qualifiedInodes", "availableBytesBefore",
                 "projectedAvailableBytes", "minimumRecoverySatisfied", "targetAvailableSatisfied",
                 "classificationPolicy", "rootPolicy",
-                "operationalState", "deploymentLock", "writerLock", "candidates", "errors",
+                "operationalState", "liveRecapture", "deploymentLock", "writerLock", "candidates", "errors",
                 "commands", "automaticExecutionPermitted"}
     if set(plan) != required or plan.get("schemaVersion") != 1 or plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or plan.get("errors") != [] or plan.get("automaticExecutionPermitted") is not False:
         deny("PLAN_SCHEMA_OR_STATE")
     policy, _, _ = root_policy(plan["rootPolicy"])
     _, _, op_raw, _ = load_binding(plan["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
+    live_recapture: dict[str, Any] = {}
     errors: list[str] = []
     refreshed: list[dict[str, Any]] = []
     priors: list[dict[str, Any]] = []
+    try:
+        operational, live_recapture = capture_live_operational(operational)
+    except Denied as exc:
+        errors.append(str(exc))
     process_data = _proc_targets()
     for item in plan.get("candidates", []):
         try:
@@ -632,14 +885,14 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True) -> tuple[
     expected_commands = [[*LITERAL_RM, item["path"]] for item in refreshed]
     if expected_commands != plan.get("commands"):
         errors.append("PLAN_COMMANDS_DIVERGED")
-    return refreshed, sorted(set(errors))
+    return refreshed, sorted(set(errors)), live_recapture
 
 
 def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
                  commands_output: Path, manifest_output: Path) -> dict[str, Any]:
     raw, _ = stable_regular(plan_path, plan_sha)
     plan = object_json(raw, "PLAN_JSON")
-    refreshed, errors = revalidate_plan(plan)
+    refreshed, errors, live_recapture = revalidate_plan(plan)
     if errors:
         result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors}
         print(json.dumps(result, sort_keys=True))
@@ -652,6 +905,7 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
         "deploymentLock": plan["deploymentLock"], "writerLock": plan["writerLock"],
         "minimumRecoveryBytes": plan["minimumRecoveryBytes"], "expectedRecoveryBytes": plan["qualifiedBytes"],
         "expectedRecoveryInodes": plan["qualifiedInodes"], "candidates": refreshed,
+        "preparedLiveRecapture": live_recapture,
         "commands": plan["commands"], "commandsSha256": digest_bytes(commands_raw),
         "automaticRetry": False, "forceAllowed": False, "pruneAllowed": False, "pathExpansionAllowed": False,
     }
@@ -716,7 +970,7 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
     intent = object_json(intent_raw, "INTENT_JSON")
     required = {"schemaVersion", "kind", "state", "plan", "operationalState", "rootPolicy",
                 "deploymentLock", "writerLock", "minimumRecoveryBytes", "expectedRecoveryBytes",
-                "expectedRecoveryInodes", "candidates", "commands", "commandsSha256", "automaticRetry",
+                "expectedRecoveryInodes", "candidates", "preparedLiveRecapture", "commands", "commandsSha256", "automaticRetry",
                 "forceAllowed", "pruneAllowed", "pathExpansionAllowed"}
     if (set(intent) != required or intent.get("schemaVersion") != 1 or
             intent.get("kind") != "CAPACITY_RECOVERY_INTENT" or
@@ -751,11 +1005,13 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
         # before the first durable ATTEMPT.
         plan_path = Path(intent["plan"]["path"])
         plan_raw, _ = stable_regular(plan_path, intent["plan"]["sha256"])
-        refreshed, errors = revalidate_plan(object_json(plan_raw, "PLAN_JSON"), check_locks=False)
+        refreshed, errors, live_recapture = revalidate_plan(
+            object_json(plan_raw, "PLAN_JSON"), check_locks=False)
         if errors or refreshed != intent["candidates"]:
             deny("EXECUTE_RECAPTURE_DENY:" + (errors[0] if errors else "CANDIDATE_CHANGED"))
         pre_attempt = {"event": "RECAPTURE_PASS", "intentSha256": intent_sha,
-                       "commandsSha256": intent["commandsSha256"], "candidates": refreshed}
+                       "commandsSha256": intent["commandsSha256"], "candidates": refreshed,
+                       "liveOperational": live_recapture}
         write_exclusive(receipt_root / "pre-attempt-recapture.private.json", canonical(pre_attempt))
         for ordinal, (command, candidate) in enumerate(zip(intent["commands"], intent["candidates"]), 1):
             expected = [*LITERAL_RM, candidate["path"]]

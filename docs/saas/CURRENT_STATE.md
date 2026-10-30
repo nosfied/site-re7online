@@ -8,6 +8,9 @@ O repositório contém `scripts/capacity-recovery.py`, com fases separadas de
 auditoria, preparação e execução autorizada. O contrato inicial cobre somente o
 cache literal `/home/deploy/.npm/_cacache` e runtimes derivados autenticados sob
 `build-output`; nenhuma execução produtiva ou exclusão integra esta alteração.
+O `execute` recaptura referências operacionais ao vivo somente depois dos locks;
+o cache exige allowlist canônica de grupo e modo próprio não gravável por
+grupo/outros.
 Consulte [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md).
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no

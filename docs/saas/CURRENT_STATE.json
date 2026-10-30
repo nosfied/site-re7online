@@ -12,6 +12,9 @@
     "policy": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
     "phases": ["audit", "prepare", "execute"],
     "classes": ["NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME"],
+    "executeLiveRecaptureAfterLocks": true,
+    "npmCacheGroupPrincipals": ["deploy"],
+    "npmCacheAllowedModes": ["0700", "0750", "0755"],
     "productionEffectsInThisChange": false
   },
   "production": {

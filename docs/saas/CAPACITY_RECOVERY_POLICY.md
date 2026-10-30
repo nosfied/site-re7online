@@ -16,14 +16,19 @@ O fluxo possui três fases independentes:
    agrega negativas previsíveis e, sem remover nada, publica intenção, comandos
    literais e manifesto em `SEALED_FOR_EXPLICIT_AUTHORIZATION`.
 3. `execute` exige intenção e autorização privada `AUTHORIZE_ONCE`, ambas por
-   SHA-256 externo. Sob os dois locks canônicos, recaptura tudo imediatamente
-   antes do primeiro `ATTEMPT`, executa sequencialmente e publica
+   SHA-256 externo. Depois de adquirir os dois locks canônicos, recaptura ao vivo
+   os symlinks `current`, `pm2 jlist` por binário autenticado, dump, transações
+   não terminais e grafo protegido imediatamente antes do primeiro `ATTEMPT`.
+   Referência surgida depois de `prepare` resulta em negativa. Só então executa
+   sequencialmente e publica
    `ATTEMPT → RESULT → VERIFIED` com `fsync`. A primeira falha encerra o lote;
    não há retry automático.
 
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
 owner/group/mode, métricas físicas, hashes das fontes e comando fazem parte do
-binding. O único comando destrutivo admitido é:
+binding. A fotografia operacional schema 2 exige fontes de recaptura ao vivo;
+fotografia anterior sem essas fontes é negada. O único comando destrutivo
+admitido é:
 
 ```text
 /usr/bin/rm -r -- <caminho-autenticado>
@@ -39,13 +44,15 @@ Glob, expansão, `force`, `prune`, caminho alternativo e descoberta destrutiva e
 Admite exclusivamente `/home/deploy/.npm/_cacache`, com pai literal
 `/home/deploy/.npm`. Nesta classe, e somente nela, `deploy:deploy 0775` é a
 identidade canônica do pai. O cache deve ser diretório físico, não symlink, com
-device/inode e owner/group autenticados.
+device/inode e owner/group autenticados e modo fechado `0700`, `0750` ou `0755`;
+escrita por grupo ou outros é sempre negada.
 
-O grupo `deploy` deve conter exatamente os principais declarados no plano; membro
-suplementar ou usuário com GID primário inesperado nega. Também negam: processo
-`npm`/build ativo, CWD, FD, mapa de memória ou outra referência sob o cache e
-varredura `/proc` incompleta. Essa regra não é compartilhada com ancestrais de
-`generation-retirement.py`.
+O grupo `deploy` deve conter canonicamente apenas o principal `deploy`; o pedido
+não pode fornecer ou ampliar essa allowlist. Membro suplementar ou usuário com
+GID primário inesperado nega. Também negam: processo `npm`/build ativo, inclusive
+`node .../npm-cli.js`, CWD, FD, mapa de memória ou outra referência sob o cache e
+qualquer varredura `/proc` incompleta. Essa regra não é compartilhada com
+ancestrais de `generation-retirement.py`.
 
 ### `DERIVED_OUTPUT_RUNTIME`
 

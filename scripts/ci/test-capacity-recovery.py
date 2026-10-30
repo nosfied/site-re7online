@@ -95,6 +95,15 @@ class CapacityRecoveryTests(unittest.TestCase):
         for path in (self.deployment_lock, self.writer_lock):
             path.write_bytes(b"")
             path.chmod(0o600)
+        self.pm2 = self.base / "pm2.private"
+        self.pm2.write_text("#!/bin/sh\nprintf '[]\\n'\n")
+        self.pm2.chmod(0o500)
+        self.dump = self.base / "dump.private.json"
+        private_json(self.dump, [])
+        self.release_graph = self.base / "release-graph.private.json"
+        private_json(self.release_graph, {"schemaVersion": 1, "protectedGraphPaths": []})
+        self.transactions = self.base / "transactions"
+        self.transactions.mkdir(mode=0o700)
         self.operational = self.base / "operational.private.json"
         self.write_operational()
         self.request = self.base / "audit-request.private.json"
@@ -107,15 +116,25 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.temp.cleanup()
 
     def write_operational(self, **overrides):
-        value = {"schemaVersion": 1, "currentPaths": [], "pm2LivePaths": [],
+        value = {"schemaVersion": 2, "currentPaths": [], "pm2LivePaths": [],
                  "pm2DumpPaths": [], "openTransactionPaths": [], "protectedGraphPaths": [],
-                 "deploymentLock": str(self.deployment_lock), "writerLock": str(self.writer_lock)}
+                 "deploymentLock": str(self.deployment_lock), "writerLock": str(self.writer_lock),
+                 "liveObservations": {
+                     "currentLinks": [],
+                     "pm2": {"path": str(self.pm2), "sha256": sha(self.pm2),
+                             "fingerprintSha256": hashlib.sha256(b"[]\n").hexdigest()},
+                     "dump": {"path": str(self.dump), "sha256": sha(self.dump)},
+                     "transactionsRoot": {"path": str(self.transactions),
+                                          "ownerUid": os.geteuid(), "groupGid": os.getegid(),
+                                          "allowedModes": ["0700"]},
+                     "releaseGraph": {"path": str(self.release_graph),
+                                      "sha256": sha(self.release_graph)},
+                 }}
         value.update(overrides)
         private_json(self.operational, value)
 
     def npm_candidate(self, path=None, principals=None):
-        return {"class": "NPM_CACHE_MAINTENANCE", "path": str(path or self.cache),
-                "expectedDeployGroupPrincipals": principals or ["deploy"]}
+        return {"class": "NPM_CACHE_MAINTENANCE", "path": str(path or self.cache)}
 
     def output_candidate(self, path=None):
         return {"class": "DERIVED_OUTPUT_RUNTIME", "path": str(path or self.runtime),
@@ -167,11 +186,33 @@ class CapacityRecoveryTests(unittest.TestCase):
             observed = MODULE.authenticate_npm(candidate, ([], [], True))
         self.assertEqual(observed["parentIdentity"]["mode"], "0775")
 
+    def test_cache_root_group_writable_is_denied(self):
+        self.cache.chmod(0o775)
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_MODE"):
+            MODULE.authenticate_npm(self.npm_candidate(), ([], [], True))
+
+    def test_cache_group_principals_cannot_be_supplied_by_request(self):
+        candidate = self.npm_candidate()
+        candidate["expectedDeployGroupPrincipals"] = ["deploy", "unexpected"]
+        with self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_SCHEMA"):
+            MODULE.authenticate_npm(candidate, ([], [], True))
+
+    def test_operational_state_without_live_sources_is_denied(self):
+        legacy = {"schemaVersion": 1, "currentPaths": [], "pm2LivePaths": [],
+                  "pm2DumpPaths": [], "openTransactionPaths": [],
+                  "protectedGraphPaths": [], "deploymentLock": str(self.deployment_lock),
+                  "writerLock": str(self.writer_lock)}
+        with self.assertRaisesRegex(MODULE.Denied, "OPERATIONAL_STATE_SCHEMA"):
+            MODULE.validate_operational(json.dumps(legacy).encode())
+
     def test_cache_symlink_and_owner_divergence_are_denied(self):
         link = self.cache_parent / "linked-cache"
         link.symlink_to(self.cache)
-        linked = {"class": "NPM_CACHE_MAINTENANCE", "path": str(link),
-                  "expectedDeployGroupPrincipals": ["deploy"]}
+        linked = {"class": "NPM_CACHE_MAINTENANCE", "path": str(link)}
         with mock.patch.object(MODULE, "NPM_CACHE", link), \
                 mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
@@ -213,8 +254,76 @@ class CapacityRecoveryTests(unittest.TestCase):
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
                 self.process_patch():
-            _, errors = MODULE.revalidate_plan(plan)
+            _, errors, _ = MODULE.revalidate_plan(plan)
         self.assertTrue(any("CANDIDATE_CHANGED" in item for item in errors))
+
+    def test_node_npm_cli_is_active_and_incomplete_proc_scan_denies(self):
+        proc_root = self.base / "proc"
+        process = proc_root / "42"
+        (process / "fd").mkdir(parents=True)
+        (process / "cmdline").write_bytes(
+            b"/usr/bin/node\0/usr/lib/node_modules/npm/bin/npm-cli.js\0ci\0")
+        for leaf in ("cwd", "root", "exe"):
+            (process / leaf).symlink_to(self.base)
+        targets, writers, complete = MODULE._proc_targets(proc_root)
+        self.assertTrue(writers)
+        self.assertFalse(complete)  # maps was deliberately unreadable/absent.
+        self.assertTrue(targets)
+
+    def test_execute_recaptures_new_open_transaction_reference_after_locks(self):
+        intent_sha, authorization = self.seal_and_authorize()
+        transaction = self.transactions / "new-window"
+        transaction.mkdir(mode=0o700)
+        private_json(transaction / "transaction.v1.private.json", {
+            "schemaVersion": 1, "state": "AWAITING_ACCEPTANCE",
+            "runtimePath": str(self.runtime),
+        })
+        receipt = self.base / "receipts" / "live-recapture"; receipt.parent.mkdir(mode=0o700)
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.process_patch():
+            with self.assertRaises(SystemExit):
+                MODULE.execute_intent(self.intent, intent_sha, authorization, sha(authorization), receipt)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual(result["attemptedCommands"], 0)
+        self.assertIn("DERIVED_OUTPUT_REFERENCED_OR_PROTECTED", result["failurePredicate"])
+        self.assertTrue(self.cache.exists())
+        self.assertTrue(self.runtime.exists())
+
+    def test_live_current_pm2_dump_and_graph_are_reopened(self):
+        current = self.base / "current-api"
+        current.symlink_to(self.release)
+        value = json.loads(self.operational.read_text())
+        value["liveObservations"]["currentLinks"] = [
+            {"path": str(current), "target": str(self.release)}]
+        private_json(self.operational, value)
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        MODULE.capture_live_operational(operational)
+
+        other = self.base / "other-release"; other.mkdir()
+        current.unlink(); current.symlink_to(other)
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_CURRENT_LINK"):
+            MODULE.capture_live_operational(operational)
+        current.unlink(); current.symlink_to(self.release)
+
+        original_pm2 = self.pm2.read_bytes()
+        self.pm2.chmod(0o700)
+        self.pm2.write_bytes(original_pm2 + b"# drift\n"); self.pm2.chmod(0o500)
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            MODULE.capture_live_operational(operational)
+        self.pm2.chmod(0o700); self.pm2.write_bytes(original_pm2); self.pm2.chmod(0o500)
+
+        self.dump.write_text('[{"pm_cwd":"/new/reference"}]\n'); self.dump.chmod(0o600)
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            MODULE.capture_live_operational(operational)
+        private_json(self.dump, [])
+
+        private_json(self.release_graph, {
+            "schemaVersion": 1, "protectedGraphPaths": ["/new/reference"]})
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            MODULE.capture_live_operational(operational)
 
     def test_runtime_outside_build_output_is_denied(self):
         outside = self.base / "outside"; outside.mkdir()
@@ -248,17 +357,20 @@ class CapacityRecoveryTests(unittest.TestCase):
     def test_execute_stops_first_failure_and_preserves_sources(self):
         intent_sha, authorization = self.seal_and_authorize()
         receipt = self.base / "receipts" / "once"; receipt.parent.mkdir(mode=0o700)
-        failed = SimpleNamespace(returncode=9)
+        def simulated_run(argv, **_kwargs):
+            if argv[-1] == "jlist":
+                return SimpleNamespace(returncode=0, stdout="[]\n", stderr="")
+            return SimpleNamespace(returncode=9)
         with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
                 mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
-                self.process_patch(), mock.patch.object(MODULE.subprocess, "run", return_value=failed) as runner:
+                self.process_patch(), mock.patch.object(MODULE.subprocess, "run", side_effect=simulated_run) as runner:
             with self.assertRaises(SystemExit):
                 MODULE.execute_intent(self.intent, intent_sha, authorization, sha(authorization), receipt)
         result = json.loads((receipt / "execution-receipt.private.json").read_text())
         self.assertEqual((result["attemptedCommands"], result["completedCommands"]), (1, 0))
-        self.assertEqual(runner.call_count, 1)
+        self.assertEqual(runner.call_count, 2)  # authenticated PM2 jlist, then first rm only
         self.assertTrue(self.package.exists())
         self.assertTrue(self.release.exists())
 

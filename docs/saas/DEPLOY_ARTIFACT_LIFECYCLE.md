@@ -8,6 +8,10 @@ cache npm e runtimes derivados de output já comprovados. Suas fases `audit`,
 estão em [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md). O cache npm
 não flexibiliza ancestrais de `generation-retirement.py`; usa exclusivamente a
 classe `NPM_CACHE_MAINTENANCE`, cujo pai canônico é `deploy:deploy 0775`.
+O próprio `_cacache` aceita somente `deploy:deploy 0700/0750/0755`, o grupo
+canônico não pode conter principal além de `deploy`, e `node .../npm-cli.js` é
+atividade npm. Após adquirir ambos os locks, `execute` recaptura ao vivo current,
+PM2, dump, transações não terminais e grafo antes do primeiro `ATTEMPT`.
 
 Worktrees, staging, releases, preparações, transações, evidências e logs só são
 retiráveis quando uma classe versionada futura autenticar seu fechamento. A lista
