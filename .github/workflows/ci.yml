@@ -120,6 +120,7 @@ jobs:
           src/whatsapp/tenantMetaRuntimeConfig.test.ts
           src/whatsapp/tenantMetaReactiveOutboundGate.test.ts
           src/whatsapp/tenantMetaRuntimeContract.test.ts
+          src/whatsapp/handoffConfirmationOutbound.test.ts
           src/conversation/acceptedHandoffTransition.test.ts
 
   csv-critical:
@@ -182,6 +183,8 @@ jobs:
         run: |
           node --import tsx --test --test-name-pattern "integrated WEB consent|consent reprocessing" \
             src/conversation/automationOwnActivity.test.ts
+          node --import tsx --test --test-name-pattern "accepted Meta handoff" \
+            src/whatsapp/webhookApiWebWindow.test.ts
           node --import tsx --test src/inbox/messageVisibility.test.ts
           node --import tsx --test --test-name-pattern "management-only consent" \
             src/http/automationConversations.test.ts
