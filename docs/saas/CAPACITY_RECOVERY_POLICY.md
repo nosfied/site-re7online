@@ -86,6 +86,13 @@ Limitação esperada em processo de outro UID não bloqueia, mas qualquer comand
 npm/build ou referência legível desse processo continua negando. Essa regra não é
 compartilhada com ancestrais de `generation-retirement.py`.
 
+Quando a varredura de um processo `deploy` permanece incompleta, o plano negado
+preserva junto ao predicado somente o diagnóstico sanitizado necessário: PID,
+start ticks, quatro UIDs, operação, errno e nome do errno. Cmdline, ambiente,
+alvos de FD e credenciais não integram esse diagnóstico. Fechamento transitório de
+FD é registrado separadamente; permissão negada, mudança de identidade ou outra
+leitura realmente incompleta continuam fail-closed.
+
 ### `DERIVED_OUTPUT_RUNTIME`
 
 Admite somente descendente estrito da raiz `outputs` da política versionada.

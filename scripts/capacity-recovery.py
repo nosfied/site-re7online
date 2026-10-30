@@ -10,6 +10,7 @@ intent plus an exact AUTHORIZE_ONCE document.
 from __future__ import annotations
 
 import argparse
+import errno
 import fcntl
 import grp
 import hashlib
@@ -258,7 +259,45 @@ def physical_usage(paths: Iterable[Path]) -> dict[str, dict[str, int]]:
     return result
 
 
-ProcessScan = tuple[list[tuple[int, int, str, str]], list[dict[str, Any]], bool, dict[str, int]]
+ProcessScan = tuple[list[tuple[int, int, str, str]], list[dict[str, Any]], bool, dict[str, Any]]
+PROCESS_FAILURE_DETAIL_LIMIT = 256
+
+
+def _record_process_reference_failure(summary: dict[str, Any], pid: int, start_ticks: int,
+                                      uids: tuple[int, int, int, int], operation: str,
+                                      error: OSError) -> None:
+    summary["referenceReadFailures"] += 1
+    details = summary["referenceReadFailureDetails"]
+    if len(details) >= PROCESS_FAILURE_DETAIL_LIMIT:
+        summary["referenceReadFailureDetailsTruncated"] += 1
+        return
+    details.append({
+        "pid": pid,
+        "startTicks": start_ticks,
+        "uids": {"real": uids[0], "effective": uids[1],
+                 "saved": uids[2], "fs": uids[3]},
+        "operation": operation,
+        "errno": error.errno,
+        "errnoName": errno.errorcode.get(error.errno),
+    })
+
+
+def _record_transient_fd_closure(summary: dict[str, Any], pid: int, start_ticks: int,
+                                 uids: tuple[int, int, int, int], operation: str) -> None:
+    summary["transientFdClosures"] += 1
+    details = summary["transientFdClosureDetails"]
+    if len(details) >= PROCESS_FAILURE_DETAIL_LIMIT:
+        summary["transientFdClosureDetailsTruncated"] += 1
+        return
+    details.append({
+        "pid": pid,
+        "startTicks": start_ticks,
+        "uids": {"real": uids[0], "effective": uids[1],
+                 "saved": uids[2], "fs": uids[3]},
+        "operation": operation,
+        "errno": errno.ENOENT,
+        "errnoName": "ENOENT",
+    })
 
 
 def _process_still_exists(proc: Path) -> bool:
@@ -327,6 +366,10 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
         "identityFailures": 0,
         "referenceReadFailures": 0,
         "transientFdClosures": 0,
+        "referenceReadFailureDetails": [],
+        "referenceReadFailureDetailsTruncated": 0,
+        "transientFdClosureDetails": [],
+        "transientFdClosureDetailsTruncated": 0,
     }
     try:
         processes = list(proc_root.iterdir())
@@ -423,16 +466,18 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
             for leaf in ("cwd", "root", "exe"):
                 try:
                     local_targets.append((pid, before_ticks, leaf, os.readlink(proc / leaf)))
-                except FileNotFoundError:
+                except FileNotFoundError as exc:
                     if deploy_process and _process_still_exists(proc):
                         complete = False
-                        summary["referenceReadFailures"] += 1
+                        _record_process_reference_failure(
+                            summary, pid, before_ticks, uids, f"readlink:{leaf}", exc)
                     elif not deploy_process and _process_still_exists(proc):
                         other_limited = True
-                except OSError:
+                except OSError as exc:
                     if deploy_process:
                         complete = False
-                        summary["referenceReadFailures"] += 1
+                        _record_process_reference_failure(
+                            summary, pid, before_ticks, uids, f"readlink:{leaf}", exc)
                     else:
                         other_limited = True
             try:
@@ -442,39 +487,46 @@ def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None
                     except FileNotFoundError:
                         # An FD may close between directory enumeration and readlink.
                         # The final start-ticks check still authenticates the process.
-                        summary["transientFdClosures"] += 1
-                    except OSError:
+                        _record_transient_fd_closure(
+                            summary, pid, before_ticks, uids, f"readlink:fd/{fd.name}")
+                    except OSError as exc:
                         if deploy_process:
                             complete = False
-                            summary["referenceReadFailures"] += 1
+                            _record_process_reference_failure(
+                                summary, pid, before_ticks, uids,
+                                f"readlink:fd/{fd.name}", exc)
                         else:
                             other_limited = True
-            except FileNotFoundError:
+            except FileNotFoundError as exc:
                 if deploy_process and _process_still_exists(proc):
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "listdir:fd", exc)
                 elif not deploy_process and _process_still_exists(proc):
                     other_limited = True
-            except OSError:
+            except OSError as exc:
                 if deploy_process:
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "listdir:fd", exc)
                 else:
                     other_limited = True
             try:
                 for line in (proc / "maps").read_text(errors="replace").splitlines():
                     if "/" in line:
                         local_targets.append((pid, before_ticks, "maps", line.split(None, 5)[-1]))
-            except FileNotFoundError:
+            except FileNotFoundError as exc:
                 if deploy_process and _process_still_exists(proc):
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "read:maps", exc)
                 elif not deploy_process and _process_still_exists(proc):
                     other_limited = True
-            except OSError:
+            except OSError as exc:
                 if deploy_process:
                     complete = False
-                    summary["referenceReadFailures"] += 1
+                    _record_process_reference_failure(
+                        summary, pid, before_ticks, uids, "read:maps", exc)
                 else:
                     other_limited = True
             after_ticks = _read_start_ticks(proc)
@@ -1143,7 +1195,10 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
             seen_paths.add(observed["path"])
             observations.append({"ordinal": ordinal, "source": candidate, "observation": observed})
         except Denied as exc:
-            errors.append({"ordinal": ordinal, "predicate": str(exc)})
+            error: dict[str, Any] = {"ordinal": ordinal, "predicate": str(exc)}
+            if str(exc) == "PROCESS_REFERENCE_SCAN_INCOMPLETE":
+                error["processScan"] = process_data[3]
+            errors.append(error)
     qualified_paths = [Path(item["observation"]["path"]) for item in observations]
     usage = physical_usage(qualified_paths) if qualified_paths else {}
     total = 0
