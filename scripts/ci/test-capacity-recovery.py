@@ -278,6 +278,26 @@ class CapacityRecoveryTests(unittest.TestCase):
             observed = MODULE.authenticate_npm(candidate, scan())
         self.assertEqual(observed["parentIdentity"]["mode"], "0775")
 
+    def test_process_target_containment_excludes_generic_ancestors(self):
+        self.assertFalse(MODULE.process_target_references_candidate(str(self.cache), "/"))
+        self.assertFalse(MODULE.process_target_references_candidate(
+            str(self.cache), str(self.cache_parent)))
+        self.assertTrue(MODULE.process_target_references_candidate(
+            str(self.cache), str(self.cache)))
+        self.assertTrue(MODULE.process_target_references_candidate(
+            str(self.cache), str(self.cache / "content-v2" / "sha512")))
+
+    def test_cache_process_ancestor_targets_do_not_deny(self):
+        candidate = self.npm_candidate()
+        targets = [(10, 100, "root", "/"),
+                   (11, 101, "cwd", str(self.cache_parent))]
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]):
+            observed = MODULE.authenticate_npm(candidate, scan(targets=targets))
+        self.assertEqual(observed["references"], [])
+
     def test_cache_root_group_writable_is_denied(self):
         self.cache.chmod(0o775)
         with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
@@ -575,6 +595,20 @@ class CapacityRecoveryTests(unittest.TestCase):
         with self.process_patch(), self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_OUTSIDE_ROOT"):
             MODULE.authenticate_output(self.output_candidate(outside), json.loads(self.policy.read_text()),
                                        json.loads(self.operational.read_text()), scan())
+
+    def test_runtime_process_root_ancestor_does_not_deny(self):
+        observed = MODULE.authenticate_output(
+            self.output_candidate(), json.loads(self.policy.read_text()),
+            json.loads(self.operational.read_text()),
+            scan(targets=[(12, 102, "root", "/")]))
+        self.assertEqual(observed["path"], str(self.runtime))
+
+    def test_runtime_process_descendant_reference_is_denied(self):
+        with self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_PROCESS_REFERENCE"):
+            MODULE.authenticate_output(
+                self.output_candidate(), json.loads(self.policy.read_text()),
+                json.loads(self.operational.read_text()),
+                scan(targets=[(13, 103, "fd/9", str(self.runtime / "app.js"))]))
 
     def test_runtime_reference_or_protected_graph_is_denied(self):
         self.write_operational(protectedGraphPaths=[str(self.runtime)])
