@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -877,6 +878,123 @@ class CapacityRecoveryTests(unittest.TestCase):
             self.output_candidate(), json.loads(self.policy.read_text()),
             json.loads(self.operational.read_text()), scan())
         self.assertEqual(observed["equivalence"]["allowedReleaseExtras"], [".data"])
+
+    def changing_process_patch(self, **_kwargs):
+        return mock.patch.object(MODULE, "_proc_targets", side_effect=lambda: scan(
+            processesObserved=next(self.process_counts)))
+
+    def run_lifecycle_with_changing_telemetry(self, schema2=False):
+        self.process_counts = iter((8, 9, 10))
+        self.process_patch = self.changing_process_patch
+        if schema2:
+            original_request = self.request_value
+            self.request_value = lambda *args, **kwargs: {
+                **original_request(*args, **kwargs), "schemaVersion": 2,
+                "procObserver": {"path": str(MODULE.PROC_OBSERVER_PATH), "sha256": "a" * 64}}
+
+        def privileged(_binding, _paths, phase):
+            count = next(self.process_counts)
+            return scan(processesObserved=count), {"phase": phase, "processesObserved": count}
+
+        with mock.patch.object(MODULE, "_privileged_proc_targets", side_effect=privileged):
+            intent_sha, authorization = self.seal_and_authorize()
+            intent = json.loads(self.intent.read_text())
+            self.assertEqual(intent["candidates"][0]["processScan"]["processesObserved"], 9)
+            receipt = self.base / "receipts" / "changing-telemetry"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                    mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                    mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                    mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                    self.process_patch():
+                result = MODULE.execute_intent(
+                    self.intent, intent_sha, authorization, sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertEqual(result["completedCommands"], 2)
+        self.assertFalse(self.cache.exists())
+        self.assertFalse(self.runtime.exists())
+        self.assertTrue(self.release.exists())
+        self.assertTrue(self.package.exists())
+        recapture = json.loads((receipt / "pre-attempt-recapture.private.json").read_text())
+        self.assertEqual(recapture["candidates"][0]["processScan"]["processesObserved"], 10)
+
+    def test_legacy_lifecycle_accepts_fresh_safe_telemetry_at_every_phase(self):
+        self.run_lifecycle_with_changing_telemetry()
+
+    def test_schema2_lifecycle_accepts_fresh_safe_telemetry_at_every_phase(self):
+        self.run_lifecycle_with_changing_telemetry(schema2=True)
+
+    def assert_schema2_execute_rejects_fresh_unsafe_state(self, *, unsafe_scan=None,
+                                                        mutation=None, predicate):
+        original_request = self.request_value
+        self.request_value = lambda *args, **kwargs: {
+            **original_request(*args, **kwargs), "schemaVersion": 2,
+            "procObserver": {"path": str(MODULE.PROC_OBSERVER_PATH), "sha256": "a" * 64}}
+
+        def privileged(_binding, _paths, phase):
+            process = unsafe_scan if phase == "execute" and unsafe_scan is not None else scan(
+                processesObserved={"audit": 8, "prepare": 9, "execute": 10}[phase])
+            return process, {"phase": phase, "summary": process[3]}
+
+        with mock.patch.object(MODULE, "_privileged_proc_targets", side_effect=privileged):
+            intent_sha, authorization = self.seal_and_authorize()
+            if mutation is not None:
+                mutation()
+            receipt = self.base / "receipts" / "unsafe-recapture"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                    mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                    mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                    mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                    self.assertRaises(SystemExit):
+                MODULE.execute_intent(self.intent, intent_sha, authorization, sha(authorization), receipt)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual(result["attemptedCommands"], 0)
+        self.assertIn(predicate, result["failurePredicate"])
+        self.assertTrue(self.cache.exists())
+        self.assertTrue(self.runtime.exists())
+        recapture = json.loads((receipt / "pre-attempt-recapture.private.json").read_text())
+        self.assertEqual(recapture["event"], "RECAPTURE_DENY")
+        self.assertEqual(recapture["processObservation"]["phase"], "execute")
+
+    def test_schema2_telemetry_projection_still_denies_new_process_reference(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            unsafe_scan=scan(targets=[(77, 88, "fd/9", str(self.cache / "cache.bin"))],
+                             processesObserved=10), predicate="NPM_CACHE_REFERENCED")
+
+    def test_schema2_telemetry_projection_still_denies_active_writer(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            unsafe_scan=scan(writers=[{"pid": 77}], processesObserved=10),
+            predicate="NPM_OR_BUILD_ACTIVE")
+
+    def test_schema2_telemetry_projection_still_denies_incomplete_scan(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            unsafe_scan=scan(complete=False, processesObserved=10, referenceReadFailures=1),
+            predicate="PROCESS_REFERENCE_SCAN_INCOMPLETE")
+
+    def test_schema2_telemetry_projection_still_denies_artifact_identity_change(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            mutation=lambda: self.cache.chmod(0o750), predicate="CANDIDATE_CHANGED")
+
+    def test_schema2_telemetry_projection_still_denies_file_content_change(self):
+        self.assert_schema2_execute_rejects_fresh_unsafe_state(
+            mutation=lambda: (self.runtime / "app.js").write_bytes(b"same runtimf"),
+            predicate="DERIVED_OUTPUT_EQUIVALENCE_INCOMPLETE")
+
+    def test_prepare_denial_reports_changed_fields_and_fresh_process_evidence(self):
+        self.audit()
+        self.cache.chmod(0o750)
+        self.process_patch = lambda **_kwargs: mock.patch.object(
+            MODULE, "_proc_targets", return_value=scan(processesObserved=11))
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output), self.assertRaises(SystemExit):
+            self.prepare()
+        denial = json.loads(output.getvalue())
+        comparisons = denial["processObservation"]["candidateComparisons"]
+        cache = next(item for item in comparisons if item["path"] == str(self.cache))
+        self.assertIn("identity", cache["changedFields"])
+        self.assertEqual(cache["currentProcessScan"]["processesObserved"], 11)
+        self.assertFalse(self.intent.exists())
 
     def seal_and_authorize(self):
         self.audit(); self.prepare()

@@ -1423,6 +1423,20 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     return plan
 
 
+def candidate_binding(observation: dict[str, Any]) -> dict[str, Any]:
+    """Compare artifact state, while retaining fresh process telemetry as evidence.
+
+    validate_candidate must authenticate every new scan before this projection:
+    completeness, live references and active writers are never waived here.
+    Only processScan counters/details are observational rather than artifact state.
+    """
+    return {key: value for key, value in observation.items() if key != "processScan"}
+
+
+def candidate_bindings(observations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [candidate_binding(item) for item in observations]
+
+
 def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
                     phase: str = "prepare", include_process_evidence: bool = False) -> Any:
     required = {"schemaVersion", "kind", "state", "requestSha256", "minimumRecoveryBytes",
@@ -1464,12 +1478,21 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
             priors.append(prior)
         except (Denied, KeyError, TypeError) as exc:
             errors.append(str(exc))
+    comparisons: list[dict[str, Any]] = []
     if refreshed:
         usage = physical_usage(Path(item["path"]) for item in refreshed)
         for observed, prior in zip(refreshed, priors):
             observed["physical"] = usage[observed["path"]]
-            if observed != prior:
+            current_binding, prior_binding = candidate_binding(observed), candidate_binding(prior)
+            changed_fields = sorted(key for key in current_binding.keys() | prior_binding.keys()
+                                    if key not in current_binding or key not in prior_binding or
+                                    current_binding[key] != prior_binding[key])
+            comparisons.append({"path": observed["path"], "changedFields": changed_fields,
+                                "previousProcessScan": prior.get("processScan"),
+                                "currentProcessScan": observed.get("processScan")})
+            if changed_fields:
                 errors.append(f"CANDIDATE_CHANGED:{observed['path']}")
+    process_evidence["candidateComparisons"] = comparisons
     if check_locks:
         for lock in (Path(plan["deploymentLock"]), Path(plan["writerLock"])):
             try:
@@ -1490,7 +1513,8 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
     refreshed, errors, live_recapture, process_evidence = revalidate_plan(
         plan, include_process_evidence=True)
     if errors:
-        result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors}
+        result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors,
+                  "processObservation": process_evidence}
         print(json.dumps(result, sort_keys=True))
         raise SystemExit(2)
     commands_raw = b"".join((" ".join(command) + "\n").encode() for command in plan["commands"])
@@ -1612,13 +1636,18 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
             deny("PROC_OBSERVER_BINDING_DIVERGED")
         refreshed, errors, live_recapture, process_evidence = revalidate_plan(
             plan_value, check_locks=False, phase="execute", include_process_evidence=True)
-        if errors or refreshed != intent["candidates"]:
-            deny("EXECUTE_RECAPTURE_DENY:" + (errors[0] if errors else "CANDIDATE_CHANGED"))
-        pre_attempt = {"event": "RECAPTURE_PASS", "intentSha256": intent_sha,
+        candidates_changed = candidate_bindings(refreshed) != candidate_bindings(intent["candidates"])
+        pre_attempt = {"event": "RECAPTURE_DENY" if errors or candidates_changed else "RECAPTURE_PASS",
+                       "intentSha256": intent_sha,
                        "commandsSha256": intent["commandsSha256"], "candidates": refreshed,
                        "liveOperational": live_recapture,
-                       "processObservation": process_evidence}
+                       "processObservation": process_evidence, "errors": errors,
+                       "intentCandidatesChanged": candidates_changed}
         write_exclusive(receipt_root / "pre-attempt-recapture.private.json", canonical(pre_attempt))
+        if errors or candidates_changed:
+            primary = next((error for error in errors if error != "PLAN_COMMANDS_DIVERGED"),
+                           errors[0] if errors else "CANDIDATE_CHANGED")
+            deny("EXECUTE_RECAPTURE_DENY:" + primary)
         for ordinal, (command, candidate) in enumerate(zip(intent["commands"], intent["candidates"]), 1):
             expected = [*LITERAL_RM, candidate["path"]]
             if command != expected:

@@ -37,6 +37,21 @@ admitido é:
 Glob, expansão, `force`, `prune`, caminho alternativo e descoberta destrutiva em
 `execute` são negados.
 
+### Identidade do candidato e observação de processos
+
+A identidade comparável do candidato inclui todos os campos da observação, exceto
+`processScan`. Contadores e detalhes de uma varredura são evidência fresca de cada
+fase; não são atributos imutáveis do artefato. Tanto `prepare` quanto `execute`
+validam novamente a completude, referências e escritores antes dessa comparação.
+Nenhuma referência real, varredura incompleta ou escritor é dispensado pela projeção.
+Caminhos, identidades, métricas físicas, bindings e equivalência continuam comparados.
+
+O `prepare` negado conserva na saída privada a observação atual e os nomes dos
+campos que divergiram. A recaptura de `execute` é persistida, inclusive quando nega,
+antes de qualquer `ATTEMPT`. Planos PASS existentes permanecem imutáveis e podem
+ser reabertos pelo hash original; sua reutilização exige toda a revalidação fresca,
+sem repetir a auditoria somente para igualar contadores.
+
 ### Formatos transacionais autenticados
 
 A recaptura reconhece de forma fechada os dois formatos canônicos vigentes:
