@@ -70,10 +70,16 @@ GID primário inesperado nega. Também negam: processo `npm`/build ativo, inclus
 `node .../npm-cli.js`, CWD, FD, mapa de memória ou outra referência sob o cache e
 qualquer varredura `/proc` incompleta de processo pertencente a `deploy`.
 Cada PID é vinculado ao UID autenticado em `status` e aos `start ticks` lidos
-antes/depois. Thread de kernel sem `cmdline` é ignorada nominalmente; limitação
-esperada em processo de outro UID não bloqueia, mas qualquer comando npm/build ou
-referência legível desse processo continua negando. Essa regra não é compartilhada
-com ancestrais de `generation-retirement.py`.
+antes/depois. Para processos, “referência” significa alvo literal igual ao candidato
+ou localizado abaixo dele; ancestrais genéricos como `root=/`, `cwd=/` ou
+`cwd=/home/deploy` não provam uso do descendente e não negam. CWD, executável, FD,
+mapa ou argumento no próprio candidato ou abaixo dele continuam negando. A
+sobreposição bidirecional permanece obrigatória para referências operacionais de
+`current`, PM2, dump, transação não terminal e grafo protegido. Thread de kernel
+sem `cmdline` é ignorada nominalmente; limitação esperada em processo de outro UID
+não bloqueia, mas qualquer comando npm/build ou referência legível desse processo
+continua negando. Essa regra não é compartilhada com ancestrais de
+`generation-retirement.py`.
 
 ### `DERIVED_OUTPUT_RUNTIME`
 
