@@ -311,3 +311,7 @@ atualização de ambiente. O dump final é
 A API e todas as telas previstas passaram em smoke GET-only; houve um único
 `pm2 save` depois do aceite. Nenhuma migration, SQL, chamada Meta ou envio ocorreu.
 A configuração tenant-scoped de Meta App ID permanece pendente em janela própria.
+
+## Registro operacional vigente da API
+
+A API ativa da Tendência está autenticada por [TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json); frontend aa9527cc e worker e2e7f17a permanecem selecionados por componente. O registro é owner-relayed e não substitui as provas privadas da VPS.
