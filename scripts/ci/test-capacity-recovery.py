@@ -27,6 +27,14 @@ def private_json(path: Path, value: dict) -> None:
     path.chmod(0o600)
 
 
+def scan(targets=None, writers=None, complete=True, **summary):
+    counts = {"deployProcessesInspected": 0, "otherProcessesInspected": 0,
+              "permissionLimitedOtherProcesses": 0, "kernelThreadsIgnored": 0,
+              "vanishedProcesses": 0, "identityFailures": 0}
+    counts.update(summary)
+    return (targets or [], writers or [], complete, counts)
+
+
 class CapacityRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="capacity-recovery-")
@@ -153,7 +161,25 @@ class CapacityRecoveryTests(unittest.TestCase):
 
     def process_patch(self, *, targets=None, writers=None, complete=True):
         return mock.patch.object(MODULE, "_proc_targets",
-                                 return_value=(targets or [], writers or [], complete))
+                                 return_value=scan(targets, writers, complete))
+
+    def fake_process(self, proc_root, pid, uid, arguments, *, start_ticks=100,
+                     inaccessible_cmdline=False, include_maps=True):
+        process = proc_root / str(pid)
+        (process / "fd").mkdir(parents=True)
+        (process / "status").write_text(f"Name:\tfixture\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
+        suffix = ["S", *("0" for _ in range(18)), str(start_ticks), "0"]
+        (process / "stat").write_text(f"{pid} (fixture process) " + " ".join(suffix) + "\n")
+        if inaccessible_cmdline:
+            (process / "cmdline").mkdir()
+        else:
+            (process / "cmdline").write_bytes(
+                b"\0".join(item.encode() for item in arguments) + (b"\0" if arguments else b""))
+        for leaf in ("cwd", "root", "exe"):
+            (process / leaf).symlink_to(self.base)
+        if include_maps:
+            (process / "maps").write_text("")
+        return process
 
     def identity_patches(self, principals=None):
         return mock.patch.multiple(MODULE, NPM_CACHE=self.cache, NPM_PARENT=self.cache_parent,
@@ -183,7 +209,7 @@ class CapacityRecoveryTests(unittest.TestCase):
                 mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]):
-            observed = MODULE.authenticate_npm(candidate, ([], [], True))
+            observed = MODULE.authenticate_npm(candidate, scan())
         self.assertEqual(observed["parentIdentity"]["mode"], "0775")
 
     def test_cache_root_group_writable_is_denied(self):
@@ -193,13 +219,13 @@ class CapacityRecoveryTests(unittest.TestCase):
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
                 self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_MODE"):
-            MODULE.authenticate_npm(self.npm_candidate(), ([], [], True))
+            MODULE.authenticate_npm(self.npm_candidate(), scan())
 
     def test_cache_group_principals_cannot_be_supplied_by_request(self):
         candidate = self.npm_candidate()
         candidate["expectedDeployGroupPrincipals"] = ["deploy", "unexpected"]
         with self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_SCHEMA"):
-            MODULE.authenticate_npm(candidate, ([], [], True))
+            MODULE.authenticate_npm(candidate, scan())
 
     def test_operational_state_without_live_sources_is_denied(self):
         legacy = {"schemaVersion": 1, "currentPaths": [], "pm2LivePaths": [],
@@ -218,22 +244,22 @@ class CapacityRecoveryTests(unittest.TestCase):
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
                 self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_IDENTITY"):
-            MODULE.authenticate_npm(linked, ([], [], True))
+            MODULE.authenticate_npm(linked, scan())
         with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
                 mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
                 mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid() + 1, os.getegid())), \
                 mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
                 self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_PARENT_IDENTITY"):
-            MODULE.authenticate_npm(self.npm_candidate(), ([], [], True))
+            MODULE.authenticate_npm(self.npm_candidate(), scan())
 
     def test_cache_other_path_symlink_owner_writer_and_group_are_denied(self):
         other = self.base / "other-cache"; other.mkdir()
         link = self.cache_parent / "linked"; link.symlink_to(self.cache)
         cases = [
-            (self.npm_candidate(other), ([], [], True), ["deploy"], "NPM_CACHE_PATH"),
-            (self.npm_candidate(link), ([], [], True), ["deploy"], "NPM_CACHE_PATH"),
-            (self.npm_candidate(), ([], [{"pid": 2}], True), ["deploy"], "NPM_OR_BUILD_ACTIVE"),
-            (self.npm_candidate(), ([], [], True), ["deploy", "unexpected"], "NPM_CACHE_GROUP_PRINCIPAL_UNEXPECTED"),
+            (self.npm_candidate(other), scan(), ["deploy"], "NPM_CACHE_PATH"),
+            (self.npm_candidate(link), scan(), ["deploy"], "NPM_CACHE_PATH"),
+            (self.npm_candidate(), scan(writers=[{"pid": 2}]), ["deploy"], "NPM_OR_BUILD_ACTIVE"),
+            (self.npm_candidate(), scan(), ["deploy", "unexpected"], "NPM_CACHE_GROUP_PRINCIPAL_UNEXPECTED"),
         ]
         for candidate, process, principals, predicate in cases:
             with self.subTest(predicate=predicate), \
@@ -257,18 +283,69 @@ class CapacityRecoveryTests(unittest.TestCase):
             _, errors, _ = MODULE.revalidate_plan(plan)
         self.assertTrue(any("CANDIDATE_CHANGED" in item for item in errors))
 
-    def test_node_npm_cli_is_active_and_incomplete_proc_scan_denies(self):
+    def test_node_npm_cli_owned_by_deploy_is_active(self):
         proc_root = self.base / "proc"
-        process = proc_root / "42"
-        (process / "fd").mkdir(parents=True)
-        (process / "cmdline").write_bytes(
-            b"/usr/bin/node\0/usr/lib/node_modules/npm/bin/npm-cli.js\0ci\0")
-        for leaf in ("cwd", "root", "exe"):
-            (process / leaf).symlink_to(self.base)
-        targets, writers, complete = MODULE._proc_targets(proc_root)
+        self.fake_process(proc_root, 42, os.geteuid(),
+                          ["/usr/bin/node", "/usr/lib/node_modules/npm/bin/npm-cli.js", "ci"])
+        targets, writers, complete, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
         self.assertTrue(writers)
-        self.assertFalse(complete)  # maps was deliberately unreadable/absent.
+        self.assertTrue(complete)
         self.assertTrue(targets)
+        self.assertEqual(summary["identityFailures"], 0)
+
+    def test_deploy_process_inaccessible_is_denied(self):
+        proc_root = self.base / "proc-deploy-deny"
+        self.fake_process(proc_root, 43, os.geteuid(), [], inaccessible_cmdline=True)
+        _, _, complete, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
+        self.assertFalse(complete)
+        self.assertEqual(summary["identityFailures"], 1)
+
+    def test_unrelated_root_process_inaccessible_does_not_block(self):
+        proc_root = self.base / "proc-root-allowed"
+        other_uid = 0 if os.geteuid() != 0 else 1
+        self.fake_process(proc_root, 44, other_uid, [], inaccessible_cmdline=True)
+        _, writers, complete, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
+        self.assertTrue(complete)
+        self.assertEqual(writers, [])
+        self.assertEqual(summary["permissionLimitedOtherProcesses"], 1)
+
+    def test_other_uid_readable_cache_reference_still_denies(self):
+        proc_root = self.base / "proc-other-reference"
+        other_uid = 0 if os.geteuid() != 0 else 1
+        self.fake_process(proc_root, 48, other_uid, ["/usr/bin/cat", str(self.cache / "entry")])
+        process_scan = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
+        with mock.patch.object(MODULE, "NPM_CACHE", self.cache), \
+                mock.patch.object(MODULE, "NPM_PARENT", self.cache_parent), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "NPM_CACHE_REFERENCED"):
+            MODULE.authenticate_npm(self.npm_candidate(), process_scan)
+
+    def test_kernel_thread_is_ignored_nominally(self):
+        proc_root = self.base / "proc-kernel"
+        other_uid = 0 if os.geteuid() != 0 else 1
+        self.fake_process(proc_root, 45, other_uid, [])
+        _, _, complete, summary = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
+        self.assertTrue(complete)
+        self.assertEqual(summary["kernelThreadsIgnored"], 1)
+
+    def test_recycled_pid_is_denied(self):
+        proc_root = self.base / "proc-recycled"
+        self.fake_process(proc_root, 46, os.geteuid(), ["/usr/bin/node", "service.js"])
+        with mock.patch.object(MODULE, "_read_start_ticks", side_effect=[100, 101]):
+            targets, writers, complete, summary = MODULE._proc_targets(
+                proc_root, deploy_uid=os.geteuid())
+        self.assertFalse(complete)
+        self.assertEqual(targets, [])
+        self.assertEqual(writers, [])
+        self.assertEqual(summary["identityFailures"], 1)
+
+    def test_deploy_fd_or_maps_incomplete_is_denied(self):
+        proc_root = self.base / "proc-incomplete"
+        self.fake_process(proc_root, 47, os.geteuid(), ["/usr/bin/node", "service.js"],
+                          include_maps=False)
+        _, _, complete, _ = MODULE._proc_targets(proc_root, deploy_uid=os.geteuid())
+        self.assertFalse(complete)
 
     def test_execute_recaptures_new_open_transaction_reference_after_locks(self):
         intent_sha, authorization = self.seal_and_authorize()
@@ -329,19 +406,19 @@ class CapacityRecoveryTests(unittest.TestCase):
         outside = self.base / "outside"; outside.mkdir()
         with self.process_patch(), self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_OUTSIDE_ROOT"):
             MODULE.authenticate_output(self.output_candidate(outside), json.loads(self.policy.read_text()),
-                                       json.loads(self.operational.read_text()), ([], [], True))
+                                       json.loads(self.operational.read_text()), scan())
 
     def test_runtime_reference_or_protected_graph_is_denied(self):
         self.write_operational(protectedGraphPaths=[str(self.runtime)])
         with self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_REFERENCED_OR_PROTECTED"):
             MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
-                                       json.loads(self.operational.read_text()), ([], [], True))
+                                       json.loads(self.operational.read_text()), scan())
 
     def test_incomplete_equivalence_is_denied(self):
         (self.release / "api-runtime" / "app.js").write_bytes(b"drift")
         with self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_EQUIVALENCE_INCOMPLETE"):
             MODULE.authenticate_output(self.output_candidate(), json.loads(self.policy.read_text()),
-                                       json.loads(self.operational.read_text()), ([], [], True))
+                                       json.loads(self.operational.read_text()), scan())
 
     def seal_and_authorize(self):
         self.audit(); self.prepare()

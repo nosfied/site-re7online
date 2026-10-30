@@ -190,6 +190,9 @@ def physical_usage(paths: Iterable[Path]) -> dict[str, dict[str, int]]:
     return result
 
 
+ProcessScan = tuple[list[tuple[int, int, str, str]], list[dict[str, Any]], bool, dict[str, int]]
+
+
 def _process_still_exists(proc: Path) -> bool:
     try:
         proc.stat()
@@ -211,62 +214,221 @@ def _is_active_npm_or_build(arguments: list[str]) -> bool:
             ("converta-release.py" in command and " build" in command))
 
 
-def _proc_targets(proc_root: Path = Path("/proc")) -> tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool]:
-    targets: list[tuple[int, str, str]] = []
+def _proc_start_ticks(raw: str) -> int:
+    closing = raw.rfind(") ")
+    if closing < 0:
+        deny("PROCESS_STAT_SCHEMA")
+    fields = raw[closing + 2:].split()
+    if len(fields) <= 19:
+        deny("PROCESS_STAT_SCHEMA")
+    try:
+        return int(fields[19])
+    except ValueError:
+        deny("PROCESS_STAT_SCHEMA")
+
+
+def _read_start_ticks(proc: Path) -> int:
+    return _proc_start_ticks((proc / "stat").read_text(errors="strict"))
+
+
+def _status_uids(proc: Path) -> tuple[int, int, int, int]:
+    for line in (proc / "status").read_text(errors="strict").splitlines():
+        if line.startswith("Uid:"):
+            fields = line.split()[1:]
+            if len(fields) != 4:
+                break
+            try:
+                return tuple(int(item) for item in fields)  # type: ignore[return-value]
+            except ValueError:
+                break
+    deny("PROCESS_UID_SCHEMA")
+
+
+def _proc_targets(proc_root: Path = Path("/proc"), deploy_uid: int | None = None) -> ProcessScan:
+    targets: list[tuple[int, int, str, str]] = []
     writers: list[dict[str, Any]] = []
     complete = True
+    if deploy_uid is None:
+        deploy_uid = deploy_identity()[0]
+    summary = {
+        "deployProcessesInspected": 0,
+        "otherProcessesInspected": 0,
+        "permissionLimitedOtherProcesses": 0,
+        "kernelThreadsIgnored": 0,
+        "vanishedProcesses": 0,
+        "identityFailures": 0,
+    }
     try:
         processes = list(proc_root.iterdir())
     except OSError:
-        return targets, writers, False
+        summary["identityFailures"] += 1
+        return targets, writers, False, summary
     for proc in processes:
         if not proc.name.isdigit() or int(proc.name) == os.getpid():
             continue
         pid = int(proc.name)
+        local_targets: list[tuple[int, int, str, str]] = []
+        local_writers: list[dict[str, Any]] = []
         try:
-            command_parts = (proc / "cmdline").read_bytes().split(b"\0")
-            command = " ".join(item.decode(errors="replace") for item in command_parts if item)
-            arguments = [item.decode(errors="replace") for item in command_parts if item]
-            if _is_active_npm_or_build(arguments):
-                writers.append({"pid": pid, "commandSha256": digest_bytes(command.encode())})
-            for leaf in ("cwd", "root", "exe"):
+            before_ticks = _read_start_ticks(proc)
+            try:
+                uids = _status_uids(proc)
+            except Denied:
+                complete = False
+                summary["identityFailures"] += 1
+                continue
+            except (PermissionError, OSError):
                 try:
-                    targets.append((pid, leaf, os.readlink(proc / leaf)))
+                    directory_uid = proc.stat().st_uid
                 except FileNotFoundError:
-                    if _process_still_exists(proc):
-                        complete = False
+                    summary["vanishedProcesses"] += 1
+                    continue
+                try:
+                    after_ticks = _read_start_ticks(proc)
+                except FileNotFoundError:
+                    summary["vanishedProcesses"] += 1
+                    continue
                 except OSError:
                     complete = False
+                    summary["identityFailures"] += 1
+                    continue
+                if after_ticks != before_ticks:
+                    complete = False
+                    summary["identityFailures"] += 1
+                    continue
+                if directory_uid == deploy_uid:
+                    complete = False
+                    summary["identityFailures"] += 1
+                else:
+                    summary["permissionLimitedOtherProcesses"] += 1
+                continue
+            deploy_process = deploy_uid in uids
+            other_limited = False
+            try:
+                command_parts = (proc / "cmdline").read_bytes().split(b"\0")
+            except FileNotFoundError:
+                if _process_still_exists(proc) and deploy_process:
+                    complete = False
+                    summary["identityFailures"] += 1
+                else:
+                    summary["vanishedProcesses"] += 1
+                continue
+            except OSError:
+                try:
+                    after_ticks = _read_start_ticks(proc)
+                except FileNotFoundError:
+                    summary["vanishedProcesses"] += 1
+                    continue
+                except OSError:
+                    complete = False
+                    summary["identityFailures"] += 1
+                    continue
+                if after_ticks != before_ticks:
+                    complete = False
+                    summary["identityFailures"] += 1
+                    continue
+                if deploy_process:
+                    complete = False
+                    summary["identityFailures"] += 1
+                else:
+                    summary["permissionLimitedOtherProcesses"] += 1
+                continue
+            command = " ".join(item.decode(errors="replace") for item in command_parts if item)
+            arguments = [item.decode(errors="replace") for item in command_parts if item]
+            if not arguments:
+                after_ticks = _read_start_ticks(proc)
+                if after_ticks != before_ticks:
+                    complete = False
+                    summary["identityFailures"] += 1
+                else:
+                    summary["kernelThreadsIgnored"] += 1
+                continue
+            for argument in arguments:
+                possible_path = argument.split("=", 1)[-1]
+                if possible_path.startswith("/"):
+                    local_targets.append((pid, before_ticks, "cmdline", possible_path))
+            if _is_active_npm_or_build(arguments):
+                local_writers.append({"pid": pid, "startTicks": before_ticks,
+                                      "uid": uids[1], "commandSha256": digest_bytes(command.encode())})
+            for leaf in ("cwd", "root", "exe"):
+                try:
+                    local_targets.append((pid, before_ticks, leaf, os.readlink(proc / leaf)))
+                except FileNotFoundError:
+                    if deploy_process and _process_still_exists(proc):
+                        complete = False
+                    elif not deploy_process and _process_still_exists(proc):
+                        other_limited = True
+                except OSError:
+                    if deploy_process:
+                        complete = False
+                    else:
+                        other_limited = True
             try:
                 for fd in (proc / "fd").iterdir():
                     try:
-                        targets.append((pid, f"fd/{fd.name}", os.readlink(fd)))
+                        local_targets.append((pid, before_ticks, f"fd/{fd.name}", os.readlink(fd)))
                     except FileNotFoundError:
-                        if _process_still_exists(proc):
+                        if deploy_process and _process_still_exists(proc):
                             complete = False
+                        elif not deploy_process and _process_still_exists(proc):
+                            other_limited = True
                     except OSError:
-                        complete = False
+                        if deploy_process:
+                            complete = False
+                        else:
+                            other_limited = True
             except FileNotFoundError:
-                if _process_still_exists(proc):
+                if deploy_process and _process_still_exists(proc):
                     complete = False
+                elif not deploy_process and _process_still_exists(proc):
+                    other_limited = True
             except OSError:
-                complete = False
+                if deploy_process:
+                    complete = False
+                else:
+                    other_limited = True
             try:
                 for line in (proc / "maps").read_text(errors="replace").splitlines():
                     if "/" in line:
-                        targets.append((pid, "maps", line.split(None, 5)[-1]))
+                        local_targets.append((pid, before_ticks, "maps", line.split(None, 5)[-1]))
             except FileNotFoundError:
-                if _process_still_exists(proc):
+                if deploy_process and _process_still_exists(proc):
                     complete = False
+                elif not deploy_process and _process_still_exists(proc):
+                    other_limited = True
             except OSError:
+                if deploy_process:
+                    complete = False
+                else:
+                    other_limited = True
+            after_ticks = _read_start_ticks(proc)
+            if after_ticks != before_ticks:
                 complete = False
+                summary["identityFailures"] += 1
+                continue
+            targets.extend(local_targets)
+            writers.extend(local_writers)
+            summary["deployProcessesInspected" if deploy_process else "otherProcessesInspected"] += 1
+            if other_limited:
+                summary["permissionLimitedOtherProcesses"] += 1
         except PermissionError:
-            complete = False
+            try:
+                directory_uid = proc.stat().st_uid
+            except FileNotFoundError:
+                summary["vanishedProcesses"] += 1
+                continue
+            if directory_uid == deploy_uid:
+                complete = False
+                summary["identityFailures"] += 1
+            else:
+                summary["permissionLimitedOtherProcesses"] += 1
         except FileNotFoundError:
+            summary["vanishedProcesses"] += 1
             continue
-        except OSError:
+        except (OSError, Denied):
             complete = False
-    return targets, writers, complete
+            summary["identityFailures"] += 1
+    return targets, writers, complete, summary
 
 
 def path_overlap(left: str, right: str) -> bool:
@@ -563,7 +725,7 @@ def validate_lock_free(path: Path) -> dict[str, Any]:
 
 
 def authenticate_npm(candidate: dict[str, Any],
-                     process_data: tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool],
+                     process_data: ProcessScan,
                      operational: dict[str, Any] | None = None) -> dict[str, Any]:
     if set(candidate) != NPM_CANDIDATE_KEYS:
         deny("NPM_CACHE_SCHEMA")
@@ -582,10 +744,11 @@ def authenticate_npm(candidate: dict[str, Any],
     actual_principals = deploy_group_principals()
     if actual_principals != ["deploy"]:
         deny("NPM_CACHE_GROUP_PRINCIPAL_UNEXPECTED")
-    targets, writers, complete = process_data
+    targets, writers, complete, scan_summary = process_data
     if writers:
         deny("NPM_OR_BUILD_ACTIVE")
-    references = [{"pid": pid, "source": source} for pid, source, target in targets
+    references = [{"pid": pid, "startTicks": ticks, "source": source}
+                  for pid, ticks, source, target in targets
                   if path_overlap(str(path), target)]
     if references:
         deny("NPM_CACHE_REFERENCED")
@@ -599,7 +762,8 @@ def authenticate_npm(candidate: dict[str, Any],
         deny("PROCESS_REFERENCE_SCAN_INCOMPLETE")
     return {"class": candidate["class"], "path": str(path),
             "identity": stat_identity(root), "parentIdentity": stat_identity(parent),
-            "deployGroupPrincipals": actual_principals, "references": []}
+            "deployGroupPrincipals": actual_principals, "references": [],
+            "processScan": scan_summary}
 
 
 def artifact_for(contract: dict[str, Any], path: Path, cls: str) -> dict[str, Any]:
@@ -671,7 +835,7 @@ def compare_index(runtime: Path, release_root: Path, relative: str,
 
 
 def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], operational: dict[str, Any],
-                        process_data: tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool]) -> dict[str, Any]:
+                        process_data: ProcessScan) -> dict[str, Any]:
     if set(candidate) != OUTPUT_CANDIDATE_KEYS:
         deny("DERIVED_OUTPUT_SCHEMA")
     path = normalized_absolute(candidate.get("path"), "DERIVED_OUTPUT_PATH")
@@ -699,8 +863,8 @@ def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], opera
                   operational["protectedGraphPaths"])
     if any(path_overlap(str(path), item) for item in references):
         deny("DERIVED_OUTPUT_REFERENCED_OR_PROTECTED")
-    targets, _, complete = process_data
-    if any(path_overlap(str(path), target) for _, _, target in targets):
+    targets, _, complete, scan_summary = process_data
+    if any(path_overlap(str(path), target) for _, _, _, target in targets):
         deny("DERIVED_OUTPUT_PROCESS_REFERENCE")
     if not complete:
         deny("PROCESS_REFERENCE_SCAN_INCOMPLETE")
@@ -756,11 +920,12 @@ def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], opera
             "releaseId": release_id, "targetCommit": target, "releaseRoot": str(release_root),
             "runtimeRelativePath": relative,
             "bindings": {label: {"path": str(value[0]), "sha256": candidate[label]["sha256"]}
-                         for label, value in bindings.items()}, "equivalence": equivalence}
+                         for label, value in bindings.items()}, "equivalence": equivalence,
+            "processScan": scan_summary}
 
 
 def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict[str, Any],
-                       process_data: tuple[list[tuple[int, str, str]], list[dict[str, Any]], bool]) -> dict[str, Any]:
+                       process_data: ProcessScan) -> dict[str, Any]:
     if not isinstance(candidate, dict) or candidate.get("class") not in CLASSES:
         deny("CANDIDATE_CLASS")
     if candidate["class"] == "NPM_CACHE_MAINTENANCE":

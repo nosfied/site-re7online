@@ -51,8 +51,12 @@ O grupo `deploy` deve conter canonicamente apenas o principal `deploy`; o pedido
 não pode fornecer ou ampliar essa allowlist. Membro suplementar ou usuário com
 GID primário inesperado nega. Também negam: processo `npm`/build ativo, inclusive
 `node .../npm-cli.js`, CWD, FD, mapa de memória ou outra referência sob o cache e
-qualquer varredura `/proc` incompleta. Essa regra não é compartilhada com
-ancestrais de `generation-retirement.py`.
+qualquer varredura `/proc` incompleta de processo pertencente a `deploy`.
+Cada PID é vinculado ao UID autenticado em `status` e aos `start ticks` lidos
+antes/depois. Thread de kernel sem `cmdline` é ignorada nominalmente; limitação
+esperada em processo de outro UID não bloqueia, mas qualquer comando npm/build ou
+referência legível desse processo continua negando. Essa regra não é compartilhada
+com ancestrais de `generation-retirement.py`.
 
 ### `DERIVED_OUTPUT_RUNTIME`
 

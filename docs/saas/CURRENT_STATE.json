@@ -15,6 +15,11 @@
     "executeLiveRecaptureAfterLocks": true,
     "npmCacheGroupPrincipals": ["deploy"],
     "npmCacheAllowedModes": ["0700", "0750", "0755"],
+    "processScan": {
+      "deployUidFullInspectionRequired": true,
+      "pidStartTicksStableRequired": true,
+      "otherUidExpectedPermissionLimits": "RECORDED_NOT_GLOBAL_DENY"
+    },
     "productionEffectsInThisChange": false
   },
   "production": {

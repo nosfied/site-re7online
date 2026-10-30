@@ -12,6 +12,8 @@ O próprio `_cacache` aceita somente `deploy:deploy 0700/0750/0755`, o grupo
 canônico não pode conter principal além de `deploy`, e `node .../npm-cli.js` é
 atividade npm. Após adquirir ambos os locks, `execute` recaptura ao vivo current,
 PM2, dump, transações não terminais e grafo antes do primeiro `ATTEMPT`.
+Em `/proc`, UID e start ticks autenticam o PID; inspeção integral é obrigatória
+para `deploy`, enquanto limitação esperada de outro UID é apenas registrada.
 
 Worktrees, staging, releases, preparações, transações, evidências e logs só são
 retiráveis quando uma classe versionada futura autenticar seu fechamento. A lista
