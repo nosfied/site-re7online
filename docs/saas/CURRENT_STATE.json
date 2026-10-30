@@ -2,8 +2,8 @@
   "schemaVersion": 7,
   "updatedAtUtc": "2026-10-30T17:30:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json",
-  "activeOperationalRecord": "docs/saas/releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json",
+  "activeDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
+  "activeOperationalRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "capacityRecoveryControlPlane": {
@@ -79,9 +79,9 @@
   "production": {
     "status": "DEPLOYED_SANITIZED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-aa9527cc-vps-20261029T222733Z",
-    "releasePath": "/opt/re7online/releases/immutable-aa9527cc-vps-20261029T222733Z",
-    "targetCommit": "aa9527cc39ae24efcd8c2bb6e653a8e04655009b",
+    "releaseId": "immutable-fa63994a-vps-20261030T153352Z",
+    "releasePath": "/opt/re7online/releases/immutable-fa63994a-vps-20261030T153352Z",
+    "targetCommit": "fa63994acd5655bd499a328679a0f8c11e0740e2",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
