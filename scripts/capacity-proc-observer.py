@@ -44,6 +44,7 @@ PREPARATIONS_ROOT = Path("/opt/re7online/backups/converta-persistent/preparation
 PREPARATION_ARCHIVE_NAMES = {
     "api-frontend-return.private.tar.gz", "worker-return.private.tar.gz",
 }
+PREPARATION_WINDOW_ARCHIVE_NAMES = {"worker-minimal-b9-v3.tar.gz"}
 PF_KTHREAD = 0x00200000
 
 
@@ -135,6 +136,11 @@ def canonical_candidate(value: Any) -> str:
     if (preparation_relative is not None and len(preparation_relative.parts) == 2 and
             preparation_relative.parts[0] not in {"", ".", ".."} and
             preparation_relative.parts[1] in PREPARATION_ARCHIVE_NAMES):
+        return candidate
+    if (preparation_relative is not None and len(preparation_relative.parts) == 3 and
+            preparation_relative.parts[0] not in {"", ".", ".."} and
+            preparation_relative.parts[1] == "window" and
+            preparation_relative.parts[2] in PREPARATION_WINDOW_ARCHIVE_NAMES):
         return candidate
     try:
         relative = path.relative_to(BUILD_OUTPUT_ROOT)
