@@ -68,6 +68,43 @@ após este próximo lote seria `8.796.827.648` bytes. Ainda faltariam `866.848.7
 bytes para o alvo agregado de `9.663.676.416` bytes, que permanece uma meta entre
 lotes e não um predicado de bloqueio para cada lote incremental seguro.
 
+#### Negativa consumida e reconciliação nominal
+
+A classificação preliminar acima foi consumida pelo `audit` único da custódia
+`p00-capacity-runtime-fix-returns-2abddc80-20261031T133937Z` e não autoriza nova
+tentativa. O plano negado SHA-256
+`e9ceaffcf0123432a8e897a5e2111e640cc46d79146c92de7875b81888d125ee`
+registrou conjuntamente:
+
+- `PREPARATION_ARCHIVE_PROTECTED_MATERIAL` no retorno API/frontend;
+- `PREPARATION_ARCHIVE_RECORD_SCOPE` no retorno worker;
+- `MINIMUM_RECOVERY_NOT_MET` como consequência agregada.
+
+A reconciliação somente leitura, sem extração e sem recalcular os hashes integrais,
+reproduziu exatamente o predicado estrutural. O retorno API/frontend contém uma
+ocorrência protegida real: `apps/whatsapp-agent/.env.example`, membro regular de
+1.789 bytes. Pela decisão fail-closed do owner, o archive inteiro fica
+permanentemente `KEEP_PROTECTED`; não se propõe exceção para o sufixo `.example`.
+
+O worker permanece preservado. Seu request usa
+`proof.kind=VERSIONED_PREPARATION_RECORD` e o documento específico
+`AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md`, SHA-256
+`5500f19a563907d2d33ee568644baa42d64bf50b4bc8cb37662e78d55aed8973`.
+A linha 18 vincula descritivamente o hash, mas não contém conjuntamente o basename
+literal e o tamanho. O documento possui na linha 32 prova genérica de que os
+arquivos compactados foram testados para leitura, porém não contém o literal
+canônico `` `tar -tzf` dos arquivos compactados PASS ``. Portanto, estender apenas
+o allowlist de documentos continuaria negando e não deve ser implementado. Uma
+futura extensão continua condicionada a registro versionado específico que
+satisfaça as mesmas provas exatas, sem aceitar documento genérico ou fabricar
+evidência histórica.
+
+Resultado da reconciliação SHA-256:
+`a502e814bb192db7851d6724c50ae143a1fc50bf54fd88d8d722416dc7def036`;
+índice SHA-256:
+`5a6cf4f4a98ec0e8f1041634d0c68396f7dbeaa33945553324f99dc00750a23b`.
+Não houve `prepare`, `execute`, `unlink` ou autorização substituta.
+
 ## Resultado obrigatório
 
 1. Uma única fonte de estado atual; histórico não concorre como instrução.
