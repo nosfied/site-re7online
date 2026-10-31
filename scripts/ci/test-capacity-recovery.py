@@ -298,10 +298,6 @@ class CapacityRecoveryTests(unittest.TestCase):
         archive_specs = [
             ("reactive/window/worker.tar.gz", False),
             ("night/candidate.tar.gz", True),
-            ("night/recovery.tar.gz", True),
-            ("frontend-a/frontend.tar.gz", False),
-            ("frontend-b/frontend.tar.gz", False),
-            ("frontend-c/frontend.tar.gz", False),
         ]
         for ordinal, (relative, night) in enumerate(archive_specs, 1):
             candidate = self.preparations / f"disposition-{suffix}" / relative
@@ -499,13 +495,13 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(observed["identity"]["nlink"], 1)
         self.assertFalse(observed["archive"]["protectedMaterialFound"])
 
-    def test_manifest_disposition_exact_seven_passes_and_uses_physical_blocks(self):
+    def test_manifest_disposition_exact_three_passes_and_uses_physical_blocks(self):
         fixture = self.manifest_disposition_fixture()
         private_json(self.request, self.request_value(fixture["candidates"]))
         with fixture["patches"], self.process_patch():
             plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
         self.assertEqual(plan["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
-        self.assertEqual(len(plan["candidates"]), 7)
+        self.assertEqual(len(plan["candidates"]), 3)
         expected = sum(item["physicalBytes"] for item in fixture["entries"])
         self.assertEqual(plan["qualifiedBytes"], expected)
         self.assertTrue(any(command[0] == "/usr/bin/rmdir" for command in plan["commands"]))
@@ -547,18 +543,18 @@ class CapacityRecoveryTests(unittest.TestCase):
         manifest_path = MODULE.DISPOSITION_MANIFEST_PATH
         self.assertEqual(
             MODULE.DISPOSITION_MANIFEST_SHA256,
-            "4d1e7a1c6128fc50240c6496cb2d3911d535d9b73c7330ed76cd904a7302602d",
+            "b2b5bff4adeec32f12e9f32e0487a75f85fa334a3273931c88b62338b6d9f78d",
         )
         self.assertEqual(
             sha(manifest_path),
-            "4d1e7a1c6128fc50240c6496cb2d3911d535d9b73c7330ed76cd904a7302602d",
+            "b2b5bff4adeec32f12e9f32e0487a75f85fa334a3273931c88b62338b6d9f78d",
         )
         manifest = json.loads(manifest_path.read_text())
         parsed, parsed_entries = MODULE._disposition_manifest({
             "path": str(manifest_path), "sha256": MODULE.DISPOSITION_MANIFEST_SHA256,
         })
         self.assertEqual(parsed, manifest)
-        self.assertEqual(len(parsed_entries), 7)
+        self.assertEqual(len(parsed_entries), 3)
         self.assertEqual(set(manifest), {
             "schemaVersion", "kind", "dispositionId", "entries",
             "versionedEnvExample",
@@ -567,10 +563,21 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(manifest["kind"], "CLOSED_PREPARATION_MANIFEST_DISPOSITION")
         self.assertEqual(manifest["dispositionId"], MODULE.DISPOSITION_ID)
         entries = manifest["entries"]
-        self.assertEqual(len(entries), 7)
-        self.assertEqual(len({entry["path"] for entry in entries}), 7)
+        self.assertEqual(len(entries), 3)
+        self.assertEqual(len({entry["path"] for entry in entries}), 3)
         self.assertEqual(sum(entry["physicalBytes"] for entry in entries),
-                         1_213_804_544)
+                         458_973_184)
+        self.assertEqual({entry["path"] for entry in entries}, {
+            "/opt/re7online/backups/converta-persistent/preparations/"
+            "incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/"
+            "worker-reactive-afbb7455.tar.gz",
+            "/opt/re7online/backups/converta-persistent/preparations/"
+            "frontend-9f4cbe0f-20261007T012803Z/frontend-9f4cbe0f-v2.tar.gz",
+            "/opt/re7online/backups/converta-persistent/preparations/"
+            "frontend-fa60-css-supervision-20261007T224500Z/"
+            "frontend-fa60-css-corrected.tar.gz",
+        })
+        self.assertTrue(all(entry["type"] == "ARCHIVE_FILE" for entry in entries))
         env = manifest["versionedEnvExample"]
         self.assertEqual(env, {
             "path": "apps/whatsapp-agent/.env.example",
@@ -582,27 +589,12 @@ class CapacityRecoveryTests(unittest.TestCase):
                 record_path = MODULE.ROOT / record["path"]
                 self.assertTrue(record_path.is_file(), record["path"])
                 self.assertEqual(sha(record_path), record["sha256"])
-        night = [entry for entry in entries if "/night-" in entry["path"]]
-        common = [entry for entry in entries if "/night-" not in entry["path"]]
-        self.assertEqual(len(night), 2)
-        self.assertEqual(len(common), 5)
-        self.assertTrue(all("protectedMemberExceptions" not in entry
-                            for entry in common))
-        expected_exceptions = [
-            {"kind": "VERSIONED_ENV_EXAMPLE",
-             "path": "apps/whatsapp-agent/.env.example"},
-            {"kind": "OPENAI_LIBRARY_CODE",
-             "pathPrefix": "node_modules/openai/resources/uploads/"},
-        ]
-        self.assertTrue(all(entry.get("protectedMemberExceptions") == expected_exceptions
-                            for entry in night))
+        self.assertTrue(all("protectedMemberExceptions" not in entry for entry in entries))
         self.assertTrue(all("candidateAncestors" in entry for entry in entries))
         present = [entry for entry in entries if entry["authorityState"] == "PRESENT"]
-        absent = [entry for entry in entries if entry["authorityState"] == "ABSENT"]
-        self.assertEqual(len(present), 5)
-        self.assertEqual(len(absent), 2)
+        self.assertEqual(len(present), 3)
         self.assertTrue(all(entry["authorityIdentity"] is not None for entry in present))
-        self.assertTrue(all(entry["authorityIdentity"] is None for entry in absent))
+        self.assertFalse(any(entry["authorityState"] == "ABSENT" for entry in entries))
 
     def test_manifest_identity_model_accepts_exact_root_or_deploy_authority(self):
         fixture = self.manifest_disposition_fixture("authority-owner")
@@ -890,7 +882,7 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertIn("COMMAND_FAILED", result["failurePredicate"])
         self.assertTrue(tree.exists())
 
-    def test_manifest_disposition_exact_seven_complete_lifecycle_passes(self):
+    def test_manifest_disposition_exact_three_complete_lifecycle_passes(self):
         fixture = self.manifest_disposition_fixture("complete")
         patch_values, authorization = self._seal_manifest_disposition(fixture)
         receipt = self.base / "receipts/disposition-complete"; receipt.parent.mkdir(mode=0o700)

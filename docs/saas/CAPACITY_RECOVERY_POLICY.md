@@ -134,7 +134,7 @@ de descoberta fornecido pelo operador.
 O próprio helper aceita somente o cache literal `/home/deploy/.npm/_cacache`,
 runtimes `api-runtime`/`frontend-runtime` no layout fechado
 `/opt/re7online/build-output/<release>-producer/<release>/<runtime>`, os basenames
-fechados da classe `CLOSED_PREPARATION_DERIVED_ARCHIVE` e os sete caminhos
+fechados da classe `CLOSED_PREPARATION_DERIVED_ARCHIVE` e os três caminhos
 literais do manifesto versionado
 `config/capacity-recovery/closed-preparation-manifest-disposition.v1.json`.
 `/`, raízes, ancestrais genéricos, outros descendentes e caminhos externos são
@@ -211,8 +211,8 @@ posterior, e o diretório-pai recebe `fsync` após a ausência comprovada.
 ### `CLOSED_PREPARATION_MANIFEST_DISPOSITION`
 
 Esta classe existe somente para a disposição fechada
-`p00-closed-preparations-20261031-v1`. O executor autentica caminho e SHA-256 do
-manifesto versionado; exige exatamente os sete candidatos, sem mistura com outra
+`p00-closed-preparations-20261031-v2-three-archives`. O executor autentica caminho e SHA-256 do
+manifesto versionado; exige exatamente os três archives candidatos, sem mistura com outra
 classe, e nega campo, caminho, autoridade ou registro histórico alternativo.
 Cada fase reabre o manifesto, os registros, candidatos e autoridades e recaptura
 as fontes vivas e as referências de processos.
@@ -220,38 +220,29 @@ as fontes vivas e as referências de processos.
 O manifesto schema 2 fixa separadamente a identidade dos ancestrais do candidato
 e da raiz física de autoridade. Raízes de autoridade podem pertencer a
 `root:root` ou `deploy:deploy`; device, inode, UID, GID e modo devem coincidir com
-o manifesto e permanecer iguais em `audit`, `prepare` e `execute`. Autoridade
-ausente é registrada nominalmente como `ABSENT`, mas nunca qualifica o candidato.
-Symlink não substitui a raiz física declarada.
+o manifesto e permanecer iguais em `audit`, `prepare` e `execute`. Todos os três
+candidatos exigem autoridade física presente; `ABSENT` é schema inválido. Symlink
+não substitui a raiz física declarada.
 
-Ancestrais dos candidatos e diretórios da árvore enumerada também podem conservar
-owners históricos `root:root` ou `deploy:deploy`. Todos devem ser diretórios
-físicos, no device esperado e não graváveis por grupo ou outros; os ancestrais do
-candidato são enumerados no manifesto e as identidades dos diretórios da árvore
-entram na relação autenticada. Escrita por grupo/outros continua sendo bloqueio
-material, ainda que o modo observado esteja registrado.
+Ancestrais dos candidatos podem conservar owners históricos `root:root` ou
+`deploy:deploy`. Todos devem ser diretórios físicos, no device esperado e não
+graváveis por grupo ou outros; são enumerados no manifesto e autenticados em
+todas as fases. Escrita por grupo/outros continua sendo bloqueio material, ainda
+que o modo observado esteja registrado.
 
-Archives são relacionados integralmente sem extração: nomes duplicados, escapes,
-links perigosos, devices, FIFO e tipos desconhecidos negam. A proteção global de
-`.env.*` e `uploads` permanece. As únicas exceções são, nos dois digests `night`
-declarados pelo manifesto, `apps/whatsapp-agent/.env.example` byte-idêntico ao
-arquivo versionado e código sob `node_modules/openai/resources/uploads/`
-comparado à release autoritativa. `.env` real e uploads operacionais continuam
-negados.
+Os três archives são relacionados integralmente sem extração: nomes duplicados,
+escapes, links perigosos, devices, FIFO e tipos desconhecidos negam. O manifesto
+produtivo não admite `protectedMemberExceptions`; a proteção global de `.env.*`,
+`uploads` e demais materiais privados permanece sem exceção.
 
 Arquivos regulares da autoridade são comparados por conteúdo e tamanho. O modo
 observado do arquivo físico é autenticado na relação, mas não precisa reproduzir o
 modo armazenado no tar; ambos são registrados. Drift de owner, device, inode,
 modo, conteúdo ou destino físico continua negando.
 
-A árvore `worker-package-audit` exige o `PACKAGE_FILES.sha256` autenticado, conjunto
-integral de folhas, arquivos regulares com `nlink=1` e equivalência folha a folha
-com a autoridade preservada. O `nlink` do diretório não é interpretado como
-hardlink de arquivo. A medição usa blocos físicos por inode único.
-
-Os únicos efeitos possíveis são `/usr/bin/unlink -- <folha>` e, depois, chamadas
-literais `/usr/bin/rmdir -- <diretório-vazio>` em pós-ordem. Nunca há `rm -r`, glob,
-shell ou exclusão da preparação inteira. Cada efeito recebe `ATTEMPT`, `RESULT` e
+O único efeito possível neste manifesto é `/usr/bin/unlink -- <archive>` para
+cada um dos três caminhos literais. Nunca há `rmdir`, `rm -r`, glob, shell ou
+exclusão da preparação inteira. Cada efeito recebe `ATTEMPT`, `RESULT` e
 `VERIFIED`; falha intermediária fecha o receipt parcial e não repete efeitos
 concluídos automaticamente.
 

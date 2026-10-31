@@ -50,8 +50,8 @@ CLASSES = {
 }
 DISPOSITION_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/closed-preparation-manifest-disposition.v1.json")
-DISPOSITION_MANIFEST_SHA256 = "4d1e7a1c6128fc50240c6496cb2d3911d535d9b73c7330ed76cd904a7302602d"
-DISPOSITION_ID = "p00-closed-preparations-20261031-v1"
+DISPOSITION_MANIFEST_SHA256 = "b2b5bff4adeec32f12e9f32e0487a75f85fa334a3273931c88b62338b6d9f78d"
+DISPOSITION_ID = "p00-closed-preparations-20261031-v2-three-archives"
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
@@ -1556,7 +1556,7 @@ def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[
             value.get("schemaVersion") != 2 or
             value.get("kind") != "CLOSED_PREPARATION_MANIFEST_DISPOSITION" or
             value.get("dispositionId") != DISPOSITION_ID or
-            not isinstance(value.get("entries"), list) or len(value["entries"]) != 7):
+            not isinstance(value.get("entries"), list) or len(value["entries"]) != 3):
         deny("DISPOSITION_MANIFEST_SCHEMA")
     env = value.get("versionedEnvExample")
     if not isinstance(env, dict) or set(env) != {"path", "sha256"}:
@@ -1602,14 +1602,10 @@ def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[
             _validate_directory_identity(ancestor, "DISPOSITION_MANIFEST_ANCESTOR_SCHEMA",
                                          path=True)
             normalized_absolute(ancestor["path"], "DISPOSITION_MANIFEST_ANCESTOR_SCHEMA")
-        if entry.get("authorityState") == "PRESENT":
-            _validate_directory_identity(entry.get("authorityIdentity"),
-                                         "DISPOSITION_MANIFEST_AUTHORITY_IDENTITY")
-        elif entry.get("authorityState") == "ABSENT":
-            if entry.get("authorityIdentity") is not None:
-                deny("DISPOSITION_MANIFEST_AUTHORITY_IDENTITY")
-        else:
+        if entry.get("authorityState") != "PRESENT":
             deny("DISPOSITION_MANIFEST_AUTHORITY_IDENTITY")
+        _validate_directory_identity(entry.get("authorityIdentity"),
+                                     "DISPOSITION_MANIFEST_AUTHORITY_IDENTITY")
         if entry["type"] == "ARCHIVE_FILE":
             if not valid_sha(entry.get("sha256")) or entry.get("proof") != "ARCHIVE_AUTHORITY_TREE":
                 deny("DISPOSITION_MANIFEST_ARCHIVE_SCHEMA")
@@ -2036,7 +2032,7 @@ def validate_audit_request(value: dict[str, Any]) -> None:
         manifest, entries = _disposition_manifest(dispositions[0].get("dispositionManifest"))
         del manifest
         requested = [item.get("path") for item in dispositions]
-        if (len(requested) != 7 or len(set(requested)) != 7 or
+        if (len(requested) != 3 or len(set(requested)) != 3 or
                 set(requested) != set(entries) or
                 any(item.get("dispositionManifest") != dispositions[0].get("dispositionManifest")
                     for item in dispositions)):

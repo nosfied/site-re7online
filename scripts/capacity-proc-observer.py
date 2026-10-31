@@ -47,10 +47,6 @@ PREPARATION_ARCHIVE_NAMES = {
 PREPARATION_WINDOW_ARCHIVE_NAMES = {"worker-minimal-b9-v3.tar.gz"}
 MANIFEST_DISPOSITION_PATHS = {
     "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-reactive-afbb7455.tar.gz",
-    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
-    "/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z/candidate.tar.gz",
-    "/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z/recovery-standalone.tar.gz",
-    "/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-20261009T220400Z/frontend-3227b2d7.tar.gz",
     "/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z/frontend-9f4cbe0f-v2.tar.gz",
     "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-css-supervision-20261007T224500Z/frontend-fa60-css-corrected.tar.gz",
 }
