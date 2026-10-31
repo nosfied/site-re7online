@@ -183,7 +183,8 @@ entram no comando da classe.
 ### `CLOSED_PREPARATION_DERIVED_ARCHIVE`
 
 Admite somente os arquivos literais `api-frontend-return.private.tar.gz` e
-`worker-return.private.tar.gz`, como filhos diretos de uma preparação física sob
+`worker-return.private.tar.gz`, como filhos diretos de uma preparação física, e
+`worker-minimal-b9-v3.tar.gz` no subdiretório literal `window`. Todos ficam sob
 `/opt/re7online/backups/converta-persistent/preparations`. Diretórios, outros
 basenames, symlinks, hardlinks, escapes e ancestrais graváveis por grupo/outros são
 negados. O arquivo exige owner/group canônicos, modo privado, device/inode, tamanho,
@@ -191,12 +192,14 @@ blocos, SHA-256 e `nlink=1` estáveis em todas as fases.
 
 A prova fechada é o registro versionado autenticado da preparação, que vincula
 literalmente basename, bytes, SHA-256 e a verificação histórica por `tar -tzf`, ou
-uma cópia autoritativa byte-idêntica que permanece preservada. Arquivos ou membros
-de archive classificados como `content`,
+uma cópia autoritativa byte-idêntica que permanece preservada.
+`worker-minimal-b9-v3.tar.gz` aceita exclusivamente a segunda forma,
+`proof.kind=DUPLICATE_COPY`; registro versionado nunca o autoriza. Arquivos ou
+membros de archive classificados como `content`,
 DB, runtime-data, configuração privada, `.data`, uploads tenant-scoped, credenciais
 ou evidência são negados. A listagem do tar é inspecionada sem extração.
 
-O observador privilegiado aceita apenas esses dois layouts literais adicionais. A
+O observador privilegiado aceita apenas esses três layouts literais. A
 recaptura de referências continua ocorrendo em `audit`, `prepare` e, novamente sob
 os locks, em `execute`. O único efeito é
 `/usr/bin/unlink -- <arquivo-autenticado>`; não há `rm -r`, glob ou exclusão do

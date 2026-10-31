@@ -261,6 +261,27 @@ class CapacityRecoveryTests(unittest.TestCase):
                     "recordEntry": selected.name,
                 }}
 
+    def b9_duplicate_candidates(self):
+        roots = []
+        for name in ("incident-6683-v4-hybrid-b9b58177-20261005T025100Z",
+                     "incident-6683-v4-hybrid-b9-capture-20261005T143500Z",
+                     "incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z"):
+            window = self.preparations / name / "window"
+            window.mkdir(parents=True, mode=0o700)
+            window.parent.chmod(0o700); window.chmod(0o700)
+            archive = window / "worker-minimal-b9-v3.tar.gz"
+            archive.write_bytes(self.archive.read_bytes()); archive.chmod(0o600)
+            roots.append(archive)
+        authority, *duplicates = roots
+        candidates = [{"class": "CLOSED_PREPARATION_DERIVED_ARCHIVE",
+                       "path": str(path), "sha256": sha(path), "proof": {
+                           "kind": "DUPLICATE_COPY",
+                           "authoritativeCopy": {
+                               "path": str(authority), "sha256": sha(authority),
+                           },
+                       }} for path in duplicates]
+        return authority, duplicates, candidates
+
     def request_value(self, candidates=None, minimum=1):
         return {"schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",
                 "minimumRecoveryBytes": minimum, "targetAvailableBytes": minimum,
@@ -336,6 +357,99 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(observed["class"], "CLOSED_PREPARATION_DERIVED_ARCHIVE")
         self.assertEqual(observed["identity"]["nlink"], 1)
         self.assertFalse(observed["archive"]["protectedMaterialFound"])
+
+    def test_hybrid_b9_duplicate_paths_pass_with_exact_authority(self):
+        authority, paths, candidates = self.b9_duplicate_candidates()
+        for path, candidate in zip(paths, candidates):
+            with self.subTest(path=path):
+                observed = self.authenticate_archive(candidate)
+                self.assertEqual(observed["proof"]["kind"], "DUPLICATE_COPY")
+                self.assertEqual(observed["proof"]["authoritativeCopy"]["path"],
+                                 str(authority))
+                self.assertEqual(observed["identity"]["nlink"], 1)
+
+    def test_hybrid_b9_versioned_record_is_denied(self):
+        _authority, paths, _candidates = self.b9_duplicate_candidates()
+        candidate = self.archive_candidate(paths[0])
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_PROOF_KIND"):
+            self.authenticate_archive(candidate)
+
+    def test_hybrid_b9_authority_must_be_distinct_present_exact_and_single_link(self):
+        authority, _paths, candidates = self.b9_duplicate_candidates()
+        same = json.loads(json.dumps(candidates[0]))
+        same["proof"]["authoritativeCopy"] = {
+            "path": same["path"], "sha256": same["sha256"],
+        }
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_AUTHORITY_SCOPE"):
+            self.authenticate_archive(same)
+
+        authority.unlink()
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_READ"):
+            self.authenticate_archive(candidates[0])
+
+        authority.write_bytes(b"divergent"); authority.chmod(0o600)
+        divergent = json.loads(json.dumps(candidates[0]))
+        divergent["proof"]["authoritativeCopy"]["sha256"] = sha(authority)
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_AUTHORITY_DIVERGED"):
+            self.authenticate_archive(divergent)
+
+        authority.write_bytes(self.archive.read_bytes()); authority.chmod(0o600)
+        authority_link = authority.with_name("worker-minimal-b9-v3.authority-link.tar.gz")
+        os.link(authority, authority_link)
+        linked = json.loads(json.dumps(candidates[0]))
+        linked["proof"]["authoritativeCopy"]["sha256"] = sha(authority)
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_AUTHORITY_DIVERGED"):
+            self.authenticate_archive(linked)
+
+    def test_hybrid_b9_candidate_identity_scope_and_structure_are_closed(self):
+        _authority, paths, candidates = self.b9_duplicate_candidates()
+        wrong_sha = json.loads(json.dumps(candidates[0])); wrong_sha["sha256"] = "0" * 64
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            self.authenticate_archive(wrong_sha)
+
+        symlink_window = self.preparations / "hybrid-b9-symlink" / "window"
+        symlink_window.mkdir(parents=True, mode=0o700)
+        symlink_window.parent.chmod(0o700); symlink_window.chmod(0o700)
+        link = symlink_window / "worker-minimal-b9-v3.tar.gz"
+        link.symlink_to(paths[0])
+        symlink = json.loads(json.dumps(candidates[0])); symlink["path"] = str(link)
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_TYPE"):
+            self.authenticate_archive(symlink)
+
+        outside = self.base / "worker-minimal-b9-v3.tar.gz"
+        outside.write_bytes(paths[0].read_bytes()); outside.chmod(0o600)
+        escaped = json.loads(json.dumps(candidates[0])); escaped.update(
+            path=str(outside), sha256=sha(outside))
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_SCOPE"):
+            self.authenticate_archive(escaped)
+
+        wrong_layout = self.preparation / "worker-minimal-b9-v3.tar.gz"
+        wrong_layout.write_bytes(paths[0].read_bytes()); wrong_layout.chmod(0o600)
+        misplaced = json.loads(json.dumps(candidates[0])); misplaced.update(
+            path=str(wrong_layout), sha256=sha(wrong_layout))
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_SCOPE"):
+            self.authenticate_archive(misplaced)
+
+        with tarfile.open(paths[0], "w:gz") as archive:
+            payload = b"protected"
+            item = tarfile.TarInfo("runtime-data/session.json")
+            item.size = len(payload); archive.addfile(item, io.BytesIO(payload))
+        paths[0].chmod(0o600)
+        protected = json.loads(json.dumps(candidates[0])); protected["sha256"] = sha(paths[0])
+        with self.assertRaisesRegex(MODULE.Denied, "PREPARATION_ARCHIVE_PROTECTED_MATERIAL"):
+            self.authenticate_archive(protected)
+
+    def test_original_return_archive_basenames_still_pass(self):
+        for basename in ("api-frontend-return.private.tar.gz",
+                         "worker-return.private.tar.gz"):
+            selected = self.preparation / basename
+            if selected != self.archive:
+                selected.write_bytes(self.archive.read_bytes()); selected.chmod(0o600)
+            self.write_archive_record(selected)
+            with self.subTest(basename=basename):
+                observed = self.authenticate_archive(self.archive_candidate(selected))
+                self.assertEqual(observed["proof"]["kind"],
+                                 "VERSIONED_PREPARATION_RECORD")
 
     def test_default_identity_schema_matches_privileged_observer_protocol(self):
         observer_spec = importlib.util.spec_from_file_location(

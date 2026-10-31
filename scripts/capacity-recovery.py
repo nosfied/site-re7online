@@ -36,7 +36,9 @@ LITERAL_UNLINK = ("/usr/bin/unlink", "--")
 PREPARATIONS_ROOT = Path("/opt/re7online/backups/converta-persistent/preparations")
 PREPARATION_DERIVED_ARCHIVE_NAMES = {
     "api-frontend-return.private.tar.gz", "worker-return.private.tar.gz",
+    "worker-minimal-b9-v3.tar.gz",
 }
+PREPARATION_DUPLICATE_ONLY_ARCHIVE_NAMES = {"worker-minimal-b9-v3.tar.gz"}
 CLASSES = {
     "NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME",
     "CLOSED_PREPARATION_DERIVED_ARCHIVE",
@@ -1401,6 +1403,9 @@ def _preparation_archive_proof(candidate: dict[str, Any], path: Path,
     proof = candidate.get("proof")
     if not isinstance(proof, dict):
         deny("PREPARATION_ARCHIVE_PROOF_SCHEMA")
+    if (path.name in PREPARATION_DUPLICATE_ONLY_ARCHIVE_NAMES and
+            proof.get("kind") != "DUPLICATE_COPY"):
+        deny("PREPARATION_ARCHIVE_PROOF_KIND")
     if proof.get("kind") == "VERSIONED_PREPARATION_RECORD":
         if set(proof) != DERIVED_ARCHIVE_PROOF_KEYS or proof.get("recordEntry") != path.name:
             deny("PREPARATION_ARCHIVE_PROOF_SCHEMA")
@@ -1456,6 +1461,13 @@ def authenticate_preparation_archive(candidate: dict[str, Any], operational: dic
     path = normalized_absolute(candidate.get("path"), "PREPARATION_ARCHIVE_PATH")
     if path.name not in PREPARATION_DERIVED_ARCHIVE_NAMES:
         deny("PREPARATION_ARCHIVE_PROTECTED_NAME")
+    if path.name in PREPARATION_DUPLICATE_ONLY_ARCHIVE_NAMES:
+        try:
+            relative = path.relative_to(PREPARATIONS_ROOT)
+        except ValueError:
+            deny("PREPARATION_ARCHIVE_SCOPE")
+        if len(relative.parts) != 3 or relative.parts[1] != "window":
+            deny("PREPARATION_ARCHIVE_SCOPE")
     _preparation_archive_ancestors(path)
     raw, identity = stable_regular(path, candidate.get("sha256"),
                                    allowed_modes={0o600, 0o640, 0o644},

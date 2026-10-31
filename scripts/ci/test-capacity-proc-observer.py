@@ -234,12 +234,20 @@ class ProcObserverTests(unittest.TestCase):
         release = "immutable-d7de6453-vps-20261024T221500Z"
         producer = f"/opt/re7online/build-output/{release}-producer/{release}"
         preparation = "/opt/re7online/backups/converta-persistent/preparations/automation-20260929T220203Z"
+        hybrid_capture = ("/opt/re7online/backups/converta-persistent/preparations/"
+                          "incident-6683-v4-hybrid-b9-capture-20261005T143500Z")
+        hybrid_absent = ("/opt/re7online/backups/converta-persistent/preparations/"
+                         "incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z")
         accepted = [OBSERVER.NPM_CACHE, producer + "/api-runtime", producer + "/frontend-runtime",
                     preparation + "/api-frontend-return.private.tar.gz",
-                    preparation + "/worker-return.private.tar.gz"]
+                    preparation + "/worker-return.private.tar.gz",
+                    hybrid_capture + "/window/worker-minimal-b9-v3.tar.gz",
+                    hybrid_absent + "/window/worker-minimal-b9-v3.tar.gz"]
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
         for path in (preparation, preparation + "/content.private.tar.gz",
-                     preparation + "/nested/api-frontend-return.private.tar.gz"):
+                     preparation + "/nested/api-frontend-return.private.tar.gz",
+                     preparation + "/worker-minimal-b9-v3.tar.gz",
+                     preparation + "/nested/worker-minimal-b9-v3.tar.gz"):
             with self.subTest(path=path), self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
                 OBSERVER.validate_request(request([path]))
 
