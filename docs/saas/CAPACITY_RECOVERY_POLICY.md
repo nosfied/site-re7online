@@ -217,6 +217,20 @@ classe, e nega campo, caminho, autoridade ou registro histórico alternativo.
 Cada fase reabre o manifesto, os registros, candidatos e autoridades e recaptura
 as fontes vivas e as referências de processos.
 
+O manifesto schema 2 fixa separadamente a identidade dos ancestrais do candidato
+e da raiz física de autoridade. Raízes de autoridade podem pertencer a
+`root:root` ou `deploy:deploy`; device, inode, UID, GID e modo devem coincidir com
+o manifesto e permanecer iguais em `audit`, `prepare` e `execute`. Autoridade
+ausente é registrada nominalmente como `ABSENT`, mas nunca qualifica o candidato.
+Symlink não substitui a raiz física declarada.
+
+Ancestrais dos candidatos e diretórios da árvore enumerada também podem conservar
+owners históricos `root:root` ou `deploy:deploy`. Todos devem ser diretórios
+físicos, no device esperado e não graváveis por grupo ou outros; os ancestrais do
+candidato são enumerados no manifesto e as identidades dos diretórios da árvore
+entram na relação autenticada. Escrita por grupo/outros continua sendo bloqueio
+material, ainda que o modo observado esteja registrado.
+
 Archives são relacionados integralmente sem extração: nomes duplicados, escapes,
 links perigosos, devices, FIFO e tipos desconhecidos negam. A proteção global de
 `.env.*` e `uploads` permanece. As únicas exceções são, nos dois digests `night`
@@ -224,6 +238,11 @@ declarados pelo manifesto, `apps/whatsapp-agent/.env.example` byte-idêntico ao
 arquivo versionado e código sob `node_modules/openai/resources/uploads/`
 comparado à release autoritativa. `.env` real e uploads operacionais continuam
 negados.
+
+Arquivos regulares da autoridade são comparados por conteúdo e tamanho. O modo
+observado do arquivo físico é autenticado na relação, mas não precisa reproduzir o
+modo armazenado no tar; ambos são registrados. Drift de owner, device, inode,
+modo, conteúdo ou destino físico continua negando.
 
 A árvore `worker-package-audit` exige o `PACKAGE_FILES.sha256` autenticado, conjunto
 integral de folhas, arquivos regulares com `nlink=1` e equivalência folha a folha
@@ -235,6 +254,10 @@ literais `/usr/bin/rmdir -- <diretório-vazio>` em pós-ordem. Nunca há `rm -r`
 shell ou exclusão da preparação inteira. Cada efeito recebe `ATTEMPT`, `RESULT` e
 `VERIFIED`; falha intermediária fecha o receipt parcial e não repete efeitos
 concluídos automaticamente.
+
+Um plano `P00_CAPACITY_RECOVERY_AUDIT_DENY` é gravado integralmente, mas a
+invocação termina com exit code não zero. A existência do plano negado não é
+sucesso do processo.
 
 ## Fontes de verdade preservadas
 
