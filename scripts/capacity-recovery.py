@@ -14,9 +14,10 @@ import errno
 import fcntl
 import grp
 import hashlib
+import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import pwd
 import re
 import secrets
@@ -28,12 +29,15 @@ import time
 from typing import Any, Iterable
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+ROOT = Path(__file__).resolve().parents[1]
 NPM_CACHE = Path("/home/deploy/.npm/_cacache")
 NPM_PARENT = Path("/home/deploy/.npm")
 NPM_CACHE_ALLOWED_MODES = {0o700, 0o750, 0o755}
 LITERAL_RM = ("/usr/bin/rm", "-r", "--")
 LITERAL_UNLINK = ("/usr/bin/unlink", "--")
+LITERAL_RMDIR = ("/usr/bin/rmdir", "--")
 PREPARATIONS_ROOT = Path("/opt/re7online/backups/converta-persistent/preparations")
+RELEASES_ROOT = Path("/opt/re7online/releases")
 PREPARATION_DERIVED_ARCHIVE_NAMES = {
     "api-frontend-return.private.tar.gz", "worker-return.private.tar.gz",
     "worker-minimal-b9-v3.tar.gz",
@@ -42,7 +46,12 @@ PREPARATION_DUPLICATE_ONLY_ARCHIVE_NAMES = {"worker-minimal-b9-v3.tar.gz"}
 CLASSES = {
     "NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME",
     "CLOSED_PREPARATION_DERIVED_ARCHIVE",
+    "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
 }
+DISPOSITION_MANIFEST_PATH = (
+    ROOT / "config/capacity-recovery/closed-preparation-manifest-disposition.v1.json")
+DISPOSITION_MANIFEST_SHA256 = "e6b0a8b40a7a177d93abcb3e752fb1ed83a42756ff4cef7f3c5da76e0d0160d4"
+DISPOSITION_ID = "p00-closed-preparations-20261031-v1"
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
@@ -63,6 +72,7 @@ OUTPUT_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {
     "runtimeRelativePath", "releaseRoot", "contract", "package", "manifest", "index",
 }
 PREPARATION_ARCHIVE_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {"sha256", "proof"}
+MANIFEST_DISPOSITION_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {"dispositionManifest"}
 DERIVED_ARCHIVE_PROOF_KEYS = {"kind", "record", "recordEntry"}
 DUPLICATE_ARCHIVE_PROOF_KEYS = {"kind", "authoritativeCopy"}
 OPERATIONAL_KEYS = {
@@ -1494,6 +1504,372 @@ def authenticate_preparation_archive(candidate: dict[str, Any], operational: dic
             "processScan": scan_summary}
 
 
+def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+        deny("DISPOSITION_MANIFEST_BINDING")
+    path = normalized_absolute(binding.get("path"), "DISPOSITION_MANIFEST_PATH")
+    if path != DISPOSITION_MANIFEST_PATH or binding.get("sha256") != DISPOSITION_MANIFEST_SHA256:
+        deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+    raw, _ = stable_regular(path, DISPOSITION_MANIFEST_SHA256, private=False,
+                            allowed_modes={0o600, 0o640, 0o644})
+    value = object_json(raw, "DISPOSITION_MANIFEST_JSON")
+    if (set(value) != {"schemaVersion", "kind", "dispositionId", "entries",
+                       "versionedEnvExample"} or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != "CLOSED_PREPARATION_MANIFEST_DISPOSITION" or
+            value.get("dispositionId") != DISPOSITION_ID or
+            not isinstance(value.get("entries"), list) or len(value["entries"]) != 7):
+        deny("DISPOSITION_MANIFEST_SCHEMA")
+    env = value.get("versionedEnvExample")
+    if not isinstance(env, dict) or set(env) != {"path", "sha256"}:
+        deny("DISPOSITION_MANIFEST_ENV_EXAMPLE")
+    env_path = ROOT / env.get("path", "")
+    if env_path != ROOT / "apps/whatsapp-agent/.env.example":
+        deny("DISPOSITION_MANIFEST_ENV_EXAMPLE")
+    stable_regular(env_path, env.get("sha256"), private=False,
+                   allowed_modes={0o600, 0o640, 0o644})
+    entries: dict[str, dict[str, Any]] = {}
+    common = {"path", "type", "physicalBytes", "sha256", "identity", "proof",
+              "authority", "historicalRecords"}
+    for entry in value["entries"]:
+        if not isinstance(entry, dict):
+            deny("DISPOSITION_MANIFEST_ENTRY_SCHEMA")
+        expected = common | ({"packageFilesSha256"}
+                             if entry.get("type") == "ENUMERATED_TREE" else set())
+        if "protectedMemberExceptions" in entry:
+            expected.add("protectedMemberExceptions")
+        if set(entry) != expected or entry.get("type") not in {"ARCHIVE_FILE", "ENUMERATED_TREE"}:
+            deny("DISPOSITION_MANIFEST_ENTRY_SCHEMA")
+        candidate_path = normalized_absolute(entry.get("path"), "DISPOSITION_ENTRY_PATH")
+        authority = normalized_absolute(entry.get("authority"), "DISPOSITION_AUTHORITY_PATH")
+        if (candidate_path == authority or PREPARATIONS_ROOT not in candidate_path.parents or
+                RELEASES_ROOT not in authority.parents):
+            deny("DISPOSITION_MANIFEST_ENTRY_SCOPE")
+        if str(candidate_path) in entries:
+            deny("DISPOSITION_MANIFEST_DUPLICATE")
+        if (not isinstance(entry.get("physicalBytes"), int) or entry["physicalBytes"] <= 0 or
+                not isinstance(entry.get("identity"), dict) or
+                set(entry["identity"]) != {"device", "inode", "nlink", "uid", "gid", "mode"} or
+                any(not isinstance(entry["identity"].get(key), int)
+                    for key in ("device", "inode", "nlink", "uid", "gid")) or
+                not re.fullmatch(r"0[0-7]{3}", str(entry["identity"].get("mode", ""))) or
+                not isinstance(entry.get("historicalRecords"), list) or
+                not entry["historicalRecords"]):
+            deny("DISPOSITION_MANIFEST_ENTRY_SCHEMA")
+        if entry["type"] == "ARCHIVE_FILE":
+            if not valid_sha(entry.get("sha256")) or entry.get("proof") != "ARCHIVE_AUTHORITY_TREE":
+                deny("DISPOSITION_MANIFEST_ARCHIVE_SCHEMA")
+            exceptions = entry.get("protectedMemberExceptions", [])
+            if exceptions not in ([], [
+                    {"kind": "VERSIONED_ENV_EXAMPLE",
+                     "path": "apps/whatsapp-agent/.env.example"},
+                    {"kind": "OPENAI_LIBRARY_CODE",
+                     "pathPrefix": "node_modules/openai/resources/uploads/"},
+            ]):
+                deny("DISPOSITION_MANIFEST_ARCHIVE_EXCEPTIONS")
+        elif (entry.get("sha256") is not None or
+              not valid_sha(entry.get("packageFilesSha256")) or
+              entry.get("proof") != "ENUMERATED_TREE_AUTHORITY"):
+            deny("DISPOSITION_MANIFEST_TREE_SCHEMA")
+        for record in entry["historicalRecords"]:
+            if not isinstance(record, dict) or set(record) != {"path", "sha256"}:
+                deny("DISPOSITION_MANIFEST_RECORD_SCHEMA")
+            record_path = ROOT / record.get("path", "")
+            try:
+                record_path.relative_to(ROOT)
+            except ValueError:
+                deny("DISPOSITION_MANIFEST_RECORD_SCOPE")
+            stable_regular(record_path, record.get("sha256"), private=False,
+                           allowed_modes={0o600, 0o640, 0o644})
+        entries[str(candidate_path)] = entry
+    return value, entries
+
+
+def _disposition_reference_checks(path: Path, operational: dict[str, Any],
+                                  process_data: ProcessScan) -> dict[str, Any]:
+    references = (operational["currentPaths"] + operational["pm2LivePaths"] +
+                  operational["pm2DumpPaths"] + operational["openTransactionPaths"] +
+                  operational["protectedGraphPaths"])
+    if any(path_overlap(str(path), item) for item in references):
+        deny("DISPOSITION_REFERENCED_OR_PROTECTED")
+    targets, writers, complete, summary = process_data
+    if any(process_target_references_candidate(str(path), target)
+           for _, _, _, target in targets):
+        deny("DISPOSITION_PROCESS_REFERENCE")
+    if any(writer.get("candidatePath") == str(path) for writer in writers):
+        deny("DISPOSITION_WRITER")
+    if not complete:
+        deny("PROCESS_REFERENCE_SCAN_INCOMPLETE")
+    return summary
+
+
+def _normalized_archive_member(name: str) -> PurePosixPath:
+    while name.startswith("./"):
+        name = name[2:]
+    pure = PurePosixPath(name)
+    if (not name or pure.is_absolute() or any(part in {"", ".", ".."} for part in pure.parts) or
+            any(ord(character) < 32 for character in name)):
+        deny("DISPOSITION_ARCHIVE_MEMBER_PATH")
+    return pure
+
+
+def _authority_root(path: Path) -> os.stat_result:
+    info = physical_directory(path, "DISPOSITION_AUTHORITY_DIRECTORY")
+    if (info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+            stat.S_IMODE(info.st_mode) & 0o022):
+        deny("DISPOSITION_AUTHORITY_IDENTITY")
+    return info
+
+
+def _authority_leaf(root: Path, relative: str) -> Path:
+    leaf = root / relative
+    current = leaf.parent
+    while current != root:
+        info = physical_directory(current, "DISPOSITION_AUTHORITY_ANCESTOR")
+        if (info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+                stat.S_IMODE(info.st_mode) & 0o022):
+            deny("DISPOSITION_AUTHORITY_IDENTITY")
+        current = current.parent
+    return leaf
+
+
+def _safe_archive_link(member: tarfile.TarInfo, member_path: PurePosixPath) -> str:
+    target = PurePosixPath(member.linkname)
+    if target.is_absolute() or not member.linkname or any(ord(character) < 32
+                                                         for character in member.linkname):
+        deny("DISPOSITION_ARCHIVE_SYMLINK")
+    resolved = list(member_path.parent.parts)
+    for part in target.parts:
+        if part == "..":
+            if not resolved:
+                deny("DISPOSITION_ARCHIVE_SYMLINK")
+            resolved.pop()
+        elif part not in {"", "."}:
+            resolved.append(part)
+    if not resolved:
+        deny("DISPOSITION_ARCHIVE_SYMLINK")
+    return member.linkname
+
+
+def _protected_archive_member(relative: str, entry: dict[str, Any], payload_sha: str | None,
+                              manifest: dict[str, Any]) -> None:
+    parts = tuple(part.lower() for part in PurePosixPath(relative).parts)
+    exceptions = entry.get("protectedMemberExceptions", [])
+    env_allowed = {"kind": "VERSIONED_ENV_EXAMPLE",
+                   "path": "apps/whatsapp-agent/.env.example"} in exceptions
+    uploads_allowed = {"kind": "OPENAI_LIBRARY_CODE",
+                       "pathPrefix": "node_modules/openai/resources/uploads/"} in exceptions
+    if any(part == ".env" or part.startswith(".env.") for part in parts):
+        env = manifest["versionedEnvExample"]
+        if relative != "apps/whatsapp-agent/.env.example" or not env_allowed or payload_sha != env["sha256"]:
+            deny("DISPOSITION_ARCHIVE_PROTECTED_MATERIAL")
+        return
+    openai_upload = "node_modules/openai/resources/uploads/" in relative.lower()
+    if "uploads" in parts:
+        if not (uploads_allowed and openai_upload):
+            deny("DISPOSITION_ARCHIVE_PROTECTED_MATERIAL")
+        return
+    if (any(part in {".data", "tenant-data", "tenant-scoped", "secrets"} for part in parts) or
+            (parts and parts[0] in {"content", "database", "runtime-data", "configuration",
+                                    "media", "evidence", "receipts"})):
+        deny("DISPOSITION_ARCHIVE_PROTECTED_MATERIAL")
+
+
+def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
+                                      manifest: dict[str, Any]) -> dict[str, Any]:
+    raw, identity = stable_regular(path, entry["sha256"],
+                                   allowed_modes={int(entry["identity"]["mode"], 8)},
+                                   include_nlink=True)
+    expected_identity = entry["identity"]
+    if ({key: identity[key] for key in expected_identity} != expected_identity or
+            identity["nlink"] != 1):
+        deny("DISPOSITION_IDENTITY_DIVERGED")
+    authority = Path(entry["authority"])
+    _authority_root(authority)
+    relation: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as archive:
+            for member in archive:
+                relative = _normalized_archive_member(member.name).as_posix()
+                if relative in seen:
+                    deny("DISPOSITION_ARCHIVE_MEMBER_DUPLICATE")
+                seen.add(relative)
+                if member.isreg():
+                    stream = archive.extractfile(member)
+                    if stream is None:
+                        deny("DISPOSITION_ARCHIVE_READ")
+                    digest = hashlib.sha256()
+                    while chunk := stream.read(1024 * 1024):
+                        digest.update(chunk)
+                    member_sha = digest.hexdigest()
+                    _protected_archive_member(relative, entry, member_sha, manifest)
+                    authoritative = _authority_leaf(authority, relative)
+                    authority_raw, authority_identity = stable_regular(
+                        authoritative, member_sha, private=False,
+                        allowed_modes={member.mode & 0o7777})
+                    if (len(authority_raw) != member.size or
+                            authority_identity["mode"] != f"0{member.mode & 0o7777:03o}"):
+                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                    relation.append({"path": relative, "type": "file", "size": member.size,
+                                     "sha256": member_sha, "authority": authority_identity})
+                elif member.isdir():
+                    authoritative = _authority_leaf(authority, relative)
+                    physical_directory(authoritative, "DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                    _protected_archive_member(relative, entry, None, manifest)
+                    relation.append({"path": relative, "type": "directory", "size": 0})
+                elif member.issym():
+                    target = _safe_archive_link(member, PurePosixPath(relative))
+                    authoritative = _authority_leaf(authority, relative)
+                    try:
+                        info = authoritative.lstat()
+                    except OSError:
+                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                    if not stat.S_ISLNK(info.st_mode) or os.readlink(authoritative) != target:
+                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                    relation.append({"path": relative, "type": "symlink", "target": target})
+                else:
+                    deny("DISPOSITION_ARCHIVE_MEMBER_UNSAFE")
+    except (tarfile.TarError, OSError):
+        deny("DISPOSITION_ARCHIVE_READ")
+    return {"memberCount": len(relation), "relationSha256": digest_bytes(canonical(relation)),
+            "authority": str(authority), "effects": [[*LITERAL_UNLINK, str(path)]]}
+
+
+def _parse_package_files(path: Path, expected_sha: str) -> tuple[dict[str, str], dict[str, Any]]:
+    raw, identity = stable_regular(path, expected_sha, allowed_modes={0o600, 0o640, 0o644},
+                                   include_nlink=True)
+    entries: dict[str, str] = {}
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        deny("DISPOSITION_PACKAGE_FILES_ENCODING")
+    for line in lines:
+        match = re.fullmatch(r"([0-9a-f]{64})  ([^\x00-\x1f]+)", line)
+        if match is None:
+            deny("DISPOSITION_PACKAGE_FILES_SCHEMA")
+        relative = _normalized_archive_member(match.group(2).removeprefix("./")).as_posix()
+        if relative == "PACKAGE_FILES.sha256" or relative in entries:
+            deny("DISPOSITION_PACKAGE_FILES_SCHEMA")
+        entries[relative] = match.group(1)
+    if not entries:
+        deny("DISPOSITION_PACKAGE_FILES_SCHEMA")
+    return entries, identity
+
+
+def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
+    root = physical_directory(path, "DISPOSITION_TREE_ROOT")
+    root_device = root.st_dev
+    expected_identity = entry["identity"]
+    root_identity = stat_identity(root, include_nlink=True)
+    if {key: root_identity[key] for key in expected_identity} != expected_identity:
+        deny("DISPOSITION_IDENTITY_DIVERGED")
+    manifest_path = path / "PACKAGE_FILES.sha256"
+    listed, package_identity = _parse_package_files(manifest_path, entry["packageFilesSha256"])
+    authority = Path(entry["authority"])
+    _authority_root(authority)
+    actual_files: dict[str, dict[str, Any]] = {}
+    directories: list[str] = []
+    stack = [path]
+    while stack:
+        current = stack.pop()
+        current_info = physical_directory(current, "DISPOSITION_TREE_DIRECTORY")
+        if current_info.st_dev != root_device:
+            deny("DISPOSITION_TREE_CROSS_DEVICE")
+        if (current_info.st_uid != os.geteuid() or current_info.st_gid != os.getegid() or
+                stat.S_IMODE(current_info.st_mode) & 0o022):
+            deny("DISPOSITION_TREE_DIRECTORY_IDENTITY")
+        if current != path:
+            directories.append(current.relative_to(path).as_posix())
+        try:
+            children = sorted(os.scandir(current), key=lambda item: item.name)
+        except OSError:
+            deny("DISPOSITION_TREE_READ")
+        for child in children:
+            child_path = Path(child.path)
+            info = child_path.lstat()
+            if info.st_dev != root_device:
+                deny("DISPOSITION_TREE_CROSS_DEVICE")
+            relative = child_path.relative_to(path).as_posix()
+            if stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+                stack.append(child_path)
+            elif stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+                if info.st_nlink != 1:
+                    deny("DISPOSITION_TREE_HARDLINK")
+                actual_files[relative] = stat_identity(info, include_nlink=True)
+            else:
+                deny("DISPOSITION_TREE_UNSAFE_LEAF")
+    expected_files = set(listed) | {"PACKAGE_FILES.sha256"}
+    if set(actual_files) != expected_files:
+        deny("DISPOSITION_TREE_LEAF_SET")
+    relation: list[dict[str, Any]] = []
+    for relative in sorted(listed):
+        leaf = path / relative
+        try:
+            leaf_mode = stat.S_IMODE(leaf.lstat().st_mode)
+            authority_mode = stat.S_IMODE((authority / relative).lstat().st_mode)
+        except OSError:
+            deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
+        if leaf_mode & 0o002 or authority_mode != leaf_mode:
+            deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
+        raw, identity = stable_regular(leaf, listed[relative], private=False,
+                                       allowed_modes={leaf_mode},
+                                       include_nlink=True)
+        if identity["nlink"] != 1:
+            deny("DISPOSITION_TREE_HARDLINK")
+        authority_raw, authority_identity = stable_regular(
+            _authority_leaf(authority, relative), listed[relative], private=False,
+            allowed_modes={authority_mode})
+        if len(raw) != len(authority_raw):
+            deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
+        relation.append({"path": relative, "sha256": listed[relative],
+                         "size": len(raw), "identity": identity,
+                         "authority": authority_identity})
+    authority_manifest_raw, _ = stable_regular(
+        _authority_leaf(authority, "PACKAGE_FILES.sha256"), entry["packageFilesSha256"], private=False,
+        allowed_modes={0o600, 0o640, 0o644})
+    if digest_bytes(authority_manifest_raw) != entry["packageFilesSha256"]:
+        deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
+    file_effects = [[*LITERAL_UNLINK, str(path / relative)]
+                    for relative in sorted(expected_files, reverse=True)]
+    directory_effects = [[*LITERAL_RMDIR, str(path / relative)]
+                         for relative in sorted(directories,
+                                                key=lambda value: (-len(PurePosixPath(value).parts), value))]
+    directory_effects.append([*LITERAL_RMDIR, str(path)])
+    return {"leafCount": len(expected_files), "directoryCount": len(directories) + 1,
+            "packageFiles": {"path": str(manifest_path), "sha256": entry["packageFilesSha256"],
+                             "identity": package_identity},
+            "relationSha256": digest_bytes(canonical(relation)), "authority": str(authority),
+            "effects": file_effects + directory_effects}
+
+
+def authenticate_manifest_disposition(candidate: dict[str, Any], operational: dict[str, Any],
+                                      process_data: ProcessScan) -> dict[str, Any]:
+    if set(candidate) != MANIFEST_DISPOSITION_CANDIDATE_KEYS:
+        deny("DISPOSITION_CANDIDATE_SCHEMA")
+    manifest, entries = _disposition_manifest(candidate.get("dispositionManifest"))
+    path = normalized_absolute(candidate.get("path"), "DISPOSITION_CANDIDATE_PATH")
+    entry = entries.get(str(path))
+    if entry is None:
+        deny("DISPOSITION_CANDIDATE_NOT_DECLARED")
+    _preparation_archive_ancestors(path)
+    process_summary = _disposition_reference_checks(path, operational, process_data)
+    if entry["type"] == "ARCHIVE_FILE":
+        detail = _authenticate_disposition_archive(path, entry, manifest)
+        identity = stat_identity(path.lstat(), include_nlink=True)
+    else:
+        detail = _authenticate_disposition_tree(path, entry)
+        identity = stat_identity(path.lstat(), include_nlink=True)
+    usage = physical_usage([path])[str(path)]
+    if usage["allocatedBytes"] != entry["physicalBytes"]:
+        deny("DISPOSITION_PHYSICAL_BYTES_DIVERGED")
+    return {"class": candidate["class"], "path": str(path), "dispositionId": DISPOSITION_ID,
+            "dispositionManifest": {"path": str(DISPOSITION_MANIFEST_PATH),
+                                    "sha256": DISPOSITION_MANIFEST_SHA256},
+            "entry": entry, "identity": identity, "detail": detail,
+            "processScan": process_summary}
+
+
 def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict[str, Any],
                        process_data: ProcessScan) -> dict[str, Any]:
     if not isinstance(candidate, dict) or candidate.get("class") not in CLASSES:
@@ -1502,13 +1878,35 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
         return authenticate_npm(candidate, process_data, operational)
     if candidate["class"] == "DERIVED_OUTPUT_RUNTIME":
         return authenticate_output(candidate, policy, operational, process_data)
-    return authenticate_preparation_archive(candidate, operational, process_data)
+    if candidate["class"] == "CLOSED_PREPARATION_DERIVED_ARCHIVE":
+        return authenticate_preparation_archive(candidate, operational, process_data)
+    return authenticate_manifest_disposition(candidate, operational, process_data)
 
 
 def removal_command(observation: dict[str, Any]) -> list[str]:
+    effects = observation.get("detail", {}).get("effects")
+    if observation.get("class") == "CLOSED_PREPARATION_MANIFEST_DISPOSITION":
+        if not isinstance(effects, list) or not effects:
+            deny("DISPOSITION_EFFECTS_SCHEMA")
+        if len(effects) != 1:
+            deny("DISPOSITION_COMPOUND_EFFECT")
+        return effects[0]
     if observation.get("class") == "CLOSED_PREPARATION_DERIVED_ARCHIVE":
         return [*LITERAL_UNLINK, observation["path"]]
     return [*LITERAL_RM, observation["path"]]
+
+
+def removal_commands(observations: Iterable[dict[str, Any]]) -> list[list[str]]:
+    commands: list[list[str]] = []
+    for observation in observations:
+        if observation.get("class") == "CLOSED_PREPARATION_MANIFEST_DISPOSITION":
+            effects = observation.get("detail", {}).get("effects")
+            if not isinstance(effects, list) or not effects:
+                deny("DISPOSITION_EFFECTS_SCHEMA")
+            commands.extend(effects)
+        else:
+            commands.append(removal_command(observation))
+    return commands
 
 
 def validate_audit_request(value: dict[str, Any]) -> None:
@@ -1527,6 +1925,19 @@ def validate_audit_request(value: dict[str, Any]) -> None:
         _validate_proc_observer_binding(value["procObserver"])
     if version == 3 and value.get("incrementalBatch") is not True:
         deny("AUDIT_REQUEST_INCREMENTAL_BATCH")
+    dispositions = [item for item in value["candidates"] if isinstance(item, dict) and
+                    item.get("class") == "CLOSED_PREPARATION_MANIFEST_DISPOSITION"]
+    if dispositions:
+        if len(dispositions) != len(value["candidates"]):
+            deny("DISPOSITION_MIXED_BATCH")
+        manifest, entries = _disposition_manifest(dispositions[0].get("dispositionManifest"))
+        del manifest
+        requested = [item.get("path") for item in dispositions]
+        if (len(requested) != 7 or len(set(requested)) != 7 or
+                set(requested) != set(entries) or
+                any(item.get("dispositionManifest") != dispositions[0].get("dispositionManifest")
+                    for item in dispositions)):
+            deny("DISPOSITION_EXACT_BATCH")
 
 
 def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[str, Any]:
@@ -1596,7 +2007,7 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         "liveRecapture": live_recapture,
         "deploymentLock": operational["deploymentLock"], "writerLock": operational["writerLock"],
         "candidates": observations, "errors": errors,
-        "commands": [removal_command(item["observation"]) for item in observations],
+        "commands": removal_commands(item["observation"] for item in observations),
         "automaticExecutionPermitted": False,
     }
     if value["schemaVersion"] in {2, 3}:
@@ -1686,7 +2097,7 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
                 validate_lock_free(lock)
             except Denied as exc:
                 errors.append(str(exc))
-    expected_commands = [removal_command(item) for item in refreshed]
+    expected_commands = removal_commands(refreshed)
     if expected_commands != plan.get("commands"):
         errors.append("PLAN_COMMANDS_DIVERGED")
     base = (refreshed, sorted(set(errors)), live_recapture)
@@ -1845,12 +2256,13 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
         policy, _, _ = root_policy(intent["rootPolicy"])
         filesystem = os.statvfs(policy["canonicalRoots"]["outputs"]["path"])
         available_before = filesystem.f_bavail * filesystem.f_frsize
-        for ordinal, (command, candidate) in enumerate(zip(intent["commands"], intent["candidates"]), 1):
-            expected = removal_command(candidate)
-            if command != expected:
-                deny("COMMAND_LITERAL_DIVERGED")
+        expected_commands = removal_commands(intent["candidates"])
+        if intent["commands"] != expected_commands:
+            deny("COMMAND_LITERAL_DIVERGED")
+        for ordinal, command in enumerate(intent["commands"], 1):
+            path_text = command[-1]
             append_event(journal, {"event": "ATTEMPT", "ordinal": ordinal,
-                                   "path": candidate["path"], "argv": command})
+                                   "path": path_text, "argv": command})
             attempted += 1
             stdout = receipt_root / f"command-{ordinal}.stdout.private.txt"
             stderr = receipt_root / f"command-{ordinal}.stderr.private.txt"
@@ -1865,17 +2277,17 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
             finally:
                 os.close(out_fd); os.close(err_fd)
             append_event(journal, {"event": "RESULT", "ordinal": ordinal,
-                                   "path": candidate["path"], "exitCode": result.returncode,
+                                   "path": path_text, "exitCode": result.returncode,
                                    "stdoutSha256": sha256(stdout), "stderrSha256": sha256(stderr)})
             if result.returncode != 0:
                 deny(f"COMMAND_FAILED:{ordinal}:{result.returncode}")
-            path = Path(candidate["path"])
+            path = Path(path_text)
             fsync_directory(path.parent)
             if path.exists() or path.is_symlink():
                 deny(f"VERIFICATION_PRESENT:{ordinal}")
-            completed += 1; removed.append(candidate["path"])
+            completed += 1; removed.append(path_text)
             append_event(journal, {"event": "VERIFIED", "ordinal": ordinal,
-                                   "path": candidate["path"], "result": "ABSENT"})
+                                   "path": path_text, "result": "ABSENT"})
         filesystem = os.statvfs(policy["canonicalRoots"]["outputs"]["path"])
         available_after = filesystem.f_bavail * filesystem.f_frsize
     except (Denied, OSError) as exc:

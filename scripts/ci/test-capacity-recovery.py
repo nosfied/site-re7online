@@ -4,7 +4,7 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import stat
 import subprocess
 import tempfile
@@ -282,6 +282,130 @@ class CapacityRecoveryTests(unittest.TestCase):
                        }} for path in duplicates]
         return authority, duplicates, candidates
 
+    def manifest_disposition_fixture(self, suffix="default"):
+        control = self.base / f"disposition-control-{suffix}"
+        env = control / "apps/whatsapp-agent/.env.example"
+        env.parent.mkdir(parents=True)
+        env.write_bytes(b"EXAMPLE_ONLY=yes\n"); env.chmod(0o644)
+        record = control / "docs/evidence.md"
+        record.parent.mkdir(parents=True)
+        record.write_text("authenticated historical record\n"); record.chmod(0o644)
+        authority_root = self.releases / f"disposition-authorities-{suffix}"
+        authority_root.mkdir()
+        entries = []
+        paths = []
+
+        archive_specs = [
+            ("reactive/window/worker.tar.gz", False),
+            ("night/candidate.tar.gz", True),
+            ("night/recovery.tar.gz", True),
+            ("frontend-a/frontend.tar.gz", False),
+            ("frontend-b/frontend.tar.gz", False),
+            ("frontend-c/frontend.tar.gz", False),
+        ]
+        for ordinal, (relative, night) in enumerate(archive_specs, 1):
+            candidate = self.preparations / f"disposition-{suffix}" / relative
+            candidate.parent.mkdir(parents=True, exist_ok=True)
+            current = candidate.parent
+            while current != self.preparations:
+                current.chmod(0o700); current = current.parent
+            authority = authority_root / f"archive-{ordinal}"
+            (authority / "dist").mkdir(parents=True)
+            (authority / "dist/app.js").write_bytes(f"archive-{ordinal}".encode())
+            (authority / "dist/app.js").chmod(0o644)
+            members = [("dist/app.js", f"archive-{ordinal}".encode())]
+            if night:
+                (authority / "apps/whatsapp-agent").mkdir(parents=True)
+                (authority / "apps/whatsapp-agent/.env.example").write_bytes(env.read_bytes())
+                (authority / "apps/whatsapp-agent/.env.example").chmod(0o644)
+                upload = authority / "node_modules/openai/resources/uploads/client.js"
+                upload.parent.mkdir(parents=True)
+                upload.write_bytes(b"library code"); upload.chmod(0o644)
+                members.extend([
+                    ("apps/whatsapp-agent/.env.example", env.read_bytes()),
+                    ("node_modules/openai/resources/uploads/client.js", b"library code"),
+                ])
+            with tarfile.open(candidate, "w:gz") as archive:
+                for name, payload in members:
+                    item = tarfile.TarInfo(name); item.size = len(payload)
+                    archive.addfile(item, io.BytesIO(payload))
+            candidate.chmod(0o600)
+            info = candidate.lstat()
+            entry = {
+                "path": str(candidate), "type": "ARCHIVE_FILE",
+                "physicalBytes": info.st_blocks * 512, "sha256": sha(candidate),
+                "identity": {"device": info.st_dev, "inode": info.st_ino, "nlink": 1,
+                             "uid": info.st_uid, "gid": info.st_gid,
+                             "mode": f"0{stat.S_IMODE(info.st_mode):03o}"},
+                "proof": "ARCHIVE_AUTHORITY_TREE", "authority": str(authority),
+                "historicalRecords": [{"path": "docs/evidence.md", "sha256": sha(record)}],
+            }
+            if night:
+                entry["protectedMemberExceptions"] = [
+                    {"kind": "VERSIONED_ENV_EXAMPLE",
+                     "path": "apps/whatsapp-agent/.env.example"},
+                    {"kind": "OPENAI_LIBRARY_CODE",
+                     "pathPrefix": "node_modules/openai/resources/uploads/"},
+                ]
+            entries.append(entry)
+            paths.append(candidate)
+
+        tree = self.preparations / f"disposition-{suffix}" / "reactive/window/worker-package-audit"
+        (tree / "dist").mkdir(parents=True)
+        current = tree
+        while current != self.preparations:
+            current.chmod(0o700); current = current.parent
+        authority = authority_root / "tree"
+        (authority / "dist").mkdir(parents=True)
+        for root in (tree, authority):
+            (root / "dist/worker.js").write_bytes(b"worker-code")
+            (root / "dist/worker.js").chmod(0o644)
+        package_raw = f"{sha(tree / 'dist/worker.js')}  dist/worker.js\n"
+        for root in (tree, authority):
+            (root / "PACKAGE_FILES.sha256").write_text(package_raw)
+            (root / "PACKAGE_FILES.sha256").chmod(0o600)
+        for directory, subdirectories, _files in os.walk(tree):
+            Path(directory).chmod(0o700)
+            for subdirectory in subdirectories:
+                (Path(directory) / subdirectory).chmod(0o700)
+        info = tree.lstat()
+        physical = MODULE.physical_usage([tree])[str(tree)]["allocatedBytes"]
+        tree_entry = {
+            "path": str(tree), "type": "ENUMERATED_TREE", "physicalBytes": physical,
+            "sha256": None, "identity": {"device": info.st_dev, "inode": info.st_ino,
+                                           "nlink": info.st_nlink, "uid": info.st_uid,
+                                           "gid": info.st_gid,
+                                           "mode": f"0{stat.S_IMODE(info.st_mode):03o}"},
+            "proof": "ENUMERATED_TREE_AUTHORITY", "authority": str(authority),
+            "historicalRecords": [{"path": "docs/evidence.md", "sha256": sha(record)}],
+            "packageFilesSha256": sha(tree / "PACKAGE_FILES.sha256"),
+        }
+        entries.insert(1, tree_entry); paths.insert(1, tree)
+        for directory, subdirectories, _files in os.walk(authority_root):
+            Path(directory).chmod(0o755)
+            for subdirectory in subdirectories:
+                (Path(directory) / subdirectory).chmod(0o755)
+        manifest = control / "config/disposition.json"
+        manifest.parent.mkdir(parents=True)
+        disposition_id = "fixture-disposition-v1"
+        private_json(manifest, {
+            "schemaVersion": 1, "kind": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+            "dispositionId": disposition_id, "entries": entries,
+            "versionedEnvExample": {"path": "apps/whatsapp-agent/.env.example",
+                                    "sha256": sha(env)},
+        })
+        binding = {"path": str(manifest), "sha256": sha(manifest)}
+        candidates = [{"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+                       "path": str(path), "dispositionManifest": binding} for path in paths]
+        patches = mock.patch.multiple(
+            MODULE, ROOT=control, PREPARATIONS_ROOT=self.preparations,
+            RELEASES_ROOT=self.releases,
+            DISPOSITION_MANIFEST_PATH=manifest, DISPOSITION_MANIFEST_SHA256=sha(manifest),
+            DISPOSITION_ID=disposition_id)
+        return {"control": control, "manifest": manifest, "entries": entries,
+                "paths": paths, "candidates": candidates, "patches": patches,
+                "authorityRoot": authority_root, "record": record}
+
     def request_value(self, candidates=None, minimum=1):
         return {"schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",
                 "minimumRecoveryBytes": minimum, "targetAvailableBytes": minimum,
@@ -357,6 +481,298 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(observed["class"], "CLOSED_PREPARATION_DERIVED_ARCHIVE")
         self.assertEqual(observed["identity"]["nlink"], 1)
         self.assertFalse(observed["archive"]["protectedMaterialFound"])
+
+    def test_manifest_disposition_exact_seven_passes_and_uses_physical_blocks(self):
+        fixture = self.manifest_disposition_fixture()
+        private_json(self.request, self.request_value(fixture["candidates"]))
+        with fixture["patches"], self.process_patch():
+            plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+        self.assertEqual(plan["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+        self.assertEqual(len(plan["candidates"]), 7)
+        expected = sum(item["physicalBytes"] for item in fixture["entries"])
+        self.assertEqual(plan["qualifiedBytes"], expected)
+        self.assertTrue(any(command[0] == "/usr/bin/rmdir" for command in plan["commands"]))
+        self.assertTrue(all(command[0] in {"/usr/bin/unlink", "/usr/bin/rmdir"}
+                            for command in plan["commands"]))
+
+    def test_manifest_disposition_missing_extra_or_swapped_path_is_denied(self):
+        for mutation in ("missing", "extra", "swapped"):
+            fixture = self.manifest_disposition_fixture(mutation)
+            candidates = json.loads(json.dumps(fixture["candidates"]))
+            if mutation == "missing":
+                candidates.pop()
+            elif mutation == "extra":
+                candidates.append(json.loads(json.dumps(candidates[0])))
+                candidates[-1]["path"] += ".extra"
+            else:
+                candidates[0]["path"] = candidates[1]["path"]
+            value = self.request_value(candidates)
+            with self.subTest(mutation=mutation), fixture["patches"], \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "DISPOSITION_EXACT_BATCH"):
+                MODULE.validate_audit_request(value)
+
+    def test_manifest_disposition_extra_manifest_field_is_denied(self):
+        fixture = self.manifest_disposition_fixture("manifest-extra-field")
+        value = json.loads(fixture["manifest"].read_text())
+        value["invented"] = True
+        private_json(fixture["manifest"], value)
+        binding = {"path": str(fixture["manifest"]), "sha256": sha(fixture["manifest"])}
+        with mock.patch.multiple(
+                MODULE, ROOT=fixture["control"], PREPARATIONS_ROOT=self.preparations,
+                RELEASES_ROOT=self.releases, DISPOSITION_MANIFEST_PATH=fixture["manifest"],
+                DISPOSITION_MANIFEST_SHA256=sha(fixture["manifest"]),
+                DISPOSITION_ID="fixture-disposition-v1"), \
+                self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_MANIFEST_SCHEMA"):
+            MODULE._disposition_manifest(binding)
+
+    def test_production_disposition_manifest_and_versioned_evidence_are_exact(self):
+        manifest_path = MODULE.DISPOSITION_MANIFEST_PATH
+        self.assertEqual(
+            MODULE.DISPOSITION_MANIFEST_SHA256,
+            "e6b0a8b40a7a177d93abcb3e752fb1ed83a42756ff4cef7f3c5da76e0d0160d4",
+        )
+        self.assertEqual(
+            sha(manifest_path),
+            "e6b0a8b40a7a177d93abcb3e752fb1ed83a42756ff4cef7f3c5da76e0d0160d4",
+        )
+        manifest = json.loads(manifest_path.read_text())
+        self.assertEqual(set(manifest), {
+            "schemaVersion", "kind", "dispositionId", "entries",
+            "versionedEnvExample",
+        })
+        self.assertEqual(manifest["schemaVersion"], 1)
+        self.assertEqual(manifest["kind"], "CLOSED_PREPARATION_MANIFEST_DISPOSITION")
+        self.assertEqual(manifest["dispositionId"], MODULE.DISPOSITION_ID)
+        entries = manifest["entries"]
+        self.assertEqual(len(entries), 7)
+        self.assertEqual(len({entry["path"] for entry in entries}), 7)
+        self.assertEqual(sum(entry["physicalBytes"] for entry in entries),
+                         1_213_804_544)
+        env = manifest["versionedEnvExample"]
+        self.assertEqual(env, {
+            "path": "apps/whatsapp-agent/.env.example",
+            "sha256": "55aa02b4c26882cac130c71d009d1e6204a0e9a1586c94bf51e1e1f6eb5a496f",
+        })
+        self.assertEqual(sha(MODULE.ROOT / env["path"]), env["sha256"])
+        for entry in entries:
+            for record in entry["historicalRecords"]:
+                record_path = MODULE.ROOT / record["path"]
+                self.assertTrue(record_path.is_file(), record["path"])
+                self.assertEqual(sha(record_path), record["sha256"])
+        night = [entry for entry in entries if "/night-" in entry["path"]]
+        common = [entry for entry in entries if "/night-" not in entry["path"]]
+        self.assertEqual(len(night), 2)
+        self.assertEqual(len(common), 5)
+        self.assertTrue(all("protectedMemberExceptions" not in entry
+                            for entry in common))
+        expected_exceptions = [
+            {"kind": "VERSIONED_ENV_EXAMPLE",
+             "path": "apps/whatsapp-agent/.env.example"},
+            {"kind": "OPENAI_LIBRARY_CODE",
+             "pathPrefix": "node_modules/openai/resources/uploads/"},
+        ]
+        self.assertTrue(all(entry.get("protectedMemberExceptions") == expected_exceptions
+                            for entry in night))
+
+    def test_manifest_disposition_byte_inode_authority_manifest_and_record_drift_deny(self):
+        mutations = ("byte", "inode", "authority", "authority-absent", "manifest", "record")
+        for mutation in mutations:
+            fixture = self.manifest_disposition_fixture(mutation)
+            candidate = fixture["candidates"][0]
+            if mutation == "byte":
+                Path(candidate["path"]).write_bytes(b"drift")
+            elif mutation == "inode":
+                path = Path(candidate["path"]); replacement = path.with_suffix(".new")
+                replacement.write_bytes(path.read_bytes()); replacement.chmod(0o600)
+                path.unlink(); replacement.rename(path)
+            elif mutation == "authority":
+                (fixture["authorityRoot"] / "archive-1/dist/app.js").write_bytes(b"drift")
+            elif mutation == "authority-absent":
+                (fixture["authorityRoot"] / "archive-1").rename(
+                    fixture["authorityRoot"] / "archive-1-absent")
+            elif mutation == "manifest":
+                fixture["manifest"].write_bytes(fixture["manifest"].read_bytes() + b" ")
+            else:
+                fixture["record"].write_text("drift\n")
+            with self.subTest(mutation=mutation), fixture["patches"], \
+                    self.assertRaises(MODULE.Denied):
+                MODULE.authenticate_manifest_disposition(
+                    candidate, json.loads(self.operational.read_text()), scan())
+
+    def test_manifest_disposition_protected_env_and_upload_exceptions_are_digest_scoped(self):
+        fixture = self.manifest_disposition_fixture("exceptions-pass")
+        night = fixture["candidates"][2]
+        with fixture["patches"]:
+            observed = MODULE.authenticate_manifest_disposition(
+                night, json.loads(self.operational.read_text()), scan())
+        self.assertGreater(observed["detail"]["memberCount"], 1)
+
+        fixture = self.manifest_disposition_fixture("exceptions-deny")
+        regular = Path(fixture["candidates"][0]["path"])
+        with tarfile.open(regular, "w:gz") as archive:
+            payload = b"secret"
+            item = tarfile.TarInfo("apps/whatsapp-agent/.env.production")
+            item.size = len(payload); archive.addfile(item, io.BytesIO(payload))
+        regular.chmod(0o600)
+        entry = fixture["entries"][0]; info = regular.lstat()
+        entry["sha256"] = sha(regular); entry["physicalBytes"] = info.st_blocks * 512
+        entry["identity"] = {"device": info.st_dev, "inode": info.st_ino, "nlink": 1,
+                             "uid": info.st_uid, "gid": info.st_gid,
+                             "mode": f"0{stat.S_IMODE(info.st_mode):03o}"}
+        private_json(fixture["manifest"], {
+            "schemaVersion": 1, "kind": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+            "dispositionId": "fixture-disposition-v1", "entries": fixture["entries"],
+            "versionedEnvExample": {"path": "apps/whatsapp-agent/.env.example",
+                                    "sha256": sha(fixture["control"] / "apps/whatsapp-agent/.env.example")},
+        })
+        with mock.patch.multiple(
+                MODULE, ROOT=fixture["control"], PREPARATIONS_ROOT=self.preparations,
+                RELEASES_ROOT=self.releases,
+                DISPOSITION_MANIFEST_PATH=fixture["manifest"],
+                DISPOSITION_MANIFEST_SHA256=sha(fixture["manifest"]),
+                DISPOSITION_ID="fixture-disposition-v1"), \
+                self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_ARCHIVE_PROTECTED_MATERIAL"):
+            MODULE.authenticate_manifest_disposition(
+                {**fixture["candidates"][0], "dispositionManifest": {
+                    "path": str(fixture["manifest"]), "sha256": sha(fixture["manifest"])}},
+                json.loads(self.operational.read_text()), scan())
+
+        manifest = {"versionedEnvExample": {"sha256": "a" * 64}}
+        with self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_ARCHIVE_PROTECTED_MATERIAL"):
+            MODULE._protected_archive_member(
+                "uploads/customer.bin", {"protectedMemberExceptions": [
+                    {"kind": "OPENAI_LIBRARY_CODE",
+                     "pathPrefix": "node_modules/openai/resources/uploads/"}]},
+                "a" * 64, manifest)
+        with self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_ARCHIVE_PROTECTED_MATERIAL"):
+            MODULE._protected_archive_member(
+                "apps/whatsapp-agent/.env", {"protectedMemberExceptions": []},
+                "a" * 64, manifest)
+        unsafe = tarfile.TarInfo("node_modules/link")
+        unsafe.type = tarfile.SYMTYPE; unsafe.linkname = "../../../outside"
+        with self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_ARCHIVE_SYMLINK"):
+            MODULE._safe_archive_link(unsafe, PurePosixPath(unsafe.name))
+
+    def test_manifest_disposition_tree_extra_symlink_and_hardlink_are_denied(self):
+        for mutation in ("extra", "missing", "symlink", "hardlink"):
+            fixture = self.manifest_disposition_fixture("tree-" + mutation)
+            tree = fixture["paths"][1]
+            if mutation == "extra":
+                (tree / "extra").write_bytes(b"extra")
+            elif mutation == "missing":
+                (tree / "dist/worker.js").unlink()
+            elif mutation == "symlink":
+                (tree / "link").symlink_to("dist/worker.js")
+            else:
+                os.link(tree / "dist/worker.js", tree / "hardlink")
+            with self.subTest(mutation=mutation), fixture["patches"], \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "DISPOSITION_TREE_LEAF_SET|DISPOSITION_TREE_UNSAFE_LEAF|DISPOSITION_TREE_HARDLINK"):
+                MODULE.authenticate_manifest_disposition(
+                    fixture["candidates"][1], json.loads(self.operational.read_text()), scan())
+
+    def test_manifest_disposition_tree_cross_device_directory_and_leaf_are_denied(self):
+        for kind in ("directory", "leaf"):
+            fixture = self.manifest_disposition_fixture("cross-device-" + kind)
+            tree = fixture["paths"][1]
+            divergent = tree / ("dist" if kind == "directory" else "dist/worker.js")
+            real_lstat = Path.lstat
+
+            def cross_device_lstat(current, *, _target=divergent):
+                info = real_lstat(current)
+                if current == _target:
+                    values = list(info)
+                    values[2] = info.st_dev + 1
+                    return os.stat_result(values)
+                return info
+
+            with self.subTest(kind=kind), fixture["patches"], \
+                    mock.patch.object(Path, "lstat", new=cross_device_lstat), \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "DISPOSITION_TREE_CROSS_DEVICE"):
+                MODULE.authenticate_manifest_disposition(
+                    fixture["candidates"][1], json.loads(self.operational.read_text()), scan())
+
+    def _seal_manifest_disposition(self, fixture):
+        private_json(self.request, self.request_value(fixture["candidates"]))
+        patch_values = dict(
+            ROOT=fixture["control"], PREPARATIONS_ROOT=self.preparations,
+            RELEASES_ROOT=self.releases,
+            DISPOSITION_MANIFEST_PATH=fixture["manifest"],
+            DISPOSITION_MANIFEST_SHA256=sha(fixture["manifest"]),
+            DISPOSITION_ID="fixture-disposition-v1")
+        with mock.patch.multiple(MODULE, **patch_values), self.process_patch():
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+            MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
+                                self.commands, self.seal_manifest)
+        intent = json.loads(self.intent.read_text())
+        authorization = self.base / "disposition-authorization.private.json"
+        private_json(authorization, {
+            "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+            "authorization": "AUTHORIZE_ONCE", "intentSha256": sha(self.intent),
+            "commandsSha256": intent["commandsSha256"],
+            "paths": [item["path"] for item in intent["candidates"]],
+        })
+        return patch_values, authorization
+
+    def test_manifest_disposition_nonempty_directory_denies_rmdir(self):
+        fixture = self.manifest_disposition_fixture("nonempty-rmdir")
+        patch_values, authorization = self._seal_manifest_disposition(fixture)
+        receipt = self.base / "receipts/disposition-nonempty"; receipt.parent.mkdir(mode=0o700)
+        tree = fixture["paths"][1]
+        real_run = subprocess.run
+        def runner(argv, **kwargs):
+            if argv[0] == "/usr/bin/rmdir" and argv[-1] == str(tree):
+                (tree / "late-entry").write_bytes(b"late")
+            return real_run(argv, **kwargs)
+        with mock.patch.multiple(MODULE, **patch_values), self.process_patch(), \
+                mock.patch.object(MODULE.subprocess, "run", side_effect=runner), \
+                self.assertRaises(SystemExit):
+            MODULE.execute_intent(self.intent, sha(self.intent), authorization,
+                                  sha(authorization), receipt)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertIn("COMMAND_FAILED", result["failurePredicate"])
+        self.assertTrue(tree.exists())
+
+    def test_manifest_disposition_exact_seven_complete_lifecycle_passes(self):
+        fixture = self.manifest_disposition_fixture("complete")
+        patch_values, authorization = self._seal_manifest_disposition(fixture)
+        receipt = self.base / "receipts/disposition-complete"; receipt.parent.mkdir(mode=0o700)
+        with mock.patch.multiple(MODULE, **patch_values), self.process_patch():
+            result = MODULE.execute_intent(self.intent, sha(self.intent), authorization,
+                                           sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertTrue(all(not path.exists() for path in fixture["paths"]))
+        self.assertTrue(all(Path(entry["authority"]).exists() for entry in fixture["entries"]))
+        events = [json.loads(line) for line in
+                  (receipt / "command-journal.private.jsonl").read_text().splitlines()]
+        self.assertEqual(sum(item["event"] == "VERIFIED" for item in events),
+                         result["completedCommands"])
+
+    def test_manifest_disposition_partial_execution_never_repeats_completed_unlink(self):
+        fixture = self.manifest_disposition_fixture("partial")
+        patch_values, authorization = self._seal_manifest_disposition(fixture)
+        receipt = self.base / "receipts/disposition-partial"; receipt.parent.mkdir(mode=0o700)
+        first_path = Path(json.loads(self.intent.read_text())["commands"][0][-1])
+        effects = []
+        def runner(argv, **_kwargs):
+            if argv[-1] == "jlist":
+                return SimpleNamespace(returncode=0, stdout="[]\n", stderr="")
+            effects.append(list(argv))
+            if len(effects) == 1:
+                os.unlink(argv[-1])
+                return SimpleNamespace(returncode=0)
+            return SimpleNamespace(returncode=9)
+        with mock.patch.multiple(MODULE, **patch_values), self.process_patch(), \
+                mock.patch.object(MODULE.subprocess, "run", side_effect=runner), \
+                self.assertRaises(SystemExit):
+            MODULE.execute_intent(self.intent, sha(self.intent), authorization,
+                                  sha(authorization), receipt)
+        self.assertFalse(first_path.exists())
+        self.assertEqual(sum(command[-1] == str(first_path) for command in effects), 1)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual((result["attemptedCommands"], result["completedCommands"]), (2, 1))
 
     def test_hybrid_b9_duplicate_paths_pass_with_exact_authority(self):
         authority, paths, candidates = self.b9_duplicate_candidates()

@@ -97,6 +97,7 @@ for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH
     require(marker in producer, f"external release producer marker {marker}")
 for marker in ('add_parser("audit")', 'add_parser("prepare")', 'add_parser("execute")',
                'NPM_CACHE_MAINTENANCE', 'DERIVED_OUTPUT_RUNTIME',
+               'CLOSED_PREPARATION_MANIFEST_DISPOSITION',
                'capture_live_operational', 'npm-cli.js',
                '_status_uids', '_proc_start_ticks', 'kernelThreadsIgnored',
                'NPM_CACHE_ALLOWED_MODES = {0o700, 0o750, 0o755}',

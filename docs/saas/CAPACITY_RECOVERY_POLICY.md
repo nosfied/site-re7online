@@ -133,10 +133,12 @@ de descoberta fornecido pelo operador.
 
 O próprio helper aceita somente o cache literal `/home/deploy/.npm/_cacache`,
 runtimes `api-runtime`/`frontend-runtime` no layout fechado
-`/opt/re7online/build-output/<release>-producer/<release>/<runtime>` e os dois
-basenames fechados da classe `CLOSED_PREPARATION_DERIVED_ARCHIVE` como filhos
-diretos de uma preparação. `/`, raízes, ancestrais genéricos, outros descendentes
-e caminhos externos são negados antes da varredura.
+`/opt/re7online/build-output/<release>-producer/<release>/<runtime>`, os basenames
+fechados da classe `CLOSED_PREPARATION_DERIVED_ARCHIVE` e os sete caminhos
+literais do manifesto versionado
+`config/capacity-recovery/closed-preparation-manifest-disposition.v1.json`.
+`/`, raízes, ancestrais genéricos, outros descendentes e caminhos externos são
+negados antes da varredura.
 
 A instalação proposta é imutável para `deploy`:
 
@@ -199,12 +201,40 @@ membros de archive classificados como `content`,
 DB, runtime-data, configuração privada, `.data`, uploads tenant-scoped, credenciais
 ou evidência são negados. A listagem do tar é inspecionada sem extração.
 
-O observador privilegiado aceita apenas esses três layouts literais. A
+O observador privilegiado aceita apenas esses layouts fechados. A
 recaptura de referências continua ocorrendo em `audit`, `prepare` e, novamente sob
 os locks, em `execute`. O único efeito é
 `/usr/bin/unlink -- <arquivo-autenticado>`; não há `rm -r`, glob ou exclusão do
 diretório da preparação. Journal e receipt registram a medição física anterior e
 posterior, e o diretório-pai recebe `fsync` após a ausência comprovada.
+
+### `CLOSED_PREPARATION_MANIFEST_DISPOSITION`
+
+Esta classe existe somente para a disposição fechada
+`p00-closed-preparations-20261031-v1`. O executor autentica caminho e SHA-256 do
+manifesto versionado; exige exatamente os sete candidatos, sem mistura com outra
+classe, e nega campo, caminho, autoridade ou registro histórico alternativo.
+Cada fase reabre o manifesto, os registros, candidatos e autoridades e recaptura
+as fontes vivas e as referências de processos.
+
+Archives são relacionados integralmente sem extração: nomes duplicados, escapes,
+links perigosos, devices, FIFO e tipos desconhecidos negam. A proteção global de
+`.env.*` e `uploads` permanece. As únicas exceções são, nos dois digests `night`
+declarados pelo manifesto, `apps/whatsapp-agent/.env.example` byte-idêntico ao
+arquivo versionado e código sob `node_modules/openai/resources/uploads/`
+comparado à release autoritativa. `.env` real e uploads operacionais continuam
+negados.
+
+A árvore `worker-package-audit` exige o `PACKAGE_FILES.sha256` autenticado, conjunto
+integral de folhas, arquivos regulares com `nlink=1` e equivalência folha a folha
+com a autoridade preservada. O `nlink` do diretório não é interpretado como
+hardlink de arquivo. A medição usa blocos físicos por inode único.
+
+Os únicos efeitos possíveis são `/usr/bin/unlink -- <folha>` e, depois, chamadas
+literais `/usr/bin/rmdir -- <diretório-vazio>` em pós-ordem. Nunca há `rm -r`, glob,
+shell ou exclusão da preparação inteira. Cada efeito recebe `ATTEMPT`, `RESULT` e
+`VERIFIED`; falha intermediária fecha o receipt parcial e não repete efeitos
+concluídos automaticamente.
 
 ## Fontes de verdade preservadas
 
@@ -237,13 +267,14 @@ automaticamente às duas classes desta ferramenta. Até existir classe versionad
 com prova fechada, permanece `NOT_QUALIFIED` e requer evolução separada do
 control plane.
 
-## Recibo e retomada
+## Recibo e fechamento parcial
 
 O receipt root deve ser novo, privado e estar sob pai seguro. Cada stdout/stderr,
 journal e recibo é criado com exclusividade, modo `0600` e `fsync`; o diretório é
 sincronizado antes da liberação dos locks. O recibo registra contadores, caminhos
 efetivamente ausentes e hashes da intenção/autorização/journal.
 
-Uma falha preserva todos os parciais. Nova execução exige nova auditoria,
-preparação e autorização vinculadas somente ao estado remanescente; nunca se
-reutiliza `AUTHORIZE_ONCE` consumida.
+Uma falha produz fechamento terminal parcial e preserva todos os efeitos já
+comprovados. Não existe retry ou retomada automática. Uma operação futura sobre
+o estado remanescente exige nova auditoria, preparação e autorização; nunca se
+reutiliza `AUTHORIZE_ONCE` consumida nem o mesmo receipt root.

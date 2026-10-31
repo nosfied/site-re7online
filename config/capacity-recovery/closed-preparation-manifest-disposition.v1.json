@@ -1,0 +1,186 @@
+{
+  "dispositionId": "p00-closed-preparations-20261031-v1",
+  "entries": [
+    {
+      "authority": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified",
+      "historicalRecords": [
+        {
+          "path": "docs/reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_V4_PREPARED_2026-10-05.md",
+          "sha256": "819910b1a478d25f16d6977ac56e11cec63e8ce26ffde994b4989fc0cb54c190"
+        }
+      ],
+      "identity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 3161308,
+        "mode": "0664",
+        "nlink": 1,
+        "uid": 1000
+      },
+      "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-reactive-afbb7455.tar.gz",
+      "physicalBytes": 111230976,
+      "proof": "ARCHIVE_AUTHORITY_TREE",
+      "sha256": "8b67292578090a2f564e4a9bf399b002e667bba723c936859fc438aa1221f5c8",
+      "type": "ARCHIVE_FILE"
+    },
+    {
+      "authority": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified",
+      "historicalRecords": [
+        {
+          "path": "docs/reviews/automation-freeform-window-release-af26/worker-reactive-transport-20261005.manifest.json",
+          "sha256": "ecd717aecc0ba1019a6e039b27d0ecbbf98e334b23f15cf2a6acf36c646aaaf6"
+        }
+      ],
+      "identity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 3161329,
+        "mode": "0700",
+        "nlink": 3,
+        "uid": 1000
+      },
+      "packageFilesSha256": "650b2a216b595f858c4b9b5110d2dbcd8909bc4a7ec655c3560734c5641ca398",
+      "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
+      "physicalBytes": 365674496,
+      "proof": "ENUMERATED_TREE_AUTHORITY",
+      "sha256": null,
+      "type": "ENUMERATED_TREE"
+    },
+    {
+      "authority": "/opt/re7online/releases/a1cc380eddcd1467b8e0d3a8e405f82689a25b3d",
+      "historicalRecords": [
+        {
+          "path": "docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md",
+          "sha256": "2fe9180696da93fd1f39fbcc9dc290baad7b6e21a58be203b3868caa4fc61d18"
+        }
+      ],
+      "identity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 2101673,
+        "mode": "0600",
+        "nlink": 1,
+        "uid": 1000
+      },
+      "path": "/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z/candidate.tar.gz",
+      "physicalBytes": 102604800,
+      "protectedMemberExceptions": [
+        {
+          "kind": "VERSIONED_ENV_EXAMPLE",
+          "path": "apps/whatsapp-agent/.env.example"
+        },
+        {
+          "kind": "OPENAI_LIBRARY_CODE",
+          "pathPrefix": "node_modules/openai/resources/uploads/"
+        }
+      ],
+      "proof": "ARCHIVE_AUTHORITY_TREE",
+      "sha256": "f5dda6a4b6bf6b6a7e8e50af0e4b343fb77c0ef6bd7191cf72c62d2c5d9a3d48",
+      "type": "ARCHIVE_FILE"
+    },
+    {
+      "authority": "/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c",
+      "historicalRecords": [
+        {
+          "path": "docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md",
+          "sha256": "2fe9180696da93fd1f39fbcc9dc290baad7b6e21a58be203b3868caa4fc61d18"
+        }
+      ],
+      "identity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 2101675,
+        "mode": "0664",
+        "nlink": 1,
+        "uid": 1000
+      },
+      "path": "/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z/recovery-standalone.tar.gz",
+      "physicalBytes": 102477824,
+      "protectedMemberExceptions": [
+        {
+          "kind": "VERSIONED_ENV_EXAMPLE",
+          "path": "apps/whatsapp-agent/.env.example"
+        },
+        {
+          "kind": "OPENAI_LIBRARY_CODE",
+          "pathPrefix": "node_modules/openai/resources/uploads/"
+        }
+      ],
+      "proof": "ARCHIVE_AUTHORITY_TREE",
+      "sha256": "7fe1817d89546aff855f40d4290776803acff60feb75902d1d5daed3642b3586",
+      "type": "ARCHIVE_FILE"
+    },
+    {
+      "authority": "/opt/re7online/releases/3227b2d752110873f0eff4ee5253a6f06ca51549-front",
+      "historicalRecords": [
+        {
+          "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md",
+          "sha256": "2e48b7dc2c97670429a6c1f88734c57503ab806381fac1effbdf5bc80543f31f"
+        }
+      ],
+      "identity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 2176997,
+        "mode": "0664",
+        "nlink": 1,
+        "uid": 1000
+      },
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-20261009T220400Z/frontend-3227b2d7.tar.gz",
+      "physicalBytes": 184074240,
+      "proof": "ARCHIVE_AUTHORITY_TREE",
+      "sha256": "9b54548e4a7763f5078ae0433aceb43a37567eccd988814dd82f2fab97229319",
+      "type": "ARCHIVE_FILE"
+    },
+    {
+      "authority": "/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front",
+      "historicalRecords": [
+        {
+          "path": "docs/reviews/automation-freeform-window-release-af26/FRONTEND_9F4CBE0F_PREPARED_2026-10-06.md",
+          "sha256": "13dd2d7514683004489137911cc1eb53e030e6fa118f744ef98a37b04ff91ddc"
+        }
+      ],
+      "identity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 3169675,
+        "mode": "0664",
+        "nlink": 1,
+        "uid": 1000
+      },
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z/frontend-9f4cbe0f-v2.tar.gz",
+      "physicalBytes": 173621248,
+      "proof": "ARCHIVE_AUTHORITY_TREE",
+      "sha256": "d0f15209922741e51ab21e22d01ff2188ce212ef23081888084c868754065e54",
+      "type": "ARCHIVE_FILE"
+    },
+    {
+      "authority": "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8",
+      "historicalRecords": [
+        {
+          "path": "docs/reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md",
+          "sha256": "44fe92b3f9f28d946a38035b69dd47e2c1e40a7c93f18eb800c2565b0412b48a"
+        }
+      ],
+      "identity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 3169958,
+        "mode": "0664",
+        "nlink": 1,
+        "uid": 1000
+      },
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-css-supervision-20261007T224500Z/frontend-fa60-css-corrected.tar.gz",
+      "physicalBytes": 174120960,
+      "proof": "ARCHIVE_AUTHORITY_TREE",
+      "sha256": "17bd5fb895ce14f610257fb8186b916dbc39d34cdd7f421cb07f5a0fc2e1f252",
+      "type": "ARCHIVE_FILE"
+    }
+  ],
+  "kind": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+  "schemaVersion": 1,
+  "versionedEnvExample": {
+    "path": "apps/whatsapp-agent/.env.example",
+    "sha256": "55aa02b4c26882cac130c71d009d1e6204a0e9a1586c94bf51e1e1f6eb5a496f"
+  }
+}
