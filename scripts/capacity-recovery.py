@@ -1759,6 +1759,7 @@ def _parse_package_files(path: Path, expected_sha: str) -> tuple[dict[str, str],
 
 def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
     root = physical_directory(path, "DISPOSITION_TREE_ROOT")
+    root_device = root.st_dev
     expected_identity = entry["identity"]
     root_identity = stat_identity(root, include_nlink=True)
     if {key: root_identity[key] for key in expected_identity} != expected_identity:
@@ -1773,6 +1774,8 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
     while stack:
         current = stack.pop()
         current_info = physical_directory(current, "DISPOSITION_TREE_DIRECTORY")
+        if current_info.st_dev != root_device:
+            deny("DISPOSITION_TREE_CROSS_DEVICE")
         if (current_info.st_uid != os.geteuid() or current_info.st_gid != os.getegid() or
                 stat.S_IMODE(current_info.st_mode) & 0o022):
             deny("DISPOSITION_TREE_DIRECTORY_IDENTITY")
@@ -1785,6 +1788,8 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
         for child in children:
             child_path = Path(child.path)
             info = child_path.lstat()
+            if info.st_dev != root_device:
+                deny("DISPOSITION_TREE_CROSS_DEVICE")
             relative = child_path.relative_to(path).as_posix()
             if stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
                 stack.append(child_path)

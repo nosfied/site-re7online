@@ -526,6 +526,55 @@ class CapacityRecoveryTests(unittest.TestCase):
                 self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_MANIFEST_SCHEMA"):
             MODULE._disposition_manifest(binding)
 
+    def test_production_disposition_manifest_and_versioned_evidence_are_exact(self):
+        manifest_path = MODULE.DISPOSITION_MANIFEST_PATH
+        self.assertEqual(
+            MODULE.DISPOSITION_MANIFEST_SHA256,
+            "e6b0a8b40a7a177d93abcb3e752fb1ed83a42756ff4cef7f3c5da76e0d0160d4",
+        )
+        self.assertEqual(
+            sha(manifest_path),
+            "e6b0a8b40a7a177d93abcb3e752fb1ed83a42756ff4cef7f3c5da76e0d0160d4",
+        )
+        manifest = json.loads(manifest_path.read_text())
+        self.assertEqual(set(manifest), {
+            "schemaVersion", "kind", "dispositionId", "entries",
+            "versionedEnvExample",
+        })
+        self.assertEqual(manifest["schemaVersion"], 1)
+        self.assertEqual(manifest["kind"], "CLOSED_PREPARATION_MANIFEST_DISPOSITION")
+        self.assertEqual(manifest["dispositionId"], MODULE.DISPOSITION_ID)
+        entries = manifest["entries"]
+        self.assertEqual(len(entries), 7)
+        self.assertEqual(len({entry["path"] for entry in entries}), 7)
+        self.assertEqual(sum(entry["physicalBytes"] for entry in entries),
+                         1_213_804_544)
+        env = manifest["versionedEnvExample"]
+        self.assertEqual(env, {
+            "path": "apps/whatsapp-agent/.env.example",
+            "sha256": "55aa02b4c26882cac130c71d009d1e6204a0e9a1586c94bf51e1e1f6eb5a496f",
+        })
+        self.assertEqual(sha(MODULE.ROOT / env["path"]), env["sha256"])
+        for entry in entries:
+            for record in entry["historicalRecords"]:
+                record_path = MODULE.ROOT / record["path"]
+                self.assertTrue(record_path.is_file(), record["path"])
+                self.assertEqual(sha(record_path), record["sha256"])
+        night = [entry for entry in entries if "/night-" in entry["path"]]
+        common = [entry for entry in entries if "/night-" not in entry["path"]]
+        self.assertEqual(len(night), 2)
+        self.assertEqual(len(common), 5)
+        self.assertTrue(all("protectedMemberExceptions" not in entry
+                            for entry in common))
+        expected_exceptions = [
+            {"kind": "VERSIONED_ENV_EXAMPLE",
+             "path": "apps/whatsapp-agent/.env.example"},
+            {"kind": "OPENAI_LIBRARY_CODE",
+             "pathPrefix": "node_modules/openai/resources/uploads/"},
+        ]
+        self.assertTrue(all(entry.get("protectedMemberExceptions") == expected_exceptions
+                            for entry in night))
+
     def test_manifest_disposition_byte_inode_authority_manifest_and_record_drift_deny(self):
         mutations = ("byte", "inode", "authority", "authority-absent", "manifest", "record")
         for mutation in mutations:
@@ -620,6 +669,28 @@ class CapacityRecoveryTests(unittest.TestCase):
             with self.subTest(mutation=mutation), fixture["patches"], \
                     self.assertRaisesRegex(MODULE.Denied,
                                            "DISPOSITION_TREE_LEAF_SET|DISPOSITION_TREE_UNSAFE_LEAF|DISPOSITION_TREE_HARDLINK"):
+                MODULE.authenticate_manifest_disposition(
+                    fixture["candidates"][1], json.loads(self.operational.read_text()), scan())
+
+    def test_manifest_disposition_tree_cross_device_directory_and_leaf_are_denied(self):
+        for kind in ("directory", "leaf"):
+            fixture = self.manifest_disposition_fixture("cross-device-" + kind)
+            tree = fixture["paths"][1]
+            divergent = tree / ("dist" if kind == "directory" else "dist/worker.js")
+            real_lstat = Path.lstat
+
+            def cross_device_lstat(current, *, _target=divergent):
+                info = real_lstat(current)
+                if current == _target:
+                    values = list(info)
+                    values[2] = info.st_dev + 1
+                    return os.stat_result(values)
+                return info
+
+            with self.subTest(kind=kind), fixture["patches"], \
+                    mock.patch.object(Path, "lstat", new=cross_device_lstat), \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "DISPOSITION_TREE_CROSS_DEVICE"):
                 MODULE.authenticate_manifest_disposition(
                     fixture["candidates"][1], json.loads(self.operational.read_text()), scan())
 

@@ -267,13 +267,14 @@ automaticamente às duas classes desta ferramenta. Até existir classe versionad
 com prova fechada, permanece `NOT_QUALIFIED` e requer evolução separada do
 control plane.
 
-## Recibo e retomada
+## Recibo e fechamento parcial
 
 O receipt root deve ser novo, privado e estar sob pai seguro. Cada stdout/stderr,
 journal e recibo é criado com exclusividade, modo `0600` e `fsync`; o diretório é
 sincronizado antes da liberação dos locks. O recibo registra contadores, caminhos
 efetivamente ausentes e hashes da intenção/autorização/journal.
 
-Uma falha preserva todos os parciais. Nova execução exige nova auditoria,
-preparação e autorização vinculadas somente ao estado remanescente; nunca se
-reutiliza `AUTHORIZE_ONCE` consumida.
+Uma falha produz fechamento terminal parcial e preserva todos os efeitos já
+comprovados. Não existe retry ou retomada automática. Uma operação futura sobre
+o estado remanescente exige nova auditoria, preparação e autorização; nunca se
+reutiliza `AUTHORIZE_ONCE` consumida nem o mesmo receipt root.
