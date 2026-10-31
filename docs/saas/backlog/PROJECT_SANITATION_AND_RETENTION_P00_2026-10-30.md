@@ -42,6 +42,29 @@ após o pequeno custo da custódia. O índice de evidências SHA-256 é
 
 Este lote não volta para inventário, auditoria, preparação ou execução.
 
+### Lote incremental 2026-10-31 — duplicatas `hybrid-b9`
+
+Estado terminal `COMPLETED`, 2/2, sem autorização de repetição. Foram removidas
+somente as duas cópias duplicadas literais de
+`worker-minimal-b9-v3.tar.gz` nas preparações `hybrid-b9-capture` e
+`hybrid-b9-absent`. A autoridade SHA-256
+`236c1d502df5767eb7cde726ce0d7ae7c6e8200489cac4d09a417b08d98c0e98`
+permaneceu preservada na preparação `hybrid-b9b58177-20261005T025100Z`.
+
+O journal SHA-256 é
+`4fa19906df26870468e10e93a7bae37bf56e9675543664e6fb57100784a3a5c7` e o
+receipt SHA-256 é
+`056573218d17556df599bb965120985cad5b004da7de22441e52316276239241`.
+O ganho físico posterior medido foi `224.071.680` bytes. A verificação final
+comprovou os dois candidatos ausentes, a autoridade intacta, produção e locks
+preservados e nenhum efeito fora do escopo. A capacidade disponível final foi
+`8.651.104.256` bytes; faltavam `1.012.572.160` bytes para o alvo agregado de
+`9.663.676.416` bytes.
+
+Os dois caminhos removidos ficam proibidos de voltar a inventário, auditoria,
+preparação ou execução. Ganho estimado nunca substitui os `224.071.680` bytes
+efetivamente observados no receipt.
+
 ### Próximo lote classificado — ainda não autorizado
 
 O próximo escopo fechado contém somente dois archives de retorno derivados da
@@ -104,6 +127,43 @@ Resultado da reconciliação SHA-256:
 índice SHA-256:
 `5a6cf4f4a98ec0e8f1041634d0c68396f7dbeaa33945553324f99dc00750a23b`.
 Não houve `prepare`, `execute`, `unlink` ou autorização substituta.
+
+### Classificação somente leitura das gerações — 31/10/2026
+
+A classificação posterior ao lote `hybrid-b9` reutilizou a fotografia operacional,
+o grafo e os contratos já autenticados; não executou `capacity-recovery audit`,
+`generation-retirement prepare` ou qualquer exclusão. A fotografia confirmou API
+`fa63994a`, frontend `aa9527cc` e worker `e2e7f17a` ativos.
+
+| Classe | Gerações/caminhos | Resultado |
+| --- | --- | --- |
+| ativa | releases `immutable-fa63994a-vps-20261030T153352Z`, `immutable-aa9527cc-vps-20261029T222733Z` e `immutable-e2e7f17a-20261022T005110Z` | protegidas por `current`/PM2/dump |
+| rollback imediato | releases `immutable-754281d3-vps-20261029T174145Z` e `immutable-b96eb779-vps-20261028T025159Z` | preservar releases, pacotes, manifestos e índices |
+| transação aberta ou layout transacional não reconciliado | `immutable-d436239e-vps-20261026T131821Z` e `immutable-f5028de1-20261020T181603Z` | negar retirada até fechamento/classificação do journal legado |
+| dependência transitiva | demais diretórios presentes no grafo protegido | preservar; o grafo autenticado contém os 60/60 diretórios físicos de `releases` |
+| histórica sem retorno comprovado | nenhuma release física | nenhuma release ficou simultaneamente fora de active, rollback, retorno transitivo, candidatas e transações abertas |
+| retirável | nenhuma release física | nenhum `RELEASE_RUNTIME` existente está `RETIREMENT_READY` e fora do grafo protegido |
+
+O inventário físico encontrou 18 diretórios sob `build-output`, em geral entre
+148 e 155 MB. Os contratos fechados preservam pacote, manifesto, índice e evidência;
+os runtimes derivados já aparecem `SANITIZED` ou estão fisicamente ausentes. A
+geração `immutable-123ba7bd-vps-20261026T200100Z` é a única com derivados
+`RETIREMENT_READY`, mas esses runtimes já estão ausentes e seu diretório contém
+somente pacote/evidência preservados. Os outputs `059ea95a` e `ef3a2128` pertencem
+a releases já retiradas, porém também restam apenas fontes de verdade preservadas.
+
+Existe somente um diretório sob `build-worktrees`,
+`whatsapp-meta-backfill-7339b143-source`, com `75.272.192` bytes. Ele não pertence
+a uma geração de release coberta por contrato de retirada e não entra em lote sem
+classificação própria.
+
+Uma release histórica típica ocupa aproximadamente 989 MB. Somar seu diretório de
+`build-output` ultrapassaria aproximadamente 1,1 GB apenas contabilizando pacote,
+manifesto, índice e evidência que o contrato manda preservar; não há runtime/output
+retirável que complete esse ganho. Assim, não existe lote literal canônico de uma
+única geração acima de aproximadamente 1,1 GB. A próxima classificação deve voltar
+às preparações grandes, por artefato literal e autoridade preservada, nunca pela
+pasta inteira.
 
 ## Resultado obrigatório
 
