@@ -74,8 +74,13 @@ class AdapterTests(unittest.TestCase):
                               'sha256': self.fixture.digest},
                 'terminalDisposition': 'SANITIZE_AFTER_USE',
                 'equivalenceSha256': hashlib.sha256(operation['target'].encode()).hexdigest(),
+                'operation': {'name': operation['name'], 'kind': operation['kind'],
+                              'artifactIndex': operation['artifactIndex'],
+                              'predictedBytes': operation['allocatedBudgetBytes'],
+                              'predictedInodes': 1},
             })
         contract = {'schemaVersion': 1, 'generationId': value['review']['generation'],
+                    'reservationRoot': str(self.parent),
                     'preparationArtifacts': artifacts}
         path = self.base / (value['review']['generation'] + '.preparation-contract.private.json')
         path.write_text(json.dumps(contract, sort_keys=True, separators=(',', ':')) + '\n')
@@ -93,6 +98,8 @@ class AdapterTests(unittest.TestCase):
         self.assertFalse(result['executionAuthorized'])
         lifecycle = json.loads((gen / 'preparation-artifacts.lifecycle.private.json').read_text())
         self.assertEqual(lifecycle['state'], 'OPEN')
+        self.assertEqual(lifecycle['event'], 'CREATION_COMPLETED')
+        self.assertGreater(lifecycle['realized'][0]['allocatedBytes'], 0)
 
     def test_frontend_existing_compiled_bytes_no_build(self):
         self.run_adapter('frontend')
@@ -220,25 +227,56 @@ class AdapterTests(unittest.TestCase):
             'budgetInodes': 1, 'protection': 'DERIVED_WITH_AUTHORITY',
             'authority': {'path': str(self.fixture.artifact), 'sha256': self.fixture.digest},
             'terminalDisposition': 'SANITIZE_AFTER_USE',
-            'equivalenceSha256': hashlib.sha256(b'integrated').hexdigest()}
+            'equivalenceSha256': hashlib.sha256(b'integrated').hexdigest(),
+            'operation': {'name': 'copy-compiled', 'kind': 'copy', 'artifactIndex': 0,
+                          'predictedBytes': 4096, 'predictedInodes': 1}}
         admitted = self.base / 'admitted'
         controls = {}
         for role in ('generation-retirement', 'converta-release', 'root-policy'):
             source = self.base / (role + '.source'); source.write_text(role); source.chmod(0o644)
             raw = source.read_bytes(); controls[role] = (source, raw, hashlib.sha256(raw).hexdigest())
+        producer_inputs = []
+        for role, relative in admission.PREPARATION_PRODUCER_ROLES.items():
+            source = HERE.parent / relative
+            private = self.base / 'producer-inputs' / relative
+            private.parent.mkdir(parents=True, exist_ok=True)
+            private.write_bytes(source.read_bytes()); private.chmod(0o600)
+            producer_inputs.append({'role': role, 'sourcePath': str(private),
+                'sourceSha256': hashlib.sha256(private.read_bytes()).hexdigest()})
         request = {'schemaVersion': 2, 'generationId': generation, 'releaseId': 'release',
                    'targetCommit': '1' * 40, 'finalRoot': str(admitted),
                    'operationalStateOutputName': 'operational-state.private.json',
-                   'preparationArtifacts': [artifact]}
+                   'preparationReservationRoot': str(self.parent),
+                   'preparationArtifacts': [artifact],
+                   'preparationProducerArtifacts': producer_inputs}
         template = json.dumps({'schemaVersion': 2, 'controlPlaneArtifacts': []}).encode()
         template_path = self.base / 'template'; template_path.write_bytes(template); template_path.chmod(0o600)
+        producer_errors = []
+        producer = admission.validate_preparation_producer(
+            request['preparationProducerArtifacts'], producer_errors)
+        self.assertEqual(producer_errors, [])
         admission.materialize(request, controls, (template_path, template,
-                                                   hashlib.sha256(template).hexdigest()))
+                                                   hashlib.sha256(template).hexdigest()), producer)
         value = copy.deepcopy(self.value); value['review']['generation'] = generation
         contract = admitted / 'preparation-artifacts.contract.private.json'
         value['preparationArtifactContract'] = {
             'path': str(contract), 'sha256': hashlib.sha256(contract.read_bytes()).hexdigest()}
-        m.prepare_api(value, self.parent, self.runners, NOW)
+        current = datetime.datetime.now(datetime.timezone.utc)
+        for field, key in (('contextObservation', 'context'), ('capacitySamples', 'samples')):
+            binding = value['captureBindings'][field]; capture = Path(binding['capturePath'])
+            data = json.loads(capture.read_text()); data['atUtc'] = current.isoformat()
+            capture.write_text(json.dumps(data)); capture.chmod(0o600)
+            binding['sha256'] = hashlib.sha256(capture.read_bytes()).hexdigest()
+        value.pop('clockMode'); value['maxCaptureAgeSeconds'] = 3600
+        input_path = self.base / 'copied-entrypoint-input.private.json'
+        input_path.write_text(json.dumps(value)); input_path.chmod(0o600)
+        copied = admitted / 'preparation-producer-root/scripts/operational_preparers_v3.py'
+        result = __import__('subprocess').run([
+            __import__('sys').executable, '-B', str(copied), '--adapter', 'api',
+            '--input', str(input_path), '--input-sha256', hashlib.sha256(input_path.read_bytes()).hexdigest(),
+            '--output', str(self.parent), '--local-only'], capture_output=True, text=True,
+            env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         lifecycle = self.parent / generation / 'preparation-artifacts.lifecycle.private.json'
         self.assertEqual(json.loads(lifecycle.read_text())['state'], 'OPEN')
         (self.parent / generation / 'package.bin').unlink()
@@ -246,6 +284,12 @@ class AdapterTests(unittest.TestCase):
             lifecycle, hashlib.sha256(lifecycle.read_bytes()).hexdigest(), 'SANITIZED',
             'c' * 64, 'owner', 'downstream success')
         self.assertEqual(closed['state'], 'SANITIZED')
+        dependency = admitted / 'preparation-producer-root/scripts/operational-retention-report.py'
+        dependency.write_bytes(dependency.read_bytes() + b'\n# drift\n')
+        denied = __import__('subprocess').run([__import__('sys').executable, '-B', str(copied), '--help'],
+            capture_output=True, text=True, env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn('preparation_runtime_dependency_drift', denied.stderr)
 
     def test_tar_actual_bytes_after_gate(self):
         value = copy.deepcopy(self.value)
@@ -256,6 +300,22 @@ class AdapterTests(unittest.TestCase):
         with m.tarfile.open(self.parent / 'frontend-future/package.tar') as tar:
             self.assertEqual(tar.getnames(), ['package.bin'])
             self.assertEqual(tar.extractfile('package.bin').read(), self.fixture.artifact.read_bytes())
+
+    def test_tar_realized_over_budget_is_retention_debt(self):
+        value = copy.deepcopy(self.value)
+        value['review']['generation'] = 'case-tar-over-budget'
+        value['operations'][0]['target'] = 'source.bin'
+        value['operations'].append({'kind': 'tar', 'name': 'pack', 'artifactIndex': 0,
+            'allocatedBudgetBytes': 4096, 'reason': 'fixture underestimated archive',
+            'target': 'package.tar', 'members': ['source.bin'],
+            'memberSha256': {'source.bin': self.fixture.digest}})
+        with self.assertRaisesRegex(ValueError, 'preparation_realized_budget_exceeded'):
+            self.run_adapter('api', value)
+        lifecycle = json.loads((self.parent / value['review']['generation'] /
+                                'preparation-artifacts.lifecycle.private.json').read_text())
+        self.assertEqual(lifecycle['state'], 'RETENTION_DEBT')
+        tar = next(item for item in lifecycle['realized'] if item['path'].endswith('/package.tar'))
+        self.assertGreater(tar['allocatedBytes'], 4096)
 
     def closure_value(self, kind):
         value = copy.deepcopy(self.value); value['review']['state'] = 'CONSUMED'

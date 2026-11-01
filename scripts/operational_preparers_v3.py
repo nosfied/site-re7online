@@ -15,6 +15,18 @@ import tarfile
 
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+RUNTIME_DEPENDENCIES = {
+    'scripts/preparation_artifact_lifecycle.py': 'a67fb3361c17372896241469683104cb2e3bab3e892b8bf32127882612ad0f2a',
+    'scripts/operational_preparation_review.py': 'cbcb7896adeb9a90504c78c4c043644486a311a4d0c7daa9b9bcfd3b1e7a2cbc',
+    'scripts/operational-retention-report.py': '7d76a567b35c006bca53f45300f8543164095fb3b373414b6889a013a298a9fb',
+    'docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/capacity_budget.py': '58d621121124481b9d3040321a131511b8e88918f49c16175dad716fb4b10a83',
+    'docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/saved_reference_capture.py': '36e29e431ebdb8afeea5f034c4e1291739e50ab887c02b17b5de250832f93aa8',
+    'docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/third-withdrawal/references.py': '07c14ea6db6fbe1e918128258a422e385690384b08eff9d5de0e62e9871b0683',
+}
+for relative, expected in RUNTIME_DEPENDENCIES.items():
+    if hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() != expected:
+        raise ValueError('preparation_runtime_dependency_drift:' + relative)
 preparation_spec = importlib.util.spec_from_file_location(
     'preparation_artifact_lifecycle', HERE / 'preparation_artifact_lifecycle.py')
 preparation_lifecycle = importlib.util.module_from_spec(preparation_spec)
@@ -152,6 +164,7 @@ def preparation_adapter(kind, value, parent, runners, now=None):
     output = None
     lifecycle_contract = None
     lifecycle_path = None
+    realized = []
     denial_name = None
     try:
         lock = os.open('.future-preparation.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600, dir_fd=directory)
@@ -201,6 +214,12 @@ def preparation_adapter(kind, value, parent, runners, now=None):
                 require((a.st_dev, a.st_ino) == (b.st_dev, b.st_ino), 'generation_directory_drift')
             finally: os.close(current)
             runners[operation['kind']](operation, generation)
+        if operations:
+            realized = preparation_lifecycle.measure_realized(lifecycle_contract)
+            preparation_lifecycle.replace_lifecycle(
+                lifecycle_path,
+                preparation_lifecycle.lifecycle_value(lifecycle_contract, 'OPEN',
+                                                      'CREATION_COMPLETED', realized=realized))
         # Post-staging inventory uses the existing reader; no atomic/production PASS is inferred.
         inventory = c.reporter.inventory([generation])
         require(inventory['metadataCompleteWithinBudget'], 'post_inventory_incomplete')
@@ -213,10 +232,17 @@ def preparation_adapter(kind, value, parent, runners, now=None):
     except BaseException as e:
         if output is not None:
             if lifecycle_path is not None and lifecycle_contract is not None:
+                if not realized:
+                    try:
+                        realized = preparation_lifecycle.measure_realized(
+                            lifecycle_contract, require_all=False, enforce_budget=False)
+                    except (OSError, ValueError):
+                        realized = []
                 preparation_lifecycle.replace_lifecycle(
                     lifecycle_path,
                     preparation_lifecycle.lifecycle_value(lifecycle_contract, 'RETENTION_DEBT',
-                                                          'CREATION_INTERRUPTED', type(e).__name__))
+                                                          'CREATION_INTERRUPTED', type(e).__name__,
+                                                          realized))
             exclusive_json(output, 'denial.private.json', {'result': 'DENY', 'errorClass': type(e).__name__,
                            'automaticRetry': False, 'partialGenerationPreserved': True})
         elif denial_name is not None:

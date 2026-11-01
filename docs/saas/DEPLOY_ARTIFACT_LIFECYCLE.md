@@ -1079,9 +1079,10 @@ O gate de reviews já protege outputs de gerações. Archives volumosos criados 
 `backups/.../preparations` continuam fora dessa cobertura. O sucesso da retirada
 3/3 não fecha essa lacuna.
 
-O schema 2 da admissão materializa `preparationArtifacts`; o produtor real
-`operational_preparers_v3.py` autentica esse contrato antes da primeira cópia ou
-compactação. A implementação reutiliza o lifecycle, o preparador e
+O schema 2 da admissão materializa `preparationArtifacts` e uma árvore executável
+autenticada com o preparador, coordenador, inventário e dependências pinadas. O
+adapter versionado `operational_preparers_v3.py` autentica o contrato antes da
+primeira cópia ou compactação. A implementação reutiliza o lifecycle, o preparador e
 `generation-retirement.py review-preparation`, sem executor, launcher ou cron de
 limpeza novo. O contrato identifica:
 
@@ -1096,9 +1097,11 @@ limpeza novo. O contrato identifica:
 | Owner, prazo e impedimento nominal para dívida | Tornar dívida acompanhável, sem autorizar exclusão por idade |
 
 `OPEN` ou `RETENTION_DEBT` bloqueia somente artefato equivalente no mesmo `scope`.
-Operações independentes não são bloqueadas pela dívida de outro escopo; as reservas
-de bytes/inodes de todos os registros abertos são, contudo, somadas no filesystem,
-porque capacidade é compartilhada. Dados e efeitos dos tenants permanecem isolados.
+Operações independentes não são bloqueadas pela dívida de outro escopo. O contrato
+fixa uma `reservationRoot`; o mesmo lock serializa seus filhos diretos e as reservas
+abertas encontradas nesse domínio são somadas antes da alocação. Isso não é inventário
+de todo o filesystem nem cobre outra raiz. A capacidade livre atual ainda é medida no
+filesystem da raiz. Dados e efeitos dos tenants permanecem isolados.
 
 Admissão deve qualificar orçamento/reserva e preparação equivalente pendente antes
 da cópia. Finalize/rollback devem registrar sanitização ou dívida nominal, sem
@@ -1111,3 +1114,11 @@ caminhos literais já estão ausentes; o consumidor não remove nada. Histórico
 registro continua histórico não classificado, nunca `SANITIZED` por inferência.
 Os testes cobrem materialização, produtor, duplicação, orçamento, resíduo e
 fechamento. Esta implementação versionada não autoriza instalação ou retirada.
+
+Cobertura comprovada: somente invocações pelo CLI/API de
+`operational_preparers_v3.py`. A busca de chamadores não encontrou integração desse
+adapter no produtor canônico `converta-release.py` nem em outro criador atual; o
+producer de release usa `build-output` e seu lifecycle de geração. Scripts e kits
+históricos que criaram archives em `preparations` não são retroativamente
+interceptados. Portanto esta é uma fronteira preventiva disponível e testada, não
+uma proibição técnica global de qualquer escrita manual nessa árvore.

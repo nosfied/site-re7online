@@ -132,6 +132,27 @@ class AdmissionTests(unittest.TestCase):
             ],
         }
 
+    def producer_artifacts(self):
+        root = SCRIPT.resolve().parents[1]
+        roles = {
+            "preparation-producer": "scripts/operational_preparers_v3.py",
+            "preparation-review": "scripts/operational_preparation_review.py",
+            "preparation-inventory": "scripts/operational-retention-report.py",
+            "preparation-lifecycle": "scripts/preparation_artifact_lifecycle.py",
+            "capacity-dependency": "docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/capacity_budget.py",
+            "capture-dependency": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/saved_reference_capture.py",
+            "reference-dependency": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/third-withdrawal/references.py",
+        }
+        result = []
+        for role, relative in roles.items():
+            source = root / relative
+            private = self.sources / 'producer-root' / relative
+            private.parent.mkdir(parents=True, exist_ok=True)
+            private.write_bytes(source.read_bytes()); private.chmod(0o600)
+            result.append({"role": role, "sourcePath": str(private),
+                           "sourceSha256": hashlib.sha256(private.read_bytes()).hexdigest()})
+        return result
+
     def run_request(self, value):
         request = self.private / "request.private.json"
         request.write_text(json.dumps(value))
@@ -177,6 +198,8 @@ class AdmissionTests(unittest.TestCase):
         value = self.request()
         value["schemaVersion"] = 2
         value["finalRoot"] = str(self.private / "admitted-v2")
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = self.producer_artifacts()
         value["preparationArtifacts"] = [{
             "path": str(self.private / "future/archive.tar"),
             "scope": "api:fixture", "owner": "release-owner",
@@ -186,6 +209,8 @@ class AdmissionTests(unittest.TestCase):
                           "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
             "terminalDisposition": "SANITIZE_AFTER_USE",
             "equivalenceSha256": "b" * 64,
+            "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                          "predictedBytes": 4096, "predictedInodes": 1},
         }]
         result, report = self.run_request(value)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -197,10 +222,31 @@ class AdmissionTests(unittest.TestCase):
 
     def test_v2_rejects_open_schema_and_invalid_budget(self):
         value = self.request(); value["schemaVersion"] = 2
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = []
         value["preparationArtifacts"] = [{"path": "/tmp/x", "extra": True}]
         result, report = self.run_request(value)
         self.assertEqual(result.returncode, 2)
         self.assertTrue(any(item.startswith("preparationArtifacts:") for item in report["errors"]))
+
+    def test_v2_missing_runtime_dependency_denies_without_custody(self):
+        value = self.request(); value["schemaVersion"] = 2
+        value["finalRoot"] = str(self.private / "missing-dependency")
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = self.producer_artifacts()[:-1]
+        value["preparationArtifacts"] = [{
+            "path": str(self.private / "future/archive.tar"), "scope": "api:fixture",
+            "owner": "owner", "budgetBytes": 4096, "budgetInodes": 1,
+            "protection": "DERIVED_WITH_AUTHORITY",
+            "authority": {"path": str(self.paths["contract"]),
+                          "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
+            "terminalDisposition": "SANITIZE_AFTER_USE", "equivalenceSha256": "b" * 64,
+            "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                          "predictedBytes": 4096, "predictedInodes": 1}}]
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 2)
+        self.assertTrue(any("reference-dependency:missing" in error for error in report["errors"]))
+        self.assertFalse(Path(value["finalRoot"]).exists())
 
     def test_aggregate_denial_reports_all_known_defects_without_partial_root(self):
         value = self.request()

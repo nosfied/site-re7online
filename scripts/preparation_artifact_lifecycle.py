@@ -13,7 +13,9 @@ STATES = {"OPEN", "SANITIZED", "RETENTION_DEBT"}
 PROTECTIONS = {"DERIVED_WITH_AUTHORITY", "UNIQUE_PROTECTED", "EVIDENCE_PRESERVE"}
 DISPOSITIONS = {"SANITIZE_AFTER_USE", "PRESERVE_AS_RETENTION_DEBT"}
 ARTIFACT_KEYS = {"path", "scope", "owner", "budgetBytes", "budgetInodes",
-                 "protection", "authority", "terminalDisposition", "equivalenceSha256"}
+                 "protection", "authority", "terminalDisposition", "equivalenceSha256",
+                 "operation"}
+OPERATION_KEYS = {"name", "kind", "artifactIndex", "predictedBytes", "predictedInodes"}
 
 
 def _require(condition: bool, predicate: str) -> None:
@@ -57,6 +59,16 @@ def validate_artifacts(items: Any) -> list[dict[str, Any]]:
                  "preparation_artifact_disposition")
         _require(_digest(item["equivalenceSha256"]),
                  "preparation_artifact_equivalence")
+        operation = item["operation"]
+        _require(isinstance(operation, dict) and set(operation) == OPERATION_KEYS and
+                 isinstance(operation["name"], str) and operation["name"] and
+                 operation["kind"] in {"copy", "tar"} and
+                 type(operation["artifactIndex"]) is int and operation["artifactIndex"] >= 0 and
+                 type(operation["predictedBytes"]) is int and operation["predictedBytes"] > 0 and
+                 type(operation["predictedInodes"]) is int and operation["predictedInodes"] > 0 and
+                 item["budgetBytes"] >= operation["predictedBytes"] and
+                 item["budgetInodes"] >= operation["predictedInodes"],
+                 "preparation_artifact_operation_budget")
         authority = item["authority"]
         if item["protection"] == "DERIVED_WITH_AUTHORITY":
             _require(isinstance(authority, dict) and set(authority) == {"path", "sha256"},
@@ -72,9 +84,11 @@ def validate_artifacts(items: Any) -> list[dict[str, Any]]:
 
 def validate_contract(value: Any) -> list[dict[str, Any]]:
     _require(isinstance(value, dict) and set(value) == {
-        "schemaVersion", "generationId", "preparationArtifacts"
+        "schemaVersion", "generationId", "reservationRoot", "preparationArtifacts"
     } and value.get("schemaVersion") == 1 and
-             isinstance(value.get("generationId"), str) and value["generationId"],
+             isinstance(value.get("generationId"), str) and value["generationId"] and
+             isinstance(value.get("reservationRoot"), str) and
+             Path(value["reservationRoot"]).is_absolute(),
              "preparation_artifact_contract_schema")
     return validate_artifacts(value["preparationArtifacts"])
 
@@ -101,18 +115,24 @@ def stable_contract(path: Path, expected_sha256: str) -> tuple[dict[str, Any], b
 
 
 def lifecycle_value(contract: dict[str, Any], state: str, event: str,
-                    failure: str | None = None) -> dict[str, Any]:
+                    failure: str | None = None,
+                    realized: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     _require(state in STATES, "preparation_lifecycle_state")
     value = {"schemaVersion": 1, "generationId": contract["generationId"],
              "state": state, "event": event,
+             "reservationRoot": contract["reservationRoot"],
              "preparationArtifacts": contract["preparationArtifacts"]}
     if failure is not None:
         value["failureClass"] = failure
+    if realized is not None:
+        value["realized"] = realized
     return value
 
 
 def validate_existing_lifecycles(parent: Path, contract: dict[str, Any]) -> dict[str, int]:
-    """Scope blocks duplicates; every open allocation shares filesystem capacity."""
+    """Scope blocks duplicates; reservations share one authenticated domain root."""
+    _require(Path(contract["reservationRoot"]) == parent,
+             "preparation_reservation_root_mismatch")
     reserved_bytes = reserved_inodes = 0
     requested = contract["preparationArtifacts"]
     for path in sorted(parent.glob("*/preparation-artifacts.lifecycle.private.json")):
@@ -133,7 +153,9 @@ def validate_existing_lifecycles(parent: Path, contract: dict[str, Any]) -> dict
         raw = b"".join(chunks)
         value = json.loads(raw)
         _require(isinstance(value, dict) and value.get("state") in STATES and
-                 value.get("schemaVersion") == 1, "preparation_lifecycle_invalid")
+                 value.get("schemaVersion") == 1 and
+                 value.get("reservationRoot") == contract["reservationRoot"],
+                 "preparation_lifecycle_invalid")
         artifacts = validate_artifacts(value.get("preparationArtifacts"))
         if value["state"] in {"OPEN", "RETENTION_DEBT"}:
             reserved_bytes += sum(item["budgetBytes"] for item in artifacts)
@@ -155,9 +177,41 @@ def validate_existing_lifecycles(parent: Path, contract: dict[str, Any]) -> dict
 
 def authenticate_operations(contract: dict[str, Any], operations: list[dict[str, Any]],
                             generation: Path) -> None:
+    _require(all(op["kind"] in {"copy", "tar"} for op in operations),
+             "preparation_untracked_operation")
     declared = {item["path"]: item for item in contract["preparationArtifacts"]}
-    actual = {str(generation / op["target"]) for op in operations if op["kind"] in {"copy", "tar"}}
+    relevant = [op for op in operations if op["kind"] in {"copy", "tar"}]
+    actual = {str(generation / op["target"]) for op in relevant}
     _require(actual == set(declared), "preparation_operation_contract_mismatch")
+    for op in relevant:
+        item = declared[str(generation / op["target"])]
+        expected = item["operation"]
+        _require(expected == {"name": op["name"], "kind": op["kind"],
+                              "artifactIndex": op["artifactIndex"],
+                              "predictedBytes": op["allocatedBudgetBytes"],
+                              "predictedInodes": 1},
+                 "preparation_operation_binding_drift")
+
+
+def measure_realized(contract: dict[str, Any], require_all: bool = True,
+                     enforce_budget: bool = True) -> list[dict[str, Any]]:
+    result = []
+    for item in contract["preparationArtifacts"]:
+        path = Path(item["path"])
+        if not path.exists() and not path.is_symlink():
+            _require(not require_all, "preparation_realized_missing")
+            continue
+        info = path.lstat()
+        _require(not path.is_symlink() and stat.S_ISREG(info.st_mode),
+                 "preparation_realized_type")
+        observed = {"path": str(path), "allocatedBytes": info.st_blocks * 512,
+                    "allocatedInodes": 1}
+        result.append(observed)
+        if enforce_budget:
+            _require(observed["allocatedBytes"] <= item["budgetBytes"] and
+                     observed["allocatedInodes"] <= item["budgetInodes"],
+                     "preparation_realized_budget_exceeded")
+    return result
 
 
 def replace_lifecycle(path: Path, value: dict[str, Any]) -> None:
