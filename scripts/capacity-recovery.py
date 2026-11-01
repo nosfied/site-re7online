@@ -27,7 +27,7 @@ import subprocess
 import sys
 import tarfile
 import time
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 ROOT = Path(__file__).resolve().parents[1]
@@ -157,6 +157,7 @@ NAME_REGISTRY_MAX_BYTES = 64 * 1024 * 1024
 NAME_REGISTRY_CACHE_KIB = 1024
 TAR_PROGRESS_INTERVAL = 4096
 TAR_PROGRESS_EVENT_LIMIT = 256
+TAR_PROGRESS_TIME_INTERVAL_SECONDS = 1.0
 
 
 class Denied(RuntimeError):
@@ -446,7 +447,10 @@ class Telemetry:
              member_count: int = 0, temporary_disk_bytes: int | None = None,
              tar_members_retained: int | None = None,
              name_registry: dict[str, Any] | None = None,
-             memory_events_baseline: dict[str, int] | None = None) -> None:
+             memory_events_baseline: dict[str, int] | None = None,
+             progress_kind: str | None = None,
+             progress_bytes: int | None = None,
+             member_size_bytes: int | None = None) -> None:
         rss_current, rss_peak = self._rss()
         row: dict[str, Any] = {
             "schemaVersion": 1, "phase": phase, "candidate": candidate,
@@ -465,6 +469,12 @@ class Telemetry:
             row["tarMembersRetained"] = tar_members_retained
         if name_registry is not None:
             row["nameRegistry"] = name_registry
+        if progress_kind is not None:
+            row["progressKind"] = progress_kind
+        if progress_bytes is not None:
+            row["progressBytes"] = progress_bytes
+        if member_size_bytes is not None:
+            row["memberSizeBytes"] = member_size_bytes
         os.write(self.fd, canonical(row))
         os.fsync(self.fd)
 
@@ -481,12 +491,17 @@ _TELEMETRY: Telemetry | None = None
 def telemetry(phase: str, *, candidate: Path | str | None = None,
               member_count: int = 0, temporary_disk_bytes: int | None = None,
               tar_members_retained: int | None = None,
-              name_registry: dict[str, Any] | None = None) -> None:
+              name_registry: dict[str, Any] | None = None,
+              progress_kind: str | None = None,
+              progress_bytes: int | None = None,
+              member_size_bytes: int | None = None) -> None:
     if _TELEMETRY is not None:
         _TELEMETRY.emit(phase, candidate=str(candidate) if candidate is not None else None,
                         member_count=member_count, temporary_disk_bytes=temporary_disk_bytes,
                         tar_members_retained=tar_members_retained,
-                        name_registry=name_registry)
+                        name_registry=name_registry, progress_kind=progress_kind,
+                        progress_bytes=progress_bytes,
+                        member_size_bytes=member_size_bytes)
 
 
 def deny(predicate: str) -> None:
@@ -584,7 +599,8 @@ def stable_regular_digest(path: Path, expected_sha: str, *, private: bool = True
                           allowed_modes: set[int] | None = None,
                           include_nlink: bool = False,
                           allowed_owner_pairs: set[tuple[int, int]] | None = None,
-                          expected_size: int | None = None
+                          expected_size: int | None = None,
+                          progress: Callable[[int], None] | None = None,
                           ) -> dict[str, Any]:
     """Authenticate a regular file without ever retaining its contents."""
     if not valid_sha(expected_sha):
@@ -607,8 +623,12 @@ def stable_regular_digest(path: Path, expected_sha: str, *, private: bool = True
         try:
             opened = os.fstat(fd)
             digest = hashlib.sha256()
+            consumed = 0
             while block := os.read(fd, 1024 * 1024):
                 digest.update(block)
+                consumed += len(block)
+                if progress is not None:
+                    progress(consumed)
             after = os.fstat(fd)
         finally:
             os.close(fd)
@@ -2144,10 +2164,28 @@ def _protected_archive_member(relative: str, entry: dict[str, Any], payload_sha:
 
 def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
                                       manifest: dict[str, Any]) -> dict[str, Any]:
+    progress_events = 0
+    last_progress_at = time.monotonic()
+
+    def emit_temporal_progress(kind: str, consumed: int, *, member_count: int = 0,
+                               member_size: int | None = None) -> None:
+        nonlocal progress_events, last_progress_at
+        now = time.monotonic()
+        if (progress_events >= TAR_PROGRESS_EVENT_LIMIT or
+                now - last_progress_at < TAR_PROGRESS_TIME_INTERVAL_SECONDS):
+            return
+        telemetry("tar_scan_progress", candidate=path, member_count=member_count,
+                  progress_kind=kind, progress_bytes=consumed,
+                  member_size_bytes=member_size)
+        progress_events += 1
+        last_progress_at = now
+
     telemetry("before_archive_hash", candidate=path)
     identity = stable_regular_digest(
         path, entry["sha256"],
-        allowed_modes={int(entry["identity"]["mode"], 8)}, include_nlink=True)
+        allowed_modes={int(entry["identity"]["mode"], 8)}, include_nlink=True,
+        progress=lambda consumed: emit_temporal_progress(
+            "archive_hash", consumed, member_size=entry["identity"].get("size")))
     telemetry("after_archive_hash", candidate=path)
     expected_identity = entry["identity"]
     if ({key: identity[key] for key in expected_identity} != expected_identity or
@@ -2160,7 +2198,6 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
     max_tar_members_retained = 0
     name_registry_peak_bytes = 0
     name_registry_metrics: dict[str, Any] | None = None
-    progress_events = 0
     telemetry("before_tar_scan", candidate=path)
     telemetry("before_authority_compare", candidate=path)
     try:
@@ -2183,8 +2220,13 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
                             if stream is None:
                                 deny("DISPOSITION_ARCHIVE_READ")
                             digest = hashlib.sha256()
+                            payload_bytes = 0
                             while chunk := stream.read(1024 * 1024):
                                 digest.update(chunk)
+                                payload_bytes += len(chunk)
+                                emit_temporal_progress(
+                                    "archive_payload", payload_bytes,
+                                    member_count=relation.count, member_size=member.size)
                             member_sha = digest.hexdigest()
                             _protected_archive_member(relative, entry, member_sha, manifest)
                             authoritative, authority_ancestors = _authority_leaf(
@@ -2196,7 +2238,10 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
                             authority_identity = stable_regular_digest(
                                 authoritative, member_sha, private=False,
                                 allowed_modes={authority_mode}, expected_size=member.size,
-                                allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
+                                allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())},
+                                progress=lambda consumed: emit_temporal_progress(
+                                    "authority_leaf", consumed,
+                                    member_count=relation.count, member_size=member.size))
                             relation.add({"path": relative, "type": "file", "size": member.size,
                                           "sha256": member_sha,
                                           "tarMode": f"0{member.mode & 0o7777:03o}",
@@ -2240,6 +2285,7 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
                                       member_count=relation.count,
                                       temporary_disk_bytes=current_disk)
                             progress_events += 1
+                            last_progress_at = time.monotonic()
                     finally:
                         # Stream mode still appends every TarInfo to this list in
                         # Python 3.12. Admitted member handling never relies on a

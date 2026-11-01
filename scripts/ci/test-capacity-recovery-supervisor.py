@@ -122,6 +122,70 @@ class SupervisorTests(unittest.TestCase):
                 MODULE.validate_audit_limits(
                     SimpleNamespace(memory_max_bytes=memory, timeout_seconds=timeout))
 
+    def test_scope_resource_snapshot_is_bounded_sanitized_and_correlated(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-resource-sample-") as folder:
+            root = Path(folder)
+            cgroup = root / "cgroup" / "user.slice" / "exact.scope"
+            cgroup.mkdir(parents=True)
+            (cgroup / "memory.current").write_text("12345\n")
+            (cgroup / "memory.peak").write_text("23456\n")
+            (cgroup / "memory.events").write_text("low 0\noom 1\n")
+            (cgroup / "memory.stat").write_text(
+                "anon 4096\nfile 8192\nkernel 2048\nunknown_private 99\n")
+            (cgroup / "cgroup.procs").write_text("42\n")
+            process = root / "proc" / "42"
+            process.mkdir(parents=True)
+            stat_tail = ["S", *(["0"] * 18), "987654", "0", "0"]
+            (process / "stat").write_text("42 (name with ) delimiter) " +
+                                            " ".join(stat_tail) + "\n")
+            (process / "status").write_text(
+                "Name:\tsanitized\nUid:\t1000\t1000\t1000\t1000\nVmRSS:\t321 kB\n")
+            telemetry = root / "executor.jsonl"
+            telemetry.write_text(json.dumps({
+                "schemaVersion": 1, "phase": "tar_scan_progress",
+                "monotonicNs": 111, "memberCount": 9,
+                "progressKind": "archive_payload", "progressBytes": 1048576,
+                "candidate": "/private/not-forwarded",
+            }) + "\n")
+            telemetry.chmod(0o600)
+            observed = MODULE.scope_resource_snapshot(
+                {"state": "PASS", "cgroup": "/user.slice/exact.scope"},
+                telemetry, cgroup_fs=root / "cgroup", proc_root=root / "proc")
+        self.assertEqual(observed["scopeMemoryStat"], {
+            "anon": 4096, "file": 8192, "kernel": 2048})
+        self.assertEqual(observed["scopeProcesses"], [{
+            "pid": 42, "startTicks": 987654, "uids": [1000] * 4,
+            "rssBytes": 321 * 1024}])
+        self.assertEqual(observed["executorCorrelation"]["phase"],
+                         "tar_scan_progress")
+        serialized = json.dumps(observed)
+        self.assertNotIn("cmdline", serialized)
+        self.assertNotIn("environment", serialized)
+        self.assertNotIn("/private/not-forwarded", serialized)
+        self.assertEqual(observed["observationGaps"], [])
+
+    def test_scope_resource_snapshot_records_collection_gaps_and_pid_limit(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-resource-gap-") as folder:
+            root = Path(folder)
+            cgroup = root / "cgroup" / "exact.scope"
+            cgroup.mkdir(parents=True)
+            (cgroup / "memory.current").write_text("1\n")
+            (cgroup / "memory.peak").write_text("2\n")
+            (cgroup / "memory.events").write_text("oom 0\n")
+            (cgroup / "cgroup.procs").write_text("1\n2\n")
+            telemetry = root / "missing.jsonl"
+            with mock.patch.object(MODULE, "AUDIT_SCOPE_PID_LIMIT", 1):
+                observed = MODULE.scope_resource_snapshot(
+                    {"state": "PASS", "cgroup": "/exact.scope"}, telemetry,
+                    cgroup_fs=root / "cgroup", proc_root=root / "proc")
+        self.assertTrue(observed["scopeProcessesTruncated"])
+        self.assertIn("cgroup.procs:TRUNCATED", observed["observationGaps"])
+        self.assertIn("memory.stat:NOT_FOUND", observed["observationGaps"])
+        self.assertIn("pid:1:PROCESS_VANISHED", observed["observationGaps"])
+        self.assertIn("executorTelemetry:NOT_FOUND", observed["observationGaps"])
+        self.assertLessEqual(MODULE.AUDIT_RESOURCE_SAMPLE_LIMIT,
+                             MODULE.AUDIT_TIMEOUT_MAX_SECONDS + 2)
+
     def test_audit_terminal_reasons_are_nominal(self):
         passed = {"state": "PASS"}
         common = {"executor_state": "EXECUTOR_STARTED",

@@ -68,6 +68,38 @@ não presumido como limpo pelo contexto Python.
 O escopo 3/3, a telemetria preservada e a proibição de repetição estão no
 [plano P00 de sanitização](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
 
+A tentativa posterior sob o merge de control plane
+`c0146133f5c2e03cce8623876c61cfe320de0c5b`, custódia
+`p00-capacity-three-archives-c0146133-v1`, também é terminal e irrepetível.
+O supervisor autenticou o cgroup de 256 MiB e encerrou em
+`AUDIT_MEMORY_MAX`: `scopeMemoryPeakBytes=268435456`, `exitCode=-9`, escopo
+vazio/encerrado e nenhum plano ou efeito. O primeiro archive concluiu 7.056
+membros; o segundo chegou a `before_authority_compare`, sem progresso de membro
+persistido, e o terceiro não iniciou. `memory.stat`, consumo individual dos PIDs
+do escopo e progresso interno no intervalo final não foram coletados, portanto a
+composição do OOM produtivo não é declarada. Request, terminal e telemetrias
+permanecem na custódia; produção, dump, guarda e locks ficaram preservados.
+
+O ensaio local dirigido mostrou a lacuna do orçamento, sem atribuir retroativamente
+a causa produtiva: 180 MiB físicos frios, autenticados pelo mesmo percurso, levaram
+o cgroup exatamente a 256 MiB com aproximadamente 249 MiB em `file`, enquanto o
+RSS observado permaneceu perto de 31 MiB; o kernel local conseguiu reclaim e o
+ensaio passou. Payload esparso de 200 MiB e 3.000 arquivos/192 MiB descompactados
+também passaram com picos do cgroup de aproximadamente 33/28 MiB. Assim, cardinalidade,
+payload lógico e RSS isolados não explicam o evento; nova operação exige orçamento
+com margem medida para cache frio e regressão de `memory.stat`, não replay do
+request `2b1d438d...`.
+
+A entrega local complementar preserva essa negativa e acrescenta observabilidade
+limitada no supervisor/executor, além de um perfil frio sintético 3/3. No perfil,
+458.973.184 bytes descompactados/459.113.917 comprimidos concluíram em 4,150 s,
+mas o cgroup atingiu exatamente o teto ensaiado de 512 MiB; `file` respondeu por
+515.768.320 bytes e a soma de RSS foi 30.887.936 bytes. Logo não há proposta de
+replay: o estado nominal é
+`AUDIT_RESOURCE_BUDGET_NOT_QUALIFIED_WITHIN_BOUND`. Código e regressões são
+apenas entrega local/em revisão; nenhum novo `audit`, `prepare` ou `execute` foi
+executado na VPS.
+
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
 memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou

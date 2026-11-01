@@ -172,6 +172,56 @@ o predicado de pré-lançamento. A espera é limitada e falha de kill/confirmaç
 termina em `RECOVERY_PENDING`. O ensaio afetado comprovou descendente resistente
 encerrado no escopo e sentinela externo preservado, sem nova tentativa produtiva.
 
+#### Tentativa c0146133-v1 — `AUDIT_MEMORY_MAX`, terminal
+
+A custódia `p00-capacity-three-archives-c0146133-v1` consumiu uma única auditoria
+do mesmo lote 3/3, request SHA-256
+`2b1d438d71af5d22dfb0c253b8595656f1ab27b59d4a910062fa07b767272f7e`.
+O supervisor encerrou em `AUDIT_MEMORY_MAX`, sinal 9, pico do cgroup igual ao
+limite de 268.435.456 bytes e escopo confirmado vazio. Terminal
+`b62a630b4ca092b7f58a2d6d5ddcecab58deec0b559acf4925813a62d4ebd9f5`;
+telemetrias `51008da92a34eff0257043068bde0fffaa2c578885b3a8737a47989d3cfb9e73`
+e `f2c8ce4a8d4c8a485e1a338f491b8f44b34a22d7ec18731895c59f47730335d7`.
+Plano ausente e zero efeitos.
+
+| Candidato | Última prova persistida |
+| --- | --- |
+| `worker-reactive-afbb7455.tar.gz` | hash, 7.056 membros e autoridade concluídos |
+| `frontend-9f4cbe0f-v2.tar.gz` | hash concluído; `before_authority_compare`; zero progresso persistido |
+| `frontend-fa60-css-corrected.tar.gz` | não iniciado |
+
+O diagnóstico local não promoveu hipótese a fato produtivo. Casos esparsos e
+3.000 arquivos/192 MiB passaram com baixo pico. Um payload físico frio de 180 MiB
+atingiu o teto de 256 MiB com cerca de 249 MiB em `file`, mesmo com RSS próximo de
+31 MiB, e concluiu somente porque houve reclaim local. Como a tentativa produtiva
+não preservou `memory.stat` nem consumo por PID no intervalo final de 27,2 s, a
+composição do OOM permanece não atribuível. O orçamento de 256 MiB está recusado
+para replay; qualquer proposta futura exige regressão de cache frio e margem
+explícita, sem alterar candidatos ou reaproveitar esta autorização.
+
+#### Telemetria complementar e perfil frio local
+
+A mesma entrega local amplia apenas observabilidade: o supervisor amostra uma vez
+por segundo, com limites fechados, `memory.stat`, eventos, processos do cgroup e
+correlação com o executor; o autenticador emite progresso temporal limitado ao
+longo de hashes/payloads/autoridades. Falha de coleta permanece visível como
+lacuna e não vira completude presumida.
+
+O perfil dirigido percorreu o autenticador completo pelo supervisor real com três
+archives sintéticos próprios, sem `drop_caches` global ou bytes produtivos. Os
+458.973.184 bytes de folhas produziram 459.113.917 bytes comprimidos. Em 4,150 s,
+o cgroup alcançou 536.870.912/536.870.912 bytes; máximos de `file`, `anon`,
+`kernel` e RSS somado foram 515.768.320, 19.124.224, 1.880.064 e 30.887.936
+bytes. A execução concluiu sem OOM, mas sem qualquer margem. A fixture usa três
+folhas grandes e complementa — não substitui — a regressão anterior de 30k/60k
+membros e nomes longos.
+
+Critério atual: `AUDIT_RESOURCE_BUDGET_NOT_QUALIFIED_WITHIN_BOUND`. Uma margem de
+128 MiB sobre o pico requer 671.088.640 bytes, acima do máximo versionado de 512
+MiB. Não ampliar o limite nem repetir a custódia produtiva por tentativa; a
+próxima decisão exige mudança explícita do contrato ou redução medida do cache
+contabilizado, em frente separada.
+
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
 continuam nas seções próprias; não são reabertos por esta correção.
