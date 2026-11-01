@@ -65,9 +65,9 @@ Os dois caminhos removidos ficam proibidos de voltar a inventário, auditoria,
 preparação ou execução. Ganho estimado nunca substitui os `224.071.680` bytes
 efetivamente observados no receipt.
 
-### Próximo lote classificado — ainda não autorizado
+### Histórico encerrado — tentativa `runtime-fix` negada
 
-O próximo escopo fechado contém somente dois archives de retorno derivados da
+O escopo então classificado continha somente dois archives de retorno derivados da
 preparação `runtime-fix-20260930T020103Z`. Seus hashes são reutilizados do
 `backup-manifest.json` e do registro versionado
 `AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md`; não foram recalculados nesta
@@ -80,11 +80,12 @@ classificação:
 
 Ganho físico potencial: `372.838.400` bytes e dois inodes. Ambos são arquivos
 regulares `deploy:deploy 0600`, `nlink=1`, sob a raiz canônica de preparações.
-Ficam explicitamente fora do lote `content.private.tar.gz`, `database.dump`,
+Ficaram explicitamente fora do lote `content.private.tar.gz`, `database.dump`,
 `runtime-data.private.tar.gz`, `configuration.private.tar.gz` e qualquer outro
 caminho. A classificação não substitui a futura recaptura de referências e
 identidades por `audit`; não há autorização de `prepare` ou `execute` neste
-checkpoint.
+checkpoint histórico. A negativa abaixo consumiu essa classificação; esta seção
+não é roteiro vigente.
 
 Com a capacidade final observada do lote anterior, a projeção meramente aritmética
 após este próximo lote seria `8.796.827.648` bytes. Ainda faltariam `866.848.768`
@@ -127,6 +128,59 @@ Resultado da reconciliação SHA-256:
 índice SHA-256:
 `5a6cf4f4a98ec0e8f1041634d0c68396f7dbeaa33945553324f99dc00750a23b`.
 Não houve `prepare`, `execute`, `unlink` ou autorização substituta.
+
+### Lote fechado 3/3 — tentativa interrompida, correção somente local
+
+O lote atual permanece exatamente nos archives
+`worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
+`frontend-fa60-css-corrected.tar.gz`, total físico declarado de `458.973.184`
+bytes. Não há autorização para incluir quarto caminho, mudar manifesto, autoridade,
+permissão, exceção ou efeito. As provas de identidade, relação e material protegido
+já produzidas são reutilizáveis; não devem ser reconstruídas por hashing ou extração
+integral.
+
+A custódia
+`p00-capacity-three-archives-9e251046-20261101T132910Z` terminou por sinal:
+`exitCode=-15`, RSS pico do filho `1.288.294.400` bytes, pico do cgroup
+`1.976.967.168` bytes e zero OOM. Não houve plano, `prepare`, `execute` ou
+`unlink`; stdout/stderr ficaram vazios. Os hashes integrais do request, das duas
+telemetrias e do marcador terminal permanecem no índice privado da custódia; não
+foram recalculados nesta revisão local. Essa operação é terminal e não pode ser
+relançada.
+
+| Estado | Prova | Critério de encerramento |
+| --- | --- | --- |
+| implementado nesta revisão local | liberação de `TarFile.members`; registro SQLite binário, cache 1 MiB, disco 64 MiB; progresso limitado | diff e regressões aprovados |
+| ensaiado localmente | 30.000/60.000 membros sob `RLIMIT_AS=256 MiB`, incluindo nomes longos, diretórios, symlinks admitidos e arquivos regulares com conteúdo/autoridade físicos; no máximo um `TarInfo`; resultados atualizados vinculados ao teste do PR, sem afirmar cardinalidade do archive produtivo interrompido | regressão dirigida e suite documental PASS |
+| executado em produção | nenhuma fase após a tentativa terminal | somente após revisão, integração e autorização separada |
+| pendente estrutural | lifecycle ainda não cobre automaticamente arquivos volumosos criados em `backups/.../preparations` | contrato de criação/owner/orçamento/retirada antes de novas preparações volumosas |
+
+Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
+`fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
+continuam nas seções próprias; não são reabertos por esta correção.
+
+O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
+`ExactNameRegistry` estava aberto. O supervisor persistiu as fases
+`before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico
+RSS. Como esperado para término não recuperável, `__exit__` não rodou: permaneceu
+um diretório privado `0700`, de nome exclusivo sob o pai da telemetria, com um
+banco `0600` de 8.192 bytes lógicos/físicos e 4.096 nomes. A limpeza feita pelo
+próprio teste ocorreu somente depois de medir e revalidar device/inode e não é
+contrato produtivo. Em operação, tal resíduo permanece na custódia terminal para
+inventário/classificação literal; não autoriza glob, varredura destrutiva ou retry.
+
+#### Comparação com caminhos já comprovados
+
+| Referência | Versão/função e prova efetiva | Trecho reutilizado sem mudança | Diferença do lote 3/3 |
+| --- | --- | --- | --- |
+| PR #288 | merge `9b2169d4e74c0d1c7ae5fb363f31ea753112b326`; `candidate_binding()` exclui somente `processScan` depois de `validate_candidate()` recapturar completude/referências; plano PASS `23a3d796…`, receipt `97a121df…` | projeção estável do artefato e recaptura volátil em `prepare`/`execute` | não percorreu relação tar/autoridade de alta cardinalidade |
+| `automation-20260929` | `CLOSED_PREPARATION_DERIVED_ARCHIVE`, registro versionado e dois `unlink`; journal `7416d6b2…`, receipt `466e4315…` | caminho/hash/prova fechados, journal, receipt e proibição de repetição | retornos anteriores não exerceram a relação atual 3/3 com autoridades de cerca de 25 mil entradas |
+| `hybrid-b9` | `proof.kind=DUPLICATE_COPY`, autoridade exata preservada; journal `4fa19906…`, receipt `05657321…` | igualdade exata, autoridade distinta, `nlink=1` e efeito literal | archive menor e prova por cópia; não exigiu manter relação completa de nomes/autoridade do lote atual |
+| `fa63994a` | `converta-release.py::require_generation_reviews()` e `generation-retirement.py`; lifecycle/marker/receipt terminal `DEPLOYED_SANITIZED` | lifecycle, review, fechamento terminal e não repetição | é geração canônica; os archives atuais nasceram em `preparations`, fora desse lifecycle |
+
+Os prefixos acima identificam hashes integrais já preservados nas seções de
+fechamento e nos índices privados. A comparação não reexecutou efeitos, hashing
+integral, extração ou coleta produtiva.
 
 ### Classificação somente leitura das gerações — 31/10/2026
 

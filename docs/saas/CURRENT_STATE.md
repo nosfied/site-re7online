@@ -45,9 +45,11 @@ executável criado por esta atualização.
 ## Control plane de recuperação de capacidade
 
 O repositório contém `scripts/capacity-recovery.py`, com fases separadas de
-auditoria, preparação e execução autorizada. O escopo cobre somente o cache literal `/home/deploy/.npm/_cacache` e runtimes
-derivados autenticados sob `build-output`. A execução relatada de 30/10 está no
-checkpoint acima; suas retiradas não devem ser repetidas.
+auditoria, preparação e execução autorizada. O escopo cobre o cache literal
+`/home/deploy/.npm/_cacache`, runtimes derivados autenticados sob `build-output` e
+classes fechadas de archives individuais de preparação. A execução relatada de
+30/10 e os lotes `automation`/`hybrid-b9` são terminais; suas retiradas não devem
+ser repetidas.
 O `execute` recaptura referências operacionais ao vivo somente depois dos locks;
 o cache exige allowlist canônica de grupo e modo próprio não gravável por
 grupo/outros.
@@ -55,6 +57,16 @@ O inventário transacional reconhece os formatos canônicos fixed-current e
 frontend-only, preserva como não terminais os layouts legados com referências e
 nega qualquer diretório sem classificação fechada.
 Consulte [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md).
+
+A tentativa de 01/11 do lote fechado de três archives terminou por sinal antes de
+plano ou efeito. A correção de cardinalidade está somente implementada e ensaiada
+no patch local baseado em `9e251046`; não está integrada nem executada em produção.
+O ensaio complementar com subprocesso real comprovou que `SIGTERM` é registrado
+pelo supervisor, mas pode deixar o registro SQLite privado no pai da telemetria;
+esse resíduo é limitado e deve ser preservado/classificado por caminho literal,
+não presumido como limpo pelo contexto Python.
+O escopo 3/3, a telemetria preservada e a proibição de repetição estão no
+[plano P00 de sanitização](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e o fechamento ativo está

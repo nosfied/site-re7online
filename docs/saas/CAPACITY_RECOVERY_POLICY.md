@@ -59,8 +59,71 @@ Archives da disposição fechada são autenticados por FD `O_NOFOLLOW`: uma prim
 passagem calcula SHA-256 em blocos e uma segunda passagem usa tar streaming
 `r|gz`. A identidade é conferida antes e depois de ambas. Folhas do tar e da
 autoridade são hasheadas em blocos; a relação usa digest incremental com framing
-de tamanho, sem reter archive, folha ou lista integral em memória. Duplicidades,
-escapes, links e tipos inseguros continuam fail-closed.
+de tamanho, sem reter conteúdo de archive ou folha em memória. O Python 3.12
+acrescenta cada `TarInfo` a `TarFile.members` mesmo em `r|gz`; por isso o executor
+libera explicitamente essa lista depois de processar cada membro admitido. Hardlink
+e qualquer tipo que pudesse depender de membro anterior continuam negados.
+
+Os nomes normalizados não ficam em um `set` de RAM. O registro exato usa SQLite da
+biblioteca padrão, chave primária `BLOB` e comparação binária, sem case folding ou
+normalização Unicode adicional. Sua área é criada exclusivamente como diretório
+privado `0700`, o banco como `0600`, e ambos são retirados com `fsync` em sucesso
+ou falha recuperável que percorra o contexto Python. O cache é limitado a 1 MiB.
+`PRAGMA max_page_count` limita o arquivo
+principal do banco a 64 MiB; isso não é apresentado como quota agregada do
+diretório. O executor mede separadamente os blocos do banco e dos auxiliares
+conhecidos a cada progresso e no flush final, nega arquivo desconhecido e também
+nega se a soma física observada ultrapassar 64 MiB. Com `journal_mode=OFF`, o
+ensaio não criou journal, WAL, SHM ou outro temporário. Espaço insuficiente,
+`SQLITE_FULL`, falha de armazenamento ou resíduo não removível resultam em
+negativa nominal. Telemetria de progresso ocorre a cada
+4.096 membros, no máximo 256 vezes por candidato, e inclui somente contador,
+memória e bytes temporários. Duplicidades, escapes, links, tipos inseguros e
+material protegido continuam fail-closed.
+
+O encerramento do processo por `SIGTERM` não executa necessariamente o
+`ExactNameRegistry.__exit__`. O ensaio local com filho e supervisor reais confirmou
+que o supervisor encaminha o sinal e persiste `signal_received`, `after_child`,
+`exitCode=-15`, sinal e pico RSS, mas deixa a área privada já criada sob o pai da
+telemetria. No caso dirigido, ela permaneceu como um único diretório físico
+`.capacity-name-registry-<32-hex>` `0700`, contendo somente `names.sqlite3` `0600`:
+4.096 nomes e 8.192 bytes lógicos/físicos. O limite estrutural continua sendo o
+banco principal de 64 MiB e os auxiliares conhecidos medidos; não é promessa de
+remoção por sinal nem quota agregada independente do filesystem. O resíduo integra
+a custódia terminal da fase: preservar terminal/telemetria, comprovar ausência do
+filho e classificar o caminho literal e sua identidade no procedimento canônico de
+resíduos antes de qualquer retirada. Não há limpeza automática ampla, glob ou
+alteração genérica do tratamento de sinais nas fases destrutivas.
+
+### Tentativa interrompida de 01/11/2026 e limite desta revisão
+
+A operação vinculada ao merge `9e25104660642ce72bfe289e41320a6d12c804bd`
+terminou por sinal antes de produzir plano semântico. Custódia preservada:
+`p00-capacity-three-archives-9e251046-20261101T132910Z`. Os hashes externos do
+request, das duas telemetrias e do marcador terminal permanecem no índice privado
+da custódia e não foram recalculados nesta revisão local. O supervisor registrou
+`exitCode=-15`, pico RSS do
+filho de `1.288.294.400` bytes, pico do cgroup de `1.976.967.168` bytes e zero
+evento OOM. Plano, `prepare`, `execute` e `unlink` não existiram. Essa tentativa é
+terminal e não pode ser repetida.
+
+O escopo continua fechado nos três archives
+`worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
+`frontend-fa60-css-corrected.tar.gz`, total físico declarado de `458.973.184`
+bytes. O ensaio local desta revisão usou autoridades sintéticas equivalentes e
+30.000/60.000 membros, incluindo 318/634 nomes longos, 8/15 arquivos regulares
+com conteúdo e autoridade físicos, 3/6 symlinks admitidos e os diretórios
+restantes. Sob `RLIMIT_AS=256 MiB`, a implementação anterior reteve
+30.000/60.000 objetos em `TarFile.members`; a implementação corrigida reteve no
+máximo um, com RSS pico observado de 34.459.648/34.459.648 bytes. Depois do commit
+final do registro, 30.000/60.000 nomes distintos e o mesmo número de verificações
+de unicidade produziram bancos de 602.112/1.163.264 bytes lógicos e físicos. Os
+valores foram medidos antes do cleanup, com `page_count=147/284`,
+`page_size=4096`, `max_page_count=16384`, cache de 1.024 KiB e somente o arquivo
+principal presente. O limite efetivo do banco foi 67.108.864 bytes. O limite de
+256 MiB é hipótese de ensaio,
+não orçamento produtivo aprovado. Este parágrafo registra controle implementado e
+ensaiado localmente; nenhuma nova operação produtiva foi executada ou autorizada.
 
 ### Identidade do candidato e observação de processos
 

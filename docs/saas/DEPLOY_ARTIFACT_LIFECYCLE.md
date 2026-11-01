@@ -551,7 +551,7 @@ temporário não a comprova.
 | --- | --- |
 | Contrato privado de capacidade, pico e reserva | Exigido por `converta-release.py build`, antes da saída e do primeiro npm |
 | Registro de geração | Sidecar com BUILDING/COMPLETE/FAILED; classificação permanece PENDING até revisão |
-| Impedir automaticamente nova geração por retenção pendente anterior | Não implementado pelo produtor atual; a revisão e o bloqueio de cópias dispensáveis dependem do procedimento operacional |
+| Impedir automaticamente nova geração por retenção pendente anterior | Implementado para outputs de gerações pelo `converta-release.py::require_generation_reviews`; não cobre arquivos volumosos de preparações fora do output canônico |
 | Impedir automaticamente ultrapassagem do orçamento ao longo de todas as fases | Não comprovado pelo preflight inicial; medir nas fronteiras de cópia e registrar desvios continua necessário |
 | Retirada e retenção por idade | Não há exclusão automática introduzida por este método |
 | Instalação dos controles na VPS | Precisa de atestação do executável efetivamente usado e seu hash; merge ou documentação não comprovam ativação |
@@ -559,6 +559,19 @@ temporário não a comprova.
 A extensão futura dos controles deve reutilizar o produtor e os registros existentes,
 com teste de negativa antes da alocação volumosa. Não introduzir outro launcher,
 cron ou framework de limpeza para substituir a correção desse fluxo.
+
+A lacuna remanescente é específica: archives volumosos em
+`backups/converta-persistent/preparations` não nascem sob o lifecycle/review das
+gerações. A correção de cardinalidade do `capacity-recovery.py` limita a memória da
+qualificação, mas não cria owner, orçamento ou evento de retirada para esses
+arquivos. Essa extensão permanece próxima frente e não integra esta revisão.
+
+O registro temporário de nomes é retirado quando o contexto Python termina de modo
+recuperável. Um `SIGTERM` pode impedir `__exit__`: o supervisor ainda sela sinal,
+exit code e RSS, enquanto o diretório privado `.capacity-name-registry-*` pode
+permanecer na custódia da fase. Ele deve entrar no inventário terminal pelo caminho
+e identidade exatos e só pode ser retirado após classificação canônica; não há
+varredura ou limpeza automática da raiz de custódia.
 
 ## Inventário histórico anterior aos lotes de 25/10/2026
 

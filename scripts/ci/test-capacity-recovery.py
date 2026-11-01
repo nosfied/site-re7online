@@ -6,11 +6,13 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import resource
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
 import tarfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -1961,6 +1963,336 @@ class CapacityRecoveryTests(unittest.TestCase):
         ambiguous = MODULE.FramedRelationDigest()
         ambiguous.add({"path": "a\n"}); ambiguous.add({"path": "b"})
         self.assertNotEqual(first.hexdigest(), ambiguous.hexdigest())
+
+    def test_exact_name_registry_is_binary_bounded_and_cleans_on_failure(self):
+        existing = set(self.base.glob(".capacity-name-registry-*"))
+        with self.assertRaisesRegex(MODULE.Denied,
+                                    "DISPOSITION_ARCHIVE_MEMBER_DUPLICATE"):
+            with MODULE.ExactNameRegistry(self.base) as names:
+                self.assertEqual(names.connection.execute(
+                    "PRAGMA cache_size").fetchone()[0], -MODULE.NAME_REGISTRY_CACHE_KIB)
+                names.add("case/Name")
+                names.add("case/name")
+                names.add("café")
+                names.add("café")
+                names.add("case/Name")
+        self.assertEqual(set(self.base.glob(".capacity-name-registry-*")), existing)
+
+        with self.assertRaisesRegex(MODULE.Denied,
+                                    "DISPOSITION_NAME_REGISTRY_SPACE"):
+            with MODULE.ExactNameRegistry(self.base, max_bytes=8192,
+                                          cache_kib=64) as names:
+                for index in range(100):
+                    names.add(f"{index:04d}-" + "x" * 4096)
+        self.assertEqual(set(self.base.glob(".capacity-name-registry-*")), existing)
+
+    def test_registry_substitution_preserves_relation_digest(self):
+        fixture = self.manifest_disposition_fixture("relation-compatible")
+        entry = fixture["entries"][0]
+        manifest = json.loads(fixture["manifest"].read_text())
+
+        class InMemoryExactRegistry:
+            def __init__(self, *_args, **_kwargs):
+                self.values = set()
+                self.peak_physical_bytes = 0
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                return False
+            def add(self, value):
+                encoded = value.encode("utf-8", "surrogatepass")
+                if encoded in self.values:
+                    raise MODULE.Denied("DISPOSITION_ARCHIVE_MEMBER_DUPLICATE")
+                self.values.add(encoded)
+            def measure(self):
+                return 0
+            def finalize(self):
+                return {}
+
+        with fixture["patches"], mock.patch.object(
+                MODULE, "ExactNameRegistry", InMemoryExactRegistry):
+            reference = MODULE._authenticate_disposition_archive(
+                Path(entry["path"]), entry, manifest)
+        with fixture["patches"]:
+            bounded = MODULE._authenticate_disposition_archive(
+                Path(entry["path"]), entry, manifest)
+        self.assertEqual(bounded["relationSha256"], reference["relationSha256"])
+        self.assertEqual(bounded["memberCount"], reference["memberCount"])
+
+    def test_distant_normalized_duplicate_still_denies(self):
+        root = self.base / "distant-duplicate"
+        root.mkdir(mode=0o700)
+        authority = root / "authority"
+        authority.mkdir(mode=0o755)
+        archive_path = root / "candidate.tar.gz"
+        with tarfile.open(archive_path, "w:gz", compresslevel=1) as output:
+            for index in range(5000):
+                item = tarfile.TarInfo(f"tree/{index:05d}/")
+                item.type = tarfile.DIRTYPE
+                output.addfile(item)
+            duplicate = tarfile.TarInfo("./tree/00001/")
+            duplicate.type = tarfile.DIRTYPE
+            output.addfile(duplicate)
+        archive_path.chmod(0o600)
+        info = archive_path.lstat()
+        authority_info = authority.stat()
+        entry = {
+            "sha256": sha(archive_path),
+            "identity": {"device": info.st_dev, "inode": info.st_ino, "nlink": 1,
+                         "uid": info.st_uid, "gid": info.st_gid,
+                         "mode": f"0{stat.S_IMODE(info.st_mode):03o}"},
+            "authority": str(authority), "authorityState": "PRESENT",
+            "authorityIdentity": MODULE._directory_identity(authority_info),
+            "protectedMemberExceptions": [],
+        }
+        with mock.patch.object(MODULE, "_authority_leaf",
+                               return_value=(authority, [])), \
+                self.assertRaisesRegex(MODULE.Denied,
+                                       "DISPOSITION_ARCHIVE_MEMBER_DUPLICATE"):
+            MODULE._authenticate_disposition_archive(
+                archive_path, entry, {"versionedEnvExample": {"sha256": "0" * 64}})
+
+    def test_high_cardinality_tar_members_and_name_memory_are_bounded(self):
+        root = self.base / "cardinality"
+        root.mkdir(mode=0o700)
+        authority = root / "authority"
+        authority.mkdir(mode=0o755)
+        authority_tree = authority / "tree"
+        authority_tree.mkdir(mode=0o755)
+
+        long_component = "representative-long-name-" + ("x" * 96)
+
+        def member_spec(index):
+            if index % 10000 == 7:
+                return ("symlink", f"tree/link-{index:06d}",
+                        f"target-{index:06d}", b"")
+            if index % 4096 == 3:
+                name = f"tree/files/{long_component}-{index:06d}.txt"
+                return ("file", name, None,
+                        f"representative-payload-{index:06d}\n".encode())
+            if index % 97 == 0:
+                return ("directory", f"tree/{long_component}-{index:06d}",
+                        None, b"")
+            return ("directory", f"tree/{index:06d}", None, b"")
+
+        for index in range(60000):
+            kind, relative, target, payload = member_spec(index)
+            authoritative = authority / relative
+            authoritative.parent.mkdir(parents=True, exist_ok=True)
+            if kind == "directory":
+                authoritative.mkdir(mode=0o755)
+            elif kind == "file":
+                authoritative.write_bytes(payload)
+            else:
+                authoritative.symlink_to(target)
+
+        def create_archive(count):
+            path = root / f"candidate-{count}.tar.gz"
+            with tarfile.open(path, "w:gz", compresslevel=1) as output:
+                for index in range(count):
+                    kind, relative, target, payload = member_spec(index)
+                    item = tarfile.TarInfo(relative + ("/" if kind == "directory" else ""))
+                    if kind == "directory":
+                        item.type = tarfile.DIRTYPE
+                        output.addfile(item)
+                    elif kind == "file":
+                        item.type = tarfile.REGTYPE
+                        item.size = len(payload)
+                        output.addfile(item, io.BytesIO(payload))
+                    else:
+                        item.type = tarfile.SYMTYPE
+                        item.linkname = target
+                        output.addfile(item)
+            path.chmod(0o600)
+            return path
+
+        archives = [create_archive(30000), create_archive(60000)]
+        fixture_counts = {}
+        for count in (30000, 60000):
+            kinds = {"directory": 0, "file": 0, "symlink": 0, "longName": 0}
+            for index in range(count):
+                kind, relative, _target, _payload = member_spec(index)
+                kinds[kind] += 1
+                kinds["longName"] += int(long_component in relative)
+            fixture_counts[count] = kinds
+            self.assertGreater(kinds["directory"], 0)
+            self.assertGreater(kinds["file"], 0)
+            self.assertGreater(kinds["symlink"], 0)
+            self.assertGreater(kinds["longName"], 0)
+        old_code = r'''
+import json,resource,sys,tarfile
+with tarfile.open(sys.argv[1],"r|gz") as archive:
+    for _member in archive:pass
+    count=len(archive.members)
+print(json.dumps({"membersRetained":count,"rssPeak":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024},sort_keys=True))
+'''
+
+        code = r'''
+import importlib.util,json,resource,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("capacity",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+p=Path(sys.argv[2]);a=Path(sys.argv[3]);t=Path(sys.argv[4]);s=p.lstat();q=a.stat()
+entry={"sha256":sys.argv[5],"identity":{"device":s.st_dev,"inode":s.st_ino,"nlink":1,"uid":s.st_uid,"gid":s.st_gid,"mode":f"0{s.st_mode & 0o777:03o}"},"authority":str(a),"authorityState":"PRESENT","authorityIdentity":m._directory_identity(q),"protectedMemberExceptions":[]}
+m._TELEMETRY=m.Telemetry(t)
+try:r=m._authenticate_disposition_archive(p,entry,{"versionedEnvExample":{"sha256":"0"*64}})
+finally:m._TELEMETRY.close();m._TELEMETRY=None
+print(json.dumps({"result":r,"rssPeak":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024},sort_keys=True))
+'''
+
+        def limit_memory():
+            maximum = 256 * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (maximum, maximum))
+
+        old_observations = []
+        observations = []
+        for archive_path in archives:
+            old = subprocess.run(
+                [sys.executable, "-B", "-c", old_code, str(archive_path)],
+                capture_output=True, text=True, preexec_fn=limit_memory,
+                timeout=180, check=False)
+            self.assertEqual(old.returncode, 0, old.stderr)
+            old_observations.append(json.loads(old.stdout))
+            telemetry_path = root / f"{archive_path.stem}.telemetry.jsonl"
+            completed = subprocess.run(
+                [sys.executable, "-B", "-c", code, str(TOOL), str(archive_path),
+                 str(authority), str(telemetry_path), sha(archive_path)],
+                capture_output=True, text=True, preexec_fn=limit_memory,
+                timeout=180, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            observation = json.loads(completed.stdout)
+            events = [json.loads(line) for line in telemetry_path.read_text().splitlines()]
+            observation["sampledPeak"] = max(
+                event["rssPeakBytes"] for event in events
+                if event["rssPeakBytes"] is not None)
+            observation["progressEvents"] = sum(
+                event["phase"] == "tar_scan_progress" for event in events)
+            final_scan = next(event for event in events
+                              if event["phase"] == "after_tar_scan")
+            observation["maxTarMembersRetained"] = final_scan["tarMembersRetained"]
+            observation["nameRegistryPeakPhysicalBytes"] = final_scan[
+                "temporaryDiskBytes"]
+            observation["nameRegistry"] = final_scan["nameRegistry"]
+            observations.append(observation)
+
+        for count, old, observation in zip((30000, 60000), old_observations,
+                                            observations):
+            self.assertEqual(old["membersRetained"], count)
+            result = observation["result"]
+            self.assertEqual(result["memberCount"], count)
+            self.assertLessEqual(observation["maxTarMembersRetained"], 1)
+            self.assertLessEqual(observation["nameRegistryPeakPhysicalBytes"],
+                                 MODULE.NAME_REGISTRY_MAX_BYTES)
+            registry = observation["nameRegistry"]
+            self.assertEqual(registry["distinctNames"], count)
+            self.assertEqual(registry["uniquenessChecks"], count)
+            self.assertEqual(registry["journalMode"], "off")
+            self.assertEqual(registry["cacheSizeKiB"], MODULE.NAME_REGISTRY_CACHE_KIB)
+            self.assertEqual(registry["configuredDatabaseLimitBytes"],
+                             registry["pageSize"] * registry["maxPageCount"])
+            self.assertLessEqual(registry["configuredDatabaseLimitBytes"],
+                                 MODULE.NAME_REGISTRY_MAX_BYTES)
+            self.assertEqual([item["kind"] for item in registry["files"]], ["database"])
+            self.assertLessEqual(observation["progressEvents"],
+                                 MODULE.TAR_PROGRESS_EVENT_LIMIT)
+            self.assertLess(observation["rssPeak"], 256 * 1024 * 1024)
+        self.assertLess(observations[1]["rssPeak"] - observations[0]["rssPeak"],
+                        24 * 1024 * 1024)
+        print("CARDINALITY_MEASUREMENTS=" + json.dumps({
+            "prior": old_observations, "bounded": observations,
+            "fixture": {"longNames": True, "regularFilesWithPhysicalAuthority": True,
+                        "admittedSymlinks": True, "directories": True,
+                        "counts": fixture_counts},
+        }, sort_keys=True))
+
+    def test_sigterm_leaves_bounded_registry_residue_and_supervisor_records_terminal(self):
+        root = self.base / "signal-registry"
+        root.mkdir(mode=0o700)
+        scratch = root / "scratch"
+        scratch.mkdir(mode=0o700)
+        ready = root / "ready.json"
+        supervisor = TOOL.with_name("capacity-recovery-supervisor.py")
+
+        child_source = r'''
+import importlib.util,json,os,sys,time
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("capacity",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+parent=Path(sys.argv[2]);ready=Path(sys.argv[3])
+with m.ExactNameRegistry(parent) as registry:
+    for index in range(4096):registry.add(f"representative/{index:06d}")
+    physical=registry.measure();info=registry.directory.lstat()
+    ready.write_text(json.dumps({"path":str(registry.directory),"device":info.st_dev,"inode":info.st_ino,"mode":oct(info.st_mode & 0o777),"physicalBytes":physical,"distinctNames":registry.count},sort_keys=True))
+    time.sleep(60)
+'''
+        harness = root / "supervisor-harness.py"
+        harness.write_text(r'''
+import importlib.util,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("supervisor",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+child=[sys.executable,"-B","-c",sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]]
+m.executor_argv=lambda _args:child
+sys.argv=["supervisor","--stdout-output",sys.argv[6],"--stderr-output",sys.argv[7],"--terminal-output",sys.argv[8],"--telemetry-output",sys.argv[9],"--supervisor-telemetry-output",sys.argv[10],"audit","--request","/synthetic-request","--request-sha256","0"*64,"--plan-output","/synthetic-plan"]
+m.main()
+''')
+        stdout = root / "stdout"
+        stderr = root / "stderr"
+        terminal = root / "terminal.json"
+        child_telemetry = root / "child.jsonl"
+        supervisor_telemetry = root / "supervisor.jsonl"
+        process = subprocess.Popen([
+            sys.executable, "-B", str(harness), str(supervisor), child_source,
+            str(TOOL), str(scratch), str(ready), str(stdout), str(stderr),
+            str(terminal), str(child_telemetry), str(supervisor_telemetry),
+        ])
+        deadline = time.monotonic() + 15
+        while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertTrue(ready.exists(), f"child failed before readiness: {process.poll()}")
+        process.send_signal(signal.SIGTERM)
+        process.wait(timeout=15)
+
+        residue = json.loads(ready.read_text())
+        residue_path = Path(residue["path"])
+        self.assertTrue(residue_path.is_dir())
+        self.assertEqual(residue_path.parent, scratch)
+        self.assertRegex(residue_path.name, r"^\.capacity-name-registry-[0-9a-f]{32}$")
+        self.assertEqual(residue["mode"], "0o700")
+        self.assertEqual(residue["distinctNames"], 4096)
+        self.assertEqual(sorted(item.name for item in residue_path.iterdir()),
+                         [MODULE.ExactNameRegistry.DATABASE_NAME])
+        database = residue_path / MODULE.ExactNameRegistry.DATABASE_NAME
+        database_info = database.lstat()
+        self.assertTrue(stat.S_ISREG(database_info.st_mode))
+        self.assertEqual(stat.S_IMODE(database_info.st_mode), 0o600)
+        self.assertLessEqual(database_info.st_blocks * 512,
+                             MODULE.NAME_REGISTRY_MAX_BYTES)
+
+        terminal_row = json.loads(terminal.read_text())
+        supervisor_rows = [json.loads(line) for line in supervisor_telemetry.read_text().splitlines()]
+        self.assertEqual(terminal_row["state"], "TERMINAL")
+        self.assertEqual(terminal_row["exitCode"], -signal.SIGTERM)
+        self.assertEqual(terminal_row["signal"], signal.SIGTERM)
+        self.assertEqual([row["phase"] for row in supervisor_rows],
+                         ["before_child", "signal_received", "after_child"])
+        self.assertGreater(terminal_row["childRssPeakBytes"], 0)
+        print("SIGNAL_REGISTRY_RESIDUE=" + json.dumps({
+            "supervisorExitCode": process.returncode,
+            "childExitCode": terminal_row["exitCode"],
+            "childSignal": terminal_row["signal"],
+            "directoryMode": residue["mode"],
+            "databaseMode": oct(stat.S_IMODE(database_info.st_mode)),
+            "databaseLogicalBytes": database_info.st_size,
+            "databasePhysicalBytes": database_info.st_blocks * 512,
+            "distinctNames": residue["distinctNames"],
+            "boundedByBytes": MODULE.NAME_REGISTRY_MAX_BYTES,
+            "supervisorPhases": [row["phase"] for row in supervisor_rows],
+        }, sort_keys=True))
+
+        # Test-only cleanup is confined to the exact identity published by the child.
+        current = residue_path.lstat()
+        self.assertEqual((current.st_dev, current.st_ino),
+                         (residue["device"], residue["inode"]))
+        database.unlink()
+        residue_path.rmdir()
 
     def test_streaming_archive_identity_and_authority_drift_still_deny(self):
         fixture = self.manifest_disposition_fixture("streaming-drift")
