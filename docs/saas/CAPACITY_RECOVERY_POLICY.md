@@ -596,6 +596,21 @@ escapes, links perigosos, devices, FIFO e tipos desconhecidos negam. O manifesto
 produtivo não admite `protectedMemberExceptions`; a proteção global de `.env.*`,
 `uploads` e demais materiais privados permanece sem exceção.
 
+O autenticador também possui suporte técnico ensaiado para uma futura entrada
+fechada `ENUMERATED_TREE`, sem alterar o manifesto produtivo 3/3. A árvore exige
+`PACKAGE_FILES.sha256` e autentica `PACKAGE_SYMLINKS.txt` como uma das folhas
+regulares antes de interpretar sua relação. Arquivos e links declarados precisam
+coincidir exatamente com a árvore candidata; cada link é confrontado por
+`lstat/readlink/lstat`, sem seguir o destino, e com o link correspondente na
+autoridade. Links extras, ausentes, duplicados, divergentes, escapes ou substituição
+de tipo negam. Um overlay adicional na autoridade não entra na relação nem nos
+efeitos. Folhas usam hashing em blocos e a relação usa digest incremental; não se
+retêm payloads ou a relação completa em memória.
+
+Esse suporte não qualifica nem autoriza `worker-package-audit`: identidade atual,
+equivalência folha a folha, referências vivas, manifesto fechado e helper continuam
+pendentes e exigem decisão separada. O manifesto terminal 3/3 permanece byte-exato.
+
 Arquivos regulares da autoridade são comparados por conteúdo e tamanho. O modo
 observado do arquivo físico é autenticado na relação, mas não precisa reproduzir o
 modo armazenado no tar; ambos são registrados. Drift de owner, device, inode,
@@ -707,6 +722,7 @@ encerra o lote 3/3; não voltar a inventariar ou tentar remover seus caminhos.
 | Telemetria maior que 64 KiB tornou início inconclusivo | Autenticar somente a primeira linha limitada, não rejeitar pelo volume total do JSONL |
 | Processo encerrou, mas efeitos não estavam reconciliados | Diferenciar término do scope, início do executor e estado dos efeitos; não inferir sucesso ou zero efeitos pelo exit code |
 | Nova coleta repetia prova suficiente | Predicado, efeitos, provas válidas e menor próxima ação após cada negativa |
+| Árvore enumerada continha links internos legítimos, mas o autenticador aceitava só arquivos regulares | `PACKAGE_SYMLINKS.txt` autenticado antes da interpretação, conjunto exato de tipos e `lstat/readlink/lstat`; suporte ensaiado não equivale a qualificação |
 
 O loop de raiz é defeito reproduzido e corrigido. A presença do membro raiz no
 archive produtivo não foi demonstrada pelos registros históricos; não converter

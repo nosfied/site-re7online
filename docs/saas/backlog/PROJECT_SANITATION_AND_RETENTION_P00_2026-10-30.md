@@ -609,7 +609,7 @@ o ganho real antes da decisão seguinte.
 
 | Artefato | Bytes físicos registrados | Estado/impedimento |
 | --- | ---: | --- |
-| worker-package-audit | 365.674.496 | INVESTIGATE; falta qualificação folha a folha e binding completo com autoridade worker-minimal-reactive-afbb7455-verified |
+| worker-package-audit | 365.674.496 | INVESTIGATE; suporte técnico local para 7.044 arquivos/11 symlinks corrigido e ensaiado, sem alterar manifesto/helper 3/3; ainda faltam qualificação produtiva folha a folha, identidades/referências frescas e binding fechado com autoridade worker-minimal-reactive-afbb7455-verified |
 | runtime-fix/api-frontend-return.private.tar.gz | 276.844.544 | KEEP_PROTECTED permanente pela decisão existente sobre material protegido; não reabrir como candidato |
 | frontend-3227b2d7.tar.gz | 184.074.240 | NOT_QUALIFIED; ancestral 0775 continua impedimento material |
 | night/candidate.tar.gz | 102.604.800 | NOT_QUALIFIED; autoridade física esperada ausente |

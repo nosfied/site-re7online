@@ -366,7 +366,10 @@ class CapacityRecoveryTests(unittest.TestCase):
         for root in (tree, authority):
             (root / "dist/worker.js").write_bytes(b"worker-code")
             (root / "dist/worker.js").chmod(0o644)
-        package_raw = f"{sha(tree / 'dist/worker.js')}  dist/worker.js\n"
+            (root / "PACKAGE_SYMLINKS.txt").write_bytes(b"")
+            (root / "PACKAGE_SYMLINKS.txt").chmod(0o600)
+        package_raw = (f"{sha(tree / 'PACKAGE_SYMLINKS.txt')}  PACKAGE_SYMLINKS.txt\n"
+                       f"{sha(tree / 'dist/worker.js')}  dist/worker.js\n")
         for root in (tree, authority):
             (root / "PACKAGE_FILES.sha256").write_text(package_raw)
             (root / "PACKAGE_FILES.sha256").chmod(0o600)
@@ -428,6 +431,68 @@ class CapacityRecoveryTests(unittest.TestCase):
         return {"control": control, "manifest": manifest, "entries": entries,
                 "paths": paths, "candidates": candidates, "patches": patches,
                 "authorityRoot": authority_root, "record": record}
+
+    def worker_tree_fixture(self, suffix="worker-tree", *, payload_count=3,
+                            largest_size=0, link_count=2):
+        root = self.preparations / suffix / "window/worker-package-audit"
+        authority = self.releases / f"{suffix}-authority"
+        for base, mode in ((root, 0o700), (authority, 0o755)):
+            (base / "payload").mkdir(parents=True)
+            (base / "node_modules/.bin").mkdir(parents=True)
+            (base / "node_modules/tools").mkdir(parents=True)
+            for directory, subdirectories, _files in os.walk(base):
+                Path(directory).chmod(mode)
+                for subdirectory in subdirectories:
+                    (Path(directory) / subdirectory).chmod(mode)
+        payloads = {f"payload/file-{index:05d}.bin": f"payload-{index}".encode()
+                    for index in range(payload_count)}
+        if largest_size:
+            payloads["payload/largest.bin"] = None
+        for index in range(link_count):
+            payloads[f"node_modules/tools/tool-{index:02d}.js"] = f"tool-{index}".encode()
+        for relative, payload in payloads.items():
+            for base in (root, authority):
+                destination = base / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if payload is None:
+                    with destination.open("wb") as stream:
+                        remaining = largest_size
+                        block = b"x" * (1024 * 1024)
+                        while remaining:
+                            piece = block[:min(len(block), remaining)]
+                            stream.write(piece); remaining -= len(piece)
+                else:
+                    destination.write_bytes(payload)
+                destination.chmod(0o644)
+        links = []
+        for index in range(link_count):
+            relative = f"node_modules/.bin/tool-{index:02d}"
+            target = f"../tools/tool-{index:02d}.js"
+            links.append((relative, target))
+            for base in (root, authority):
+                (base / relative).symlink_to(target)
+        link_raw = "".join(f"{relative}\t{target}\n" for relative, target in links).encode()
+        for base in (root, authority):
+            (base / "PACKAGE_SYMLINKS.txt").write_bytes(link_raw)
+            (base / "PACKAGE_SYMLINKS.txt").chmod(0o600)
+        listed = ["PACKAGE_SYMLINKS.txt", *sorted(payloads)]
+        package_raw = "".join(
+            f"{sha(root / relative)}  {relative}\n" for relative in listed).encode()
+        for base in (root, authority):
+            (base / "PACKAGE_FILES.sha256").write_bytes(package_raw)
+            (base / "PACKAGE_FILES.sha256").chmod(0o600)
+        (authority / ".data").symlink_to("/persistent/worker-data")
+        root_info = root.lstat(); authority_info = authority.lstat()
+        entry = {
+            "identity": {"device": root_info.st_dev, "inode": root_info.st_ino,
+                         "nlink": root_info.st_nlink, "uid": root_info.st_uid,
+                         "gid": root_info.st_gid,
+                         "mode": f"0{stat.S_IMODE(root_info.st_mode):03o}"},
+            "authority": str(authority), "authorityState": "PRESENT",
+            "authorityIdentity": MODULE._directory_identity(authority_info),
+            "packageFilesSha256": sha(root / "PACKAGE_FILES.sha256"),
+        }
+        return root, authority, entry, links
 
     def request_value(self, candidates=None, minimum=1):
         return {"schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",
@@ -693,7 +758,7 @@ class CapacityRecoveryTests(unittest.TestCase):
                 mock.patch.object(MODULE, "physical_directory", side_effect=physical):
             observed = MODULE.authenticate_manifest_disposition(
                 fixture["candidates"][1], json.loads(self.operational.read_text()), scan())
-        self.assertEqual(observed["detail"]["leafCount"], 2)
+        self.assertEqual(observed["detail"]["leafCount"], 3)
 
         fixture = self.manifest_disposition_fixture("tree-directory-write")
         (fixture["paths"][1] / "dist").chmod(0o775)
@@ -828,6 +893,142 @@ class CapacityRecoveryTests(unittest.TestCase):
                                            "DISPOSITION_TREE_LEAF_SET|DISPOSITION_TREE_UNSAFE_LEAF|DISPOSITION_TREE_HARDLINK"):
                 MODULE.authenticate_manifest_disposition(
                     fixture["candidates"][1], json.loads(self.operational.read_text()), scan())
+
+    def test_manifest_disposition_tree_authenticates_declared_links_and_preserves_overlay(self):
+        tree, authority, entry, links = self.worker_tree_fixture("tree-links-pass")
+        overlay_before = os.readlink(authority / ".data")
+        first = MODULE._authenticate_disposition_tree(tree, entry)
+        second = MODULE._authenticate_disposition_tree(tree, entry)
+        self.assertEqual(first["symlinkCount"], len(links))
+        self.assertEqual(first["relationSha256"], second["relationSha256"])
+        self.assertEqual(os.readlink(authority / ".data"), overlay_before)
+        commands = first["effects"]
+        link_commands = {tuple(command) for command in commands
+                         if Path(command[-1]).is_symlink()}
+        self.assertEqual(link_commands, {
+            ("/usr/bin/unlink", "--", str(tree / relative))
+            for relative, _target in links
+        })
+        self.assertTrue(all(command[0] in {"/usr/bin/unlink", "/usr/bin/rmdir"}
+                            for command in commands))
+        self.assertFalse(any(str(authority) in argument
+                             for command in commands for argument in command))
+
+    def test_manifest_disposition_tree_link_set_target_type_and_escape_deny(self):
+        for mutation, predicate in (
+                ("extra", "DISPOSITION_TREE_LEAF_SET"),
+                ("missing", "DISPOSITION_TREE_LEAF_SET"),
+                ("target", "DISPOSITION_TREE_SYMLINK_DIVERGED"),
+                ("authority-target", "DISPOSITION_TREE_AUTHORITY_DIVERGED"),
+                ("type", "DISPOSITION_TREE_LEAF_SET"),
+                ("unbound", "FILE_SHA256"),
+                ("duplicate", "DISPOSITION_PACKAGE_SYMLINKS_SCHEMA"),
+                ("escape", "DISPOSITION_ARCHIVE_SYMLINK")):
+            tree, authority, entry, links = self.worker_tree_fixture("tree-link-" + mutation)
+            relative, target = links[0]
+            link = tree / relative
+            if mutation == "extra":
+                (tree / "node_modules/.bin/extra").symlink_to("../tools/tool-00.js")
+            elif mutation == "missing":
+                link.unlink()
+            elif mutation == "target":
+                link.unlink(); link.symlink_to("../tools/tool-01.js")
+            elif mutation == "authority-target":
+                authority_link = authority / relative
+                authority_link.unlink(); authority_link.symlink_to("../tools/tool-01.js")
+            elif mutation == "type":
+                link.unlink(); link.write_bytes(b"not-a-link"); link.chmod(0o644)
+            elif mutation == "unbound":
+                relation = tree / "PACKAGE_SYMLINKS.txt"
+                relation.write_bytes(relation.read_bytes() + b"invalid-without-binding\n")
+            else:
+                relation = tree / "PACKAGE_SYMLINKS.txt"
+                authority_relation = authority / "PACKAGE_SYMLINKS.txt"
+                raw = relation.read_bytes()
+                if mutation == "duplicate":
+                    raw += f"{relative}\t{target}\n".encode()
+                else:
+                    raw = raw.replace(f"{relative}\t{target}".encode(),
+                                      f"{relative}\t../../../outside".encode())
+                for path in (relation, authority_relation):
+                    path.write_bytes(raw); path.chmod(0o600)
+                package = tree / "PACKAGE_FILES.sha256"
+                authority_package = authority / "PACKAGE_FILES.sha256"
+                lines = package.read_text().splitlines()
+                lines[0] = f"{sha(relation)}  PACKAGE_SYMLINKS.txt"
+                package_raw = ("\n".join(lines) + "\n").encode()
+                for path in (package, authority_package):
+                    path.write_bytes(package_raw); path.chmod(0o600)
+                entry["packageFilesSha256"] = sha(package)
+            with self.subTest(mutation=mutation), \
+                    self.assertRaisesRegex(MODULE.Denied, predicate):
+                MODULE._authenticate_disposition_tree(tree, entry)
+
+    def test_manifest_disposition_tree_symlink_identity_drift_denies(self):
+        tree, _authority, entry, links = self.worker_tree_fixture("tree-link-drift")
+        target_path = tree / links[0][0]
+        real_readlink = os.readlink
+        changed = False
+        def drifting_readlink(path):
+            nonlocal changed
+            value = real_readlink(path)
+            if Path(path) == target_path and not changed:
+                changed = True
+                target_path.unlink(); target_path.symlink_to(value)
+            return value
+        with mock.patch.object(MODULE.os, "readlink", side_effect=drifting_readlink), \
+                self.assertRaisesRegex(MODULE.Denied,
+                                       "DISPOSITION_TREE_SYMLINK_DIVERGED"):
+            MODULE._authenticate_disposition_tree(tree, entry)
+
+    def test_manifest_disposition_tree_regular_drift_and_whole_reader_deny(self):
+        tree, _authority, entry, _links = self.worker_tree_fixture("tree-streaming")
+        with mock.patch.object(MODULE, "stable_regular",
+                               side_effect=AssertionError("whole reader forbidden")):
+            observed = MODULE._authenticate_disposition_tree(tree, entry)
+        self.assertGreater(observed["regularLeafCount"], 1)
+        (tree / "payload/file-00000.bin").write_bytes(b"drift")
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            MODULE._authenticate_disposition_tree(tree, entry)
+
+    def test_worker_package_cardinality_largest_leaf_and_links_fit_memory_limit(self):
+        tree, authority, entry, links = self.worker_tree_fixture(
+            "tree-worker-cardinality", payload_count=7031,
+            largest_size=19_631_784, link_count=11)
+        entry_path = self.base / "worker-tree-entry.json"
+        entry_path.write_text(json.dumps(entry)); entry_path.chmod(0o600)
+        program = """
+import importlib.util,json,pathlib,resource,sys
+spec=importlib.util.spec_from_file_location('capacity_recovery',sys.argv[1])
+module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+entry=json.loads(pathlib.Path(sys.argv[3]).read_text())
+result=module._authenticate_disposition_tree(pathlib.Path(sys.argv[2]),entry)
+print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['regularLeafCount'],
+ 'symlinkCount':result['symlinkCount'],'relationSha256':result['relationSha256'],
+ 'rssPeakBytes':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024},sort_keys=True))
+"""
+        maximum = 256 * 1024 * 1024
+        def limit_memory():
+            resource.setrlimit(resource.RLIMIT_AS, (maximum, maximum))
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", program, str(TOOL), str(tree), str(entry_path)],
+            capture_output=True, text=True, timeout=120, preexec_fn=limit_memory,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["regularLeafCount"], 7045)
+        self.assertEqual(observed["symlinkCount"], 11)
+        self.assertEqual(observed["leafCount"], 7056)
+        self.assertLess(observed["rssPeakBytes"], maximum)
+        self.assertEqual((tree / "payload/largest.bin").stat().st_size, 19_631_784)
+        self.assertEqual((authority / "payload/largest.bin").stat().st_size, 19_631_784)
+        self.assertEqual(len(links), 11)
+        self.assertTrue((authority / ".data").is_symlink())
+        print("WORKER_TREE_MEMORY=" + json.dumps({
+            "payloadFiles": 7044, "physicalRegularLeaves": 7045,
+            "symlinks": 11, "largestLeafBytes": 19_631_784,
+            "rssPeakBytes": observed["rssPeakBytes"], "rlimitAsBytes": maximum,
+        }, sort_keys=True))
 
     def test_manifest_disposition_tree_cross_device_directory_and_leaf_are_denied(self):
         for kind in ("directory", "leaf"):
