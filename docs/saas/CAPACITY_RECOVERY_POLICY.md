@@ -645,9 +645,14 @@ fallback para checkout, caminho livre ou reaproveitamento de fotografia/request.
 
 O materializador versionado
 `scripts/capacity-recovery-worker-package-materialize.py` deriva `ROOT` de sua
-própria custódia e foi exercitado, junto com o consumidor real copiado, fora do
-checkout até a autenticação de uma árvore sintética. A regressão também nega
-drift da fotografia, manifesto, prova e identidade do helper. Isso é controle
+própria custódia, autentica por SHA o consumidor copiado e reutiliza dele
+`canonical()`, `_pm2_projection()` e os validadores de binding. A regressão
+executa ambos fora do checkout e chama `audit_request()` real: fotografia,
+recaptura de current/PM2/dump/grafo/transações e autenticação da árvore sintética
+permanecem reais; somente a invocação sudo do observador `/proc` é substituída
+por sua fronteira sintética. O teste produz plano PASS e também nega fingerprint
+adulterado, troca do consumidor, drift entre fotografia/request e o readback
+pré-selagem, manifesto, prova e identidade do helper. Isso é controle
 implementado e ensaiado localmente; não é auditoria produtiva, autorização ou
 renovação das tentativas v1/v2/v3 preservadas.
 

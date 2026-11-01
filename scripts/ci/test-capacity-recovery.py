@@ -1158,6 +1158,7 @@ class CapacityRecoveryTests(unittest.TestCase):
         shutil.copy2(source / "capacity-recovery-worker-package-materialize.py",
                      scripts / "capacity-recovery-worker-package-materialize.py")
         shutil.copy2(source / "capacity-recovery.py", scripts / "capacity-recovery.py")
+        (scripts / "capacity-recovery.py").chmod(0o644)
         shutil.copy2(fixture["manifest"], config / "worker-package-audit-disposition.v1.json")
         shutil.copytree(fixture["control"] / "apps", control / "apps")
         shutil.copytree(fixture["control"] / "docs", control / "docs")
@@ -1169,6 +1170,16 @@ class CapacityRecoveryTests(unittest.TestCase):
             "external_consumer", scripts / "capacity-recovery.py")
         consumer = importlib.util.module_from_spec(consumer_spec)
         assert consumer_spec.loader is not None; consumer_spec.loader.exec_module(consumer)
+
+        def configure_consumer(module):
+            module.ROOT = control
+            module.PREPARATIONS_ROOT = self.preparations
+            module.RELEASES_ROOT = self.releases
+            module.WORKER_PACKAGE_AUDIT_MANIFEST_PATH = manifest
+            module.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256 = sha(manifest)
+            module.WORKER_PACKAGE_AUDIT_DISPOSITION_ID = "fixture-worker-package-audit-v1"
+            module.PROC_OBSERVER_PATH = helper
+            return module
 
         node = external / "node"; node.write_text("#!/bin/sh\necho v20.20.0\n"); node.chmod(0o755)
         rows = [{"name": "api", "pid": 7, "pm2_env": {"status": "online",
@@ -1196,44 +1207,90 @@ class CapacityRecoveryTests(unittest.TestCase):
         deployment_lock = external / "deploy.lock"; deployment_lock.write_bytes(b"")
         writer_lock = external / "writer.lock"; writer_lock.write_bytes(b"")
         manifest = config / "worker-package-audit-disposition.v1.json"
+        configure_consumer(consumer)
+        load_authenticated = materializer.authenticated_consumer
+
+        def load_configured_consumer():
+            return configure_consumer(load_authenticated())
+
+        fd_identity_checks = []
+        confirm_identity = materializer.confirm_open_identity
+
+        def confirm_same_fd(fd, path, expected):
+            fd_identity_checks.append((os.fstat(fd).st_dev, os.fstat(fd).st_ino,
+                                       path.lstat().st_dev, path.lstat().st_ino))
+            return confirm_identity(fd, path, expected)
+
         with mock.patch.multiple(materializer, CUSTODY=external, ROOT=control, PM2=pm2,
                 PM2_SHA256=sha(pm2), NODE=node, NODE_SHA256=sha(node), DUMP=dump,
                 GRAPH=graph, POLICY=policy, MANIFEST=manifest, HELPER=helper,
                 HELPER_SHA256=sha(helper), HELPER_PROOF=proof, CANDIDATE=fixture["root"],
                 CURRENT=current, TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
-                WRITER_LOCK=writer_lock):
+                WRITER_LOCK=writer_lock, MINIMUM_RECOVERY_BYTES=1,
+                authenticated_consumer=load_configured_consumer,
+                confirm_open_identity=confirm_same_fd):
             result = materializer.materialize()
-        request = json.loads((external / "audit-request.private.json").read_text())
+        self.assertEqual(fd_identity_checks, [(pm2.stat().st_dev, pm2.stat().st_ino,
+                                               pm2.stat().st_dev, pm2.stat().st_ino)])
+        request_path = external / "audit-request.private.json"
+        request = json.loads(request_path.read_text())
+        binding_readback = json.loads((external / "binding-readback.private.json").read_text())
+        self.assertEqual(binding_readback["requestSha256"], sha(request_path))
+        self.assertEqual(binding_readback["operationalStateSha256"],
+                         request["operationalState"]["sha256"])
+        self.assertEqual(binding_readback["manifestSha256"],
+                         request["candidates"][0]["dispositionManifest"]["sha256"])
+        self.assertEqual(binding_readback["rootPolicySha256"], request["rootPolicy"]["sha256"])
         self.assertEqual(result["pm2FingerprintSha256"],
             consumer.digest_bytes(consumer.canonical(consumer._pm2_projection(rows))))
-        with mock.patch.multiple(consumer, ROOT=control, PREPARATIONS_ROOT=self.preparations,
-                RELEASES_ROOT=self.releases, WORKER_PACKAGE_AUDIT_MANIFEST_PATH=manifest,
-                WORKER_PACKAGE_AUDIT_MANIFEST_SHA256=sha(manifest),
-                WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1",
-                PROC_OBSERVER_PATH=helper):
-            consumer.validate_audit_request(request)
-            observed = consumer.authenticate_manifest_disposition(
-                request["candidates"][0], json.loads((external / "operational-state.schema2.private.json").read_text()), scan())
-        self.assertEqual(observed["path"], str(fixture["root"]))
+        plan_path = external / "plan.private.json"
+        process_evidence = {"mechanism": "synthetic-privileged-boundary"}
+        with mock.patch.object(consumer, "_privileged_proc_targets",
+                               return_value=(scan(), process_evidence)):
+            plan = consumer.audit_request(request_path, sha(request_path), plan_path)
+        self.assertEqual(plan["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+        self.assertEqual(plan["errors"], [])
+        self.assertEqual(len(plan["candidates"]), 1)
+        self.assertEqual(plan["candidates"][0]["observation"]["path"], str(fixture["root"]))
+        self.assertEqual(plan["processObservation"], process_evidence)
+        self.assertEqual(json.loads(plan_path.read_text()), plan)
+
+        bad_operational = json.loads((external / "operational-state.schema2.private.json").read_text())
+        bad_operational["liveObservations"]["pm2"]["fingerprintSha256"] = "0" * 64
+        bad_operational_path = external / "operational-state.bad-fingerprint.private.json"
+        private_json(bad_operational_path, bad_operational)
+        bad_request = json.loads(request_path.read_text())
+        bad_request["operationalState"] = {"path": str(bad_operational_path),
+                                           "sha256": sha(bad_operational_path)}
+        bad_request_path = external / "audit-request.bad-fingerprint.private.json"
+        bad_request_path.write_bytes(consumer.canonical(bad_request)); bad_request_path.chmod(0o600)
+        with mock.patch.object(consumer, "_privileged_proc_targets",
+                               return_value=(scan(), process_evidence)), \
+                self.assertRaisesRegex(consumer.Denied, "LIVE_PM2_CHANGED"):
+            consumer.audit_request(bad_request_path, sha(bad_request_path),
+                                   external / "bad-plan.private.json")
+
         operational_path = external / "operational-state.schema2.private.json"
         operational_raw = operational_path.read_bytes()
+        binding_path = external / "binding-readback.private.json"
+        binding_path.unlink()
         operational_path.write_bytes(operational_raw + b"\n")
-        with mock.patch.multiple(consumer, ROOT=control, PREPARATIONS_ROOT=self.preparations,
-                RELEASES_ROOT=self.releases, WORKER_PACKAGE_AUDIT_MANIFEST_PATH=manifest,
-                WORKER_PACKAGE_AUDIT_MANIFEST_SHA256=sha(manifest),
-                WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1",
-                PROC_OBSERVER_PATH=helper), self.assertRaises(consumer.Denied):
-            consumer.load_binding(request["operationalState"], "OPERATIONAL_STATE")
+        with self.assertRaises(consumer.Denied):
+            materializer.final_readback(consumer, request_path, sha(request_path),
+                                        request["procObserver"])
+        self.assertFalse(binding_path.exists())
         operational_path.write_bytes(operational_raw)
         manifest_raw = manifest.read_bytes()
         manifest.write_bytes(manifest_raw + b"\n")
-        with mock.patch.multiple(consumer, ROOT=control, PREPARATIONS_ROOT=self.preparations,
-                RELEASES_ROOT=self.releases, WORKER_PACKAGE_AUDIT_MANIFEST_PATH=manifest,
-                WORKER_PACKAGE_AUDIT_MANIFEST_SHA256=hashlib.sha256(manifest_raw).hexdigest(),
-                WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1",
-                PROC_OBSERVER_PATH=helper), self.assertRaises(consumer.Denied):
+        with self.assertRaises(consumer.Denied):
             consumer.validate_audit_request(request)
         manifest.write_bytes(manifest_raw)
+        consumer_path = scripts / "capacity-recovery.py"
+        consumer_raw = consumer_path.read_bytes()
+        consumer_path.write_bytes(consumer_raw + b"\n")
+        with self.assertRaisesRegex(RuntimeError, "SHA256"):
+            materializer.authenticated_consumer()
+        consumer_path.write_bytes(consumer_raw); consumer_path.chmod(0o644)
         proof.unlink()
         with mock.patch.multiple(materializer, HELPER_PROOF=proof):
             with self.assertRaises((FileNotFoundError, RuntimeError)):
