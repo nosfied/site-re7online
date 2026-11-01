@@ -1,8 +1,21 @@
 {
-  "dispositionId": "p00-closed-preparations-20261031-v1",
+  "dispositionId": "p00-closed-preparations-20261031-v2-three-archives",
   "entries": [
     {
       "authority": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified",
+      "authorityIdentity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 5770335,
+        "mode": "0700",
+        "uid": 1000
+      },
+      "authorityState": "PRESENT",
+      "candidateAncestors": [
+        {"device": 64769, "gid": 1000, "inode": 3161205, "mode": "0700", "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window", "uid": 1000},
+        {"device": 64769, "gid": 1000, "inode": 3161204, "mode": "0700", "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z", "uid": 1000},
+        {"device": 64769, "gid": 1000, "inode": 2101127, "mode": "0700", "path": "/opt/re7online/backups/converta-persistent/preparations", "uid": 1000}
+      ],
       "historicalRecords": [
         {
           "path": "docs/reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_V4_PREPARED_2026-10-05.md",
@@ -24,116 +37,19 @@
       "type": "ARCHIVE_FILE"
     },
     {
-      "authority": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified",
-      "historicalRecords": [
-        {
-          "path": "docs/reviews/automation-freeform-window-release-af26/worker-reactive-transport-20261005.manifest.json",
-          "sha256": "ecd717aecc0ba1019a6e039b27d0ecbbf98e334b23f15cf2a6acf36c646aaaf6"
-        }
-      ],
-      "identity": {
-        "device": 64769,
-        "gid": 1000,
-        "inode": 3161329,
-        "mode": "0700",
-        "nlink": 3,
-        "uid": 1000
-      },
-      "packageFilesSha256": "650b2a216b595f858c4b9b5110d2dbcd8909bc4a7ec655c3560734c5641ca398",
-      "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
-      "physicalBytes": 365674496,
-      "proof": "ENUMERATED_TREE_AUTHORITY",
-      "sha256": null,
-      "type": "ENUMERATED_TREE"
-    },
-    {
-      "authority": "/opt/re7online/releases/a1cc380eddcd1467b8e0d3a8e405f82689a25b3d",
-      "historicalRecords": [
-        {
-          "path": "docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md",
-          "sha256": "2fe9180696da93fd1f39fbcc9dc290baad7b6e21a58be203b3868caa4fc61d18"
-        }
-      ],
-      "identity": {
-        "device": 64769,
-        "gid": 1000,
-        "inode": 2101673,
-        "mode": "0600",
-        "nlink": 1,
-        "uid": 1000
-      },
-      "path": "/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z/candidate.tar.gz",
-      "physicalBytes": 102604800,
-      "protectedMemberExceptions": [
-        {
-          "kind": "VERSIONED_ENV_EXAMPLE",
-          "path": "apps/whatsapp-agent/.env.example"
-        },
-        {
-          "kind": "OPENAI_LIBRARY_CODE",
-          "pathPrefix": "node_modules/openai/resources/uploads/"
-        }
-      ],
-      "proof": "ARCHIVE_AUTHORITY_TREE",
-      "sha256": "f5dda6a4b6bf6b6a7e8e50af0e4b343fb77c0ef6bd7191cf72c62d2c5d9a3d48",
-      "type": "ARCHIVE_FILE"
-    },
-    {
-      "authority": "/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c",
-      "historicalRecords": [
-        {
-          "path": "docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md",
-          "sha256": "2fe9180696da93fd1f39fbcc9dc290baad7b6e21a58be203b3868caa4fc61d18"
-        }
-      ],
-      "identity": {
-        "device": 64769,
-        "gid": 1000,
-        "inode": 2101675,
-        "mode": "0664",
-        "nlink": 1,
-        "uid": 1000
-      },
-      "path": "/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z/recovery-standalone.tar.gz",
-      "physicalBytes": 102477824,
-      "protectedMemberExceptions": [
-        {
-          "kind": "VERSIONED_ENV_EXAMPLE",
-          "path": "apps/whatsapp-agent/.env.example"
-        },
-        {
-          "kind": "OPENAI_LIBRARY_CODE",
-          "pathPrefix": "node_modules/openai/resources/uploads/"
-        }
-      ],
-      "proof": "ARCHIVE_AUTHORITY_TREE",
-      "sha256": "7fe1817d89546aff855f40d4290776803acff60feb75902d1d5daed3642b3586",
-      "type": "ARCHIVE_FILE"
-    },
-    {
-      "authority": "/opt/re7online/releases/3227b2d752110873f0eff4ee5253a6f06ca51549-front",
-      "historicalRecords": [
-        {
-          "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md",
-          "sha256": "2e48b7dc2c97670429a6c1f88734c57503ab806381fac1effbdf5bc80543f31f"
-        }
-      ],
-      "identity": {
-        "device": 64769,
-        "gid": 1000,
-        "inode": 2176997,
-        "mode": "0664",
-        "nlink": 1,
-        "uid": 1000
-      },
-      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-20261009T220400Z/frontend-3227b2d7.tar.gz",
-      "physicalBytes": 184074240,
-      "proof": "ARCHIVE_AUTHORITY_TREE",
-      "sha256": "9b54548e4a7763f5078ae0433aceb43a37567eccd988814dd82f2fab97229319",
-      "type": "ARCHIVE_FILE"
-    },
-    {
       "authority": "/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front",
+      "authorityIdentity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 5778416,
+        "mode": "0775",
+        "uid": 1000
+      },
+      "authorityState": "PRESENT",
+      "candidateAncestors": [
+        {"device": 64769, "gid": 1000, "inode": 3169670, "mode": "0700", "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z", "uid": 1000},
+        {"device": 64769, "gid": 1000, "inode": 2101127, "mode": "0700", "path": "/opt/re7online/backups/converta-persistent/preparations", "uid": 1000}
+      ],
       "historicalRecords": [
         {
           "path": "docs/reviews/automation-freeform-window-release-af26/FRONTEND_9F4CBE0F_PREPARED_2026-10-06.md",
@@ -156,6 +72,18 @@
     },
     {
       "authority": "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8",
+      "authorityIdentity": {
+        "device": 64769,
+        "gid": 1000,
+        "inode": 5829522,
+        "mode": "0775",
+        "uid": 1000
+      },
+      "authorityState": "PRESENT",
+      "candidateAncestors": [
+        {"device": 64769, "gid": 1000, "inode": 3169871, "mode": "0700", "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-css-supervision-20261007T224500Z", "uid": 1000},
+        {"device": 64769, "gid": 1000, "inode": 2101127, "mode": "0700", "path": "/opt/re7online/backups/converta-persistent/preparations", "uid": 1000}
+      ],
       "historicalRecords": [
         {
           "path": "docs/reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md",
@@ -178,7 +106,7 @@
     }
   ],
   "kind": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "versionedEnvExample": {
     "path": "apps/whatsapp-agent/.env.example",
     "sha256": "55aa02b4c26882cac130c71d009d1e6204a0e9a1586c94bf51e1e1f6eb5a496f"

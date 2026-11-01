@@ -50,8 +50,8 @@ CLASSES = {
 }
 DISPOSITION_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/closed-preparation-manifest-disposition.v1.json")
-DISPOSITION_MANIFEST_SHA256 = "e6b0a8b40a7a177d93abcb3e752fb1ed83a42756ff4cef7f3c5da76e0d0160d4"
-DISPOSITION_ID = "p00-closed-preparations-20261031-v1"
+DISPOSITION_MANIFEST_SHA256 = "b2b5bff4adeec32f12e9f32e0487a75f85fa334a3273931c88b62338b6d9f78d"
+DISPOSITION_ID = "p00-closed-preparations-20261031-v2-three-archives"
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
@@ -209,7 +209,9 @@ def stat_identity(info: os.stat_result, *, include_nlink: bool = False) -> dict[
 
 def stable_regular(path: Path, expected_sha: str, *, private: bool = True,
                    allowed_modes: set[int] | None = None,
-                   include_nlink: bool = False) -> tuple[bytes, dict[str, Any]]:
+                   include_nlink: bool = False,
+                   allowed_owner_pairs: set[tuple[int, int]] | None = None
+                   ) -> tuple[bytes, dict[str, Any]]:
     if not valid_sha(expected_sha):
         deny(f"FILE_SHA_SCHEMA:{path.name}")
     try:
@@ -217,8 +219,10 @@ def stable_regular(path: Path, expected_sha: str, *, private: bool = True,
         if path.is_symlink() or not stat.S_ISREG(before.st_mode):
             deny(f"FILE_TYPE:{path}")
         mode = stat.S_IMODE(before.st_mode)
+        expected_owners = (allowed_owner_pairs if allowed_owner_pairs is not None else
+                           {(os.geteuid(), os.getegid())})
         if allowed_modes is not None and (mode not in allowed_modes or
-                                          before.st_uid != os.geteuid() or before.st_gid != os.getegid()):
+                                          (before.st_uid, before.st_gid) not in expected_owners):
             deny(f"FILE_MODE_IDENTITY:{path}")
         if private and allowed_modes is None and (mode & 0o077 or before.st_uid != os.geteuid() or before.st_gid != os.getegid()):
             deny(f"FILE_PRIVATE_IDENTITY:{path}")
@@ -234,7 +238,7 @@ def stable_regular(path: Path, expected_sha: str, *, private: bool = True,
         current = path.lstat()
     except OSError:
         deny(f"FILE_READ:{path}")
-    identities = [(item.st_dev, item.st_ino, item.st_mode, item.st_size,
+    identities = [(item.st_dev, item.st_ino, item.st_mode, item.st_uid, item.st_gid, item.st_size,
                    item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
                   for item in (before, opened, after, current)]
     if len(set(identities)) != 1:
@@ -1353,19 +1357,53 @@ def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], opera
             "processScan": scan_summary}
 
 
-def _preparation_archive_ancestors(path: Path) -> None:
+DIRECTORY_IDENTITY_KEYS = {"device", "inode", "uid", "gid", "mode"}
+ANCESTOR_IDENTITY_KEYS = DIRECTORY_IDENTITY_KEYS | {"path"}
+
+
+def _directory_identity(info: os.stat_result) -> dict[str, Any]:
+    return {
+        "device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
+        "gid": info.st_gid, "mode": f"0{stat.S_IMODE(info.st_mode):03o}",
+    }
+
+
+def _identity_owner_allowed(info: os.stat_result) -> bool:
+    return (info.st_uid, info.st_gid) in {(0, 0), (os.geteuid(), os.getegid())}
+
+
+def _validate_directory_identity(value: Any, predicate: str, *, path: bool = False) -> None:
+    expected = ANCESTOR_IDENTITY_KEYS if path else DIRECTORY_IDENTITY_KEYS
+    if (not isinstance(value, dict) or set(value) != expected or
+            any(not isinstance(value.get(key), int)
+                for key in ("device", "inode", "uid", "gid")) or
+            not re.fullmatch(r"0[0-7]{3}", str(value.get("mode", ""))) or
+            (path and not isinstance(value.get("path"), str))):
+        deny(predicate)
+
+
+def _preparation_archive_ancestors(path: Path,
+                                   expected_identities: list[dict[str, Any]] | None = None
+                                   ) -> list[dict[str, Any]]:
     if path.parent == PREPARATIONS_ROOT or PREPARATIONS_ROOT not in path.parents:
         deny("PREPARATION_ARCHIVE_SCOPE")
     root_info = physical_directory(PREPARATIONS_ROOT, "PREPARATION_ARCHIVE_ROOT")
-    expected = (root_info.st_uid, root_info.st_gid)
+    legacy_owner = (root_info.st_uid, root_info.st_gid)
+    observed: list[dict[str, Any]] = []
     current = path.parent
     while True:
         info = physical_directory(current, "PREPARATION_ARCHIVE_ANCESTOR")
-        if (info.st_uid, info.st_gid) != expected or stat.S_IMODE(info.st_mode) & 0o022:
+        owner_allowed = (_identity_owner_allowed(info) if expected_identities is not None else
+                         (info.st_uid, info.st_gid) == legacy_owner)
+        if not owner_allowed or stat.S_IMODE(info.st_mode) & 0o022:
             deny("PREPARATION_ARCHIVE_ANCESTOR_IDENTITY")
+        observed.append({"path": str(current), **_directory_identity(info)})
         if current == PREPARATIONS_ROOT:
             break
         current = current.parent
+    if expected_identities is not None and observed != expected_identities:
+        deny("PREPARATION_ARCHIVE_ANCESTOR_IDENTITY")
+    return observed
 
 
 def _archive_structure(path: Path, identity: dict[str, Any]) -> dict[str, Any]:
@@ -1515,10 +1553,10 @@ def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[
     value = object_json(raw, "DISPOSITION_MANIFEST_JSON")
     if (set(value) != {"schemaVersion", "kind", "dispositionId", "entries",
                        "versionedEnvExample"} or
-            value.get("schemaVersion") != 1 or
+            value.get("schemaVersion") != 2 or
             value.get("kind") != "CLOSED_PREPARATION_MANIFEST_DISPOSITION" or
             value.get("dispositionId") != DISPOSITION_ID or
-            not isinstance(value.get("entries"), list) or len(value["entries"]) != 7):
+            not isinstance(value.get("entries"), list) or len(value["entries"]) != 3):
         deny("DISPOSITION_MANIFEST_SCHEMA")
     env = value.get("versionedEnvExample")
     if not isinstance(env, dict) or set(env) != {"path", "sha256"}:
@@ -1530,7 +1568,8 @@ def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[
                    allowed_modes={0o600, 0o640, 0o644})
     entries: dict[str, dict[str, Any]] = {}
     common = {"path", "type", "physicalBytes", "sha256", "identity", "proof",
-              "authority", "historicalRecords"}
+              "authority", "authorityState", "authorityIdentity", "candidateAncestors",
+              "historicalRecords"}
     for entry in value["entries"]:
         if not isinstance(entry, dict):
             deny("DISPOSITION_MANIFEST_ENTRY_SCHEMA")
@@ -1556,6 +1595,17 @@ def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[
                 not isinstance(entry.get("historicalRecords"), list) or
                 not entry["historicalRecords"]):
             deny("DISPOSITION_MANIFEST_ENTRY_SCHEMA")
+        ancestors = entry.get("candidateAncestors")
+        if not isinstance(ancestors, list) or not ancestors:
+            deny("DISPOSITION_MANIFEST_ANCESTOR_SCHEMA")
+        for ancestor in ancestors:
+            _validate_directory_identity(ancestor, "DISPOSITION_MANIFEST_ANCESTOR_SCHEMA",
+                                         path=True)
+            normalized_absolute(ancestor["path"], "DISPOSITION_MANIFEST_ANCESTOR_SCHEMA")
+        if entry.get("authorityState") != "PRESENT":
+            deny("DISPOSITION_MANIFEST_AUTHORITY_IDENTITY")
+        _validate_directory_identity(entry.get("authorityIdentity"),
+                                     "DISPOSITION_MANIFEST_AUTHORITY_IDENTITY")
         if entry["type"] == "ARCHIVE_FILE":
             if not valid_sha(entry.get("sha256")) or entry.get("proof") != "ARCHIVE_AUTHORITY_TREE":
                 deny("DISPOSITION_MANIFEST_ARCHIVE_SCHEMA")
@@ -1613,24 +1663,35 @@ def _normalized_archive_member(name: str) -> PurePosixPath:
     return pure
 
 
-def _authority_root(path: Path) -> os.stat_result:
+def _authority_root(path: Path, entry: dict[str, Any], *,
+                    require_not_group_writable: bool = False
+                    ) -> tuple[os.stat_result, dict[str, Any]]:
+    if entry.get("authorityState") != "PRESENT":
+        deny("DISPOSITION_AUTHORITY_ABSENT")
     info = physical_directory(path, "DISPOSITION_AUTHORITY_DIRECTORY")
-    if (info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
-            stat.S_IMODE(info.st_mode) & 0o022):
+    identity = _directory_identity(info)
+    if (not _identity_owner_allowed(info) or
+            (require_not_group_writable and stat.S_IMODE(info.st_mode) & 0o022) or
+            identity != entry.get("authorityIdentity")):
         deny("DISPOSITION_AUTHORITY_IDENTITY")
-    return info
+    return info, identity
 
 
-def _authority_leaf(root: Path, relative: str) -> Path:
+def _authority_leaf(root: Path, root_info: os.stat_result,
+                    relative: str, *, require_not_group_writable: bool = False
+                    ) -> tuple[Path, list[dict[str, Any]]]:
     leaf = root / relative
     current = leaf.parent
+    ancestors: list[dict[str, Any]] = []
     while current != root:
         info = physical_directory(current, "DISPOSITION_AUTHORITY_ANCESTOR")
-        if (info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
-                stat.S_IMODE(info.st_mode) & 0o022):
+        if (info.st_dev != root_info.st_dev or not _identity_owner_allowed(info) or
+                (require_not_group_writable and stat.S_IMODE(info.st_mode) & 0o022)):
             deny("DISPOSITION_AUTHORITY_IDENTITY")
+        ancestors.append({"path": str(current), **_directory_identity(info),
+                          "nlink": info.st_nlink})
         current = current.parent
-    return leaf
+    return leaf, ancestors
 
 
 def _safe_archive_link(member: tarfile.TarInfo, member_path: PurePosixPath) -> str:
@@ -1685,7 +1746,7 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
             identity["nlink"] != 1):
         deny("DISPOSITION_IDENTITY_DIVERGED")
     authority = Path(entry["authority"])
-    _authority_root(authority)
+    authority_root, authority_root_identity = _authority_root(authority, entry)
     relation: list[dict[str, Any]] = []
     seen: set[str] = set()
     try:
@@ -1704,36 +1765,53 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
                         digest.update(chunk)
                     member_sha = digest.hexdigest()
                     _protected_archive_member(relative, entry, member_sha, manifest)
-                    authoritative = _authority_leaf(authority, relative)
+                    authoritative, authority_ancestors = _authority_leaf(
+                        authority, authority_root, relative)
+                    try:
+                        authority_mode = stat.S_IMODE(authoritative.lstat().st_mode)
+                    except OSError:
+                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
                     authority_raw, authority_identity = stable_regular(
                         authoritative, member_sha, private=False,
-                        allowed_modes={member.mode & 0o7777})
-                    if (len(authority_raw) != member.size or
-                            authority_identity["mode"] != f"0{member.mode & 0o7777:03o}"):
+                        allowed_modes={authority_mode},
+                        allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
+                    if len(authority_raw) != member.size:
                         deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
                     relation.append({"path": relative, "type": "file", "size": member.size,
-                                     "sha256": member_sha, "authority": authority_identity})
+                                     "sha256": member_sha, "tarMode": f"0{member.mode & 0o7777:03o}",
+                                     "authority": authority_identity,
+                                     "authorityAncestors": authority_ancestors})
                 elif member.isdir():
-                    authoritative = _authority_leaf(authority, relative)
-                    physical_directory(authoritative, "DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                    authoritative, authority_ancestors = _authority_leaf(
+                        authority, authority_root, relative)
+                    directory_info = physical_directory(
+                        authoritative, "DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                    if directory_info.st_dev != authority_root.st_dev or not _identity_owner_allowed(directory_info):
+                        deny("DISPOSITION_AUTHORITY_IDENTITY")
                     _protected_archive_member(relative, entry, None, manifest)
-                    relation.append({"path": relative, "type": "directory", "size": 0})
+                    relation.append({"path": relative, "type": "directory", "size": 0,
+                                     "authority": stat_identity(directory_info, include_nlink=True),
+                                     "authorityAncestors": authority_ancestors})
                 elif member.issym():
                     target = _safe_archive_link(member, PurePosixPath(relative))
-                    authoritative = _authority_leaf(authority, relative)
+                    authoritative, authority_ancestors = _authority_leaf(
+                        authority, authority_root, relative)
                     try:
                         info = authoritative.lstat()
                     except OSError:
                         deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
                     if not stat.S_ISLNK(info.st_mode) or os.readlink(authoritative) != target:
                         deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                    relation.append({"path": relative, "type": "symlink", "target": target})
+                    relation.append({"path": relative, "type": "symlink", "target": target,
+                                     "authority": stat_identity(info, include_nlink=True),
+                                     "authorityAncestors": authority_ancestors})
                 else:
                     deny("DISPOSITION_ARCHIVE_MEMBER_UNSAFE")
     except (tarfile.TarError, OSError):
         deny("DISPOSITION_ARCHIVE_READ")
     return {"memberCount": len(relation), "relationSha256": digest_bytes(canonical(relation)),
-            "authority": str(authority), "effects": [[*LITERAL_UNLINK, str(path)]]}
+            "authority": str(authority), "authorityIdentity": authority_root_identity,
+            "effects": [[*LITERAL_UNLINK, str(path)]]}
 
 
 def _parse_package_files(path: Path, expected_sha: str) -> tuple[dict[str, str], dict[str, Any]]:
@@ -1767,18 +1845,23 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
     manifest_path = path / "PACKAGE_FILES.sha256"
     listed, package_identity = _parse_package_files(manifest_path, entry["packageFilesSha256"])
     authority = Path(entry["authority"])
-    _authority_root(authority)
+    authority_root, authority_root_identity = _authority_root(
+        authority, entry, require_not_group_writable=True)
     actual_files: dict[str, dict[str, Any]] = {}
     directories: list[str] = []
+    directory_identities: list[dict[str, Any]] = []
     stack = [path]
     while stack:
         current = stack.pop()
         current_info = physical_directory(current, "DISPOSITION_TREE_DIRECTORY")
         if current_info.st_dev != root_device:
             deny("DISPOSITION_TREE_CROSS_DEVICE")
-        if (current_info.st_uid != os.geteuid() or current_info.st_gid != os.getegid() or
-                stat.S_IMODE(current_info.st_mode) & 0o022):
+        if not _identity_owner_allowed(current_info) or stat.S_IMODE(current_info.st_mode) & 0o022:
             deny("DISPOSITION_TREE_DIRECTORY_IDENTITY")
+        directory_identities.append({
+            "path": "." if current == path else current.relative_to(path).as_posix(),
+            **stat_identity(current_info, include_nlink=True),
+        })
         if current != path:
             directories.append(current.relative_to(path).as_posix())
         try:
@@ -1810,24 +1893,34 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
             authority_mode = stat.S_IMODE((authority / relative).lstat().st_mode)
         except OSError:
             deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
-        if leaf_mode & 0o002 or authority_mode != leaf_mode:
+        if leaf_mode & 0o022:
             deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
         raw, identity = stable_regular(leaf, listed[relative], private=False,
                                        allowed_modes={leaf_mode},
-                                       include_nlink=True)
+                                       include_nlink=True,
+                                       allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
         if identity["nlink"] != 1:
             deny("DISPOSITION_TREE_HARDLINK")
+        authority_leaf, authority_ancestors = _authority_leaf(
+            authority, authority_root, relative, require_not_group_writable=True)
         authority_raw, authority_identity = stable_regular(
-            _authority_leaf(authority, relative), listed[relative], private=False,
-            allowed_modes={authority_mode})
+            authority_leaf, listed[relative], private=False,
+            allowed_modes={authority_mode},
+            allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
         if len(raw) != len(authority_raw):
             deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
         relation.append({"path": relative, "sha256": listed[relative],
                          "size": len(raw), "identity": identity,
-                         "authority": authority_identity})
+                         "authority": authority_identity,
+                         "authorityAncestors": authority_ancestors})
+    authority_manifest, authority_manifest_ancestors = _authority_leaf(
+        authority, authority_root, "PACKAGE_FILES.sha256",
+        require_not_group_writable=True)
+    authority_manifest_mode = stat.S_IMODE(authority_manifest.lstat().st_mode)
     authority_manifest_raw, _ = stable_regular(
-        _authority_leaf(authority, "PACKAGE_FILES.sha256"), entry["packageFilesSha256"], private=False,
-        allowed_modes={0o600, 0o640, 0o644})
+        authority_manifest, entry["packageFilesSha256"], private=False,
+        allowed_modes={authority_manifest_mode},
+        allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
     if digest_bytes(authority_manifest_raw) != entry["packageFilesSha256"]:
         deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
     file_effects = [[*LITERAL_UNLINK, str(path / relative)]
@@ -1839,7 +1932,12 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
     return {"leafCount": len(expected_files), "directoryCount": len(directories) + 1,
             "packageFiles": {"path": str(manifest_path), "sha256": entry["packageFilesSha256"],
                              "identity": package_identity},
-            "relationSha256": digest_bytes(canonical(relation)), "authority": str(authority),
+            "relationSha256": digest_bytes(canonical({
+                "directories": sorted(directory_identities, key=lambda item: item["path"]),
+                "files": relation,
+                "authorityManifestAncestors": authority_manifest_ancestors,
+            })), "authority": str(authority),
+            "authorityIdentity": authority_root_identity,
             "effects": file_effects + directory_effects}
 
 
@@ -1852,7 +1950,7 @@ def authenticate_manifest_disposition(candidate: dict[str, Any], operational: di
     entry = entries.get(str(path))
     if entry is None:
         deny("DISPOSITION_CANDIDATE_NOT_DECLARED")
-    _preparation_archive_ancestors(path)
+    ancestor_identities = _preparation_archive_ancestors(path, entry["candidateAncestors"])
     process_summary = _disposition_reference_checks(path, operational, process_data)
     if entry["type"] == "ARCHIVE_FILE":
         detail = _authenticate_disposition_archive(path, entry, manifest)
@@ -1867,6 +1965,7 @@ def authenticate_manifest_disposition(candidate: dict[str, Any], operational: di
             "dispositionManifest": {"path": str(DISPOSITION_MANIFEST_PATH),
                                     "sha256": DISPOSITION_MANIFEST_SHA256},
             "entry": entry, "identity": identity, "detail": detail,
+            "candidateAncestors": ancestor_identities,
             "processScan": process_summary}
 
 
@@ -1933,7 +2032,7 @@ def validate_audit_request(value: dict[str, Any]) -> None:
         manifest, entries = _disposition_manifest(dispositions[0].get("dispositionManifest"))
         del manifest
         requested = [item.get("path") for item in dispositions]
-        if (len(requested) != 7 or len(set(requested)) != 7 or
+        if (len(requested) != 3 or len(set(requested)) != 3 or
                 set(requested) != set(entries) or
                 any(item.get("dispositionManifest") != dispositions[0].get("dispositionManifest")
                     for item in dispositions)):
@@ -2362,6 +2461,9 @@ def main() -> None:
             result = execute_intent(args.intent, args.intent_sha256, args.authorization,
                                     args.authorization_sha256, args.receipt_root)
         print(json.dumps(result, sort_keys=True))
+        if (args.action == "audit" and
+                result.get("state") == "P00_CAPACITY_RECOVERY_AUDIT_DENY"):
+            raise SystemExit(2)
     except Denied as exc:
         print(json.dumps({"state": "CAPACITY_RECOVERY_DENY", "predicate": str(exc)}, sort_keys=True))
         raise SystemExit(2)
