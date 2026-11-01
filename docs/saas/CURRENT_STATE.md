@@ -233,6 +233,27 @@ intenção, manifesto, autorização e receipt históricos não são editados ne
 reutilizados. Regressão sintética percorre roots físicos distintos de audit,
 prepare e execute; drift de caminho, SHA ou confinamento continua `DENY`.
 
+O PR #306 foi integrado no merge
+`04a9650da1f827e93262873b8813aa50f9dde4b7`; o HEAD testado
+`42e4dee8321e970af22e1a38f0105258c3e9c756` e o merge possuem a mesma árvore
+`f22c60bacd76c0372faceff4b6ff88f66422e5b6`. A operação sucessora preservou o
+plano PASS `502cc4b7…` e a tentativa anterior como terminal, selou intenção
+`b3b1e7f745b6f32f0d8233ac585a69fe5be0fc57ac4964a0f4f8c6cd6e872ec0`,
+comandos `725ecbdc…` e autorização `2330c848…`, e executou uma única vez na
+custódia `p00-capacity-three-archives-04a9650d-prepare-successor-v1`.
+
+O fechamento é `COMPLETED_RECONCILED`: 3 `ATTEMPT`, 3 `RESULT` e 3 `VERIFIED`,
+sem `DENY`, com os três archives ausentes e as três autoridades preservadas.
+Receipt `6662af796b38018af5285f552fc80090ed4fdfd29f27143bad8fdb255cbc0646`,
+journal `b13da490e5dc1452ad1901cb3e84f4e2fa35514f2f2742f6b96d8201221f8744`
+e terminal `2445581590eae2ad59fe09ea4c8ac055c500d8d749d4b117022d8e80a69e2ec8`
+registram ganho físico de `458.964.992` bytes. O receipt mediu
+`8.846.487.552` bytes disponíveis; depois de persistidas todas as evidências, a
+observação final foi `8.846.467.072` bytes e `8.727.609` inodes disponíveis.
+PM2, dump, grafo, API, frontend, worker, health e locks permaneceram
+inalterados. Esse lote é terminal e irrepetível; nenhuma retirada adicional foi
+autorizada.
+
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
 memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou
