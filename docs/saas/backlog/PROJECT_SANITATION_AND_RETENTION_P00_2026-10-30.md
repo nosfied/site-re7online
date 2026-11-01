@@ -609,7 +609,7 @@ o ganho real antes da decisão seguinte.
 
 | Artefato | Bytes físicos registrados | Estado/impedimento |
 | --- | ---: | --- |
-| worker-package-audit | 365.674.496 | INVESTIGATE; suporte técnico local para 7.044 arquivos/11 symlinks corrigido e ensaiado, sem alterar manifesto/helper 3/3; ainda faltam qualificação produtiva folha a folha, identidades/referências frescas e binding fechado com autoridade worker-minimal-reactive-afbb7455-verified |
+| worker-package-audit | 365.674.496 | REVIEW READY / NOT QUALIFIED: contrato separado fecha candidato, autoridade, `PACKAGE_FILES.sha256`, relação de 11 links, identidades históricas e observador literal; percurso sintético materializado `audit → prepare → execute` passa e negativas de path/hash/identidade/link/referência/dependência passam. A futura qualificação produtiva continua sendo uma única fase `audit` contida, com identidades, referências, locks e equivalência folha a folha frescos; nenhuma retirada autorizada |
 | runtime-fix/api-frontend-return.private.tar.gz | 276.844.544 | KEEP_PROTECTED permanente pela decisão existente sobre material protegido; não reabrir como candidato |
 | frontend-3227b2d7.tar.gz | 184.074.240 | NOT_QUALIFIED; ancestral 0775 continua impedimento material |
 | night/candidate.tar.gz | 102.604.800 | NOT_QUALIFIED; autoridade física esperada ausente |
@@ -621,6 +621,33 @@ Os três itens potencialmente qualificáveis somam 645.742.592 bytes, ainda
 recuperação comprovada. Não há hoje um conjunto comprovadamente retirável que
 cubra o déficit integral; isso não cria uma nova exigência de tamanho mínimo
 igual ao déficit para cada lote.
+
+### Plano fechado para a futura qualificação de `worker-package-audit`
+
+Escopo único: candidato
+`/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit`
+e autoridade preservada
+`/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified`. O request
+schema 3 deverá conter um único candidato, `incrementalBatch=true`,
+`minimumRecoveryBytes=365674496`, `targetAvailableBytes=9663676416`, o manifesto
+específico autenticado e o helper
+instalado a partir do mesmo merge. A fotografia operacional, o SHA do request e
+o diretório de Node no `PATH` são necessariamente materializados e reabertos na
+janela; não são antecipados neste plano versionado.
+
+Custódia proposta:
+`/opt/re7online/backups/converta-persistent/preparations/p00-capacity-worker-package-audit-<merge12>-v1`, privada `0700`, com orçamento máximo de 128 MiB. A fase usa
+`MemoryMax=536870912`, `MemorySwapMax=0`, timeout monotônico de 1800 segundos e
+graça de cinco segundos. O comando canônico, depois do readback do request, é:
+
+```text
+/usr/bin/python3 -B <custody>/control/scripts/capacity-recovery-supervisor.py --stdout-output <custody>/audit.stdout.private.txt --stderr-output <custody>/audit.stderr.private.txt --terminal-output <custody>/audit.terminal.private.json --telemetry-output <custody>/audit.telemetry.private.jsonl --supervisor-telemetry-output <custody>/audit.supervisor-telemetry.private.jsonl audit --request <custody>/audit-request.private.json --request-sha256 <REQUEST_SHA256_FROM_STABLE_READBACK> --plan-output <custody>/audit-plan.private.json --containment-output <custody>/audit-containment.private.json --memory-max-bytes 536870912 --timeout-seconds 1800
+```
+
+A operação futura para na primeira divergência de binding, identidade, relação,
+referência, helper, PM2/health/guarda/lock, contenção, prazo ou capacidade; para
+também imediatamente após o `audit`, mesmo em PASS. Não há pré-comparação do
+payload, `prepare`, `execute`, autorização ou efeito nesta habilitação.
 
 Arestas d436239e (ROLLBACK_DEPENDENCY) e f1602787 (ACTIVE_DEPENDENCY), ativos,
 retornos imediatos e dependências transitivas continuam preservadas. Não remover

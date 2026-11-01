@@ -494,6 +494,57 @@ class CapacityRecoveryTests(unittest.TestCase):
         }
         return root, authority, entry, links
 
+    def worker_package_audit_disposition_fixture(self, suffix="worker-binding"):
+        root, authority, entry, links = self.worker_tree_fixture(suffix)
+        control = self.base / f"worker-control-{suffix}" / "control"
+        env = control / "apps/whatsapp-agent/.env.example"
+        env.parent.mkdir(parents=True)
+        env.write_bytes(b"EXAMPLE_ONLY=yes\n"); env.chmod(0o644)
+        record = control / "docs/evidence.md"
+        record.parent.mkdir(parents=True)
+        record.write_text("worker package audit historical evidence\n"); record.chmod(0o644)
+        current = root.parent
+        ancestors = []
+        while True:
+            current.chmod(0o700)
+            info = current.lstat()
+            ancestors.append({"path": str(current), "device": info.st_dev,
+                              "inode": info.st_ino, "uid": info.st_uid,
+                              "gid": info.st_gid,
+                              "mode": f"0{stat.S_IMODE(info.st_mode):03o}"})
+            if current == self.preparations:
+                break
+            current = current.parent
+        entry.update({
+            "path": str(root), "type": "ENUMERATED_TREE",
+            "physicalBytes": MODULE.physical_usage([root])[str(root)]["allocatedBytes"],
+            "sha256": None, "proof": "ENUMERATED_TREE_AUTHORITY",
+            "candidateAncestors": ancestors,
+            "historicalRecords": [{"path": "docs/evidence.md", "sha256": sha(record)}],
+            "packageSymlinksSha256": sha(root / "PACKAGE_SYMLINKS.txt"),
+        })
+        manifest = control / "config/capacity-recovery/worker-package-audit-disposition.v1.json"
+        manifest.parent.mkdir(parents=True)
+        private_json(manifest, {
+            "schemaVersion": 2, "kind": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+            "dispositionId": "fixture-worker-package-audit-v1", "entries": [entry],
+            "versionedEnvExample": {"path": "apps/whatsapp-agent/.env.example",
+                                    "sha256": sha(env)},
+        })
+        binding = {"path": str(manifest), "sha256": sha(manifest)}
+        candidate = {"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+                     "path": str(root), "dispositionManifest": binding}
+        patches = mock.patch.multiple(
+            MODULE, ROOT=control, PREPARATIONS_ROOT=self.preparations,
+            RELEASES_ROOT=self.releases,
+            WORKER_PACKAGE_AUDIT_MANIFEST_PATH=manifest,
+            WORKER_PACKAGE_AUDIT_MANIFEST_SHA256=sha(manifest),
+            WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1")
+        return {"root": root, "authority": authority, "entry": entry,
+                "links": links, "control": control, "manifest": manifest,
+                "binding": binding, "candidate": candidate, "patches": patches,
+                "record": record, "env": env}
+
     def request_value(self, candidates=None, minimum=1):
         return {"schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",
                 "minimumRecoveryBytes": minimum, "targetAvailableBytes": minimum,
@@ -670,6 +721,187 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(len(present), 3)
         self.assertTrue(all(entry["authorityIdentity"] is not None for entry in present))
         self.assertFalse(any(entry["authorityState"] == "ABSENT" for entry in entries))
+
+    def test_worker_package_audit_manifest_is_closed_and_binds_existing_proofs(self):
+        path = MODULE.WORKER_PACKAGE_AUDIT_MANIFEST_PATH
+        self.assertEqual(
+            MODULE.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256,
+            "40727a3c5f6c685ffa0169366310b6f4d92a203ade522835da0c83fbb3868c76",
+        )
+        self.assertEqual(sha(path), MODULE.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256)
+        manifest, entries = MODULE._disposition_manifest({
+            "path": str(path), "sha256": MODULE.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256,
+        })
+        self.assertEqual(manifest["dispositionId"],
+                         MODULE.WORKER_PACKAGE_AUDIT_DISPOSITION_ID)
+        self.assertEqual(len(entries), 1)
+        expected_path = (
+            "/opt/re7online/backups/converta-persistent/preparations/"
+            "incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/"
+            "worker-package-audit")
+        self.assertEqual(set(entries), {expected_path})
+        entry = entries[expected_path]
+        self.assertEqual(entry["authority"],
+                         "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified")
+        self.assertEqual(entry["physicalBytes"], 365_674_496)
+        self.assertEqual(entry["packageFilesSha256"],
+                         "650b2a216b595f858c4b9b5110d2dbcd8909bc4a7ec655c3560734c5641ca398")
+        self.assertEqual(entry["packageSymlinksSha256"],
+                         "2699e8641f1eb28fdfd963c2fea413866edd6eab62e5bd1ad71f1f8606251fc4")
+        self.assertEqual(entry["identity"], {
+            "device": 64769, "inode": 3161329, "nlink": 3,
+            "uid": 1000, "gid": 1000, "mode": "0700",
+        })
+        for record in entry["historicalRecords"]:
+            record_path = MODULE.ROOT / record["path"]
+            self.assertEqual(sha(record_path), record["sha256"])
+        historical = json.loads((
+            MODULE.ROOT / "docs/reviews/automation-freeform-window-release-af26/"
+            "worker-reactive-transport-20261005.manifest.json").read_text())
+        self.assertEqual(historical["manifestSha256"], entry["packageFilesSha256"])
+        self.assertEqual(historical["symlinkCount"], 11)
+        relation = MODULE.ROOT / (
+            "docs/reviews/automation-freeform-window-release-af26/"
+            "worker-reactive-transport-20261005.symlinks.txt")
+        self.assertEqual(sha(relation), entry["packageSymlinksSha256"])
+        self.assertEqual(len(relation.read_text().splitlines()), 11)
+
+    def test_worker_package_audit_closed_contract_full_lifecycle_and_negatives(self):
+        fixture = self.worker_package_audit_disposition_fixture("worker-closed")
+        private_json(self.request, self.request_value([fixture["candidate"]]))
+        plan = fixture["control"].parent / "worker-plan.private.json"
+        intent = self.base / "worker-intent.private.json"
+        commands = self.base / "worker-commands.private.json"
+        seal = self.base / "worker-seal.private.json"
+        with fixture["patches"], self.process_patch():
+            audited = MODULE.audit_request(self.request, sha(self.request), plan)
+            self.assertEqual(audited["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS",
+                             audited["errors"])
+            MODULE.prepare_plan(plan, sha(plan), intent, commands, seal)
+        sealed = json.loads(intent.read_text())
+        self.assertEqual(len(sealed["candidates"]), 1)
+        self.assertEqual(sealed["candidates"][0]["path"], str(fixture["root"]))
+        self.assertEqual(sealed["candidates"][0]["detail"]["symlinkCount"],
+                         len(fixture["links"]))
+        self.assertTrue(all(command[0] in {"/usr/bin/unlink", "/usr/bin/rmdir"}
+                            for command in sealed["commands"]))
+        self.assertFalse(any(str(fixture["authority"]) in argument
+                             for command in sealed["commands"] for argument in command))
+        self.assertFalse(any(".data" in argument
+                             for command in sealed["commands"] for argument in command))
+
+        for name in ("path", "manifest-hash", "identity", "authority-identity",
+                     "link", "dependency"):
+            negative = self.worker_package_audit_disposition_fixture("worker-negative-" + name)
+            candidate = negative["candidate"]
+            if name == "path":
+                candidate["path"] += ".other"
+            elif name == "manifest-hash":
+                candidate["dispositionManifest"]["sha256"] = "0" * 64
+            elif name == "identity":
+                negative["root"].chmod(0o755)
+            elif name == "authority-identity":
+                negative["authority"].chmod(0o700)
+            elif name == "link":
+                (negative["root"] / negative["links"][0][0]).unlink()
+            else:
+                negative["record"].write_text("changed\n")
+            private_json(self.request, self.request_value([candidate]))
+            expected = {
+                "path": "DISPOSITION_EXACT_BATCH",
+                "manifest-hash": "DISPOSITION_MANIFEST_FIXED_BINDING",
+                "identity": "DISPOSITION_IDENTITY_DIVERGED",
+                "authority-identity": "DISPOSITION_AUTHORITY_IDENTITY",
+                "link": "DISPOSITION_TREE_LEAF_SET",
+                "dependency": "FILE_SHA256",
+            }[name]
+            with self.subTest(name=name), negative["patches"], self.process_patch():
+                try:
+                    denied = MODULE.audit_request(
+                        self.request, sha(self.request), self.base / f"negative-{name}.json")
+                except MODULE.Denied as exc:
+                    self.assertIn(expected, str(exc))
+                else:
+                    self.assertEqual(denied["state"], "P00_CAPACITY_RECOVERY_AUDIT_DENY")
+                    self.assertTrue(any(expected in error["predicate"]
+                                        for error in denied["errors"]))
+
+        reference = self.worker_package_audit_disposition_fixture("worker-negative-reference")
+        private_json(self.request, self.request_value([reference["candidate"]]))
+        targets = [(77, 88, "fd/4",
+                    str(reference["root"] / "payload/file-00000.bin"))]
+        with reference["patches"], self.process_patch(targets=targets):
+            denied = MODULE.audit_request(
+                self.request, sha(self.request), self.base / "negative-reference.json")
+            self.assertEqual(denied["state"], "P00_CAPACITY_RECOVERY_AUDIT_DENY")
+            self.assertTrue(any(error["predicate"] == "DISPOSITION_PROCESS_REFERENCE"
+                                for error in denied["errors"]))
+
+    def test_worker_package_audit_materialized_controls_cross_phase_lifecycle(self):
+        fixture = self.worker_package_audit_disposition_fixture("worker-materialized")
+
+        def phase_module(name):
+            root = self.preparations / name / "control"
+            sources = {
+                "apps/whatsapp-agent/.env.example": fixture["env"],
+                "docs/evidence.md": fixture["record"],
+                "config/capacity-recovery/worker-package-audit-disposition.v1.json":
+                    fixture["manifest"],
+                "scripts/capacity-recovery.py": TOOL,
+            }
+            for relative, source in sources.items():
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(source.read_bytes())
+                destination.chmod(stat.S_IMODE(source.stat().st_mode))
+            spec = importlib.util.spec_from_file_location(
+                "worker_materialized_" + name.replace("-", "_"),
+                root / "scripts/capacity-recovery.py")
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return root, module
+
+        audit_root, audit_module = phase_module("worker-phase-audit")
+        _prepare_root, prepare_module = phase_module("worker-phase-prepare")
+        _execute_root, execute_module = phase_module("worker-phase-execute")
+        audit_manifest = audit_module.WORKER_PACKAGE_AUDIT_MANIFEST_PATH
+        binding = {"path": str(audit_manifest), "sha256": sha(audit_manifest)}
+        candidate = {**fixture["candidate"], "dispositionManifest": binding}
+        private_json(self.request, self.request_value([candidate]))
+        plan = audit_root.parent / "plan.private.json"
+        intent = self.base / "materialized-intent.private.json"
+        commands = self.base / "materialized-commands.private.json"
+        seal = self.base / "materialized-seal.private.json"
+        common = dict(
+            PREPARATIONS_ROOT=self.preparations, RELEASES_ROOT=self.releases,
+            WORKER_PACKAGE_AUDIT_MANIFEST_SHA256=sha(audit_manifest),
+            WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1")
+        with mock.patch.multiple(audit_module, **common), \
+                mock.patch.object(audit_module, "_proc_targets", return_value=scan()):
+            audited = audit_module.audit_request(self.request, sha(self.request), plan)
+        self.assertEqual(audited["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+        with mock.patch.multiple(prepare_module, **common), \
+                mock.patch.object(prepare_module, "_proc_targets", return_value=scan()):
+            prepare_module.prepare_plan(plan, sha(plan), intent, commands, seal)
+        sealed = json.loads(intent.read_text())
+        authorization = self.base / "materialized-authorization.private.json"
+        private_json(authorization, {
+            "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+            "authorization": "AUTHORIZE_ONCE", "intentSha256": sha(intent),
+            "commandsSha256": sealed["commandsSha256"],
+            "paths": [item["path"] for item in sealed["candidates"]],
+        })
+        receipt = self.base / "receipts/worker-materialized"
+        receipt.parent.mkdir(mode=0o700)
+        with mock.patch.multiple(execute_module, **common), \
+                mock.patch.object(execute_module, "_proc_targets", return_value=scan()):
+            result = execute_module.execute_intent(
+                intent, sha(intent), authorization, sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertFalse(fixture["root"].exists())
+        self.assertTrue(fixture["authority"].exists())
+        self.assertTrue((fixture["authority"] / ".data").is_symlink())
 
     def test_manifest_identity_model_accepts_exact_root_or_deploy_authority(self):
         fixture = self.manifest_disposition_fixture("authority-owner")

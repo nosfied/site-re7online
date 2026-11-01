@@ -245,6 +245,13 @@ class ProcObserverTests(unittest.TestCase):
                     hybrid_absent + "/window/worker-minimal-b9-v3.tar.gz"]
         accepted.extend(sorted(OBSERVER.MANIFEST_DISPOSITION_PATHS))
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
+        worker_package_audit = (
+            "/opt/re7online/backups/converta-persistent/preparations/"
+            "incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/"
+            "worker-package-audit")
+        self.assertIn(worker_package_audit, OBSERVER.MANIFEST_DISPOSITION_PATHS)
+        with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+            OBSERVER.validate_request(request([worker_package_audit + "-other"]))
         for path in (preparation, preparation + "/content.private.tar.gz",
                      preparation + "/nested/api-frontend-return.private.tar.gz",
                      preparation + "/worker-minimal-b9-v3.tar.gz",
