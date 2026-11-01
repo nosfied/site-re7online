@@ -107,12 +107,11 @@ outro lote.
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
 owner/group/mode, métricas físicas, hashes das fontes e comando fazem parte do
 binding. A fotografia operacional schema 2 exige fontes de recaptura ao vivo;
-fotografia anterior sem essas fontes é negada. O único comando destrutivo
-admitido é:
-
-```text
-/usr/bin/rm -r -- <caminho-autenticado>
-```
+fotografia anterior sem essas fontes é negada. Os comandos destrutivos são fechados por classe. `NPM_CACHE_MAINTENANCE` e
+`DERIVED_OUTPUT_RUNTIME` usam `/usr/bin/rm -r -- <caminho-autenticado>`.
+`CLOSED_PREPARATION_DERIVED_ARCHIVE` e o manifesto produtivo fechado 3/3 usam
+somente `/usr/bin/unlink -- <arquivo-autenticado>`. A existência de código
+histórico para outros tipos não autoriza seus efeitos neste lote.
 
 Glob, expansão, `force`, `prune`, caminho alternativo e descoberta destrutiva em
 `execute` são negados.
@@ -654,3 +653,69 @@ Uma falha produz fechamento terminal parcial e preserva todos os efeitos já
 comprovados. Não existe retry ou retomada automática. Uma operação futura sobre
 o estado remanescente exige nova auditoria, preparação e autorização; nunca se
 reutiliza `AUTHORIZE_ONCE` consumida nem o mesmo receipt root.
+
+
+## Continuidade qualificada em 01/11/2026 — leitura obrigatória antes de nova frente
+
+Esta seção consolida o procedimento exercido, não autoriza reproduzir os caminhos,
+requests ou autorizações históricos. Princípios continuam superiores ao runbook.
+O comando executável de uma nova operação deve ser materializado pelo mecanismo
+canônico, com os argumentos da versão autenticada; exemplos históricos não são
+templates consumíveis.
+
+### Sequência que funcionou
+
+1. Identificar o último checkpoint válido e a diferença em relação ao código,
+   layout, dados e ambiente atuais. Reutilizar provas e bytes ainda válidos.
+2. Validar localmente a transição completa dos consumidores reais, inclusive
+   localizações físicas distintas de audit, prepare e execute.
+3. Finalizar a fotografia operacional antes de gerar seu binding no request.
+   Reabrir os pequenos insumos por identidade/hash/modo e selar o request por
+   último. Reescrita posterior invalida a selagem; não transportar hashes de
+   templates antigos.
+4. Autenticar executor, supervisor, helper, manifesto, registros e ambiente
+   Node/PM2. Derivar os bindings de manifesto e registros da raiz histórica
+   autenticada pelo plano, conforme o contrato fechado acima.
+5. Usar o supervisor versionado nas três fases, com contenção efetiva de memória
+   agregada, swap, prazo e encerramento restrito à unidade exata. Leituras caras
+   também consomem recursos produtivos.
+6. Audit publica plano; prepare revalida e sela intenção/comandos; execute consome
+   autorização própria e recaptura referências sob locks antes do primeiro efeito.
+   Revalidar não significa produzir outra auditoria para substituir uma prova válida.
+7. Após efeito, reconciliar journal e receipt, confirmar ausências, autoridades e
+   produção preservadas, medir ganho e custo da custódia e registrar terminalidade.
+
+O lote encerrado usou 512 MiB, swap zero, prazo de 1.800 s, graça de 5 s e
+orçamento de custódia de 128 MiB em disco. São condições daquela operação,
+não defaults aprovados para qualquer futura carga. A memória disponível do host
+era uma observação, não reserva garantida. Ganho previsto de 458.973.184 bytes
+não substitui ganho medido de 458.964.992 bytes. O receipt
+`6662af796b38018af5285f552fc80090ed4fdfd29f27143bad8fdb255cbc0646`
+encerra o lote 3/3; não voltar a inventariar ou tentar remover seus caminhos.
+
+### Falhas que a próxima preparação precisa detectar
+
+| Falha real | Controle/regressão existente a reutilizar |
+| --- | --- |
+| Streaming conservava nomes e TarInfo | Digest incremental, registro exato em disco limitado e liberação de TarFile.members; regressões de cardinalidade |
+| Membro raiz iniciava subida fora da autoridade | Tratamento explícito de diretório raiz, confinamento antes de subir e término obrigatório antes do ponto fixo parent == current |
+| Fixture de poucos bytes declarada representativa de toda memória | Separar cardinalidade, maior folha, volume e leitura física fria; relatar cobertura e lacunas |
+| Monitoramento confundido com proteção | cgroup agregado e prazo reais, testes de OOM/timeout e sentinela externo |
+| Cache confundido com heap | Amostras correlacionadas de memory.stat, PIDs/RSS e eventos; não somar máximos de instantes diferentes |
+| Request conservou hash de fotografia anterior | Fotografia final → readback estável → bindings conferidos → request selado |
+| Executor idêntico relocado mudou ROOT | Binding histórico caminho+SHA do plano e regressão completa entre roots distintos |
+| Telemetria maior que 64 KiB tornou início inconclusivo | Autenticar somente a primeira linha limitada, não rejeitar pelo volume total do JSONL |
+| Processo encerrou, mas efeitos não estavam reconciliados | Diferenciar término do scope, início do executor e estado dos efeitos; não inferir sucesso ou zero efeitos pelo exit code |
+| Nova coleta repetia prova suficiente | Predicado, efeitos, provas válidas e menor próxima ação após cada negativa |
+
+O loop de raiz é defeito reproduzido e corrigido. A presença do membro raiz no
+archive produtivo não foi demonstrada pelos registros históricos; não converter
+essa hipótese em causalidade provada. O OOM produtivo mais recente registrou
+memória anônima dominante; o perfil sintético dominado por cache não o explica.
+Atingir memory.max ou aumentar seu contador não equivale isoladamente a OOM.
+
+Uma execução parcial/negada é terminal. Preservar seu recibo e sua autorização
+consumida. Qualquer sucessão precisa ser explicitamente delimitada pelo contrato,
+sem sobrescrita, replay automático ou ampliação silenciosa. Distinguir o escopo
+autorizado pelo owner do documento técnico de uso único: o documento consumido
+nunca volta a ser usado.

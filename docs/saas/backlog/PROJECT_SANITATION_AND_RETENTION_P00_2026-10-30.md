@@ -591,3 +591,45 @@ A frente termina somente quando:
 
 Até lá, o backlog funcional pode ser analisado, mas novos builds normais não devem
 competir com esta frente P00 por disco ou por mudança de control plane.
+
+
+## Decisão consolidada após o fechamento 3/3 — 01/11/2026
+
+Fonte: relatório do Codex local encaminhado pelo owner; sem nova inspeção da VPS
+pelo editor desta consolidação. As medições abaixo são checkpoints históricos,
+não saldo reservado para uma futura operação.
+
+Saldo final registrado: 8.846.467.072 bytes. Diferença para o alvo agregado de
+9.663.676.416 bytes: 817.209.344 bytes. Esse alvo não substitui o orçamento real
+da próxima geração nem o piso normal de build. Lotes incrementais seguros não
+precisam cobrir integralmente esse déficit: respeitam seu mínimo próprio e medem
+o ganho real antes da decisão seguinte.
+
+### Acervo pendente reutilizado — identificação resumida, não comandos
+
+| Artefato | Bytes físicos registrados | Estado/impedimento |
+| --- | ---: | --- |
+| worker-package-audit | 365.674.496 | INVESTIGATE; falta qualificação folha a folha e binding completo com autoridade worker-minimal-reactive-afbb7455-verified |
+| runtime-fix/api-frontend-return.private.tar.gz | 276.844.544 | KEEP_PROTECTED permanente pela decisão existente sobre material protegido; não reabrir como candidato |
+| frontend-3227b2d7.tar.gz | 184.074.240 | NOT_QUALIFIED; ancestral 0775 continua impedimento material |
+| night/candidate.tar.gz | 102.604.800 | NOT_QUALIFIED; autoridade física esperada ausente |
+| night/recovery-standalone.tar.gz | 102.477.824 | NOT_QUALIFIED; autoridade física esperada ausente |
+| runtime-fix/worker-return.private.tar.gz | 95.993.856 | Pendente de registro histórico com escopo/evidência exatos; não fabricar prova retrospectiva |
+
+Os três itens potencialmente qualificáveis somam 645.742.592 bytes, ainda
+171.466.752 bytes abaixo do déficit registrado. Potencial não é autorização nem
+recuperação comprovada. Não há hoje um conjunto comprovadamente retirável que
+cubra o déficit integral; isso não cria uma nova exigência de tamanho mínimo
+igual ao déficit para cada lote.
+
+Arestas d436239e (ROLLBACK_DEPENDENCY) e f1602787 (ACTIVE_DEPENDENCY), ativos,
+retornos imediatos e dependências transitivas continuam preservadas. Não remover
+arestas para fabricar elegibilidade. Uma necessidade de rever a retenção exige
+prova e decisão próprias; documentos antigos não são referências vivas por mera
+conveniência, nem ausência de uso presumida autoriza retirada.
+
+Próximo ato: usar o inventário existente para fechar impedimentos concretos e
+dimensionar o ganho possível, juntamente com a proposta preventiva em
+[DEPLOY_ARTIFACT_LIFECYCLE](../DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026).
+Nenhum novo audit, prepare, execute, mudança de permissão ou retirada é autorizado
+por esta classificação documental.

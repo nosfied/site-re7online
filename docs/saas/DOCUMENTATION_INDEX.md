@@ -36,7 +36,8 @@
   — contrato de capacidade/classificação, inventário consolidado e novo lote pequeno
   proposto; não autoriza limpeza.
 - [Política canônica de recuperação mínima de capacidade](CAPACITY_RECOVERY_POLICY.md)
-  — `audit`, `prepare` e `execute` fail-closed para cache npm e runtimes derivados autenticados.
+  — `audit`, `prepare` e `execute` contidos e fail-closed; inclui archives fechados,
+  checkpoint 3/3 terminal e consolidação das falhas/regressões de 01/11.
 - [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
   — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
   homologação funcional Meta permanece pendente.
@@ -113,3 +114,20 @@ documento histórico prevalece sobre o modelo operacional canônico.
 - [Fechamento API 754281d3 — DB-first e retenção sanitizada](releases/P00_DB_FIRST_API_754281D3_2026-10-29_DEPLOYED_SANITIZED.json)
 - [Registro ativo API-only da Tendência — fa63994a](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json)
   — DEPLOYED_SANITIZED; frontend aa9527cc e worker e2e7f17a preservados.
+
+
+## Continuidade operacional consolidada — 01/11/2026
+
+- [Procedimento qualificado e lições da recuperação de capacidade](CAPACITY_RECOVERY_POLICY.md#continuidade-qualificada-em-01112026--leitura-obrigatória-antes-de-nova-frente)
+  — reuso, selagem, contenção, bindings entre roots, memória e reconciliação de efeitos.
+- [Convergência: entregas encerradas e dívida restante](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#consolidação-de-01112026--não-reabrir-entregas-qualificadas)
+  — não reimplementar controles resolvidos; P00-D não é encerrado pelo lote 3/3.
+- [Capacidade e impedimentos após o lote 3/3](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md#decisão-consolidada-após-o-fechamento-33--01112026)
+  — saldo histórico, déficit e candidatos pendentes; não autoriza retirada.
+- [Lifecycle de preparações volumosas: proposta pendente](DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026)
+  — contrato preventivo e aceite; não confundir proposta com rotina instalada.
+
+O lote 3/3 registrado no PR #307 está COMPLETED_RECONCILED e é irrepetível.
+A consolidação não muda os princípios, não cria outro runbook e não autoriza
+operação produtiva. O [estado canônico](CURRENT_STATE.md) e seu JSON continuam
+sendo a entrada de continuidade, com histórico separado das próximas ações.
