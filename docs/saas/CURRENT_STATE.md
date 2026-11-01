@@ -81,24 +81,33 @@ composição do OOM produtivo não é declarada. Request, terminal e telemetrias
 permanecem na custódia; produção, dump, guarda e locks ficaram preservados.
 
 O ensaio local dirigido mostrou a lacuna do orçamento, sem atribuir retroativamente
-a causa produtiva: 180 MiB físicos frios, autenticados pelo mesmo percurso, levaram
+a causa produtiva: 180 MiB físicos aconselhados como frios, sem residência inicial
+medida, autenticados pelo mesmo percurso, levaram
 o cgroup exatamente a 256 MiB com aproximadamente 249 MiB em `file`, enquanto o
 RSS observado permaneceu perto de 31 MiB; o kernel local conseguiu reclaim e o
 ensaio passou. Payload esparso de 200 MiB e 3.000 arquivos/192 MiB descompactados
 também passaram com picos do cgroup de aproximadamente 33/28 MiB. Assim, cardinalidade,
 payload lógico e RSS isolados não explicam o evento; nova operação exige orçamento
-com margem medida para cache frio e regressão de `memory.stat`, não replay do
+com residência inicial e recuperação medidas, além de regressão de `memory.stat`, não replay do
 request `2b1d438d...`.
 
 A entrega local complementar preserva essa negativa e acrescenta observabilidade
-limitada no supervisor/executor, além de um perfil frio sintético 3/3. No perfil,
-458.973.184 bytes descompactados/459.113.917 comprimidos concluíram em 4,150 s,
-mas o cgroup atingiu exatamente o teto ensaiado de 512 MiB; `file` respondeu por
-515.768.320 bytes e a soma de RSS foi 30.887.936 bytes. Logo não há proposta de
-replay: o estado nominal é
-`AUDIT_RESOURCE_BUDGET_NOT_QUALIFIED_WITHIN_BOUND`. Código e regressões são
-apenas entrega local/em revisão; nenhum novo `audit`, `prepare` ou `execute` foi
-executado na VPS.
+limitada no supervisor/executor. O perfil sintético 3/3 reutilizou
+458.973.184 bytes apenas como escala física declarada do lote — não como volume
+descompactado produtivo — e seus archives somaram 459.113.917 bytes lógicos. Ele
+concluiu em 4,150 s no teto de 512 MiB: `oom/oom_kill/high=0`, `max=1538`,
+`file=515.768.320`, dirty/writeback/shmem zero e RSS somado 30.887.936 bytes.
+Isso é conclusão sob pressão, não orçamento operacional qualificado nem causa do
+OOM produtivo.
+
+Não há fundamento para a fórmula pico + 128 MiB: 128 MiB era orçamento de disco
+da custódia. A conclusão corrigida é
+`LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE / OPERATIONAL_BUDGET_NOT_YET_QUALIFIED`.
+A verificação complementar encontrou zero de 224.144 páginas residentes nos seis
+arquivos sintéticos antes/depois de `fsync` + `POSIX_FADV_DONTNEED` + `mincore`,
+mas foi posterior ao perfil e não prova retroativamente seu início. Código e
+regressões são apenas entrega local/em revisão; nenhum novo `audit`, `prepare` ou
+`execute` foi executado na VPS.
 
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com

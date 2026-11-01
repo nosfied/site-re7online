@@ -9,6 +9,7 @@ integrated authenticator inside the integrated audit supervisor/cgroup.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import importlib.util
 import json
@@ -75,21 +76,59 @@ def make_fixture(root: Path, sizes: list[int]) -> tuple[Path, list[dict[str, obj
     return metadata, entries
 
 
-def evict_own_files(entries: list[dict[str, object]]) -> list[str]:
+def resident_pages(fd: int, size: int) -> tuple[int | None, int, str | None]:
+    page_size = os.sysconf("SC_PAGE_SIZE")
+    page_count = (size + page_size - 1) // page_size
+    if page_count == 0:
+        return 0, 0, None
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.mmap.restype = ctypes.c_void_p
+    address = libc.mmap(None, size, 0, 1, fd, 0)  # PROT_NONE, MAP_SHARED
+    failed = ctypes.c_void_p(-1).value
+    if address == failed:
+        return None, page_count, f"MMAP_ERRNO_{ctypes.get_errno()}"
+    vector = (ctypes.c_ubyte * page_count)()
+    try:
+        if libc.mincore(ctypes.c_void_p(address), size, vector) != 0:
+            return None, page_count, f"MINCORE_ERRNO_{ctypes.get_errno()}"
+        return sum(1 for value in vector if value & 1), page_count, None
+    finally:
+        libc.munmap(ctypes.c_void_p(address), size)
+
+
+def evict_own_files(entries: list[dict[str, object]]) -> dict[str, object]:
     gaps: list[str] = []
     paths = [Path(str(entry["path"])) for entry in entries]
     authority = Path(str(entries[0]["authority"]))
     paths.extend(authority / f"candidate-{ordinal}.bin"
                  for ordinal in range(1, len(entries) + 1))
+    observations: list[dict[str, object]] = []
     for path in paths:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
         try:
+            info = os.fstat(fd)
+            before, pages, before_gap = resident_pages(fd, info.st_size)
+            os.fsync(fd)
             os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+            after, after_pages, after_gap = resident_pages(fd, info.st_size)
+            if pages != after_pages:
+                gaps.append(f"{path.name}:PAGE_COUNT_CHANGED")
+            for stage, gap in (("before", before_gap), ("after", after_gap)):
+                if gap is not None:
+                    gaps.append(f"{path.name}:{stage}:{gap}")
+            observations.append({"name": path.name, "bytes": info.st_size,
+                                 "totalPages": pages, "residentPagesBefore": before,
+                                 "residentPagesAfter": after})
         except (AttributeError, OSError) as error:
             gaps.append(f"{path.name}:{type(error).__name__}")
         finally:
             os.close(fd)
-    return gaps
+    return {"gaps": gaps, "files": observations,
+            "totalPages": sum(int(item["totalPages"]) for item in observations),
+            "residentPagesBefore": sum(int(item["residentPagesBefore"] or 0)
+                                       for item in observations),
+            "residentPagesAfter": sum(int(item["residentPagesAfter"] or 0)
+                                      for item in observations)}
 
 
 def child_source(path: Path) -> None:
@@ -124,13 +163,29 @@ def main() -> None:
     parser.add_argument("--memory-max-bytes", type=int, required=True)
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--sizes", default="111230976,173621248,174120960")
+    parser.add_argument("--verify-cold-existing", action="store_true")
     args = parser.parse_args()
-    args.root.mkdir(mode=0o700)
+    if args.verify_cold_existing:
+        if not args.root.is_dir() or args.root.is_symlink():
+            raise SystemExit("existing synthetic fixture root is required")
+    else:
+        args.root.mkdir(mode=0o700)
     sizes = [int(value) for value in args.sizes.split(",")]
     if len(sizes) != 3 or any(value <= 0 for value in sizes):
         raise SystemExit("exactly three positive sizes are required")
+    if args.verify_cold_existing:
+        metadata = args.root / "fixture.json"
+        fixture = json.loads(metadata.read_text())
+        entries = fixture["entries"]
+        cold = evict_own_files(entries)
+        result = {"schemaVersion": 1, "state": "PASS" if not cold["gaps"] else "GAP",
+                  "syntheticOnly": True, "coldPreparation": cold}
+        output = args.root / "cold-preparation-verification.json"
+        output.write_text(json.dumps(result, sort_keys=True) + "\n")
+        print(json.dumps(result, sort_keys=True))
+        return
     metadata, entries = make_fixture(args.root, sizes)
-    cold_gaps = evict_own_files(entries)
+    cold = evict_own_files(entries)
     child = args.root / "contained-child.py"
     child_source(child)
     supervisor = load(args.supervisor, "profile_supervisor_parent")
@@ -165,9 +220,15 @@ def main() -> None:
     terminal = json.loads(outputs["terminal.json"].read_text())
     report = {
         "schemaVersion": 1, "state": "PASS" if code == 0 else "DENY",
-        "exitCode": code, "syntheticOnly": True, "coldAdviceGaps": cold_gaps,
-        "candidateCount": 3, "uncompressedBytes": sum(sizes),
-        "compressedBytes": sum(Path(str(entry["path"])).stat().st_size for entry in entries),
+        "exitCode": code, "syntheticOnly": True,
+        "coldPreparation": cold,
+        "candidateCount": 3,
+        "sourceBatchDeclaredPhysicalBytes": sum(sizes),
+        "syntheticPayloadLogicalBytes": sum(sizes),
+        "syntheticArchiveLogicalBytes": sum(
+            Path(str(entry["path"])).stat().st_size for entry in entries),
+        "syntheticArchivePhysicalBytes": sum(
+            Path(str(entry["path"])).stat().st_blocks * 512 for entry in entries),
         "memoryMaxBytes": args.memory_max_bytes,
         "scopeMemoryPeakBytes": terminal.get("scopeMemoryPeakBytes"),
         "elapsedMonotonicNs": terminal.get("elapsedMonotonicNs"),

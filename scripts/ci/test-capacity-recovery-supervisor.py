@@ -14,6 +14,13 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
+PROFILE_TOOL = Path(__file__).resolve().parent / "capacity-recovery-cold-profile.py"
+PROFILE_SPEC = importlib.util.spec_from_file_location("capacity_recovery_cold_profile",
+                                                      PROFILE_TOOL)
+PROFILE = importlib.util.module_from_spec(PROFILE_SPEC)
+assert PROFILE_SPEC.loader is not None
+PROFILE_SPEC.loader.exec_module(PROFILE)
+
 
 class SupervisorTests(unittest.TestCase):
     class FakeChild:
@@ -185,6 +192,26 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn("executorTelemetry:NOT_FOUND", observed["observationGaps"])
         self.assertLessEqual(MODULE.AUDIT_RESOURCE_SAMPLE_LIMIT,
                              MODULE.AUDIT_TIMEOUT_MAX_SECONDS + 2)
+
+    def test_synthetic_cold_preparation_syncs_and_measures_residency(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-cold-proof-") as folder:
+            root = Path(folder)
+            authority = root / "authority"
+            authority.mkdir()
+            leaf = authority / "candidate-1.bin"
+            archive = root / "candidate-1.tar.gz"
+            leaf.write_bytes(b"a" * (2 * 1024 * 1024))
+            archive.write_bytes(b"b" * (2 * 1024 * 1024))
+            # Bring only these synthetic files into cache before proving that
+            # the bounded preparation can observe and evict their clean pages.
+            self.assertEqual(len(leaf.read_bytes()), 2 * 1024 * 1024)
+            self.assertEqual(len(archive.read_bytes()), 2 * 1024 * 1024)
+            result = PROFILE.evict_own_files([{
+                "path": str(archive), "authority": str(authority)}])
+        self.assertEqual(result["gaps"], [])
+        self.assertGreater(result["residentPagesBefore"], 0)
+        self.assertEqual(result["residentPagesAfter"], 0)
+        self.assertEqual(len(result["files"]), 2)
 
     def test_audit_terminal_reasons_are_nominal(self):
         passed = {"state": "PASS"}

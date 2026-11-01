@@ -182,16 +182,20 @@ autenticador sob cgroup v2 de 256 MiB. Um payload esparso de 200 MiB passou com
 pico do cgroup de 32.919.552 bytes; 3.000 arquivos regulares totalizando 192 MiB
 descompactados antes do marco de 4.096 membros passaram com 27.844.608 bytes.
 Um payload físico incompressível de 180 MiB já aquecido passou com 24.137.728
-bytes. Depois de `POSIX_FADV_DONTNEED`, o mesmo caso frio atingiu exatamente
+bytes. Depois de `POSIX_FADV_DONTNEED`, o mesmo caso aconselhado como frio atingiu
+exatamente
 268.435.456 bytes: máximos amostrados de `file=248.836.096`, `anon=19.587.072`,
 `kernel=1.081.344` e RSS do processo de 31.260.672 bytes; houve reclaim local e
-conclusão. Isso demonstra que 256 MiB não reservam margem para leitura física
-fria, mas não reconstrói a composição do OOM produtivo, pois seu `memory.stat`
-não foi coletado.
+conclusão. O retorno de `POSIX_FADV_DONTNEED` não comprovou sozinho a residência
+anterior ou posterior das páginas; esse ensaio demonstra pressão de cache, não
+uma leitura fria autenticada nem a composição do OOM produtivo, cujo
+`memory.stat` não foi coletado.
 
 Antes de nova autorização, a regressão necessária deve executar autoridade e
-archive físicos frios no cgroup real, amostrar `memory.stat` e PIDs durante toda
-a passagem e negar o orçamento quando o pico não preservar margem explícita.
+archive físicos com residência inicial medida no cgroup real, amostrar
+`memory.stat` e PIDs durante toda a passagem e avaliar pico, eventos, recuperação
+e progresso conjuntamente. Eventual margem obrigatória precisa ter fundamento
+versionado ou medido; não é derivada de orçamento de disco.
 Elevar apenas `RLIMIT_AS`, contar nomes ou observar RSS não cobre esse caso. O
 request e a custódia c014 são terminais e não podem ser repetidos.
 
@@ -205,17 +209,35 @@ O executor também emite progresso temporal, limitado aos mesmos 256 eventos por
 candidato, durante hash, payload e comparação da autoridade, sem nomes ou
 conteúdo.
 
-O perfil físico frio dirigido criou três archives e autoridades exclusivamente
-sintéticos com 458.973.184 bytes descompactados e 459.113.917 bytes comprimidos,
-na mesma sequência 3/3. `POSIX_FADV_DONTNEED` foi aplicado somente a esses
-arquivos. Pelo supervisor/cgroup real, com `MemoryMax=536870912`, o autenticador
-completo passou em 4,150 s, porém atingiu exatamente 536.870.912 bytes: máximo
-amostrado de `file=515.768.320`, `anon=19.124.224`, `kernel=1.880.064` e soma de
-RSS dos PIDs de 30.887.936 bytes. Não houve OOM, mas a margem foi zero. Portanto
-nenhum orçamento até o teto já admitido de 512 MiB está qualificado. Reservar
-128 MiB sobre o pico medido exigiria 671.088.640 bytes, fora do contrato atual;
-isso é `AUDIT_RESOURCE_BUDGET_NOT_QUALIFIED_WITHIN_BOUND`, não autorização para
-ampliar a borda nem repetir produção.
+O perfil dirigido criou três archives e autoridades exclusivamente sintéticos.
+Os tamanhos das três folhas somam 458.973.184 bytes porque reutilizam apenas a
+escala física declarada do lote original; isso **não** comprova o volume
+descompactado dos archives produtivos. Os archives sintéticos somaram
+459.113.917 bytes lógicos. Pelo supervisor/cgroup real, com
+`MemoryMax=536870912`, o autenticador completo passou em 4,150 s e atingiu o
+teto: na quarta amostra, tomada no mesmo instante, `file=515.768.320`,
+`anon=19.124.224`, `kernel=1.880.064`, `shmem=0`, dirty/writeback zero e RSS
+somado de 30.887.936 bytes. `high`, `oom` e `oom_kill` permaneceram zero; o
+contador `max` foi 872 nessa amostra e 1.538 no terminal, comprovando pressão e
+recuperação de carga, não OOM. Cache `file` limpo é potencialmente recuperável,
+mas não é presumido integralmente recuperável.
+
+Não existe fundamento canônico ou medido para exigir 128 MiB acima do pico; os
+128 MiB anteriores eram orçamento **de disco da custódia**, não margem de
+memória. A conclusão corrigida é
+`LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE / OPERATIONAL_BUDGET_NOT_YET_QUALIFIED`:
+o ensaio concluiu sob pressão, mas não qualifica replay porque a equivalência de
+volume descompactado não foi provada, o início frio não foi medido naquela
+execução e a causa do OOM produtivo permanece desconhecida.
+
+A preparação foi complementada sem repetir o autenticador: após `fsync`,
+`POSIX_FADV_DONTNEED` e `mincore`, os seis arquivos sintéticos existentes
+registraram zero de 224.144 páginas residentes tanto antes quanto depois da
+verificação, sem lacunas. Isso valida a instrumentação e o estado frio atual,
+mas não retroage como prova do início do perfil já concluído. O próximo ato
+concreto, após revisão, é uma única qualificação **local** com a residência
+capturada imediatamente antes do supervisor, ainda dentro de 512 MiB. Produção
+continua proibida; o teto, a contenção e a elegibilidade permanecem inalterados.
 
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e

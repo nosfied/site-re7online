@@ -81,21 +81,46 @@
       "supervisorTelemetrySha256": "f2c8ce4a8d4c8a485e1a338f491b8f44b34a22d7ec18731895c59f47730335d7"
     },
     "localColdReadQualification": {
-      "state": "AUDIT_RESOURCE_BUDGET_NOT_QUALIFIED_WITHIN_BOUND",
+      "state": "LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE_OPERATIONAL_BUDGET_NOT_YET_QUALIFIED",
       "scope": "LOCAL_SYNTHETIC_ONLY_NOT_PRODUCTION_EXECUTED",
       "candidateCount": 3,
-      "uncompressedBytes": 458973184,
-      "compressedBytes": 459113917,
+      "sourceBatchDeclaredPhysicalBytes": 458973184,
+      "syntheticPayloadLogicalBytes": 458973184,
+      "syntheticArchiveLogicalBytes": 459113917,
+      "sourceUncompressedBytesProven": false,
       "memoryMaxBytes": 536870912,
       "cgroupMemoryPeakBytes": 536870912,
       "sampledFilePeakBytes": 515768320,
       "sampledAnonPeakBytes": 19124224,
       "sampledKernelPeakBytes": 1880064,
+      "sampledShmemBytes": 0,
+      "sampledDirtyBytes": 0,
+      "sampledWritebackBytes": 0,
       "sampledProcessRssSumPeakBytes": 30887936,
+      "memoryEvents": {
+        "high": 0,
+        "max": 1538,
+        "oom": 0,
+        "oomKill": 0,
+        "oomGroupKill": 0
+      },
       "elapsedMonotonicNs": 4149637097,
-      "qualifiedHeadroomBytes": 0,
-      "budgetWith128MiBHeadroomBytes": 671088640,
       "supervisorMaximumBytes": 536870912,
+      "mandatoryMemoryHeadroomBytes": null,
+      "prior128MiBMeaning": "CUSTODY_DISK_BUDGET_NOT_MEMORY_HEADROOM",
+      "coldPreparationProvenAtProfileStart": false,
+      "supplementalColdVerification": {
+        "totalPages": 224144,
+        "residentPagesBefore": 0,
+        "residentPagesAfter": 0,
+        "gaps": []
+      },
+      "operationalBudgetQualified": false,
+      "qualificationBlockers": [
+        "PRODUCTIVE_UNCOMPRESSED_VOLUME_NOT_PROVEN",
+        "COLD_RESIDENCY_NOT_CAPTURED_AT_PROFILE_START",
+        "PRODUCTIVE_OOM_COMPOSITION_UNKNOWN"
+      ],
       "productionReplayPermitted": false
     },
     "localCardinalityValidation": {

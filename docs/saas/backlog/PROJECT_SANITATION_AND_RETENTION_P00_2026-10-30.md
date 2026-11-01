@@ -191,13 +191,14 @@ Plano ausente e zero efeitos.
 | `frontend-fa60-css-corrected.tar.gz` | não iniciado |
 
 O diagnóstico local não promoveu hipótese a fato produtivo. Casos esparsos e
-3.000 arquivos/192 MiB passaram com baixo pico. Um payload físico frio de 180 MiB
+3.000 arquivos/192 MiB passaram com baixo pico. Um payload físico de 180 MiB,
+aconselhado como frio mas sem residência inicial medida,
 atingiu o teto de 256 MiB com cerca de 249 MiB em `file`, mesmo com RSS próximo de
 31 MiB, e concluiu somente porque houve reclaim local. Como a tentativa produtiva
 não preservou `memory.stat` nem consumo por PID no intervalo final de 27,2 s, a
 composição do OOM permanece não atribuível. O orçamento de 256 MiB está recusado
-para replay; qualquer proposta futura exige regressão de cache frio e margem
-explícita, sem alterar candidatos ou reaproveitar esta autorização.
+para replay; qualquer proposta futura exige residência inicial, recuperação e
+componentes do cgroup medidos, sem alterar candidatos ou reaproveitar esta autorização.
 
 #### Telemetria complementar e perfil frio local
 
@@ -208,19 +209,26 @@ longo de hashes/payloads/autoridades. Falha de coleta permanece visível como
 lacuna e não vira completude presumida.
 
 O perfil dirigido percorreu o autenticador completo pelo supervisor real com três
-archives sintéticos próprios, sem `drop_caches` global ou bytes produtivos. Os
-458.973.184 bytes de folhas produziram 459.113.917 bytes comprimidos. Em 4,150 s,
-o cgroup alcançou 536.870.912/536.870.912 bytes; máximos de `file`, `anon`,
-`kernel` e RSS somado foram 515.768.320, 19.124.224, 1.880.064 e 30.887.936
-bytes. A execução concluiu sem OOM, mas sem qualquer margem. A fixture usa três
-folhas grandes e complementa — não substitui — a regressão anterior de 30k/60k
-membros e nomes longos.
+archives sintéticos próprios, sem `drop_caches` global ou bytes produtivos. A
+soma de 458.973.184 bytes foi escolhida somente a partir do espaço físico
+declarado do lote original; não é prova de seu volume descompactado. Os archives
+sintéticos ocuparam 459.113.917 bytes lógicos. Em 4,150 s, o cgroup alcançou o
+teto de 536.870.912 bytes. Na amostra de maior pressão, tomada no mesmo instante,
+`file`, `anon`, `kernel`, shmem, dirty/writeback e RSS somado foram 515.768.320,
+19.124.224, 1.880.064, zero, zero e 30.887.936 bytes. O terminal registrou
+`max=1538`, mas `high=oom=oom_kill=0`; o ensaio concluiu com recuperação sob
+pressão. Não se presume que todo `file` seja recuperável.
 
-Critério atual: `AUDIT_RESOURCE_BUDGET_NOT_QUALIFIED_WITHIN_BOUND`. Uma margem de
-128 MiB sobre o pico requer 671.088.640 bytes, acima do máximo versionado de 512
-MiB. Não ampliar o limite nem repetir a custódia produtiva por tentativa; a
-próxima decisão exige mudança explícita do contrato ou redução medida do cache
-contabilizado, em frente separada.
+Os 128 MiB pertenciam ao orçamento de **disco da custódia**, não a uma margem
+canônica de memória, e essa fórmula foi retirada. Critério atual:
+`LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE / OPERATIONAL_BUDGET_NOT_YET_QUALIFIED`.
+A instrumentação complementar, executada sem repetir o autenticador, confirmou
+zero de 224.144 páginas residentes nos seis arquivos sintéticos atuais antes e
+depois de `fsync`/`POSIX_FADV_DONTNEED`/`mincore`; isso não prova retroativamente
+o início do perfil anterior. A fixture complementa — não substitui — a regressão
+de 30k/60k membros. Próximo ato: após revisão, uma única qualificação local com
+residência capturada imediatamente antes do supervisor, teto ainda em 512 MiB.
+Produção e a custódia terminal continuam proibidas para replay.
 
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
