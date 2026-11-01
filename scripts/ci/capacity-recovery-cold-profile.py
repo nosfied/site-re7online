@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import stat
 import tarfile
+import time
 from types import SimpleNamespace
 
 
@@ -128,7 +129,8 @@ def evict_own_files(entries: list[dict[str, object]]) -> dict[str, object]:
             "residentPagesBefore": sum(int(item["residentPagesBefore"] or 0)
                                        for item in observations),
             "residentPagesAfter": sum(int(item["residentPagesAfter"] or 0)
-                                      for item in observations)}
+                                      for item in observations),
+            "capturedMonotonicNs": time.monotonic_ns()}
 
 
 def child_source(path: Path) -> None:
@@ -158,6 +160,7 @@ finally:os.close(fd)
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--fixture-root", type=Path)
     parser.add_argument("--executor", type=Path, required=True)
     parser.add_argument("--supervisor", type=Path, required=True)
     parser.add_argument("--memory-max-bytes", type=int, required=True)
@@ -165,8 +168,9 @@ def main() -> None:
     parser.add_argument("--sizes", default="111230976,173621248,174120960")
     parser.add_argument("--verify-cold-existing", action="store_true")
     args = parser.parse_args()
+    fixture_root = args.fixture_root or args.root
     if args.verify_cold_existing:
-        if not args.root.is_dir() or args.root.is_symlink():
+        if not fixture_root.is_dir() or fixture_root.is_symlink():
             raise SystemExit("existing synthetic fixture root is required")
     else:
         args.root.mkdir(mode=0o700)
@@ -174,7 +178,7 @@ def main() -> None:
     if len(sizes) != 3 or any(value <= 0 for value in sizes):
         raise SystemExit("exactly three positive sizes are required")
     if args.verify_cold_existing:
-        metadata = args.root / "fixture.json"
+        metadata = fixture_root / "fixture.json"
         fixture = json.loads(metadata.read_text())
         entries = fixture["entries"]
         cold = evict_own_files(entries)
@@ -184,8 +188,28 @@ def main() -> None:
         output.write_text(json.dumps(result, sort_keys=True) + "\n")
         print(json.dumps(result, sort_keys=True))
         return
-    metadata, entries = make_fixture(args.root, sizes)
+    if args.fixture_root is not None:
+        if not fixture_root.is_dir() or fixture_root.is_symlink():
+            raise SystemExit("existing synthetic fixture root is required")
+        metadata = fixture_root / "fixture.json"
+        fixture = json.loads(metadata.read_text())
+        entries = fixture["entries"]
+        sizes = fixture["sizes"]
+        if len(entries) != 3 or len(sizes) != 3:
+            raise SystemExit("existing synthetic fixture must contain exactly three candidates")
+    else:
+        metadata, entries = make_fixture(args.root, sizes)
     cold = evict_own_files(entries)
+    if cold["gaps"] or cold["residentPagesAfter"] != 0:
+        result = {
+            "schemaVersion": 1, "state": "COLD_PRECONDITION_NOT_MET",
+            "exitCode": 78, "syntheticOnly": True, "coldPreparation": cold,
+            "supervisorStarted": False,
+        }
+        (args.root / "profile-result.json").write_text(
+            json.dumps(result, sort_keys=True) + "\n")
+        print(json.dumps(result, sort_keys=True))
+        raise SystemExit(78)
     child = args.root / "contained-child.py"
     child_source(child)
     supervisor = load(args.supervisor, "profile_supervisor_parent")

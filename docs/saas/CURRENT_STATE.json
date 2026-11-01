@@ -81,7 +81,7 @@
       "supervisorTelemetrySha256": "f2c8ce4a8d4c8a485e1a338f491b8f44b34a22d7ec18731895c59f47730335d7"
     },
     "localColdReadQualification": {
-      "state": "LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE_OPERATIONAL_BUDGET_NOT_YET_QUALIFIED",
+      "state": "SYNTHETIC_PROFILE_512_MIB_QUALIFIED_VPS_OPERATIONAL_BUDGET_NOT_APPROVED",
       "scope": "LOCAL_SYNTHETIC_ONLY_NOT_PRODUCTION_EXECUTED",
       "candidateCount": 3,
       "sourceBatchDeclaredPhysicalBytes": 458973184,
@@ -90,37 +90,46 @@
       "sourceUncompressedBytesProven": false,
       "memoryMaxBytes": 536870912,
       "cgroupMemoryPeakBytes": 536870912,
-      "sampledFilePeakBytes": 515768320,
-      "sampledAnonPeakBytes": 19124224,
+      "sampledFilePeakBytes": 515809280,
+      "sampledAnonPeakBytes": 19091456,
       "sampledKernelPeakBytes": 1880064,
       "sampledShmemBytes": 0,
       "sampledDirtyBytes": 0,
       "sampledWritebackBytes": 0,
-      "sampledProcessRssSumPeakBytes": 30887936,
+      "sampledProcessRssSumPeakBytes": 30838784,
       "memoryEvents": {
         "high": 0,
-        "max": 1538,
+        "max": 1508,
         "oom": 0,
         "oomKill": 0,
         "oomGroupKill": 0
       },
-      "elapsedMonotonicNs": 4149637097,
+      "elapsedMonotonicNs": 4146428708,
       "supervisorMaximumBytes": 536870912,
       "mandatoryMemoryHeadroomBytes": null,
       "prior128MiBMeaning": "CUSTODY_DISK_BUDGET_NOT_MEMORY_HEADROOM",
-      "coldPreparationProvenAtProfileStart": false,
+      "coldPreparationProvenAtProfileStart": true,
       "supplementalColdVerification": {
         "totalPages": 224144,
         "residentPagesBefore": 0,
         "residentPagesAfter": 0,
         "gaps": []
       },
+      "syntheticProfileQualified": true,
+      "vpsOperationalApproved": false,
       "operationalBudgetQualified": false,
       "qualificationBlockers": [
         "PRODUCTIVE_UNCOMPRESSED_VOLUME_NOT_PROVEN",
-        "COLD_RESIDENCY_NOT_CAPTURED_AT_PROFILE_START",
         "PRODUCTIVE_OOM_COMPOSITION_UNKNOWN"
       ],
+      "evidence": {
+        "profileResultSha256": "1601d3ea7a357046bb3b38f24f2ea765e5f7fd33cdff3771e65bde9956e6d337",
+        "terminalSha256": "2a2a4d2e20080d2de1d2a6050f636fa0d5cdff96bca2be820c4b84805f1390f0",
+        "supervisorTelemetrySha256": "cf0357ff48713f39372f1c3616edb2c2e92b9a01a281776411f844a78e494548",
+        "executorTelemetrySha256": "a196f9f95f503e781be2cdf89c4e92beec80003083d9179d999216ba753253c4",
+        "planSha256": "cc496bdb21ca7aa808fc2ed2ef875dc6eae249c26964a0583f6374c04ef3f2a5",
+        "containmentSha256": "c9292e3f9c9de73f152641fd96ffbc69f8370e9084203d6c6cbfac373c3f66ce"
+      },
       "productionReplayPermitted": false
     },
     "localCardinalityValidation": {

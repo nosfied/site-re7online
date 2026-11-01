@@ -214,30 +214,34 @@ Os tamanhos das três folhas somam 458.973.184 bytes porque reutilizam apenas a
 escala física declarada do lote original; isso **não** comprova o volume
 descompactado dos archives produtivos. Os archives sintéticos somaram
 459.113.917 bytes lógicos. Pelo supervisor/cgroup real, com
-`MemoryMax=536870912`, o autenticador completo passou em 4,150 s e atingiu o
-teto: na quarta amostra, tomada no mesmo instante, `file=515.768.320`,
-`anon=19.124.224`, `kernel=1.880.064`, `shmem=0`, dirty/writeback zero e RSS
-somado de 30.887.936 bytes. `high`, `oom` e `oom_kill` permaneceram zero; o
-contador `max` foi 872 nessa amostra e 1.538 no terminal, comprovando pressão e
-recuperação de carga, não OOM. Cache `file` limpo é potencialmente recuperável,
-mas não é presumido integralmente recuperável.
+`MemoryMax=536870912`, a qualificação única reutilizou esses arquivos sem
+recriá-los. Imediatamente antes do lançamento, após `fsync`,
+`POSIX_FADV_DONTNEED` e `mincore`, os seis arquivos registraram zero de 224.144
+páginas residentes e nenhuma lacuna. Não houve hashing ou leitura dos arquivos
+entre essa captura e o supervisor. O autenticador completo passou os três
+candidatos em 4,146 s e atingiu o teto. Na última amostra viva, tomada no mesmo
+instante, `file=515.809.280`, `anon=19.091.456`, `kernel=1.880.064`, `shmem=0`,
+dirty/writeback zero e RSS somado de 30.838.784 bytes. `high`, `oom` e
+`oom_kill` permaneceram zero; o contador terminal `max=1508` comprova pressão e
+reclaim suficiente para concluir, não OOM. O cgroup desapareceu após o término,
+portanto não existe amostra direta de decaimento posterior. Cache `file` limpo é
+potencialmente recuperável, mas não é presumido integralmente recuperável.
 
 Não existe fundamento canônico ou medido para exigir 128 MiB acima do pico; os
 128 MiB anteriores eram orçamento **de disco da custódia**, não margem de
 memória. A conclusão corrigida é
-`LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE / OPERATIONAL_BUDGET_NOT_YET_QUALIFIED`:
-o ensaio concluiu sob pressão, mas não qualifica replay porque a equivalência de
-volume descompactado não foi provada, o início frio não foi medido naquela
-execução e a causa do OOM produtivo permanece desconhecida.
-
-A preparação foi complementada sem repetir o autenticador: após `fsync`,
-`POSIX_FADV_DONTNEED` e `mincore`, os seis arquivos sintéticos existentes
-registraram zero de 224.144 páginas residentes tanto antes quanto depois da
-verificação, sem lacunas. Isso valida a instrumentação e o estado frio atual,
-mas não retroage como prova do início do perfil já concluído. O próximo ato
-concreto, após revisão, é uma única qualificação **local** com a residência
-capturada imediatamente antes do supervisor, ainda dentro de 512 MiB. Produção
-continua proibida; o teto, a contenção e a elegibilidade permanecem inalterados.
+`SYNTHETIC_PROFILE_512_MIB_QUALIFIED / VPS_OPERATIONAL_BUDGET_NOT_APPROVED`.
+Ela qualifica somente o perfil sintético frio: não qualifica replay produtivo,
+pois a equivalência de volume descompactado não foi provada e a composição do
+OOM produtivo permanece desconhecida. Evidências: resultado
+`1601d3ea7a357046bb3b38f24f2ea765e5f7fd33cdff3771e65bde9956e6d337`, terminal
+`2a2a4d2e20080d2de1d2a6050f636fa0d5cdff96bca2be820c4b84805f1390f0`,
+telemetria do supervisor
+`cf0357ff48713f39372f1c3616edb2c2e92b9a01a281776411f844a78e494548` e plano
+`cc496bdb21ca7aa808fc2ed2ef875dc6eae249c26964a0583f6374c04ef3f2a5`.
+O próximo ato é revisão desta entrega; qualquer operação na VPS continua
+dependente de autorização separada e de orçamento representativo do volume
+produtivo desconhecido.
 
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e

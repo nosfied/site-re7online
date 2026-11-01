@@ -94,20 +94,27 @@ request `2b1d438d...`.
 A entrega local complementar preserva essa negativa e acrescenta observabilidade
 limitada no supervisor/executor. O perfil sintético 3/3 reutilizou
 458.973.184 bytes apenas como escala física declarada do lote — não como volume
-descompactado produtivo — e seus archives somaram 459.113.917 bytes lógicos. Ele
-concluiu em 4,150 s no teto de 512 MiB: `oom/oom_kill/high=0`, `max=1538`,
-`file=515.768.320`, dirty/writeback/shmem zero e RSS somado 30.887.936 bytes.
-Isso é conclusão sob pressão, não orçamento operacional qualificado nem causa do
-OOM produtivo.
+descompactado produtivo — e seus archives somaram 459.113.917 bytes lógicos. A
+qualificação única reutilizou a fixture e capturou sua residência imediatamente
+antes do lançamento: zero de 224.144 páginas residentes, sem lacunas e sem
+hashing/leitura intermediária. O autenticador 3/3 concluiu em 4,146 s no teto de
+512 MiB: `oom/oom_kill/high=0`, `max=1508`, `file=515.809.280`,
+`anon=19.091.456`, `kernel=1.880.064`, dirty/writeback/shmem zero e RSS somado
+30.838.784 bytes. As alocações anônimas e o RSS permaneceram estáveis enquanto
+`file` dominou a pressão. O cgroup desapareceu após o término, sem amostra direta
+de decaimento posterior.
 
 Não há fundamento para a fórmula pico + 128 MiB: 128 MiB era orçamento de disco
-da custódia. A conclusão corrigida é
-`LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE / OPERATIONAL_BUDGET_NOT_YET_QUALIFIED`.
-A verificação complementar encontrou zero de 224.144 páginas residentes nos seis
-arquivos sintéticos antes/depois de `fsync` + `POSIX_FADV_DONTNEED` + `mincore`,
-mas foi posterior ao perfil e não prova retroativamente seu início. Código e
-regressões são apenas entrega local/em revisão; nenhum novo `audit`, `prepare` ou
-`execute` foi executado na VPS.
+da custódia. A conclusão vigente é
+`SYNTHETIC_PROFILE_512_MIB_QUALIFIED / VPS_OPERATIONAL_BUDGET_NOT_APPROVED`.
+O perfil sintético frio foi qualificado; ele não prova o volume descompactado
+produtivo nem explica a composição do OOM anterior. Código, regressões e essa
+qualificação são somente entrega local/em revisão; nenhum novo `audit`, `prepare`
+ou `execute` foi executado na VPS. Resultado, terminal, telemetria do supervisor
+e plano: `1601d3ea7a357046bb3b38f24f2ea765e5f7fd33cdff3771e65bde9956e6d337`,
+`2a2a4d2e20080d2de1d2a6050f636fa0d5cdff96bca2be820c4b84805f1390f0`,
+`cf0357ff48713f39372f1c3616edb2c2e92b9a01a281776411f844a78e494548` e
+`cc496bdb21ca7aa808fc2ed2ef875dc6eae249c26964a0583f6374c04ef3f2a5`.
 
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com

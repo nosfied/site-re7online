@@ -212,23 +212,24 @@ O perfil dirigido percorreu o autenticador completo pelo supervisor real com tr�
 archives sintéticos próprios, sem `drop_caches` global ou bytes produtivos. A
 soma de 458.973.184 bytes foi escolhida somente a partir do espaço físico
 declarado do lote original; não é prova de seu volume descompactado. Os archives
-sintéticos ocuparam 459.113.917 bytes lógicos. Em 4,150 s, o cgroup alcançou o
-teto de 536.870.912 bytes. Na amostra de maior pressão, tomada no mesmo instante,
-`file`, `anon`, `kernel`, shmem, dirty/writeback e RSS somado foram 515.768.320,
-19.124.224, 1.880.064, zero, zero e 30.887.936 bytes. O terminal registrou
-`max=1538`, mas `high=oom=oom_kill=0`; o ensaio concluiu com recuperação sob
-pressão. Não se presume que todo `file` seja recuperável.
+sintéticos ocuparam 459.113.917 bytes lógicos. Na qualificação única, os seis
+arquivos tiveram residência capturada imediatamente antes do lançamento: zero de
+224.144 páginas residentes, sem lacunas ou leitura intermediária. Em 4,146 s, o
+cgroup alcançou o teto de 536.870.912 bytes. Na última amostra viva, tomada no
+mesmo instante, `file`, `anon`, `kernel`, shmem, dirty/writeback e RSS somado
+foram 515.809.280, 19.091.456, 1.880.064, zero, zero e 30.838.784 bytes. O
+terminal registrou `max=1508`, mas `high=oom=oom_kill=0`; os três candidatos
+passaram sob pressão. Não se presume que todo `file` seja recuperável, e não há
+amostra direta de decaimento depois que o cgroup desapareceu.
 
 Os 128 MiB pertenciam ao orçamento de **disco da custódia**, não a uma margem
 canônica de memória, e essa fórmula foi retirada. Critério atual:
-`LOCAL_512_MIB_COMPLETED_UNDER_PRESSURE / OPERATIONAL_BUDGET_NOT_YET_QUALIFIED`.
-A instrumentação complementar, executada sem repetir o autenticador, confirmou
-zero de 224.144 páginas residentes nos seis arquivos sintéticos atuais antes e
-depois de `fsync`/`POSIX_FADV_DONTNEED`/`mincore`; isso não prova retroativamente
-o início do perfil anterior. A fixture complementa — não substitui — a regressão
-de 30k/60k membros. Próximo ato: após revisão, uma única qualificação local com
-residência capturada imediatamente antes do supervisor, teto ainda em 512 MiB.
-Produção e a custódia terminal continuam proibidas para replay.
+`SYNTHETIC_PROFILE_512_MIB_QUALIFIED / VPS_OPERATIONAL_BUDGET_NOT_APPROVED`.
+A fixture complementa — não substitui — a regressão de 30k/60k membros. A
+qualificação sintética não prova o volume descompactado dos archives produtivos
+nem a composição do OOM anterior. Próximo ato: revisão desta entrega. Produção e
+a custódia terminal continuam proibidas para replay; qualquer operação na VPS
+depende de autorização separada e orçamento representativo.
 
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
