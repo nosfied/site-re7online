@@ -59,14 +59,26 @@ nega qualquer diretório sem classificação fechada.
 Consulte [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md).
 
 A tentativa de 01/11 do lote fechado de três archives terminou por sinal antes de
-plano ou efeito. A correção de cardinalidade está somente implementada e ensaiada
-no patch local baseado em `9e251046`; não está integrada nem executada em produção.
+plano ou efeito. A correção de cardinalidade foi integrada pelo merge
+`b66fc5fd0178b4dcd87e5aa4618d3a955efaa204`; não foi executada em produção.
 O ensaio complementar com subprocesso real comprovou que `SIGTERM` é registrado
 pelo supervisor, mas pode deixar o registro SQLite privado no pai da telemetria;
 esse resíduo é limitado e deve ser preservado/classificado por caminho literal,
 não presumido como limpo pelo contexto Python.
 O escopo 3/3, a telemetria preservada e a proibição de repetição estão no
 [plano P00 de sanitização](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
+
+A extensão mínima seguinte está implementada e ensaiada somente em checkout
+isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
+memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou
+autenticar a contenção nega antes do executor. Casos locais normal, OOM real,
+timeout com descendente resistente, cadeia Python/Node/helper e sentinela externo
+passaram. `prepare`/`execute` não mudaram. Os 256 MiB do ensaio não são orçamento
+produtivo, e nenhuma nova tentativa produtiva está autorizada por esse resultado.
+O fechamento revisado autentica `telemetry_started` antes de afirmar execução,
+limita toda espera e publica `RECOVERY_PENDING` se não confirmar escopo vazio e
+launcher encerrado. O ensaio afetado confirmou timeout com descendente resistente
+e sentinela externo preservado; isso continua sem autorizar operação produtiva.
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e o fechamento ativo está

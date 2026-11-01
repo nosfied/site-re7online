@@ -155,6 +155,23 @@ relançada.
 | executado em produção | nenhuma fase após a tentativa terminal | somente após revisão, integração e autorização separada |
 | pendente estrutural | lifecycle ainda não cobre automaticamente arquivos volumosos criados em `backups/.../preparations` | contrato de criação/owner/orçamento/retirada antes de novas preparações volumosas |
 
+O merge `b66fc5fd0178b4dcd87e5aa4618d3a955efaa204` integrou a correção de
+cardinalidade; isso não altera a terminalidade da tentativa anterior. A extensão
+local seguinte resolve apenas os predicados
+`RESOURCE_CONTAINMENT_NOT_IMPLEMENTED` e
+`DURATION_CONTAINMENT_NOT_IMPLEMENTED` para uma futura fase `audit`: escopo
+transitório cgroup v2 autenticado, limite agregado de memória, swap zero e prazo
+monotônico. Ensaios locais comprovaram cadeia Python/Node/helper no mesmo escopo,
+OOM real, timeout de descendente resistente e preservação de sentinela externo.
+O valor de 256 MiB continua hipótese de ensaio; orçamento produtivo, integração e
+autorização de nova operação permanecem pendentes. `prepare`, `execute`, o lote
+3/3 e suas autoridades não foram alterados.
+O fechamento local revisado separa executor não iniciado, iniciado por
+`telemetry_started` e estado inconclusivo; exceção pós-lançamento nunca reutiliza
+o predicado de pré-lançamento. A espera é limitada e falha de kill/confirmação
+termina em `RECOVERY_PENDING`. O ensaio afetado comprovou descendente resistente
+encerrado no escopo e sentinela externo preservado, sem nova tentativa produtiva.
+
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
 continuam nas seções próprias; não são reabertos por esta correção.

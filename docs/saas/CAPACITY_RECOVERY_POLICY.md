@@ -5,9 +5,16 @@ capacidade fora do encerramento obrigatório de uma geração. A implementação
 `scripts/capacity-recovery.py`; executores privados, comandos improvisados e
 adaptações de `generation-retirement.py` para cache npm são proibidos. Execuções
 longas usam exclusivamente `scripts/capacity-recovery-supervisor.py`, que chama o
-executor irmão sem shell, preserva canais e código de saída e registra a última
-fotografia de memória do cgroup e o pico RSS do processo filho via
-`RUSAGE_CHILDREN` após término normal ou por sinal.
+executor irmão sem shell e preserva canais e código de saída. Na fase `audit`, o
+supervisor exige um escopo transitório do `systemd --user` em cgroup v2 antes de
+executar o auditor. `MemoryMax`, `MemorySwapMax=0`, `OOMPolicy=kill` e
+`memory.oom.group=1` limitam a memória agregada do Python, Node/PM2 CLI, helper e
+demais descendentes da auditoria; RSS continua evidência, não mecanismo de limite.
+`RuntimeMaxSec` usa relógio monotônico e encerra somente o control group desse
+escopo. O daemon PM2 e os serviços já existentes ficam fora dele. Ausência do
+escopo, limites divergentes ou impossibilidade de autenticá-lo negam antes do
+executor. `prepare` e `execute` conservam o comportamento histórico de sinais,
+locks e journals.
 
 ## Estados e separação de autoridade
 
@@ -35,6 +42,29 @@ legíveis, `memory.current`, `memory.peak` e `memory.events`. O supervisor mant�
 um segundo JSONL e recaptura os contadores e `childRssPeakBytes` após o filho
 terminar normalmente ou por sinal;
 nenhum dos dois registros contém conteúdo de arquivo, ambiente ou credencial.
+
+O orçamento do `audit` é sempre explícito: `--memory-max-bytes` aceita somente o
+intervalo fechado de 128 a 512 MiB e `--timeout-seconds`, 10 a 1.800 segundos.
+Esses limites são bordas admitidas pelo supervisor, não autorização operacional.
+Em especial, os 256 MiB usados no ensaio local não constituem orçamento
+produtivo. O consumidor interno autentica novamente o nome e o caminho do cgroup,
+`memory.max`, `memory.swap.max` e `memory.oom.group` antes de substituir seu
+processo pelo executor canônico. Excesso de memória e prazo publicam,
+respectivamente, `AUDIT_MEMORY_MAX` e `AUDIT_TIMEOUT`; não há retry automático.
+Um fail-safe do supervisor atua somente sobre o nome exato da unidade criada por
+ele e nunca procura ou sinaliza processo por nome.
+
+O fechamento distingue três estados de execução. `EXECUTOR_NOT_STARTED` exige
+falha anterior ao launcher ou negativa explícita do bootstrap contido;
+`EXECUTOR_STARTED` exige o primeiro evento privado e estável
+`telemetry_started`; qualquer outra combinação após o lançamento é
+`EXECUTOR_STATE_INCONCLUSIVE`. Exceção, sinal, timeout ou saída do launcher com
+descendentes ainda no escopo inicia encerramento somente da unidade exata. A
+confirmação exige unidade inativa/failed (ou ausente), cgroup ausente/vazio e
+launcher encerrado. A espera é limitada; falha de `systemctl`, membro remanescente
+ou identidade ilegível produz `AUDIT_RECOVERY_PENDING`, preserva unidade,
+tentativas e evidências e não declara término. Somente depois da confirmação o
+supervisor pode limpar o estado transitório da unidade.
 
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
 owner/group/mode, métricas físicas, hashes das fontes e comando fazem parte do
@@ -106,6 +136,24 @@ da custódia e não foram recalculados nesta revisão local. O supervisor regist
 filho de `1.288.294.400` bytes, pico do cgroup de `1.976.967.168` bytes e zero
 evento OOM. Plano, `prepare`, `execute` e `unlink` não existiram. Essa tentativa é
 terminal e não pode ser repetida.
+
+### Contenção local validada após a integração do PR #300
+
+O patch baseado em `b66fc5fd0178b4dcd87e5aa4618d3a955efaa204`
+exercitou localmente o supervisor real em escopo transitório: Python, Node e o
+helper sintético permaneceram no mesmo cgroup; o caso normal terminou com pico do
+escopo de 34.140.160 bytes. O excesso real sob 128 MiB terminou com
+`Result=oom-kill`, `AUDIT_MEMORY_MAX` e pico de 132.980.736 bytes. Um descendente
+que ignorou `SIGTERM` terminou por prazo de 10 segundos mais a graça fechada de 5
+segundos, com `Result=timeout` e `AUDIT_TIMEOUT`; um sentinela externo continuou
+vivo. O teste representativo do autenticador real com 30.000/60.000 membros foi
+revalidado. Esses resultados são ensaio local, não execução produtiva nem
+aprovação do orçamento da próxima auditoria.
+
+Um término não recuperável ainda pode deixar o registro SQLite privado na
+custódia. A contenção limita a memória e a duração, mas não autoriza limpeza
+automática: o resíduo continua limitado pelo contrato do registro, deve ser
+identificado literalmente e tratado pelo procedimento de custódia já existente.
 
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
