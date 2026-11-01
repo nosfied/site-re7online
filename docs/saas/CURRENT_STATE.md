@@ -166,6 +166,18 @@ current, dump, health local/público, guarda e locks permaneceram iguais. Os tr�
 archives e as três autoridades seguem presentes. A custódia e o request são
 terminais e não podem ser reutilizados.
 
+A montagem corrigida foi consumida uma única vez na custódia
+`p00-capacity-three-archives-916f8d6b-v2`. A fotografia final
+`7c719d20…` foi autenticada antes da geração do request
+`4cfaab66…`; a conferência integral dos bindings ficou selada em
+`d53ca8c…`. O audit terminou `P00_CAPACITY_RECOVERY_AUDIT_PASS`, exit 0,
+3/3 qualificados, `458.973.184` bytes/3 inodes, plano `502cc4b7…`, sem efeitos.
+O cgroup atingiu 512 MiB sob reclaim, mas registrou zero OOM/kill; RSS pico do
+filho 57.942.016 bytes e duração 165,185 s. A comparação posterior
+`e5327224…` comprova PM2, current, dump, health, guarda e locks preservados; os
+três candidatos continuam presentes. Índice `5b2635c2…`. `prepare`, `execute` e
+exclusão não foram executados nem autorizados por este resultado.
+
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
 memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou

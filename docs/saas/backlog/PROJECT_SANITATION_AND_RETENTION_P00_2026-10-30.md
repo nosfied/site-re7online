@@ -293,6 +293,25 @@ scope encerrado e zero plano/efeito. Os três candidatos e autoridades continuam
 presentes, e PM2, current, dump, guarda, health e locks foram preservados. Essa
 operação não produziu resultado de elegibilidade 3/3 e não pode ser repetida.
 
+#### Auditoria corrigida 916f8d6b-v2
+
+A v1 conservou o hash antigo porque o request foi derivado de template antes de
+o estado operacional final ser autenticado. A v2 não transportou esse binding:
+finalizou `operational-state.schema2.private.json`, confirmou
+`7c719d20eb94a7df6c2e6ac92eacfb38407eebc97d7a9c3f2158dc92039dbda5`,
+gerou o request e só o selou após readback integral dos bindings. Request
+`4cfaab66119ea9f06c96e26781d40fc5be158442a7ac0baa4386326b5b4c1c6e`;
+conferência `d53ca8c9094f7c249614de2db5c3d50ff8747b90a37d543c6ed9bf85e948a863`.
+
+O audit único passou 3/3 e qualificou `458.973.184` bytes/3 inodes, plano
+`502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`,
+sem executar efeitos. Disponível antes `8.391.720.960`; projetado
+`8.850.694.144`; mínimo incremental satisfeito e alvo agregado ainda não.
+Terminal `f4792439…`, telemetrias `2454a7f5…`/`7b1fdd1e…`, índice
+`5b2635c2…`. A produção permaneceu inalterada (`e5327224…`), os três candidatos
+e autoridades seguem presentes e a custódia parou antes de `prepare`/`execute`.
+O resultado é prova reutilizável, não autorização destrutiva.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico

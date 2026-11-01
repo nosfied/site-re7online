@@ -306,6 +306,38 @@ A negativa comprova que caminho e SHA do estado operacional formam um binding
 único: atualizar um exige atualizar atomicamente o outro antes do lançamento.
 Essa custódia e esse request são terminais e proibidos para replay.
 
+### Auditoria corrigida 916f8d6b-v2
+
+A causa da v1 foi confirmada na montagem: um template do request anterior teve
+os caminhos atualizados, mas conservou o SHA antigo da fotografia operacional.
+Não houve defeito do consumidor. Na custódia exclusiva
+`p00-capacity-three-archives-916f8d6b-v2`, a fotografia foi finalizada primeiro,
+reaberta por leitura estável e autenticada em
+`7c719d20eb94a7df6c2e6ac92eacfb38407eebc97d7a9c3f2158dc92039dbda5`.
+Só então o request foi gerado do zero, reaberto e conferido campo a campo; seu
+SHA final é `4cfaab66119ea9f06c96e26781d40fc5be158442a7ac0baa4386326b5b4c1c6e`
+e a conferência selada é
+`d53ca8c9094f7c249614de2db5c3d50ff8747b90a37d543c6ed9bf85e948a863`.
+Nenhum insumo selado foi reescrito depois da conferência e nenhum payload foi
+relido para montar os bindings.
+
+O único `audit` terminou em 165,185 s, exit code 0, scope encerrado e estado
+`P00_CAPACITY_RECOVERY_AUDIT_PASS`. O plano
+`502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`
+qualificou 3/3, `458.973.184` bytes e três inodes, sem referências ou writers;
+`errors=[]`. O espaço observado foi `8.391.720.960` bytes e a projeção
+`8.850.694.144`: o mínimo incremental passou e o alvo agregado não passou, como
+esperado. A contenção chegou a `536.870.912` bytes, com 3.729 eventos `max`, mas
+zero `oom`, `oom_kill` e `oom_group_kill`; RSS pico do filho 57.942.016 bytes.
+Terminal `f4792439ba120732af502a7d49763a7cea12e084b7e022bb86e87da9f75ea03d`,
+telemetrias `2454a7f595cd7accf59338424f65f26eb8df939e942a7853f63ad3309dfe8312`
+e `7b1fdd1e4d9fb036ec91a328bb4576c76b06918a3eb183a2577ba95b314211f3`,
+índice `5b2635c2e410de18a3847fcc84c41c9b672a865c31a3e981c7c8dc2f114c170d`.
+Produção permaneceu inalterada, comprovada por
+`e53272249a28b9d7d152c401b8f063f0967f8a89b079278ee028ec428ad86631`;
+os três archives e suas autoridades continuam presentes. Esta etapa parou antes
+de `prepare`/`execute` e não autoriza exclusão.
+
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
 `frontend-fa60-css-corrected.tar.gz`, total físico declarado de `458.973.184`
