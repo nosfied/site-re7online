@@ -66,12 +66,12 @@
       "rlimitAsBytes": 268435456,
       "maxTarMembersRetained": 1,
       "rssPeakBytes": [
-        38842368,
-        38842368
+        34459648,
+        34459648
       ],
       "nameRegistryPeakPhysicalBytes": [
-        552960,
-        1110016
+        602112,
+        1163264
       ],
       "nameRegistryDistinctNames": [
         30000,
@@ -82,13 +82,48 @@
         60000
       ],
       "nameRegistryPageCount": [
-        135,
-        271
+        147,
+        284
       ],
       "nameRegistryPageSize": 4096,
       "nameRegistryMaxPageCount": 16384,
       "nameRegistryDatabaseLimitBytes": 67108864,
       "nameRegistryAuxiliaryFilesObserved": [],
+      "representativeFixture": {
+        "longNames": true,
+        "regularFilesWithPhysicalAuthority": true,
+        "admittedSymlinks": true,
+        "directories": true,
+        "longNameCounts": [
+          318,
+          634
+        ],
+        "regularFileCounts": [
+          8,
+          15
+        ],
+        "symlinkCounts": [
+          3,
+          6
+        ]
+      },
+      "signalInterruptionValidation": {
+        "realChild": true,
+        "signal": 15,
+        "childExitCode": -15,
+        "supervisorPhases": [
+          "before_child",
+          "signal_received",
+          "after_child"
+        ],
+        "cleanupGuaranteedBySignal": false,
+        "residueDirectoryMode": "0700",
+        "residueDatabaseMode": "0600",
+        "sampleDistinctNames": 4096,
+        "sampleLogicalBytes": 8192,
+        "samplePhysicalBytes": 8192,
+        "treatment": "PRESERVE_TERMINAL_CUSTODY_AND_CLASSIFY_LITERAL_IDENTITY"
+      },
       "productionBudgetApproved": false
     },
     "productionEffectsInThisChange": false,

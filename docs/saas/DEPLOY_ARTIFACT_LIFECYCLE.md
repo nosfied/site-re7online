@@ -566,6 +566,13 @@ gerações. A correção de cardinalidade do `capacity-recovery.py` limita a mem
 qualificação, mas não cria owner, orçamento ou evento de retirada para esses
 arquivos. Essa extensão permanece próxima frente e não integra esta revisão.
 
+O registro temporário de nomes é retirado quando o contexto Python termina de modo
+recuperável. Um `SIGTERM` pode impedir `__exit__`: o supervisor ainda sela sinal,
+exit code e RSS, enquanto o diretório privado `.capacity-name-registry-*` pode
+permanecer na custódia da fase. Ele deve entrar no inventário terminal pelo caminho
+e identidade exatos e só pode ser retirado após classificação canônica; não há
+varredura ou limpeza automática da raiz de custódia.
+
 ## Inventário histórico anterior aos lotes de 25/10/2026
 
 Esta fotografia e suas classificações precedem as retiradas relatadas abaixo; não

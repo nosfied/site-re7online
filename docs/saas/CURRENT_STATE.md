@@ -61,6 +61,10 @@ Consulte [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md).
 A tentativa de 01/11 do lote fechado de três archives terminou por sinal antes de
 plano ou efeito. A correção de cardinalidade está somente implementada e ensaiada
 no patch local baseado em `9e251046`; não está integrada nem executada em produção.
+O ensaio complementar com subprocesso real comprovou que `SIGTERM` é registrado
+pelo supervisor, mas pode deixar o registro SQLite privado no pai da telemetria;
+esse resíduo é limitado e deve ser preservado/classificado por caminho literal,
+não presumido como limpo pelo contexto Python.
 O escopo 3/3, a telemetria preservada e a proibição de repetição estão no
 [plano P00 de sanitização](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
 

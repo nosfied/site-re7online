@@ -25,6 +25,7 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 - migration/SQL classificados antes da janela.
 - contrato privado de capacidade revisado conforme [ciclo de vida dos artefatos](DEPLOY_ARTIFACT_LIFECYCLE.md), incluindo pico temporário e reserva operacional.
 - recuperação extraordinária segue a [política canônica](CAPACITY_RECOVERY_POLICY.md), `scripts/capacity-recovery.py` e o supervisor durável `scripts/capacity-recovery-supervisor.py`; archives são lidos em streaming, `TarFile.members` é liberado por membro e duplicidades usam registro binário privado com cache/disco limitados; cada fase preserva telemetria JSONL limitada de memória e progresso, sem conteúdo ou credenciais. A correção de cardinalidade ensaiada localmente não autoriza repetir a tentativa produtiva interrompida.
+- após término por sinal, não presumir que o contexto Python retirou o registro de nomes: preservar terminal/telemetria, confirmar o filho encerrado e inventariar qualquer `.capacity-name-registry-*` somente por caminho e identidade literais. Não executar limpeza ampla ou automática da custódia.
 
 Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
 shell, derivar definição executável de introspecção, usar `--update-env`, executar

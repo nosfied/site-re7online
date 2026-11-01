@@ -6,11 +6,13 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import resource
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
 import tarfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -2057,20 +2059,66 @@ class CapacityRecoveryTests(unittest.TestCase):
         authority.mkdir(mode=0o755)
         authority_tree = authority / "tree"
         authority_tree.mkdir(mode=0o755)
+
+        long_component = "representative-long-name-" + ("x" * 96)
+
+        def member_spec(index):
+            if index % 10000 == 7:
+                return ("symlink", f"tree/link-{index:06d}",
+                        f"target-{index:06d}", b"")
+            if index % 4096 == 3:
+                name = f"tree/files/{long_component}-{index:06d}.txt"
+                return ("file", name, None,
+                        f"representative-payload-{index:06d}\n".encode())
+            if index % 97 == 0:
+                return ("directory", f"tree/{long_component}-{index:06d}",
+                        None, b"")
+            return ("directory", f"tree/{index:06d}", None, b"")
+
         for index in range(60000):
-            (authority_tree / f"{index:06d}").mkdir(mode=0o755)
+            kind, relative, target, payload = member_spec(index)
+            authoritative = authority / relative
+            authoritative.parent.mkdir(parents=True, exist_ok=True)
+            if kind == "directory":
+                authoritative.mkdir(mode=0o755)
+            elif kind == "file":
+                authoritative.write_bytes(payload)
+            else:
+                authoritative.symlink_to(target)
 
         def create_archive(count):
             path = root / f"candidate-{count}.tar.gz"
             with tarfile.open(path, "w:gz", compresslevel=1) as output:
                 for index in range(count):
-                    item = tarfile.TarInfo(f"tree/{index:06d}/")
-                    item.type = tarfile.DIRTYPE
-                    output.addfile(item)
+                    kind, relative, target, payload = member_spec(index)
+                    item = tarfile.TarInfo(relative + ("/" if kind == "directory" else ""))
+                    if kind == "directory":
+                        item.type = tarfile.DIRTYPE
+                        output.addfile(item)
+                    elif kind == "file":
+                        item.type = tarfile.REGTYPE
+                        item.size = len(payload)
+                        output.addfile(item, io.BytesIO(payload))
+                    else:
+                        item.type = tarfile.SYMTYPE
+                        item.linkname = target
+                        output.addfile(item)
             path.chmod(0o600)
             return path
 
         archives = [create_archive(30000), create_archive(60000)]
+        fixture_counts = {}
+        for count in (30000, 60000):
+            kinds = {"directory": 0, "file": 0, "symlink": 0, "longName": 0}
+            for index in range(count):
+                kind, relative, _target, _payload = member_spec(index)
+                kinds[kind] += 1
+                kinds["longName"] += int(long_component in relative)
+            fixture_counts[count] = kinds
+            self.assertGreater(kinds["directory"], 0)
+            self.assertGreater(kinds["file"], 0)
+            self.assertGreater(kinds["symlink"], 0)
+            self.assertGreater(kinds["longName"], 0)
         old_code = r'''
 import json,resource,sys,tarfile
 with tarfile.open(sys.argv[1],"r|gz") as archive:
@@ -2151,7 +2199,100 @@ print(json.dumps({"result":r,"rssPeak":resource.getrusage(resource.RUSAGE_SELF).
                         24 * 1024 * 1024)
         print("CARDINALITY_MEASUREMENTS=" + json.dumps({
             "prior": old_observations, "bounded": observations,
+            "fixture": {"longNames": True, "regularFilesWithPhysicalAuthority": True,
+                        "admittedSymlinks": True, "directories": True,
+                        "counts": fixture_counts},
         }, sort_keys=True))
+
+    def test_sigterm_leaves_bounded_registry_residue_and_supervisor_records_terminal(self):
+        root = self.base / "signal-registry"
+        root.mkdir(mode=0o700)
+        scratch = root / "scratch"
+        scratch.mkdir(mode=0o700)
+        ready = root / "ready.json"
+        supervisor = TOOL.with_name("capacity-recovery-supervisor.py")
+
+        child_source = r'''
+import importlib.util,json,os,sys,time
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("capacity",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+parent=Path(sys.argv[2]);ready=Path(sys.argv[3])
+with m.ExactNameRegistry(parent) as registry:
+    for index in range(4096):registry.add(f"representative/{index:06d}")
+    physical=registry.measure();info=registry.directory.lstat()
+    ready.write_text(json.dumps({"path":str(registry.directory),"device":info.st_dev,"inode":info.st_ino,"mode":oct(info.st_mode & 0o777),"physicalBytes":physical,"distinctNames":registry.count},sort_keys=True))
+    time.sleep(60)
+'''
+        harness = root / "supervisor-harness.py"
+        harness.write_text(r'''
+import importlib.util,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("supervisor",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+child=[sys.executable,"-B","-c",sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]]
+m.executor_argv=lambda _args:child
+sys.argv=["supervisor","--stdout-output",sys.argv[6],"--stderr-output",sys.argv[7],"--terminal-output",sys.argv[8],"--telemetry-output",sys.argv[9],"--supervisor-telemetry-output",sys.argv[10],"audit","--request","/synthetic-request","--request-sha256","0"*64,"--plan-output","/synthetic-plan"]
+m.main()
+''')
+        stdout = root / "stdout"
+        stderr = root / "stderr"
+        terminal = root / "terminal.json"
+        child_telemetry = root / "child.jsonl"
+        supervisor_telemetry = root / "supervisor.jsonl"
+        process = subprocess.Popen([
+            sys.executable, "-B", str(harness), str(supervisor), child_source,
+            str(TOOL), str(scratch), str(ready), str(stdout), str(stderr),
+            str(terminal), str(child_telemetry), str(supervisor_telemetry),
+        ])
+        deadline = time.monotonic() + 15
+        while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertTrue(ready.exists(), f"child failed before readiness: {process.poll()}")
+        process.send_signal(signal.SIGTERM)
+        process.wait(timeout=15)
+
+        residue = json.loads(ready.read_text())
+        residue_path = Path(residue["path"])
+        self.assertTrue(residue_path.is_dir())
+        self.assertEqual(residue_path.parent, scratch)
+        self.assertRegex(residue_path.name, r"^\.capacity-name-registry-[0-9a-f]{32}$")
+        self.assertEqual(residue["mode"], "0o700")
+        self.assertEqual(residue["distinctNames"], 4096)
+        self.assertEqual(sorted(item.name for item in residue_path.iterdir()),
+                         [MODULE.ExactNameRegistry.DATABASE_NAME])
+        database = residue_path / MODULE.ExactNameRegistry.DATABASE_NAME
+        database_info = database.lstat()
+        self.assertTrue(stat.S_ISREG(database_info.st_mode))
+        self.assertEqual(stat.S_IMODE(database_info.st_mode), 0o600)
+        self.assertLessEqual(database_info.st_blocks * 512,
+                             MODULE.NAME_REGISTRY_MAX_BYTES)
+
+        terminal_row = json.loads(terminal.read_text())
+        supervisor_rows = [json.loads(line) for line in supervisor_telemetry.read_text().splitlines()]
+        self.assertEqual(terminal_row["state"], "TERMINAL")
+        self.assertEqual(terminal_row["exitCode"], -signal.SIGTERM)
+        self.assertEqual(terminal_row["signal"], signal.SIGTERM)
+        self.assertEqual([row["phase"] for row in supervisor_rows],
+                         ["before_child", "signal_received", "after_child"])
+        self.assertGreater(terminal_row["childRssPeakBytes"], 0)
+        print("SIGNAL_REGISTRY_RESIDUE=" + json.dumps({
+            "supervisorExitCode": process.returncode,
+            "childExitCode": terminal_row["exitCode"],
+            "childSignal": terminal_row["signal"],
+            "directoryMode": residue["mode"],
+            "databaseMode": oct(stat.S_IMODE(database_info.st_mode)),
+            "databaseLogicalBytes": database_info.st_size,
+            "databasePhysicalBytes": database_info.st_blocks * 512,
+            "distinctNames": residue["distinctNames"],
+            "boundedByBytes": MODULE.NAME_REGISTRY_MAX_BYTES,
+            "supervisorPhases": [row["phase"] for row in supervisor_rows],
+        }, sort_keys=True))
+
+        # Test-only cleanup is confined to the exact identity published by the child.
+        current = residue_path.lstat()
+        self.assertEqual((current.st_dev, current.st_ino),
+                         (residue["device"], residue["inode"]))
+        database.unlink()
+        residue_path.rmdir()
 
     def test_streaming_archive_identity_and_authority_drift_still_deny(self):
         fixture = self.manifest_disposition_fixture("streaming-drift")

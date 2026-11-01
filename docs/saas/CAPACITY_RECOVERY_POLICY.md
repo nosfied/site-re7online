@@ -68,7 +68,8 @@ Os nomes normalizados não ficam em um `set` de RAM. O registro exato usa SQLite
 biblioteca padrão, chave primária `BLOB` e comparação binária, sem case folding ou
 normalização Unicode adicional. Sua área é criada exclusivamente como diretório
 privado `0700`, o banco como `0600`, e ambos são retirados com `fsync` em sucesso
-ou falha. O cache é limitado a 1 MiB. `PRAGMA max_page_count` limita o arquivo
+ou falha recuperável que percorra o contexto Python. O cache é limitado a 1 MiB.
+`PRAGMA max_page_count` limita o arquivo
 principal do banco a 64 MiB; isso não é apresentado como quota agregada do
 diretório. O executor mede separadamente os blocos do banco e dos auxiliares
 conhecidos a cada progresso e no flush final, nega arquivo desconhecido e também
@@ -79,6 +80,20 @@ negativa nominal. Telemetria de progresso ocorre a cada
 4.096 membros, no máximo 256 vezes por candidato, e inclui somente contador,
 memória e bytes temporários. Duplicidades, escapes, links, tipos inseguros e
 material protegido continuam fail-closed.
+
+O encerramento do processo por `SIGTERM` não executa necessariamente o
+`ExactNameRegistry.__exit__`. O ensaio local com filho e supervisor reais confirmou
+que o supervisor encaminha o sinal e persiste `signal_received`, `after_child`,
+`exitCode=-15`, sinal e pico RSS, mas deixa a área privada já criada sob o pai da
+telemetria. No caso dirigido, ela permaneceu como um único diretório físico
+`.capacity-name-registry-<32-hex>` `0700`, contendo somente `names.sqlite3` `0600`:
+4.096 nomes e 8.192 bytes lógicos/físicos. O limite estrutural continua sendo o
+banco principal de 64 MiB e os auxiliares conhecidos medidos; não é promessa de
+remoção por sinal nem quota agregada independente do filesystem. O resíduo integra
+a custódia terminal da fase: preservar terminal/telemetria, comprovar ausência do
+filho e classificar o caminho literal e sua identidade no procedimento canônico de
+resíduos antes de qualquer retirada. Não há limpeza automática ampla, glob ou
+alteração genérica do tratamento de sinais nas fases destrutivas.
 
 ### Tentativa interrompida de 01/11/2026 e limite desta revisão
 
@@ -96,12 +111,14 @@ O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
 `frontend-fa60-css-corrected.tar.gz`, total físico declarado de `458.973.184`
 bytes. O ensaio local desta revisão usou autoridades sintéticas equivalentes e
-30.000/60.000 membros. Sob `RLIMIT_AS=256 MiB`, a implementação anterior reteve
+30.000/60.000 membros, incluindo 318/634 nomes longos, 8/15 arquivos regulares
+com conteúdo e autoridade físicos, 3/6 symlinks admitidos e os diretórios
+restantes. Sob `RLIMIT_AS=256 MiB`, a implementação anterior reteve
 30.000/60.000 objetos em `TarFile.members`; a implementação corrigida reteve no
-máximo um, com RSS pico observado de 38.842.368/38.842.368 bytes. Depois do commit
+máximo um, com RSS pico observado de 34.459.648/34.459.648 bytes. Depois do commit
 final do registro, 30.000/60.000 nomes distintos e o mesmo número de verificações
-de unicidade produziram bancos de 552.960/1.110.016 bytes lógicos e físicos. Os
-valores foram medidos antes do cleanup, com `page_count=135/271`,
+de unicidade produziram bancos de 602.112/1.163.264 bytes lógicos e físicos. Os
+valores foram medidos antes do cleanup, com `page_count=147/284`,
 `page_size=4096`, `max_page_count=16384`, cache de 1.024 KiB e somente o arquivo
 principal presente. O limite efetivo do banco foi 67.108.864 bytes. O limite de
 256 MiB é hipótese de ensaio,

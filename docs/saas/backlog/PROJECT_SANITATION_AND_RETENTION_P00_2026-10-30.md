@@ -151,13 +151,23 @@ relançada.
 | Estado | Prova | Critério de encerramento |
 | --- | --- | --- |
 | implementado nesta revisão local | liberação de `TarFile.members`; registro SQLite binário, cache 1 MiB, disco 64 MiB; progresso limitado | diff e regressões aprovados |
-| ensaiado localmente | 30.000/60.000 membros sob `RLIMIT_AS=256 MiB`; no máximo um `TarInfo`; RSS 38.842.368/38.842.368 B; bancos após flush 552.960/1.110.016 B, sem auxiliares | regressão dirigida e suite documental PASS |
+| ensaiado localmente | 30.000/60.000 membros sob `RLIMIT_AS=256 MiB`, incluindo nomes longos, diretórios, symlinks admitidos e arquivos regulares com conteúdo/autoridade físicos; no máximo um `TarInfo`; resultados atualizados vinculados ao teste do PR, sem afirmar cardinalidade do archive produtivo interrompido | regressão dirigida e suite documental PASS |
 | executado em produção | nenhuma fase após a tentativa terminal | somente após revisão, integração e autorização separada |
 | pendente estrutural | lifecycle ainda não cobre automaticamente arquivos volumosos criados em `backups/.../preparations` | contrato de criação/owner/orçamento/retirada antes de novas preparações volumosas |
 
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
 continuam nas seções próprias; não são reabertos por esta correção.
+
+O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
+`ExactNameRegistry` estava aberto. O supervisor persistiu as fases
+`before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico
+RSS. Como esperado para término não recuperável, `__exit__` não rodou: permaneceu
+um diretório privado `0700`, de nome exclusivo sob o pai da telemetria, com um
+banco `0600` de 8.192 bytes lógicos/físicos e 4.096 nomes. A limpeza feita pelo
+próprio teste ocorreu somente depois de medir e revalidar device/inode e não é
+contrato produtivo. Em operação, tal resíduo permanece na custódia terminal para
+inventário/classificação literal; não autoriza glob, varredura destrutiva ou retry.
 
 #### Comparação com caminhos já comprovados
 
