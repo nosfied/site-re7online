@@ -5,8 +5,10 @@ import io
 import json
 import os
 from pathlib import Path, PurePosixPath
+import resource
 import stat
 import subprocess
+import sys
 import tempfile
 import tarfile
 from types import SimpleNamespace
@@ -1926,6 +1928,118 @@ class CapacityRecoveryTests(unittest.TestCase):
         for command, candidate in zip(plan["commands"], plan["candidates"]):
             self.assertEqual(command, ["/usr/bin/rm", "-r", "--", candidate["observation"]["path"]])
             self.assertNotRegex(command[-1], r"[*?\[\]{}]")
+
+    def test_manifest_archive_streams_hash_tar_and_authority_without_whole_reader(self):
+        fixture = self.manifest_disposition_fixture("streaming")
+        entry = fixture["entries"][0]
+        manifest = json.loads(fixture["manifest"].read_text())
+        real_read = MODULE.os.read
+        requested = []
+
+        def bounded_read(fd, size):
+            requested.append(size)
+            self.assertLessEqual(size, 1024 * 1024)
+            return real_read(fd, size)
+
+        with fixture["patches"], \
+                mock.patch.object(MODULE, "stable_regular",
+                                  side_effect=AssertionError("whole reader forbidden")), \
+                mock.patch.object(MODULE.os, "read", side_effect=bounded_read):
+            observed = MODULE._authenticate_disposition_archive(
+                Path(entry["path"]), entry, manifest)
+        self.assertEqual(observed["memberCount"], 1)
+        self.assertTrue(requested)
+
+    def test_incremental_relation_digest_is_framed_and_deterministic(self):
+        rows = [{"path": "a", "size": 1}, {"path": "bc", "size": 2}]
+        first = MODULE.FramedRelationDigest()
+        second = MODULE.FramedRelationDigest()
+        for row in rows:
+            first.add(row); second.add(dict(reversed(list(row.items()))))
+        self.assertEqual(first.hexdigest(), second.hexdigest())
+        self.assertEqual(first.count, 2)
+        ambiguous = MODULE.FramedRelationDigest()
+        ambiguous.add({"path": "a\n"}); ambiguous.add({"path": "b"})
+        self.assertNotEqual(first.hexdigest(), ambiguous.hexdigest())
+
+    def test_streaming_archive_identity_and_authority_drift_still_deny(self):
+        fixture = self.manifest_disposition_fixture("streaming-drift")
+        entry = fixture["entries"][0]
+        manifest = json.loads(fixture["manifest"].read_text())
+        authority = Path(entry["authority"]) / "dist/app.js"
+        authority.write_bytes(b"changed")
+        with fixture["patches"], self.assertRaisesRegex(
+                MODULE.Denied, "FILE_(SIZE|SHA256)"):
+            MODULE._authenticate_disposition_archive(Path(entry["path"]), entry, manifest)
+
+    def test_telemetry_is_jsonl_fsynced_and_remains_valid_after_interruption(self):
+        path = self.base / "interrupted.telemetry.private.jsonl"
+        trace = MODULE.Telemetry(path)
+        try:
+            trace.emit("before_tar_scan", candidate="sanitized-candidate", member_count=7)
+            raise RuntimeError("simulated interruption")
+        except RuntimeError:
+            pass
+        finally:
+            trace.close()
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        self.assertEqual([row["phase"] for row in rows],
+                         ["telemetry_started", "before_tar_scan"])
+        self.assertEqual(rows[-1]["memberCount"], 7)
+        self.assertIn("memoryEventsBaseline", rows[0])
+        self.assertNotIn("environment", path.read_text())
+
+    def test_every_cli_phase_requires_an_exclusive_telemetry_destination(self):
+        invocations = {
+            "audit": ["--request", "/request", "--request-sha256", "a" * 64,
+                      "--plan-output", "/plan"],
+            "prepare": ["--plan", "/plan", "--plan-sha256", "a" * 64,
+                        "--intent-output", "/intent", "--commands-output", "/commands",
+                        "--manifest-output", "/manifest"],
+            "execute": ["--intent", "/intent", "--intent-sha256", "a" * 64,
+                        "--authorization", "/authorization", "--authorization-sha256",
+                        "b" * 64, "--receipt-root", "/receipt"],
+        }
+        for action, arguments in invocations.items():
+            with self.subTest(action=action), \
+                    mock.patch.object(sys, "argv", [str(TOOL), action, *arguments]), \
+                    self.assertRaises(SystemExit) as stopped:
+                MODULE.parse_args()
+            self.assertEqual(stopped.exception.code, 2)
+
+    def test_streaming_archive_passes_under_explicit_address_space_limit(self):
+        root = self.base / "memory-limit"
+        authority = root / "authority"
+        authority.mkdir(parents=True)
+        payload = authority / "payload.bin"
+        with payload.open("wb") as stream:
+            for _ in range(24):
+                stream.write(os.urandom(1024 * 1024))
+        payload.chmod(0o644)
+        archive = root / "candidate.tar.gz"
+        with tarfile.open(archive, "w:gz") as output:
+            output.add(payload, arcname="payload.bin")
+        archive.chmod(0o600)
+        info = archive.lstat()
+        code = """
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location('capacity',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+p=Path(sys.argv[2]);a=Path(sys.argv[3]);s=p.lstat()
+entry={'sha256':sys.argv[4],'identity':{'device':s.st_dev,'inode':s.st_ino,'nlink':1,'uid':s.st_uid,'gid':s.st_gid,'mode':f'0{s.st_mode & 0o777:03o}'},'authority':str(a),'authorityState':'PRESENT','authorityIdentity':{'device':a.stat().st_dev,'inode':a.stat().st_ino,'uid':a.stat().st_uid,'gid':a.stat().st_gid,'mode':f'0{a.stat().st_mode & 0o777:03o}'},'protectedMemberExceptions':[]}
+print(m._authenticate_disposition_archive(p,entry,{'versionedEnvExample':{'sha256':'0'*64}})['memberCount'])
+"""
+
+        def limit_memory():
+            maximum = 72 * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (maximum, maximum))
+
+        completed = subprocess.run(
+            [sys.executable, "-B", "-c", code, str(TOOL), str(archive),
+             str(authority), sha(archive)], capture_output=True, text=True,
+            preexec_fn=limit_memory, timeout=30, check=False)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "1")
 
 
 if __name__ == "__main__":
