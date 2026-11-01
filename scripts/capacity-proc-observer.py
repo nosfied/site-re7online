@@ -49,6 +49,7 @@ MANIFEST_DISPOSITION_PATHS = {
     "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-reactive-afbb7455.tar.gz",
     "/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z/frontend-9f4cbe0f-v2.tar.gz",
     "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-css-supervision-20261007T224500Z/frontend-fa60-css-corrected.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
 }
 PF_KTHREAD = 0x00200000
 

@@ -571,10 +571,20 @@ posterior, e o diretório-pai recebe `fsync` após a ausência comprovada.
 
 ### `CLOSED_PREPARATION_MANIFEST_DISPOSITION`
 
-Esta classe existe somente para a disposição fechada
-`p00-closed-preparations-20261031-v2-three-archives`. O executor autentica caminho e SHA-256 do
-manifesto versionado; exige exatamente os três archives candidatos, sem mistura com outra
-classe, e nega campo, caminho, autoridade ou registro histórico alternativo.
+Esta classe aceita somente disposições registradas em código por caminho, SHA-256,
+`dispositionId` e cardinalidade. Permanecem fechadas e independentes:
+
+- `p00-closed-preparations-20261031-v2-three-archives`, terminal, com exatamente
+  os três archives já concluídos e seu manifesto byte-intacto;
+- `p00-worker-package-audit-afbb7455-v1`, ainda não executada, com exatamente a
+  árvore literal `worker-package-audit`, autoridade física literal
+  `worker-minimal-reactive-afbb7455-verified`, `PACKAGE_FILES.sha256` e
+  `PACKAGE_SYMLINKS.txt` vinculados pelos hashes versionados.
+
+Manifesto alternativo, mistura entre disposições, caminho adicional ou binding
+de SHA divergente negam antes da qualificação. O executor autentica caminho e
+SHA-256 do manifesto versionado e nega campo, caminho, autoridade ou registro
+histórico alternativo.
 Cada fase reabre o manifesto, os registros, candidatos e autoridades e recaptura
 as fontes vivas e as referências de processos.
 
@@ -596,8 +606,8 @@ escapes, links perigosos, devices, FIFO e tipos desconhecidos negam. O manifesto
 produtivo não admite `protectedMemberExceptions`; a proteção global de `.env.*`,
 `uploads` e demais materiais privados permanece sem exceção.
 
-O autenticador também possui suporte técnico ensaiado para uma futura entrada
-fechada `ENUMERATED_TREE`, sem alterar o manifesto produtivo 3/3. A árvore exige
+O autenticador possui suporte técnico ensaiado para a entrada fechada
+`ENUMERATED_TREE`, sem alterar o manifesto terminal 3/3. A árvore exige
 `PACKAGE_FILES.sha256` e autentica `PACKAGE_SYMLINKS.txt` como uma das folhas
 regulares antes de interpretar sua relação. Arquivos e links declarados precisam
 coincidir exatamente com a árvore candidata; cada link é confrontado por
@@ -607,18 +617,26 @@ de tipo negam. Um overlay adicional na autoridade não entra na relação nem no
 efeitos. Folhas usam hashing em blocos e a relação usa digest incremental; não se
 retêm payloads ou a relação completa em memória.
 
-Esse suporte não qualifica nem autoriza `worker-package-audit`: identidade atual,
-equivalência folha a folha, referências vivas, manifesto fechado e helper continuam
-pendentes e exigem decisão separada. O manifesto terminal 3/3 permanece byte-exato.
+O manifesto específico de `worker-package-audit` fecha caminho, autoridade,
+identidades históricas, bytes físicos registrados e hashes das duas relações. O
+observador privilegiado admite somente esse novo caminho literal, além dos
+literais anteriores; não recebe raiz ou caminho livre. Isso habilita uma futura
+qualificação única pelo `audit` canônico contido, mas não a substitui: identidade,
+equivalência folha a folha, referências vivas, capacidade e locks serão recapturados
+nessa fase. Nenhum `prepare`, autorização ou efeito é criado por esta habilitação.
+O manifesto terminal 3/3 permanece byte-exato.
 
 Arquivos regulares da autoridade são comparados por conteúdo e tamanho. O modo
 observado do arquivo físico é autenticado na relação, mas não precisa reproduzir o
 modo armazenado no tar; ambos são registrados. Drift de owner, device, inode,
 modo, conteúdo ou destino físico continua negando.
 
-O único efeito possível neste manifesto é `/usr/bin/unlink -- <archive>` para
-cada um dos três caminhos literais. Nunca há `rmdir`, `rm -r`, glob, shell ou
-exclusão da preparação inteira. Cada efeito recebe `ATTEMPT`, `RESULT` e
+No manifesto terminal 3/3, o único efeito é `/usr/bin/unlink -- <archive>`.
+Na disposição `worker-package-audit`, os únicos efeitos possíveis são `unlink`
+literal de cada folha candidata declarada e `rmdir` literal em pós-ordem, somente
+de diretórios candidatos vazios. A autoridade e seu overlay `.data` nunca entram
+nos efeitos. Nunca há `rm -r`, glob, shell ou exclusão da preparação inteira.
+Cada efeito recebe `ATTEMPT`, `RESULT` e
 `VERIFIED`; falha intermediária fecha o receipt parcial e não repete efeitos
 concluídos automaticamente.
 

@@ -53,6 +53,10 @@ DISPOSITION_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/closed-preparation-manifest-disposition.v1.json")
 DISPOSITION_MANIFEST_SHA256 = "b2b5bff4adeec32f12e9f32e0487a75f85fa334a3273931c88b62338b6d9f78d"
 DISPOSITION_ID = "p00-closed-preparations-20261031-v2-three-archives"
+WORKER_PACKAGE_AUDIT_MANIFEST_PATH = (
+    ROOT / "config/capacity-recovery/worker-package-audit-disposition.v1.json")
+WORKER_PACKAGE_AUDIT_MANIFEST_SHA256 = "40727a3c5f6c685ffa0169366310b6f4d92a203ade522835da0c83fbb3868c76"
+WORKER_PACKAGE_AUDIT_DISPOSITION_ID = "p00-worker-package-audit-afbb7455-v1"
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
@@ -1974,33 +1978,43 @@ def _disposition_manifest(
     if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
         deny("DISPOSITION_MANIFEST_BINDING")
     path = normalized_absolute(binding.get("path"), "DISPOSITION_MANIFEST_PATH")
-    expected = ({"path": str(DISPOSITION_MANIFEST_PATH),
-                 "sha256": DISPOSITION_MANIFEST_SHA256}
-                if sealed_binding is None else sealed_binding)
-    if (not isinstance(expected, dict) or set(expected) != {"path", "sha256"} or
-            binding != expected or binding.get("sha256") != DISPOSITION_MANIFEST_SHA256):
+    specs = (
+        {"path": DISPOSITION_MANIFEST_PATH, "sha256": DISPOSITION_MANIFEST_SHA256,
+         "dispositionId": DISPOSITION_ID, "entryCount": 3,
+         "bindPackageSymlinks": False},
+        {"path": WORKER_PACKAGE_AUDIT_MANIFEST_PATH,
+         "sha256": WORKER_PACKAGE_AUDIT_MANIFEST_SHA256,
+         "dispositionId": WORKER_PACKAGE_AUDIT_DISPOSITION_ID, "entryCount": 1,
+         "bindPackageSymlinks": True},
+    )
+    spec = next((item for item in specs if item["sha256"] == binding.get("sha256")), None)
+    expected = ({"path": str(spec["path"]), "sha256": spec["sha256"]}
+                if sealed_binding is None and spec is not None else sealed_binding)
+    if (spec is None or not isinstance(expected, dict) or
+            set(expected) != {"path", "sha256"} or binding != expected):
         deny("DISPOSITION_MANIFEST_FIXED_BINDING")
     try:
-        relative = DISPOSITION_MANIFEST_PATH.relative_to(ROOT)
+        relative = spec["path"].relative_to(ROOT)
     except ValueError:
         deny("DISPOSITION_MANIFEST_FIXED_BINDING")
     if not relative.parts or tuple(path.parts[-len(relative.parts):]) != relative.parts:
         deny("DISPOSITION_MANIFEST_FIXED_BINDING")
     manifest_root = path.parents[len(relative.parts) - 1]
-    if sealed_binding is not None and path != DISPOSITION_MANIFEST_PATH:
+    if sealed_binding is not None and path != spec["path"]:
         try:
             manifest_root.relative_to(PREPARATIONS_ROOT)
         except ValueError:
             deny("DISPOSITION_MANIFEST_FIXED_BINDING")
-    raw, _ = stable_regular(path, DISPOSITION_MANIFEST_SHA256, private=False,
+    raw, _ = stable_regular(path, spec["sha256"], private=False,
                             allowed_modes={0o600, 0o640, 0o644})
     value = object_json(raw, "DISPOSITION_MANIFEST_JSON")
     if (set(value) != {"schemaVersion", "kind", "dispositionId", "entries",
                        "versionedEnvExample"} or
             value.get("schemaVersion") != 2 or
             value.get("kind") != "CLOSED_PREPARATION_MANIFEST_DISPOSITION" or
-            value.get("dispositionId") != DISPOSITION_ID or
-            not isinstance(value.get("entries"), list) or len(value["entries"]) != 3):
+            value.get("dispositionId") != spec["dispositionId"] or
+            not isinstance(value.get("entries"), list) or
+            len(value["entries"]) != spec["entryCount"]):
         deny("DISPOSITION_MANIFEST_SCHEMA")
     env = value.get("versionedEnvExample")
     if not isinstance(env, dict) or set(env) != {"path", "sha256"}:
@@ -2019,6 +2033,8 @@ def _disposition_manifest(
             deny("DISPOSITION_MANIFEST_ENTRY_SCHEMA")
         expected = common | ({"packageFilesSha256"}
                              if entry.get("type") == "ENUMERATED_TREE" else set())
+        if spec["bindPackageSymlinks"] and entry.get("type") == "ENUMERATED_TREE":
+            expected.add("packageSymlinksSha256")
         if "protectedMemberExceptions" in entry:
             expected.add("protectedMemberExceptions")
         if set(entry) != expected or entry.get("type") not in {"ARCHIVE_FILE", "ENUMERATED_TREE"}:
@@ -2064,6 +2080,9 @@ def _disposition_manifest(
         elif (entry.get("sha256") is not None or
               not valid_sha(entry.get("packageFilesSha256")) or
               entry.get("proof") != "ENUMERATED_TREE_AUTHORITY"):
+            deny("DISPOSITION_MANIFEST_TREE_SCHEMA")
+        if (spec["bindPackageSymlinks"] and entry.get("type") == "ENUMERATED_TREE" and
+                not valid_sha(entry.get("packageSymlinksSha256"))):
             deny("DISPOSITION_MANIFEST_TREE_SCHEMA")
         for record in entry["historicalRecords"]:
             if not isinstance(record, dict) or set(record) != {"path", "sha256"}:
@@ -2484,6 +2503,9 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
     links_manifest_path = path / links_manifest_name
     declared_links, links_manifest_identity = _parse_package_symlinks(
         links_manifest_path, listed[links_manifest_name])
+    if ("packageSymlinksSha256" in entry and
+            listed[links_manifest_name] != entry["packageSymlinksSha256"]):
+        deny("DISPOSITION_PACKAGE_SYMLINKS_BINDING")
     if set(listed) & set(declared_links):
         deny("DISPOSITION_TREE_LEAF_SET")
     authority = Path(entry["authority"])
@@ -2634,7 +2656,8 @@ def authenticate_manifest_disposition(candidate: dict[str, Any], operational: di
     usage = physical_usage([path])[str(path)]
     if usage["allocatedBytes"] != entry["physicalBytes"]:
         deny("DISPOSITION_PHYSICAL_BYTES_DIVERGED")
-    return {"class": candidate["class"], "path": str(path), "dispositionId": DISPOSITION_ID,
+    return {"class": candidate["class"], "path": str(path),
+            "dispositionId": manifest["dispositionId"],
             "dispositionManifest": manifest_binding,
             "entry": entry, "identity": identity, "detail": detail,
             "candidateAncestors": ancestor_identities,
@@ -2708,7 +2731,7 @@ def validate_audit_request(value: dict[str, Any]) -> None:
         manifest, entries = _disposition_manifest(dispositions[0].get("dispositionManifest"))
         del manifest
         requested = [item.get("path") for item in dispositions]
-        if (len(requested) != 3 or len(set(requested)) != 3 or
+        if (len(requested) != len(entries) or len(set(requested)) != len(entries) or
                 set(requested) != set(entries) or
                 any(item.get("dispositionManifest") != dispositions[0].get("dispositionManifest")
                     for item in dispositions)):
@@ -2865,13 +2888,23 @@ def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
             if sealed_manifest_binding is not None:
                 if plan_path is None:
                     deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+                manifest_specs = (
+                    (DISPOSITION_MANIFEST_PATH, DISPOSITION_MANIFEST_SHA256),
+                    (WORKER_PACKAGE_AUDIT_MANIFEST_PATH,
+                     WORKER_PACKAGE_AUDIT_MANIFEST_SHA256),
+                )
+                manifest_spec = next(
+                    ((path, digest) for path, digest in manifest_specs
+                     if digest == sealed_manifest_binding.get("sha256")), None)
+                if manifest_spec is None:
+                    deny("DISPOSITION_MANIFEST_FIXED_BINDING")
                 try:
-                    manifest_relative = DISPOSITION_MANIFEST_PATH.relative_to(ROOT)
+                    manifest_relative = manifest_spec[0].relative_to(ROOT)
                 except ValueError:
                     deny("DISPOSITION_MANIFEST_FIXED_BINDING")
                 expected_manifest_binding = {
                     "path": str(plan_path.parent / "control" / manifest_relative),
-                    "sha256": DISPOSITION_MANIFEST_SHA256,
+                    "sha256": manifest_spec[1],
                 }
                 if sealed_manifest_binding != expected_manifest_binding:
                     deny("DISPOSITION_MANIFEST_FIXED_BINDING")
