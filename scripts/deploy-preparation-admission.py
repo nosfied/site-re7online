@@ -15,9 +15,16 @@ import sys
 from typing import Any
 import importlib.util
 
+PREPARATION_LIFECYCLE_SHA256 = "a67fb3361c17372896241469683104cb2e3bab3e892b8bf32127882612ad0f2a"
+_lifecycle_path = Path(__file__).resolve().parent / "preparation_artifact_lifecycle.py"
+try:
+    _lifecycle_raw = _lifecycle_path.read_bytes()
+except OSError as error:
+    raise RuntimeError("preparation_lifecycle_dependency_missing") from error
+if hashlib.sha256(_lifecycle_raw).hexdigest() != PREPARATION_LIFECYCLE_SHA256:
+    raise RuntimeError("preparation_lifecycle_dependency_drift")
 _lifecycle_spec = importlib.util.spec_from_file_location(
-    "preparation_artifact_lifecycle", Path(__file__).resolve().parent /
-    "preparation_artifact_lifecycle.py")
+    "preparation_artifact_lifecycle", _lifecycle_path)
 preparation_lifecycle = importlib.util.module_from_spec(_lifecycle_spec)
 _lifecycle_spec.loader.exec_module(preparation_lifecycle)
 
@@ -417,6 +424,9 @@ def expected_materialization(
             "sha256": expected,
             "copied": True,
         })
+    # Required by the copied generation-retirement entrypoint in both admission
+    # schemas. Its bytes are pinned by this admission and by the consumer.
+    payloads["preparation_artifact_lifecycle.py"] = _lifecycle_raw
     operational = json.loads(template_raw)
     operational["controlPlaneArtifacts"] = control_projection
     operational_raw = canonical(operational)
@@ -445,6 +455,12 @@ def expected_materialization(
         "operationalStateSha256": digest(operational_raw),
         "consumableMaterialized": True,
         "automaticRetry": False,
+        "preparationRuntimeDependencies": [{
+            "consumer": "generation-retirement",
+            "path": str(final_root / "preparation_artifact_lifecycle.py"),
+            "sha256": PREPARATION_LIFECYCLE_SHA256,
+            "copied": True,
+        }],
     }
     if preparation_contract is not None:
         report["preparationArtifactContract"] = {

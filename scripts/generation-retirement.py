@@ -18,9 +18,16 @@ from typing import Any
 
 import importlib.util
 
+PREPARATION_LIFECYCLE_SHA256 = "a67fb3361c17372896241469683104cb2e3bab3e892b8bf32127882612ad0f2a"
+_preparation_path = Path(__file__).resolve().parent / "preparation_artifact_lifecycle.py"
+try:
+    _preparation_raw = _preparation_path.read_bytes()
+except OSError as error:
+    raise RuntimeError("preparation_lifecycle_dependency_missing") from error
+if hashlib.sha256(_preparation_raw).hexdigest() != PREPARATION_LIFECYCLE_SHA256:
+    raise RuntimeError("preparation_lifecycle_dependency_drift")
 _preparation_spec = importlib.util.spec_from_file_location(
-    "preparation_artifact_lifecycle", Path(__file__).resolve().parent /
-    "preparation_artifact_lifecycle.py")
+    "preparation_artifact_lifecycle", _preparation_path)
 preparation_lifecycle = importlib.util.module_from_spec(_preparation_spec)
 _preparation_spec.loader.exec_module(preparation_lifecycle)
 
