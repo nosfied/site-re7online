@@ -341,3 +341,31 @@ Antes de outra geração normal:
 A documentação deste PR registra o contrato; seu fechamento operacional depende de
 código, regressões, CI e uma execução normal sem adaptação. Portanto, não declarar
 esta dívida concluída apenas porque a Tendência foi entregue.
+
+
+## Consolidação de 01/11/2026 — não reabrir entregas qualificadas
+
+A recuperação incremental 3/3 terminou em COMPLETED_RECONCILED. O sucesso
+qualifica aquele percurso de recuperação, não encerra P00-D nem comprova que
+todo deploy normal dispensa intervenção. A memória operacional do incidente e a
+sequência exercida estão na [política de capacidade](../CAPACITY_RECOVERY_POLICY.md#continuidade-qualificada-em-01112026--leitura-obrigatória-antes-de-nova-frente).
+
+| Entrega | Estado a preservar |
+| --- | --- |
+| #288, automation, hybrid-b9 e fa63994a | Terminais; preservar provas e não reexecutar |
+| #300 a #302 | Cardinalidade, contenção e observabilidade integradas; ensaios sintéticos não equivalem automaticamente ao percurso produtivo |
+| #303 | Guard do membro raiz integrado; defeito reproduzido, atribuição ao OOM histórico não comprovada |
+| #304 e #305 | Prepare e execute contidos; efeitos/journals pertencem ao executor |
+| #306 | Binding selado preservado entre roots; regressão completa e consumo sucessor comprovado |
+| #307 | Fechamento 3/3 publicado; receipt 6662af79…, ganho medido e proibição de replay |
+
+Antes de encaminhar nova ação, comparar o caminho que funcionou com a diferença
+atual: versão/árvore/CI, origem e destino físico dos controles, bindings, schema,
+ambiente, volume e recursos. Um hash de código igual não garante semântica igual
+quando a localização física integra o contrato. Ensaio de módulos isolados não
+substitui a transição completa antes da VPS.
+
+P00-D (schema/fingerprint materializador → consumidor) e lifecycle de preparações
+permanecem abertos até prova própria. Revisar itens antigos contra código integrado
+antes de classificá-los como pendência: não reimplementar protocolos resolvidos.
+Não criar um novo checklist ou executor concorrente para esta consolidação.

@@ -1069,3 +1069,43 @@ A próxima classificação de artefatos segue
 [PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
 Ela separa ativo, rollback, evidência, dado único, derivado e duplicado; idade ou
 tamanho isolados não autorizam retirada.
+
+
+## Extensão preventiva proposta — preparações volumosas (01/11/2026)
+
+**Estado: PROPOSTA / NÃO IMPLEMENTADA NEM INSTALADA POR ESTA ATUALIZAÇÃO.**
+
+O gate de reviews já protege outputs de gerações. Archives volumosos criados em
+`backups/.../preparations` continuam fora dessa cobertura. O sucesso da retirada
+3/3 não fecha essa lacuna.
+
+Estender o lifecycle e a admissão existentes com `preparationArtifacts`, sem
+outro executor, launcher ou cron de limpeza. Antes da primeira alocação volumosa,
+o contrato deve identificar:
+
+| Campo do contrato proposto | Finalidade |
+| --- | --- |
+| Escopo/geração e identificador da preparação | Vincular a alocação à operação real e evitar cópia equivalente redundante |
+| Caminho literal, classe, owner e orçamento de bytes/inodes | Identificar custo, responsabilidade e fronteira do efeito |
+| Autoridade preservada ou proteção explícita | Distinguir derivado retirável de dado único, ativo, rollback e evidência |
+| Disposição esperada e evento de encerramento | Evitar payload sem destino depois de sucesso, negativa ou rollback |
+| Estado OPEN, SANITIZED ou RETENTION_DEBT | Expor pendência real sem presumir limpeza |
+| Intenção/receipt/journal e respectivos hashes | Provar efeitos e permitir continuidade sem repetição |
+| Owner, prazo e impedimento nominal para dívida | Tornar dívida acompanhável, sem autorizar exclusão por idade |
+
+A proposta de bloqueio de nova preparação diante de OPEN ou dívida precisa ter
+escopo e consumidor explícitos no contrato. Não presumir que um diagnóstico antigo
+ou um tenant possa bloquear globalmente operações independentes. Capacidade é
+global; dados e efeitos dos tenants permanecem isolados.
+
+Admissão deve qualificar orçamento/reserva e preparação equivalente pendente antes
+da cópia. Finalize/rollback devem registrar sanitização ou dívida nominal, sem
+confundir dívida registrada com limpeza concluída. Falta de owner/prazo não pode
+ser resolvida inventando valor padrão ou descartando evidência.
+
+Aceite da implementação futura: teste com produtor/materializador e consumidor
+reais, negativa antes de alocação indevida, reuso de artefato válido, encerramento
+em sucesso/negação/rollback, interrupção com resíduo identificado e proibição de
+nova cópia equivalente sem resolução da pendência. Exigir código, regressões,
+runbook, estado e registro estruturado coerentes antes de declarar implantação.
+Esta proposta não modifica schemas nem habilita coleta ou retirada.
