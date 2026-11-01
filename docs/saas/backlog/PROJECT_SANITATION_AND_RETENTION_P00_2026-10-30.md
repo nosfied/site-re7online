@@ -331,6 +331,22 @@ sintéticos cobrem 3/3 completo, drift sob locks, contenção indisponível,
 interrupções antes/depois do primeiro efeito e sentinela externo. Esta entrega é
 somente código/teste/documentação para revisão e não autoriza `execute` produtivo.
 
+O PR #305 foi integrado no merge
+`4e85ff75048ad428137d3497292f0906927c2cd2`, árvore testada
+`5f42de235ad9936ab8eaa23cd050a3fb421e0f2e`. A única autorização posterior
+materializou SHA-256
+`6bfaa944a4d3bb2701a6949d5cd7811bf90fb22578949b85ce22f2a5a80e3d48`
+e iniciou `execute` uma vez. A recaptura sob locks encerrou antes de qualquer
+`ATTEMPT` com
+`EXECUTE_RECAPTURE_DENY:DISPOSITION_MANIFEST_FIXED_BINDING`. Receipt
+`0e9631f8…`, journal `9a2762bc…`, terminal `63da1875…` e recaptura
+`cc82ebf3…` ficam preservados na custódia
+`p00-capacity-three-archives-4e85ff75-execute-v1`. Resultado terminal:
+`FAILED_RECONCILED`, 0/3 tentados, 0/3 concluídos, os três archives presentes e
+zero ganho físico. Capacidade posterior `8.388.939.776` bytes; nenhuma nova
+classificação ou exclusão foi iniciada. Não reutilizar autorização, intenção ou
+receipt para replay.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico

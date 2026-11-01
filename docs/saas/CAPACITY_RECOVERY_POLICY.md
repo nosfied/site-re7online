@@ -76,6 +76,14 @@ autenticado reconcilia `FAILED` ou `COMPLETED`; qualquer `ATTEMPT` sem receipt
 em `RECOVERY_PENDING`. O supervisor não fabrica receipt, não repete comando e
 não transforma fechamento parcial em `COMPLETED`.
 
+O lote 3/3 selado em `502cc4b7…` consumiu uma única autorização depois do merge
+do PR #305. A recaptura sob locks negou nominalmente
+`DISPOSITION_MANIFEST_FIXED_BINDING` antes do primeiro `ATTEMPT`; receipt
+`0e9631f8…`, journal `9a2762bc…` e terminal `63da1875…` comprovam zero efeitos e
+mantêm os três candidatos presentes. Essa execução é terminal e irrepetível. A
+negativa não autoriza adaptar o manifesto, regenerar intenção, repetir fases ou
+prosseguir para outro lote na mesma janela.
+
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
 owner/group/mode, métricas físicas, hashes das fontes e comando fazem parte do
 binding. A fotografia operacional schema 2 exige fontes de recaptura ao vivo;

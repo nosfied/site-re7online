@@ -161,7 +161,7 @@
       "locksOrJournalsChanged": false
     },
     "executeContainmentPatch": {
-      "state": "LOCAL_REVIEW_ONLY_NOT_PRODUCTION_EXECUTED",
+      "state": "INTEGRATED_PRODUCTION_EXECUTE_TERMINAL_DENY",
       "inputPlanSha256": "502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5",
       "repeatAuditOrPreparePermitted": false,
       "memoryMaxBytes": 536870912,
@@ -175,7 +175,28 @@
       "receiptCreatedBySupervisor": false,
       "automaticReplay": false,
       "unreconciledEffectsState": "RECOVERY_PENDING",
-      "productionExecutePerformed": false
+      "productionExecutePerformed": true
+    },
+    "capacityRecoveryThreeArchiveExecute": {
+      "state": "FAILED_RECONCILED",
+      "custody": "p00-capacity-three-archives-4e85ff75-execute-v1",
+      "controlPlaneMerge": "4e85ff75048ad428137d3497292f0906927c2cd2",
+      "intentSha256": "906874e47846bffc506f8377f2daba1ad87d640b353e170b9cdffccea13eaadd",
+      "commandsSha256": "725ecbdcc8586cc6d6655bb13076821db247d174595ea8a6505c7fe6fb436c86",
+      "authorizationSha256": "6bfaa944a4d3bb2701a6949d5cd7811bf90fb22578949b85ce22f2a5a80e3d48",
+      "failurePredicate": "EXECUTE_RECAPTURE_DENY:DISPOSITION_MANIFEST_FIXED_BINDING",
+      "attemptedCommands": 0,
+      "completedCommands": 0,
+      "recoveredBytes": 0,
+      "candidatesPresent": 3,
+      "receiptSha256": "0e9631f8668abca9ce4f0be5278f66b33170b23768ba26efd2cd3bb9380b75ea",
+      "journalSha256": "9a2762bc291ed2230c9c324296623a72e7839b1052f03679f9b67eabed2c4cf4",
+      "terminalSha256": "63da187595ce756a77dd6dcc1b1062476c7b4cc956191287ada0def821a4df2a",
+      "preAttemptRecaptureSha256": "cc82ebf36695bd6b176938a70442571dba3df886d60a74ae6a056e1d146bc10c",
+      "availableBytesAfter": 8388939776,
+      "availableInodesAfter": 8727643,
+      "repeatPermitted": false,
+      "additionalInventoryOrDeletionPerformed": false
     },
     "authorityRootMemberGuard": {
       "state": "INTEGRATED_PRODUCTION_AUDIT_REACHED_PRE_BINDING_ONLY",

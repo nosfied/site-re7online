@@ -194,6 +194,22 @@ efeito resulta em `RECOVERY_PENDING`, sem replay nem receipt fabricado. Os teste
 usam somente caminhos sintéticos e preservam um sentinela externo ao scope. Isso
 não constitui autorização ou execução produtiva.
 
+O `execute` autorizado posteriormente foi consumido uma única vez na custódia
+`p00-capacity-three-archives-4e85ff75-execute-v1`. A contenção passou com 512
+MiB, swap zero e encerramento confirmado, mas a recaptura sob locks negou antes
+do primeiro efeito com
+`EXECUTE_RECAPTURE_DENY:DISPOSITION_MANIFEST_FIXED_BINDING`. Receipt
+`0e9631f8668abca9ce4f0be5278f66b33170b23768ba26efd2cd3bb9380b75ea`,
+journal `9a2762bc291ed2230c9c324296623a72e7839b1052f03679f9b67eabed2c4cf4`
+e terminal `63da187595ce756a77dd6dcc1b1062476c7b4cc956191287ada0def821a4df2a`
+comprovam `FAILED_RECONCILED`, zero `ATTEMPT`, zero `VERIFIED` e zero bytes
+recuperados. Os três archives permanecem presentes; saúde local continuou
+`ok=true`, `db=ok`; capacidade observada após o encerramento foi
+`8.388.939.776` bytes e `8.727.643` inodes disponíveis. A autorização foi
+consumida e a operação é terminal: não repetir `audit`, `prepare` ou `execute`.
+Não houve fechamento bem-sucedido que autorizasse avançar ao inventário ou a
+outra retirada nesta janela.
+
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
 memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou
