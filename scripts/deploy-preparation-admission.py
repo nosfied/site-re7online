@@ -13,6 +13,13 @@ import re
 import stat
 import sys
 from typing import Any
+import importlib.util
+
+_lifecycle_spec = importlib.util.spec_from_file_location(
+    "preparation_artifact_lifecycle", Path(__file__).resolve().parent /
+    "preparation_artifact_lifecycle.py")
+preparation_lifecycle = importlib.util.module_from_spec(_lifecycle_spec)
+_lifecycle_spec.loader.exec_module(preparation_lifecycle)
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
 CONTROL_ROLES = {
@@ -38,6 +45,7 @@ REQUEST_KEYS = {
     "operationalStateTemplate", "operationalStateOutputName",
     "controlPlaneArtifacts", "checks", "assertions",
 }
+REQUEST_V2_KEYS = REQUEST_KEYS | {"preparationArtifacts"}
 
 
 def canonical(value: Any) -> bytes:
@@ -262,7 +270,10 @@ def validate_request(value: Any) -> tuple[
         list[str], dict[str, tuple[Path, bytes, str]],
         tuple[Path, bytes, str] | None]:
     errors: list[str] = []
-    if not isinstance(value, dict) or set(value) != REQUEST_KEYS or value.get("schemaVersion") != 1:
+    if not isinstance(value, dict) or value.get("schemaVersion") not in {1, 2}:
+        return ["request:schema"], {}, None
+    expected_keys = REQUEST_KEYS if value["schemaVersion"] == 1 else REQUEST_V2_KEYS
+    if set(value) != expected_keys:
         return ["request:schema"], {}, None
     for key in ("generationId", "releaseId", "targetCommit"):
         if not isinstance(value.get(key), str) or not value[key]:
@@ -314,6 +325,11 @@ def validate_request(value: Any) -> tuple[
         for name in sorted(names - REQUIRED_CHECKS):
             errors.append(f"check:{name}:unknown")
     validate_assertions(value.get("assertions"), errors)
+    if value["schemaVersion"] == 2:
+        try:
+            preparation_lifecycle.validate_artifacts(value["preparationArtifacts"])
+        except (ValueError, KeyError, TypeError) as error:
+            errors.append(f"preparationArtifacts:{error}")
     return sorted(set(errors)), controls, template_info
 
 
@@ -360,6 +376,15 @@ def expected_materialization(
     operational["controlPlaneArtifacts"] = control_projection
     operational_raw = canonical(operational)
     payloads[value["operationalStateOutputName"]] = operational_raw
+    preparation_contract = None
+    if value["schemaVersion"] == 2:
+        preparation_contract = {
+            "schemaVersion": 1,
+            "generationId": value["generationId"],
+            "preparationArtifacts": value["preparationArtifacts"],
+        }
+        preparation_raw = canonical(preparation_contract)
+        payloads["preparation-artifacts.contract.private.json"] = preparation_raw
     report = {
         "schemaVersion": 1,
         "result": "P00_AGGREGATE_ADMISSION_PASS",
@@ -373,6 +398,11 @@ def expected_materialization(
         "consumableMaterialized": True,
         "automaticRetry": False,
     }
+    if preparation_contract is not None:
+        report["preparationArtifactContract"] = {
+            "path": str(final_root / "preparation-artifacts.contract.private.json"),
+            "sha256": digest(payloads["preparation-artifacts.contract.private.json"]),
+        }
     payloads["admission-report.private.json"] = canonical(report)
     return payloads, report
 

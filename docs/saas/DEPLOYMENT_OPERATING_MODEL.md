@@ -255,6 +255,10 @@ Os itens abaixo são históricos e **não utilizáveis**:
 - observador ou executor de ativação temporário em `/tmp`, inclusive polling de
   socket com amostra única logo após `pm2 start`;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
+- Preparações volumosas sem `preparationArtifacts` autenticado e lifecycle `OPEN`
+  antes da alocação. Schema legado continua legível, mas não autoriza nova cópia
+  volumosa. A fronteira de bloqueio de equivalência é o scope; a fronteira de
+  capacidade é o filesystem compartilhado.
 
 ## Histórico de produção — observação de 28/10/2026 (superada)
 

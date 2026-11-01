@@ -173,6 +173,35 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(reused["result"], "P00_AGGREGATE_ADMISSION_REUSED")
         self.assertTrue(reused["reusedExactDestination"])
 
+    def test_v2_materializes_closed_preparation_artifact_contract(self):
+        value = self.request()
+        value["schemaVersion"] = 2
+        value["finalRoot"] = str(self.private / "admitted-v2")
+        value["preparationArtifacts"] = [{
+            "path": str(self.private / "future/archive.tar"),
+            "scope": "api:fixture", "owner": "release-owner",
+            "budgetBytes": 4096, "budgetInodes": 1,
+            "protection": "DERIVED_WITH_AUTHORITY",
+            "authority": {"path": str(self.paths["contract"]),
+                          "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
+            "terminalDisposition": "SANITIZE_AFTER_USE",
+            "equivalenceSha256": "b" * 64,
+        }]
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        contract_path = Path(report["preparationArtifactContract"]["path"])
+        self.assertEqual(hashlib.sha256(contract_path.read_bytes()).hexdigest(),
+                         report["preparationArtifactContract"]["sha256"])
+        self.assertEqual(json.loads(contract_path.read_text())["preparationArtifacts"],
+                         value["preparationArtifacts"])
+
+    def test_v2_rejects_open_schema_and_invalid_budget(self):
+        value = self.request(); value["schemaVersion"] = 2
+        value["preparationArtifacts"] = [{"path": "/tmp/x", "extra": True}]
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 2)
+        self.assertTrue(any(item.startswith("preparationArtifacts:") for item in report["errors"]))
+
     def test_aggregate_denial_reports_all_known_defects_without_partial_root(self):
         value = self.request()
         source = Path(value["controlPlaneArtifacts"][2]["sourcePath"])

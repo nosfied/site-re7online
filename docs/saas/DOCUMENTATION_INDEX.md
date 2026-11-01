@@ -124,7 +124,7 @@ documento histórico prevalece sobre o modelo operacional canônico.
   — não reimplementar controles resolvidos; P00-D não é encerrado pelo lote 3/3.
 - [Capacidade e impedimentos após o lote 3/3](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md#decisão-consolidada-após-o-fechamento-33--01112026)
   — saldo histórico, déficit e candidatos pendentes; não autoriza retirada.
-- [Lifecycle de preparações volumosas: proposta pendente](DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026)
+- [Lifecycle de preparações volumosas: implementação versionada, não instalada](DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-versionada--preparações-volumosas-01112026)
   — contrato preventivo e aceite; não confundir proposta com rotina instalada.
 
 O lote 3/3 registrado no PR #307 está COMPLETED_RECONCILED e é irrepetível.

@@ -13,7 +13,12 @@ from pathlib import Path
 import stat
 import tarfile
 
+
 HERE = Path(__file__).resolve().parent
+preparation_spec = importlib.util.spec_from_file_location(
+    'preparation_artifact_lifecycle', HERE / 'preparation_artifact_lifecycle.py')
+preparation_lifecycle = importlib.util.module_from_spec(preparation_spec)
+preparation_spec.loader.exec_module(preparation_lifecycle)
 COORDINATOR_SHA = 'cbcb7896adeb9a90504c78c4c043644486a311a4d0c7daa9b9bcfd3b1e7a2cbc'
 p = HERE / 'operational_preparation_review.py'
 if hashlib.sha256(p.read_bytes()).hexdigest() != COORDINATOR_SHA:
@@ -145,6 +150,8 @@ def preparation_adapter(kind, value, parent, runners, now=None):
     lock = None
     generation = None
     output = None
+    lifecycle_contract = None
+    lifecycle_path = None
     denial_name = None
     try:
         lock = os.open('.future-preparation.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600, dir_fd=directory)
@@ -157,12 +164,30 @@ def preparation_adapter(kind, value, parent, runners, now=None):
         review, result = evaluate(value, now)
         require(review['state'] in ('READY', 'REVIEW'), 'preparation_state_invalid')
         operations = value['operations']; operation_guard(review, operations, result['artifactDecisions'])
+        reservation = {'reservedBytes': 0, 'reservedInodes': 0,
+                       'requiredBytes': 0, 'requiredInodes': 0}
+        if operations:
+            binding = value.get('preparationArtifactContract')
+            require(isinstance(binding, dict) and set(binding) == {'path', 'sha256'},
+                    'preparation_artifact_contract_binding_missing')
+            lifecycle_contract, _ = preparation_lifecycle.stable_contract(
+                Path(binding['path']), binding['sha256'])
+            require(lifecycle_contract['generationId'] == review['generation'],
+                    'preparation_artifact_generation_drift')
+            reservation = preparation_lifecycle.validate_existing_lifecycles(parent, lifecycle_contract)
         require(all(op['kind'] in runners for op in operations), 'operation_runner_missing')
         generation = local_generation(parent, review['generation'])
+        if operations:
+            preparation_lifecycle.authenticate_operations(lifecycle_contract, operations, generation)
         require(not any(generation.is_relative_to(Path(os.path.abspath(r))) for r in review['inventoryRoots']), 'generation_inside_inventory')
         os.mkdir(generation.name, mode=0o700, dir_fd=directory)
         output = c.reporter.private_output_directory(generation)
+        if operations:
+            lifecycle_path = generation / 'preparation-artifacts.lifecycle.private.json'
+            exclusive_json(output, lifecycle_path.name,
+                           preparation_lifecycle.lifecycle_value(lifecycle_contract, 'OPEN', 'CREATION_STARTED'))
         exclusive_json(output, 'before.private.json', dict(result, adapter=kind, coordinatorSha256=COORDINATOR_SHA))
+        exclusive_json(output, 'preparation-capacity.private.json', reservation)
         exclusive_json(output, 'operations.intent.private.json', {'operations': operations, 'automaticRetry': False})
         for i, operation in enumerate(operations):
             # Reread exact sources and inputs, reject drift/staleness at every boundary.
@@ -187,6 +212,11 @@ def preparation_adapter(kind, value, parent, runners, now=None):
         return {'result': 'LOCAL_PREPARED', 'adapter': kind, 'executionAuthorized': False}
     except BaseException as e:
         if output is not None:
+            if lifecycle_path is not None and lifecycle_contract is not None:
+                preparation_lifecycle.replace_lifecycle(
+                    lifecycle_path,
+                    preparation_lifecycle.lifecycle_value(lifecycle_contract, 'RETENTION_DEBT',
+                                                          'CREATION_INTERRUPTED', type(e).__name__))
             exclusive_json(output, 'denial.private.json', {'result': 'DENY', 'errorClass': type(e).__name__,
                            'automaticRetry': False, 'partialGenerationPreserved': True})
         elif denial_name is not None:
