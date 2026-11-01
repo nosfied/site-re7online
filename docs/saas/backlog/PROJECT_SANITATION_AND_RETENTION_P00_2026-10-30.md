@@ -660,3 +660,29 @@ dimensionar o ganho possível, juntamente com a proposta preventiva em
 [DEPLOY_ARTIFACT_LIFECYCLE](../DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026).
 Nenhum novo audit, prepare, execute, mudança de permissão ou retirada é autorizado
 por esta classificação documental.
+
+### Auditoria terminal de `worker-package-audit` — 01/11/2026
+
+O PR #312 foi integrado no merge
+`784b7da4c8268f32b9e36f88e4452ac5a152021b`, com árvore
+`e68e819db629886d6086a343d4d78a9ce1b43c99` idêntica ao HEAD testado
+`e139a98db132ff8a30a5a1051fb809b55051f921`. O materializador integrado
+produziu uma fotografia nova e um request novo na custódia exclusiva
+`p00-capacity-worker-package-audit-784b7da4c826-v5`; nenhuma fotografia ou
+request anterior foi reutilizado.
+
+A única fase `audit` terminou com exit code `2` e estado
+`P00_CAPACITY_RECOVERY_AUDIT_DENY`. O predicado primário foi
+`DISPOSITION_TREE_DIRECTORY_IDENTITY`; como o candidato não foi qualificado,
+o plano também registrou `MINIMUM_RECOVERY_NOT_MET`. O plano terminal tem
+SHA-256 `57eda79930ec4f24dcc56bccd6f46e9996f3855386264267d80b8071d18302ea`;
+o terminal tem SHA-256
+`fbae5eb81a62d03edbed26e4868511b3397e8b92d90a648977527fb4519a5a84`.
+
+Não houve OOM, timeout, sinal, `prepare`, `execute`, autorização ou efeito.
+O pico do cgroup foi 34.304.000 bytes, `oom=0`, `oom_kill=0`; o scope foi
+confirmado encerrado. API, frontend e worker mantiveram PID, estado e restart
+count, health local/público passou e os locks permaneceram livres. Esta
+custódia é terminal e não autoriza replay. O item continua
+`NOT_QUALIFIED`, agora pelo predicado nominal acima; o suporte técnico ensaiado
+não substitui a identidade física exigida pelo manifesto.

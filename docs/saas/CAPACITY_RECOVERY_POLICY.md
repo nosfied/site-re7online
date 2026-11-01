@@ -783,3 +783,19 @@ consumida. Qualquer sucessão precisa ser explicitamente delimitada pelo contrat
 sem sobrescrita, replay automático ou ampliação silenciosa. Distinguir o escopo
 autorizado pelo owner do documento técnico de uso único: o documento consumido
 nunca volta a ser usado.
+
+### Resultado terminal do audit `worker-package-audit` — 01/11/2026
+
+A custódia exclusiva
+`p00-capacity-worker-package-audit-784b7da4c826-v5` aplicou o percurso corrigido
+fotografia final → hash → request → readback → selagem. O request novo tem
+SHA-256 `c7cb79210e81b9761e96157b4b08891c0bd294f900cefaa88f965c78987deff5`
+e a fotografia nova
+`85bc10bebeb02624318f41d856b9bf56b47213d23291968e65ee7c71af44c2a9`.
+
+O único audit contido negou com `DISPOSITION_TREE_DIRECTORY_IDENTITY` e,
+consequentemente, `MINIMUM_RECOVERY_NOT_MET`. Exit code `2`, plano
+`57eda79930ec4f24dcc56bccd6f46e9996f3855386264267d80b8071d18302ea`,
+terminal `fbae5eb81a62d03edbed26e4868511b3397e8b92d90a648977527fb4519a5a84`.
+O scope terminou confirmado, sem OOM, timeout, sinal ou efeito. Não repetir essa
+operação nem avançar para `prepare`/`execute` com seu plano negado.
