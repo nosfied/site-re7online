@@ -347,6 +347,22 @@ zero ganho físico. Capacidade posterior `8.388.939.776` bytes; nenhuma nova
 classificação ou exclusão foi iniciada. Não reutilizar autorização, intenção ou
 receipt para replay.
 
+Diagnóstico dirigido: plano e intenção apontam para o manifesto da custódia de
+audit `916f8d6b-v2`, SHA `b2b5bff4…`. Prepare-v2 executou a partir desse control
+root. Execute materializou o mesmo executor `fa323125…` em outro control root;
+por derivar `ROOT` de `__file__`, calculou outro caminho absoluto para o
+manifesto. O SHA histórico permaneceu igual, mas o caminho calculado divergiu e
+o arquivo não existia na nova localização. Prepare-v1 já havia exposto a mesma
+incompatibilidade ao relocar executor/manifesto; prepare-v2 usou o root original,
+mas a lição não foi aplicada à materialização do execute.
+
+Correção mínima vinculada ao PR #306: audit segue fixo ao manifesto local;
+recapturas posteriores reabrem apenas o binding exato previamente autenticado e
+selado, ainda preso ao SHA compilado, layout canônico e raiz de preparações.
+Teste integral sintético usa três localizações físicas e nega drift de caminho,
+SHA e escopo antes de qualquer efeito. Autorização `6bfaa944…` e receipt
+`0e9631f8…` permanecem terminais; não há autorização de replay.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico

@@ -195,6 +195,18 @@
       "preAttemptRecaptureSha256": "cc82ebf36695bd6b176938a70442571dba3df886d60a74ae6a056e1d146bc10c",
       "availableBytesAfter": 8388939776,
       "availableInodesAfter": 8727643,
+      "bindingDiagnosis": {
+        "kind": "EXECUTOR_ROOT_RELOCATION_PATH_DIVERGENCE",
+        "planAndIntentManifestPath": "/opt/re7online/backups/converta-persistent/preparations/p00-capacity-three-archives-916f8d6b-v2/control/config/capacity-recovery/closed-preparation-manifest-disposition.v1.json",
+        "planAndIntentManifestSha256": "b2b5bff4adeec32f12e9f32e0487a75f85fa334a3273931c88b62338b6d9f78d",
+        "prepareExecutorPath": "/opt/re7online/backups/converta-persistent/preparations/p00-capacity-three-archives-916f8d6b-v2/control/scripts/capacity-recovery.py",
+        "executeExecutorPath": "/opt/re7online/backups/converta-persistent/preparations/p00-capacity-three-archives-4e85ff75-execute-v1/control/scripts/capacity-recovery.py",
+        "executorSha256": "fa323125a8da4357d847c57dd83f3e42772fdc841de1a54dcb4cc6568bfa53d8",
+        "shaDiverged": false,
+        "pathDiverged": true,
+        "historicalArtifactsEdited": false,
+        "replayAuthorized": false
+      },
       "repeatPermitted": false,
       "additionalInventoryOrDeletionPerformed": false
     },
