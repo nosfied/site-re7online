@@ -281,6 +281,31 @@ está comprovado localmente; sua ocorrência no archive produtivo permanece
 hipótese compatível com a última fase, não fato atribuído. Nenhum archive
 produtivo foi relido para fechar essa lacuna.
 
+### Tentativa terminal 916f8d6b-v1
+
+O guard do membro raiz foi integrado pelo merge
+`916f8d6b4e8696c821c40eec910dbca39449a319`, com árvore idêntica ao HEAD
+testado e CI `41343829157` 4/4 PASS. A operação única seguinte usou custódia
+`p00-capacity-three-archives-916f8d6b-v1` e request
+`113abf0a6f770d6353abfc1fb7479134e599b329f572d0fdd409fe3819f73c15`.
+O executor negou em 0,386 s com exit code 2 e
+`FILE_SHA256:operational-state.schema2.private.json`: o estado operacional
+materializado tinha SHA-256
+`fd2c68d8d0889cc55799695f55225495b4c6cf2136f3a151b93fd0e731ed0d96`,
+enquanto o request ainda vinculava o SHA anterior
+`6641d581af300cd81f13ba3febffef377e4f78feb40ede7d82d886994953ea6c`.
+
+Não houve avaliação por candidato, plano, `prepare`, `execute` ou efeito. O
+scope terminou confirmado, sem OOM ou timeout; pico do cgroup 17.289.216 bytes,
+pico RSS do filho 28.717.056 bytes. Terminal
+`4ab144e806a8ea8ec43d013f40a6479c9d95bd557917ce51493697b3d944bdec`,
+telemetrias `7235a80d617eaa1aa25df8828798a26c2ddb657083fc3bd2a71ea9dd75ed24b5`
+e `d41fde756979d9b340243d39bef0439a263b18613575fa1bc4be6abffc86596e`,
+índice `d2902c27a570e4a9e7d69e3278eb4ad2b3180b1a576b6fc2930a7b0a8130ce6f`.
+A negativa comprova que caminho e SHA do estado operacional formam um binding
+único: atualizar um exige atualizar atomicamente o outro antes do lançamento.
+Essa custódia e esse request são terminais e proibidos para replay.
+
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
 `frontend-fa60-css-corrected.tar.gz`, total físico declarado de `458.973.184`

@@ -268,6 +268,31 @@ Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
 continuam nas seções próprias; não são reabertos por esta correção.
 
+#### Tentativa terminal 916f8d6b-v1
+
+O PR #303 foi integrado no merge
+`916f8d6b4e8696c821c40eec910dbca39449a319`; sua árvore
+`38fd61326d494a1d312a723653bfaee10d92a12d` é idêntica à do HEAD testado
+`e75c48280c1e56bd96e497e59acc21107a45bf31`, coberto pela CI `41343829157`
+4/4 PASS. A auditoria única da custódia
+`p00-capacity-three-archives-916f8d6b-v1`, request
+`113abf0a6f770d6353abfc1fb7479134e599b329f572d0fdd409fe3819f73c15`,
+foi consumida por negativa de binding antes de classificar qualquer archive.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| estado operacional materializado | `fd2c68d8d0889cc55799695f55225495b4c6cf2136f3a151b93fd0e731ed0d96` |
+| SHA antigo ainda vinculado pelo request | `6641d581af300cd81f13ba3febffef377e4f78feb40ede7d82d886994953ea6c` |
+| terminal | `4ab144e806a8ea8ec43d013f40a6479c9d95bd557917ce51493697b3d944bdec` |
+| telemetria do executor | `7235a80d617eaa1aa25df8828798a26c2ddb657083fc3bd2a71ea9dd75ed24b5` |
+| telemetria do supervisor | `d41fde756979d9b340243d39bef0439a263b18613575fa1bc4be6abffc86596e` |
+| índice privado | `d2902c27a570e4a9e7d69e3278eb4ad2b3180b1a576b6fc2930a7b0a8130ce6f` |
+
+Predicado: `FILE_SHA256:operational-state.schema2.private.json`; exit code 2;
+scope encerrado e zero plano/efeito. Os três candidatos e autoridades continuam
+presentes, e PM2, current, dump, guarda, health e locks foram preservados. Essa
+operação não produziu resultado de elegibilidade 3/3 e não pode ser repetida.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico

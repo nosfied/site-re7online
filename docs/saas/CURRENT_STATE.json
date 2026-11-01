@@ -1,13 +1,13 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-11-01T19:48:52Z",
+  "updatedAtUtc": "2026-11-01T20:05:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "capacityRecoveryControlPlane": {
-    "state": "PRODUCTION_AUDIT_512_MIB_TERMINAL_ROOT_MEMBER_GUARD_LOCAL_REVIEW",
+    "state": "PRODUCTION_AUDIT_BINDING_DENY_TERMINAL_NO_EFFECT",
     "script": "scripts/capacity-recovery.py",
     "policy": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
     "phases": [
@@ -57,7 +57,7 @@
       "repeatPermitted": false,
       "evidenceHashes": "PRESERVED_IN_PRIVATE_CUSTODY_INDEX_NOT_REHASHED_HERE"
     },
-    "latestContainedAttempt": {
+    "previousContainedAttempt": {
       "reportedDate": "2026-11-01",
       "controlPlaneMerge": "3950b67c01c10f9a3db84a06f51d45b023d9e527",
       "custody": "p00-capacity-three-archives-3950b67c-v1",
@@ -85,8 +85,36 @@
       "supervisorTelemetrySha256": "ab4f7caa183003c9ec9148f8b3b36e6e4053e93aacc4f87af50c78663c2035f1",
       "evidenceIndexSha256": "4995c169c57f70cd2c2771f6f439a32bfc8544dcf6c63f2ebea8228426d309a9"
     },
+    "latestContainedAttempt": {
+      "reportedDate": "2026-11-01",
+      "controlPlaneMerge": "916f8d6b4e8696c821c40eec910dbca39449a319",
+      "testedHead": "e75c48280c1e56bd96e497e59acc21107a45bf31",
+      "tree": "38fd61326d494a1d312a723653bfaee10d92a12d",
+      "ciRun": 41343829157,
+      "custody": "p00-capacity-three-archives-916f8d6b-v1",
+      "requestSha256": "113abf0a6f770d6353abfc1fb7479134e599b329f572d0fdd409fe3819f73c15",
+      "state": "P00_CAPACITY_RECOVERY_AUDIT_DENY",
+      "predicate": "FILE_SHA256:operational-state.schema2.private.json",
+      "exitCode": 2,
+      "signal": null,
+      "memoryMaxBytes": 536870912,
+      "cgroupMemoryPeakBytes": 17289216,
+      "childRssPeakBytes": 28717056,
+      "elapsedMonotonicNs": 386446813,
+      "scopeTermination": "TERMINATED_CONFIRMED",
+      "planProduced": false,
+      "candidateResultsProduced": false,
+      "effectsExecuted": 0,
+      "repeatPermitted": false,
+      "operationalStateSha256": "fd2c68d8d0889cc55799695f55225495b4c6cf2136f3a151b93fd0e731ed0d96",
+      "requestBoundOperationalStateSha256": "6641d581af300cd81f13ba3febffef377e4f78feb40ede7d82d886994953ea6c",
+      "terminalSha256": "4ab144e806a8ea8ec43d013f40a6479c9d95bd557917ce51493697b3d944bdec",
+      "executorTelemetrySha256": "7235a80d617eaa1aa25df8828798a26c2ddb657083fc3bd2a71ea9dd75ed24b5",
+      "supervisorTelemetrySha256": "d41fde756979d9b340243d39bef0439a263b18613575fa1bc4be6abffc86596e",
+      "evidenceIndexSha256": "d2902c27a570e4a9e7d69e3278eb4ad2b3180b1a576b6fc2930a7b0a8130ce6f"
+    },
     "authorityRootMemberGuard": {
-      "state": "LOCAL_FIX_FOR_REVIEW_NOT_PRODUCTION_EXECUTED",
+      "state": "INTEGRATED_PRODUCTION_AUDIT_REACHED_PRE_BINDING_ONLY",
       "defectReproduced": true,
       "priorVersionTimeoutSeconds": 5,
       "rootAliases": [

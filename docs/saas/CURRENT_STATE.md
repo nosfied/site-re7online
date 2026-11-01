@@ -138,6 +138,34 @@ determinístico. Os registros históricos do 9f4 não contêm a linha de listage
 o comando de criação que provariam o membro `.`, portanto a causa produtiva
 permanece hipótese e não conclusão.
 
+A correção foi integrada pelo merge
+`916f8d6b4e8696c821c40eec910dbca39449a319`, com árvore
+`38fd61326d494a1d312a723653bfaee10d92a12d` idêntica ao HEAD testado
+`e75c48280c1e56bd96e497e59acc21107a45bf31` e CI `41343829157` 4/4 PASS.
+A auditoria única posterior, custódia
+`p00-capacity-three-archives-916f8d6b-v1` e request
+`113abf0a6f770d6353abfc1fb7479134e599b329f572d0fdd409fe3819f73c15`,
+terminou antes da classificação dos candidatos com
+`FILE_SHA256:operational-state.schema2.private.json`. O arquivo materializado
+teve SHA-256 `fd2c68d8d0889cc55799695f55225495b4c6cf2136f3a151b93fd0e731ed0d96`,
+mas o request conservou o SHA anterior `6641d581af300cd81f13ba3febffef377e4f78feb40ede7d82d886994953ea6c`.
+Logo, esta foi uma negativa de binding da entrada operacional, não resultado de
+nenhum dos três candidates.
+
+O scope terminou confirmado, exit code 2, sem OOM, timeout, plano, `prepare`,
+`execute` ou efeito. Terminal
+`4ab144e806a8ea8ec43d013f40a6479c9d95bd557917ce51493697b3d944bdec`,
+telemetrias do executor e supervisor
+`7235a80d617eaa1aa25df8828798a26c2ddb657083fc3bd2a71ea9dd75ed24b5`
+e `d41fde756979d9b340243d39bef0439a263b18613575fa1bc4be6abffc86596e`;
+índice privado
+`d2902c27a570e4a9e7d69e3278eb4ad2b3180b1a576b6fc2930a7b0a8130ce6f`.
+PM2 antes/depois permaneceu byte-idêntico em
+`99a4cae95105dde9391e3be83bd5cdc2f5d771a03cd972e84e37a02efcf8c308`;
+current, dump, health local/público, guarda e locks permaneceram iguais. Os três
+archives e as três autoridades seguem presentes. A custódia e o request são
+terminais e não podem ser reutilizados.
+
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
 memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou
