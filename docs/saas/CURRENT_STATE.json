@@ -1,13 +1,13 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-30T17:30:00Z",
+  "updatedAtUtc": "2026-11-01T14:22:36Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "capacityRecoveryControlPlane": {
-    "state": "COMPLETED_REPORTED",
+    "state": "PRODUCTION_ATTEMPT_INTERRUPTED_LOCAL_FIX_PENDING_REVIEW",
     "script": "scripts/capacity-recovery.py",
     "policy": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
     "phases": [
@@ -18,7 +18,8 @@
     "classes": [
       "NPM_CACHE_MAINTENANCE",
       "DERIVED_OUTPUT_RUNTIME",
-      "CLOSED_PREPARATION_DERIVED_ARCHIVE"
+      "CLOSED_PREPARATION_DERIVED_ARCHIVE",
+      "CLOSED_PREPARATION_MANIFEST_DISPOSITION"
     ],
     "executeLiveRecaptureAfterLocks": true,
     "npmCacheGroupPrincipals": [
@@ -42,6 +43,53 @@
       "legacyLayouts": "CLOSED_CLASSIFIERS_ONLY",
       "unknownLayout": "DENY",
       "nonTerminalReferences": "PROTECTED"
+    },
+    "latestInterruptedAttempt": {
+      "reportedDate": "2026-11-01",
+      "baseMerge": "9e25104660642ce72bfe289e41320a6d12c804bd",
+      "custody": "p00-capacity-three-archives-9e251046-20261101T132910Z",
+      "exitCode": -15,
+      "childRssPeakBytes": 1288294400,
+      "cgroupMemoryPeakBytes": 1976967168,
+      "oomEvents": 0,
+      "planProduced": false,
+      "effectsExecuted": 0,
+      "repeatPermitted": false,
+      "evidenceHashes": "PRESERVED_IN_PRIVATE_CUSTODY_INDEX_NOT_REHASHED_HERE"
+    },
+    "localCardinalityValidation": {
+      "state": "IMPLEMENTED_AND_LOCALLY_TESTED_NOT_INTEGRATED_NOT_PRODUCTION_EXECUTED",
+      "memberScales": [
+        30000,
+        60000
+      ],
+      "rlimitAsBytes": 268435456,
+      "maxTarMembersRetained": 1,
+      "rssPeakBytes": [
+        38842368,
+        38842368
+      ],
+      "nameRegistryPeakPhysicalBytes": [
+        552960,
+        1110016
+      ],
+      "nameRegistryDistinctNames": [
+        30000,
+        60000
+      ],
+      "nameRegistryUniquenessChecks": [
+        30000,
+        60000
+      ],
+      "nameRegistryPageCount": [
+        135,
+        271
+      ],
+      "nameRegistryPageSize": 4096,
+      "nameRegistryMaxPageCount": 16384,
+      "nameRegistryDatabaseLimitBytes": 67108864,
+      "nameRegistryAuxiliaryFilesObserved": [],
+      "productionBudgetApproved": false
     },
     "productionEffectsInThisChange": false,
     "lastCompleted": {

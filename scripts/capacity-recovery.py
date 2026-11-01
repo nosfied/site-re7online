@@ -21,6 +21,7 @@ import pwd
 import re
 import resource
 import secrets
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -152,10 +153,231 @@ LEGACY_PROTECTED_SENTINELS = {
     "api-return.private.json", "frontend-return.private.json",
 }
 EMPTY_PREFLIGHT = re.compile(r"^preflight-[0-9a-f]{8}-[0-9]{8}T[0-9]{6}Z$")
+NAME_REGISTRY_MAX_BYTES = 64 * 1024 * 1024
+NAME_REGISTRY_CACHE_KIB = 1024
+TAR_PROGRESS_INTERVAL = 4096
+TAR_PROGRESS_EVENT_LIMIT = 256
 
 
 class Denied(RuntimeError):
     pass
+
+
+class ExactNameRegistry:
+    """Disk-backed exact set with a fixed cache and disk budget.
+
+    Names are stored as UTF-8 bytes with surrogate preservation in a BLOB
+    primary key. SQLite therefore cannot add case folding, Unicode
+    normalization, or locale collation.
+    """
+
+    DATABASE_NAME = "names.sqlite3"
+    KNOWN_FILES = {DATABASE_NAME, f"{DATABASE_NAME}-journal",
+                   f"{DATABASE_NAME}-wal", f"{DATABASE_NAME}-shm"}
+
+    def __init__(self, parent: Path, *, max_bytes: int = NAME_REGISTRY_MAX_BYTES,
+                 cache_kib: int = NAME_REGISTRY_CACHE_KIB) -> None:
+        self.parent = parent
+        self.max_bytes = max_bytes
+        self.cache_kib = cache_kib
+        self.directory: Path | None = None
+        self.directory_fd = -1
+        self.directory_identity: tuple[int, int] | None = None
+        self.connection: sqlite3.Connection | None = None
+        self.peak_physical_bytes = 0
+        self.count = 0
+        self.uniqueness_checks = 0
+
+    @staticmethod
+    def _encoded(value: str) -> bytes:
+        return value.encode("utf-8", "surrogatepass")
+
+    def __enter__(self) -> ExactNameRegistry:
+        try:
+            parent_info = self.parent.lstat()
+            if self.parent.is_symlink() or not stat.S_ISDIR(parent_info.st_mode):
+                deny("DISPOSITION_NAME_REGISTRY_PARENT")
+            filesystem = os.statvfs(self.parent)
+            if filesystem.f_bavail * filesystem.f_frsize < self.max_bytes:
+                deny("DISPOSITION_NAME_REGISTRY_SPACE")
+            parent_fd = os.open(self.parent, os.O_RDONLY | os.O_DIRECTORY |
+                                os.O_NOFOLLOW | os.O_CLOEXEC)
+            try:
+                for _ in range(16):
+                    name = f".capacity-name-registry-{secrets.token_hex(16)}"
+                    try:
+                        os.mkdir(name, 0o700, dir_fd=parent_fd)
+                        break
+                    except FileExistsError:
+                        continue
+                else:
+                    deny("DISPOSITION_NAME_REGISTRY_CREATE")
+                os.fsync(parent_fd)
+                self.directory = self.parent / name
+                self.directory_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY |
+                                            os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent_fd)
+            finally:
+                os.close(parent_fd)
+            directory_info = os.fstat(self.directory_fd)
+            if (not stat.S_ISDIR(directory_info.st_mode) or
+                    directory_info.st_uid != os.geteuid() or
+                    directory_info.st_gid != os.getegid() or
+                    stat.S_IMODE(directory_info.st_mode) != 0o700):
+                deny("DISPOSITION_NAME_REGISTRY_IDENTITY")
+            self.directory_identity = (directory_info.st_dev, directory_info.st_ino)
+            database_fd = os.open(self.DATABASE_NAME, os.O_WRONLY | os.O_CREAT |
+                                  os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                  0o600, dir_fd=self.directory_fd)
+            os.close(database_fd)
+            database_path = f"/proc/self/fd/{self.directory_fd}/{self.DATABASE_NAME}"
+            self.connection = sqlite3.connect(database_path, isolation_level=None)
+            self.connection.execute("PRAGMA journal_mode=OFF")
+            self.connection.execute("PRAGMA synchronous=FULL")
+            self.connection.execute("PRAGMA temp_store=FILE")
+            self.connection.execute(f"PRAGMA cache_size=-{self.cache_kib}")
+            page_size = int(self.connection.execute("PRAGMA page_size").fetchone()[0])
+            max_pages = max(1, self.max_bytes // page_size)
+            self.connection.execute(f"PRAGMA max_page_count={max_pages}")
+            self.connection.execute(
+                "CREATE TABLE names (value BLOB PRIMARY KEY) WITHOUT ROWID")
+            # One bounded transaction avoids a durability sync per name. The
+            # registry is disposable read-only working state, never authority.
+            self.connection.execute("BEGIN IMMEDIATE")
+            self.measure()
+            return self
+        except Denied:
+            self._cleanup()
+            raise
+        except (OSError, sqlite3.Error):
+            self._cleanup()
+            deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+
+    def add(self, value: str) -> None:
+        if self.connection is None:
+            deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+        try:
+            self.uniqueness_checks += 1
+            self.connection.execute(
+                "INSERT INTO names(value) VALUES (?)", (sqlite3.Binary(self._encoded(value)),))
+            self.count += 1
+        except sqlite3.IntegrityError:
+            deny("DISPOSITION_ARCHIVE_MEMBER_DUPLICATE")
+        except sqlite3.Error as error:
+            if getattr(error, "sqlite_errorcode", None) == sqlite3.SQLITE_FULL:
+                deny("DISPOSITION_NAME_REGISTRY_SPACE")
+            deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+
+    def measure(self) -> int:
+        if self.directory_fd < 0:
+            return 0
+        total = 0
+        try:
+            names = os.listdir(self.directory_fd)
+            if any(name not in self.KNOWN_FILES for name in names):
+                deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+            for name in names:
+                info = os.stat(name, dir_fd=self.directory_fd, follow_symlinks=False)
+                if not stat.S_ISREG(info.st_mode):
+                    deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+                total += info.st_blocks * 512
+        except OSError:
+            deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+        self.peak_physical_bytes = max(self.peak_physical_bytes, total)
+        if total > self.max_bytes:
+            deny("DISPOSITION_NAME_REGISTRY_SPACE")
+        return total
+
+    def finalize(self) -> dict[str, Any]:
+        """Flush the disposable registry and return bounded sanitized metrics."""
+        if self.connection is None or self.directory_fd < 0:
+            deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+        try:
+            self.connection.commit()
+            page_count = int(self.connection.execute("PRAGMA page_count").fetchone()[0])
+            page_size = int(self.connection.execute("PRAGMA page_size").fetchone()[0])
+            max_page_count = int(self.connection.execute(
+                "PRAGMA max_page_count").fetchone()[0])
+            cache_size = int(self.connection.execute("PRAGMA cache_size").fetchone()[0])
+            journal_mode = str(self.connection.execute(
+                "PRAGMA journal_mode").fetchone()[0])
+            files: list[dict[str, Any]] = []
+            for name in sorted(os.listdir(self.directory_fd)):
+                if name not in self.KNOWN_FILES:
+                    deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+                info = os.stat(name, dir_fd=self.directory_fd, follow_symlinks=False)
+                if not stat.S_ISREG(info.st_mode):
+                    deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+                files.append({
+                    "kind": "database" if name == self.DATABASE_NAME else name.removeprefix(
+                        self.DATABASE_NAME).removeprefix("-"),
+                    "logicalBytes": info.st_size,
+                    "physicalBytes": info.st_blocks * 512,
+                })
+            physical = self.measure()
+        except Denied:
+            raise
+        except (OSError, sqlite3.Error, TypeError, ValueError):
+            deny("DISPOSITION_NAME_REGISTRY_STORAGE")
+        return {
+            "distinctNames": self.count,
+            "uniquenessChecks": self.uniqueness_checks,
+            "pageCount": page_count,
+            "pageSize": page_size,
+            "maxPageCount": max_page_count,
+            "configuredDatabaseLimitBytes": max_page_count * page_size,
+            "cacheSizeKiB": abs(cache_size) if cache_size < 0 else None,
+            "journalMode": journal_mode,
+            "files": files,
+            "physicalBytes": physical,
+        }
+
+    def _cleanup(self) -> bool:
+        failed = False
+        if self.connection is not None:
+            try:
+                self.connection.close()
+            except sqlite3.Error:
+                failed = True
+            self.connection = None
+        if self.directory_fd >= 0:
+            try:
+                for name in os.listdir(self.directory_fd):
+                    if name not in self.KNOWN_FILES:
+                        failed = True
+                        continue
+                    try:
+                        os.unlink(name, dir_fd=self.directory_fd)
+                    except OSError:
+                        failed = True
+                os.fsync(self.directory_fd)
+            except OSError:
+                failed = True
+            os.close(self.directory_fd)
+            self.directory_fd = -1
+        if self.directory is not None:
+            try:
+                current = self.directory.lstat()
+                if (self.directory.is_symlink() or not stat.S_ISDIR(current.st_mode) or
+                        (current.st_dev, current.st_ino) != self.directory_identity):
+                    raise OSError(errno.ESTALE, "name registry identity changed")
+                os.rmdir(self.directory)
+                parent_fd = os.open(self.parent, os.O_RDONLY | os.O_DIRECTORY |
+                                    os.O_NOFOLLOW | os.O_CLOEXEC)
+                try:
+                    os.fsync(parent_fd)
+                finally:
+                    os.close(parent_fd)
+            except OSError:
+                failed = True
+            self.directory = None
+            self.directory_identity = None
+        return failed
+
+    def __exit__(self, kind: type[BaseException] | None,
+                 value: BaseException | None, traceback: Any) -> bool:
+        if self._cleanup():
+            deny("DISPOSITION_NAME_REGISTRY_CLEANUP")
+        return False
 
 
 class Telemetry:
@@ -221,7 +443,10 @@ class Telemetry:
         return current, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
 
     def emit(self, phase: str, *, candidate: str | None = None,
-             member_count: int = 0, memory_events_baseline: dict[str, int] | None = None) -> None:
+             member_count: int = 0, temporary_disk_bytes: int | None = None,
+             tar_members_retained: int | None = None,
+             name_registry: dict[str, Any] | None = None,
+             memory_events_baseline: dict[str, int] | None = None) -> None:
         rss_current, rss_peak = self._rss()
         row: dict[str, Any] = {
             "schemaVersion": 1, "phase": phase, "candidate": candidate,
@@ -234,6 +459,12 @@ class Telemetry:
         }
         if memory_events_baseline is not None:
             row["memoryEventsBaseline"] = memory_events_baseline
+        if temporary_disk_bytes is not None:
+            row["temporaryDiskBytes"] = temporary_disk_bytes
+        if tar_members_retained is not None:
+            row["tarMembersRetained"] = tar_members_retained
+        if name_registry is not None:
+            row["nameRegistry"] = name_registry
         os.write(self.fd, canonical(row))
         os.fsync(self.fd)
 
@@ -248,10 +479,14 @@ _TELEMETRY: Telemetry | None = None
 
 
 def telemetry(phase: str, *, candidate: Path | str | None = None,
-              member_count: int = 0) -> None:
+              member_count: int = 0, temporary_disk_bytes: int | None = None,
+              tar_members_retained: int | None = None,
+              name_registry: dict[str, Any] | None = None) -> None:
     if _TELEMETRY is not None:
         _TELEMETRY.emit(phase, candidate=str(candidate) if candidate is not None else None,
-                        member_count=member_count)
+                        member_count=member_count, temporary_disk_bytes=temporary_disk_bytes,
+                        tar_members_retained=tar_members_retained,
+                        name_registry=name_registry)
 
 
 def deny(predicate: str) -> None:
@@ -1921,7 +2156,11 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
     authority = Path(entry["authority"])
     authority_root, authority_root_identity = _authority_root(authority, entry)
     relation = FramedRelationDigest()
-    seen: set[str] = set()
+    scratch_parent = _TELEMETRY.path.parent if _TELEMETRY is not None else path.parent
+    max_tar_members_retained = 0
+    name_registry_peak_bytes = 0
+    name_registry_metrics: dict[str, Any] | None = None
+    progress_events = 0
     telemetry("before_tar_scan", candidate=path)
     telemetry("before_authority_compare", candidate=path)
     try:
@@ -1930,65 +2169,86 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
             opened = os.fstat(fd)
             if not _same_open_identity(identity, opened):
                 deny("DISPOSITION_IDENTITY_DIVERGED")
-            with os.fdopen(os.dup(fd), "rb") as source, \
+            with ExactNameRegistry(scratch_parent) as names, \
+                    os.fdopen(os.dup(fd), "rb") as source, \
                     tarfile.open(fileobj=source, mode="r|gz") as archive:
                 for member in archive:
-                    relative = _normalized_archive_member(member.name).as_posix()
-                    if relative in seen:
-                        deny("DISPOSITION_ARCHIVE_MEMBER_DUPLICATE")
-                    seen.add(relative)
-                    if member.isreg():
-                        stream = archive.extractfile(member)
-                        if stream is None:
-                            deny("DISPOSITION_ARCHIVE_READ")
-                        digest = hashlib.sha256()
-                        while chunk := stream.read(1024 * 1024):
-                            digest.update(chunk)
-                        member_sha = digest.hexdigest()
-                        _protected_archive_member(relative, entry, member_sha, manifest)
-                        authoritative, authority_ancestors = _authority_leaf(
-                            authority, authority_root, relative)
-                        try:
-                            authority_mode = stat.S_IMODE(authoritative.lstat().st_mode)
-                        except OSError:
-                            deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                        authority_identity = stable_regular_digest(
-                            authoritative, member_sha, private=False,
-                            allowed_modes={authority_mode}, expected_size=member.size,
-                            allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
-                        relation.add({"path": relative, "type": "file", "size": member.size,
-                                      "sha256": member_sha,
-                                      "tarMode": f"0{member.mode & 0o7777:03o}",
-                                      "authority": authority_identity,
-                                      "authorityAncestors": authority_ancestors})
-                    elif member.isdir():
-                        authoritative, authority_ancestors = _authority_leaf(
-                            authority, authority_root, relative)
-                        directory_info = physical_directory(
-                            authoritative, "DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                        if (directory_info.st_dev != authority_root.st_dev or
-                                not _identity_owner_allowed(directory_info)):
-                            deny("DISPOSITION_AUTHORITY_IDENTITY")
-                        _protected_archive_member(relative, entry, None, manifest)
-                        relation.add({"path": relative, "type": "directory", "size": 0,
-                                      "authority": stat_identity(directory_info,
-                                                                 include_nlink=True),
-                                      "authorityAncestors": authority_ancestors})
-                    elif member.issym():
-                        target = _safe_archive_link(member, PurePosixPath(relative))
-                        authoritative, authority_ancestors = _authority_leaf(
-                            authority, authority_root, relative)
-                        try:
-                            info = authoritative.lstat()
-                        except OSError:
-                            deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                        if not stat.S_ISLNK(info.st_mode) or os.readlink(authoritative) != target:
-                            deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                        relation.add({"path": relative, "type": "symlink", "target": target,
-                                      "authority": stat_identity(info, include_nlink=True),
-                                      "authorityAncestors": authority_ancestors})
-                    else:
-                        deny("DISPOSITION_ARCHIVE_MEMBER_UNSAFE")
+                    max_tar_members_retained = max(max_tar_members_retained,
+                                                   len(archive.members))
+                    try:
+                        relative = _normalized_archive_member(member.name).as_posix()
+                        names.add(relative)
+                        if member.isreg():
+                            stream = archive.extractfile(member)
+                            if stream is None:
+                                deny("DISPOSITION_ARCHIVE_READ")
+                            digest = hashlib.sha256()
+                            while chunk := stream.read(1024 * 1024):
+                                digest.update(chunk)
+                            member_sha = digest.hexdigest()
+                            _protected_archive_member(relative, entry, member_sha, manifest)
+                            authoritative, authority_ancestors = _authority_leaf(
+                                authority, authority_root, relative)
+                            try:
+                                authority_mode = stat.S_IMODE(authoritative.lstat().st_mode)
+                            except OSError:
+                                deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                            authority_identity = stable_regular_digest(
+                                authoritative, member_sha, private=False,
+                                allowed_modes={authority_mode}, expected_size=member.size,
+                                allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
+                            relation.add({"path": relative, "type": "file", "size": member.size,
+                                          "sha256": member_sha,
+                                          "tarMode": f"0{member.mode & 0o7777:03o}",
+                                          "authority": authority_identity,
+                                          "authorityAncestors": authority_ancestors})
+                        elif member.isdir():
+                            authoritative, authority_ancestors = _authority_leaf(
+                                authority, authority_root, relative)
+                            directory_info = physical_directory(
+                                authoritative, "DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                            if (directory_info.st_dev != authority_root.st_dev or
+                                    not _identity_owner_allowed(directory_info)):
+                                deny("DISPOSITION_AUTHORITY_IDENTITY")
+                            _protected_archive_member(relative, entry, None, manifest)
+                            relation.add({"path": relative, "type": "directory", "size": 0,
+                                          "authority": stat_identity(directory_info,
+                                                                     include_nlink=True),
+                                          "authorityAncestors": authority_ancestors})
+                        elif member.issym():
+                            target = _safe_archive_link(member, PurePosixPath(relative))
+                            authoritative, authority_ancestors = _authority_leaf(
+                                authority, authority_root, relative)
+                            try:
+                                info = authoritative.lstat()
+                            except OSError:
+                                deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                            if (not stat.S_ISLNK(info.st_mode) or
+                                    os.readlink(authoritative) != target):
+                                deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                            relation.add({"path": relative, "type": "symlink", "target": target,
+                                          "authority": stat_identity(info, include_nlink=True),
+                                          "authorityAncestors": authority_ancestors})
+                        else:
+                            deny("DISPOSITION_ARCHIVE_MEMBER_UNSAFE")
+                        if (relation.count % TAR_PROGRESS_INTERVAL == 0 and
+                                progress_events < TAR_PROGRESS_EVENT_LIMIT):
+                            current_disk = names.measure()
+                            name_registry_peak_bytes = max(
+                                name_registry_peak_bytes, names.peak_physical_bytes)
+                            telemetry("tar_scan_progress", candidate=path,
+                                      member_count=relation.count,
+                                      temporary_disk_bytes=current_disk)
+                            progress_events += 1
+                    finally:
+                        # Stream mode still appends every TarInfo to this list in
+                        # Python 3.12. Admitted member handling never relies on a
+                        # previous TarInfo (hard links remain denied), so release
+                        # it before requesting the next header.
+                        archive.members.clear()
+                name_registry_metrics = names.finalize()
+                name_registry_peak_bytes = max(name_registry_peak_bytes,
+                                               names.peak_physical_bytes)
             after = os.fstat(fd)
         finally:
             os.close(fd)
@@ -1998,7 +2258,10 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
     except (tarfile.TarError, OSError):
         deny("DISPOSITION_ARCHIVE_READ")
     telemetry("after_authority_compare", candidate=path, member_count=relation.count)
-    telemetry("after_tar_scan", candidate=path, member_count=relation.count)
+    telemetry("after_tar_scan", candidate=path, member_count=relation.count,
+              temporary_disk_bytes=name_registry_peak_bytes,
+              tar_members_retained=max_tar_members_retained,
+              name_registry=name_registry_metrics)
     return {"memberCount": relation.count, "relationSha256": relation.hexdigest(),
             "authority": str(authority), "authorityIdentity": authority_root_identity,
             "effects": [[*LITERAL_UNLINK, str(path)]]}
