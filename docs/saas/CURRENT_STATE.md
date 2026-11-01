@@ -75,6 +75,10 @@ autenticar a contenção nega antes do executor. Casos locais normal, OOM real,
 timeout com descendente resistente, cadeia Python/Node/helper e sentinela externo
 passaram. `prepare`/`execute` não mudaram. Os 256 MiB do ensaio não são orçamento
 produtivo, e nenhuma nova tentativa produtiva está autorizada por esse resultado.
+O fechamento revisado autentica `telemetry_started` antes de afirmar execução,
+limita toda espera e publica `RECOVERY_PENDING` se não confirmar escopo vazio e
+launcher encerrado. O ensaio afetado confirmou timeout com descendente resistente
+e sentinela externo preservado; isso continua sem autorizar operação produtiva.
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e o fechamento ativo está

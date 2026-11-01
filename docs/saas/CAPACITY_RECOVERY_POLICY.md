@@ -54,6 +54,18 @@ respectivamente, `AUDIT_MEMORY_MAX` e `AUDIT_TIMEOUT`; não há retry automátic
 Um fail-safe do supervisor atua somente sobre o nome exato da unidade criada por
 ele e nunca procura ou sinaliza processo por nome.
 
+O fechamento distingue três estados de execução. `EXECUTOR_NOT_STARTED` exige
+falha anterior ao launcher ou negativa explícita do bootstrap contido;
+`EXECUTOR_STARTED` exige o primeiro evento privado e estável
+`telemetry_started`; qualquer outra combinação após o lançamento é
+`EXECUTOR_STATE_INCONCLUSIVE`. Exceção, sinal, timeout ou saída do launcher com
+descendentes ainda no escopo inicia encerramento somente da unidade exata. A
+confirmação exige unidade inativa/failed (ou ausente), cgroup ausente/vazio e
+launcher encerrado. A espera é limitada; falha de `systemctl`, membro remanescente
+ou identidade ilegível produz `AUDIT_RECOVERY_PENDING`, preserva unidade,
+tentativas e evidências e não declara término. Somente depois da confirmação o
+supervisor pode limpar o estado transitório da unidade.
+
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
 owner/group/mode, métricas físicas, hashes das fontes e comando fazem parte do
 binding. A fotografia operacional schema 2 exige fontes de recaptura ao vivo;

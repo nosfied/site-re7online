@@ -16,6 +16,29 @@ SPEC.loader.exec_module(MODULE)
 
 
 class SupervisorTests(unittest.TestCase):
+    class FakeChild:
+        def __init__(self, code=None):
+            self.pid = 4242
+            self.code = code
+            self.terminated = False
+            self.killed = False
+
+        def poll(self):
+            return self.code
+
+        def terminate(self):
+            self.terminated = True
+            self.code = -15
+
+        def kill(self):
+            self.killed = True
+            self.code = -9
+
+        def wait(self, timeout=None):
+            if self.code is None:
+                raise MODULE.subprocess.TimeoutExpired("fake", timeout)
+            return self.code
+
     def run_real_child(self, source, expected_code):
         folder = tempfile.TemporaryDirectory(prefix="capacity-supervisor-")
         self.addCleanup(folder.cleanup)
@@ -101,19 +124,35 @@ class SupervisorTests(unittest.TestCase):
 
     def test_audit_terminal_reasons_are_nominal(self):
         passed = {"state": "PASS"}
+        common = {"executor_state": "EXECUTOR_STARTED",
+                  "termination_state": "TERMINATED_CONFIRMED",
+                  "post_launch_failure": False,
+                  "launcher_exited_scope_active": False}
         cases = (
             ({"received_signal": None, "fail_safe_kill": False,
-              "scope_result": "oom-kill", "containment": passed, "exit_code": -9},
+              "scope_result": "oom-kill", "containment": passed, "exit_code": -9,
+              **common},
              "AUDIT_MEMORY_MAX"),
             ({"received_signal": None, "fail_safe_kill": False,
-              "scope_result": "timeout", "containment": passed, "exit_code": -9},
+              "scope_result": "timeout", "containment": passed, "exit_code": -9,
+              **common},
              "AUDIT_TIMEOUT"),
             ({"received_signal": None, "fail_safe_kill": False,
-              "scope_result": None, "containment": None, "exit_code": 1},
+              "scope_result": None, "containment": {"state": "DENY"}, "exit_code": 1,
+              **{**common, "executor_state": "EXECUTOR_NOT_STARTED"}},
              "AUDIT_CONTAINMENT_NOT_APPLIED"),
             ({"received_signal": None, "fail_safe_kill": False,
-              "scope_result": "success", "containment": passed, "exit_code": 0},
+              "scope_result": "success", "containment": passed, "exit_code": 0,
+              **common},
              "COMPLETED"),
+            ({"received_signal": None, "fail_safe_kill": False,
+              "scope_result": None, "containment": None, "exit_code": 78,
+              **{**common, "executor_state": "EXECUTOR_STATE_INCONCLUSIVE"}},
+             "AUDIT_LAUNCH_STATE_INCONCLUSIVE"),
+            ({"received_signal": None, "fail_safe_kill": False,
+              "scope_result": None, "containment": passed, "exit_code": 78,
+              **{**common, "termination_state": "RECOVERY_PENDING"}},
+             "AUDIT_RECOVERY_PENDING"),
         )
         for arguments, expected in cases:
             with self.subTest(expected=expected):
@@ -126,6 +165,157 @@ class SupervisorTests(unittest.TestCase):
         command.assert_called_once_with([
             "kill", "--kill-whom=all", "--signal=SIGTERM",
             "re7-capacity-audit-exact.scope"])
+
+    def test_executor_started_requires_authenticated_first_telemetry_event(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-start-proof-") as folder:
+            path = Path(folder) / "telemetry.jsonl"
+            path.write_text('{"phase":"telemetry_started","schemaVersion":1}\n')
+            path.chmod(0o600)
+            self.assertEqual(MODULE.executor_execution_state(
+                launcher_started=True, containment={"state": "PASS"},
+                telemetry_path=path), "EXECUTOR_STARTED")
+            path.write_text('{"phase":"later","schemaVersion":1}\n')
+            self.assertEqual(MODULE.executor_execution_state(
+                launcher_started=True, containment={"state": "PASS"},
+                telemetry_path=path), "EXECUTOR_STATE_INCONCLUSIVE")
+
+    def test_kill_failure_is_bounded_and_keeps_recovery_pending(self):
+        child = self.FakeChild()
+        active = {"state": "ACTIVE", "properties": {"ActiveState": "active"},
+                  "cgroupMembers": 1, "cgroupAbsent": False}
+        with tempfile.TemporaryFile() as evidence, \
+                mock.patch.object(MODULE, "scope_termination_snapshot",
+                                  return_value=active), \
+                mock.patch.object(MODULE, "kill_scope", return_value=False):
+            started = MODULE.time.monotonic()
+            result = MODULE.close_supervised_scope(
+                "re7-capacity-audit-exact.scope", {"state": "PASS"}, child,
+                evidence.fileno(), deadline_seconds=0)
+            elapsed = MODULE.time.monotonic() - started
+        self.assertEqual(result["state"], "RECOVERY_PENDING")
+        self.assertEqual(result["killAttempts"], [
+            {"signal": "SIGTERM", "succeeded": False},
+            {"signal": "SIGKILL", "succeeded": False},
+        ])
+        self.assertLess(elapsed, 1)
+        self.assertFalse(child.terminated)
+        self.assertFalse(child.killed)
+
+    def test_launcher_exit_with_live_descendant_closes_exact_scope(self):
+        child = self.FakeChild(code=0)
+        active = {"state": "ACTIVE", "properties": {"ActiveState": "active"},
+                  "cgroupMembers": 1, "cgroupAbsent": False}
+        stopped = {"state": "TERMINATED_CONFIRMED",
+                   "properties": {"ActiveState": "failed", "LoadState": "loaded"},
+                   "cgroupMembers": 0, "cgroupAbsent": False}
+        with tempfile.TemporaryFile() as evidence, \
+                mock.patch.object(MODULE, "scope_termination_snapshot",
+                                  side_effect=[active, stopped]), \
+                mock.patch.object(MODULE, "kill_scope", return_value=True) as killed:
+            result = MODULE.close_supervised_scope(
+                "re7-capacity-audit-exact.scope", {"state": "PASS"}, child,
+                evidence.fileno(), deadline_seconds=1)
+        self.assertEqual(result["state"], "TERMINATED_CONFIRMED")
+        killed.assert_called_once_with("re7-capacity-audit-exact.scope", "SIGTERM")
+
+    def test_post_launch_exception_after_containment_closes_scope(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-post-launch-") as folder:
+            root = Path(folder)
+            args = SimpleNamespace(
+                action="audit", request=Path("/request"), request_sha256="a" * 64,
+                plan_output=root / "plan", telemetry_output=root / "child.jsonl",
+                containment_output=root / "containment.json",
+                memory_max_bytes=256 * 1024 * 1024, timeout_seconds=10,
+                stdout_output=root / "stdout", stderr_output=root / "stderr",
+                terminal_output=root / "terminal.json",
+                supervisor_telemetry_output=root / "supervisor.jsonl")
+            child = self.FakeChild()
+            active = {"state": "ACTIVE", "properties": {"ActiveState": "active"},
+                      "cgroupMembers": 1, "cgroupAbsent": False}
+            stopped = {"state": "TERMINATED_CONFIRMED",
+                       "properties": {"ActiveState": "failed", "LoadState": "loaded",
+                                      "Result": "failed"},
+                       "cgroupMembers": 0, "cgroupAbsent": False}
+
+            def launch(*_unused, **_ignored):
+                args.containment_output.write_text(json.dumps({
+                    "schemaVersion": 1, "state": "PASS",
+                    "unit": "re7-capacity-audit-test.scope",
+                    "cgroup": "/user.slice/re7-capacity-audit-test.scope",
+                }) + "\n")
+                args.containment_output.chmod(0o600)
+                args.telemetry_output.write_text(
+                    '{"phase":"telemetry_started","schemaVersion":1}\n')
+                args.telemetry_output.chmod(0o600)
+                return child
+
+            with mock.patch.object(MODULE, "parser") as parser, \
+                    mock.patch.object(MODULE, "trusted_system_binary"), \
+                    mock.patch.object(MODULE, "audit_scope_unit",
+                                      return_value="re7-capacity-audit-test.scope"), \
+                    mock.patch.object(MODULE.subprocess, "Popen", side_effect=launch), \
+                    mock.patch.object(MODULE, "scope_memory_snapshot",
+                                      side_effect=RuntimeError("sample failed")), \
+                    mock.patch.object(MODULE, "scope_termination_snapshot",
+                                      side_effect=[active, stopped]), \
+                    mock.patch.object(MODULE, "kill_scope", return_value=True), \
+                    mock.patch.object(MODULE, "cleanup_scope", return_value=True), \
+                    self.assertRaises(SystemExit) as exited:
+                parser.return_value.parse_args.return_value = args
+                MODULE.main()
+            self.assertEqual(exited.exception.code, 78)
+            terminal = json.loads(args.terminal_output.read_text())
+            self.assertEqual(terminal["reason"], "AUDIT_POST_LAUNCH_FAILURE")
+            self.assertEqual(terminal["executorState"], "EXECUTOR_STARTED")
+            self.assertEqual(terminal["terminationState"], "TERMINATED_CONFIRMED")
+            self.assertTrue(child.terminated)
+
+    def test_post_launch_unconfirmed_termination_is_recovery_pending(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-recovery-pending-") as folder:
+            root = Path(folder)
+            args = SimpleNamespace(
+                action="audit", request=Path("/request"), request_sha256="a" * 64,
+                plan_output=root / "plan", telemetry_output=root / "child.jsonl",
+                containment_output=root / "containment.json",
+                memory_max_bytes=256 * 1024 * 1024, timeout_seconds=10,
+                stdout_output=root / "stdout", stderr_output=root / "stderr",
+                terminal_output=root / "terminal.json",
+                supervisor_telemetry_output=root / "supervisor.jsonl")
+            child = self.FakeChild()
+
+            def launch(*_unused, **_ignored):
+                args.containment_output.write_text(json.dumps({
+                    "schemaVersion": 1, "state": "PASS", "unit": "exact.scope",
+                    "cgroup": "/user.slice/exact.scope",
+                }) + "\n")
+                args.containment_output.chmod(0o600)
+                args.telemetry_output.write_text(
+                    '{"phase":"telemetry_started","schemaVersion":1}\n')
+                args.telemetry_output.chmod(0o600)
+                return child
+
+            pending = {"state": "RECOVERY_PENDING",
+                       "scope": {"state": "ACTIVE",
+                                 "properties": {"ActiveState": "active"},
+                                 "cgroupMembers": 1},
+                       "killAttempts": [{"signal": "SIGKILL", "succeeded": False}],
+                       "launcherExitCode": None, "evidenceErrors": 0}
+            with mock.patch.object(MODULE, "parser") as parser, \
+                    mock.patch.object(MODULE, "trusted_system_binary"), \
+                    mock.patch.object(MODULE.subprocess, "Popen", side_effect=launch), \
+                    mock.patch.object(MODULE, "scope_memory_snapshot",
+                                      side_effect=RuntimeError("sample failed")), \
+                    mock.patch.object(MODULE, "close_supervised_scope",
+                                      return_value=pending), \
+                    self.assertRaises(SystemExit) as exited:
+                parser.return_value.parse_args.return_value = args
+                MODULE.main()
+            self.assertEqual(exited.exception.code, 78)
+            terminal = json.loads(args.terminal_output.read_text())
+            self.assertEqual(terminal["state"], "RECOVERY_PENDING")
+            self.assertEqual(terminal["reason"], "AUDIT_RECOVERY_PENDING")
+            self.assertEqual(terminal["executorState"], "EXECUTOR_STARTED")
+            self.assertFalse(terminal["scopeCleanupOk"])
 
     def test_real_normal_child_records_peak_rss_after_wait(self):
         rows, terminal = self.run_real_child(
@@ -166,11 +356,34 @@ class SupervisorTests(unittest.TestCase):
             child.assert_not_called()
             self.assertEqual(stdout.read_text(), "preserved")
 
-    def test_audit_scope_launch_failure_denies_before_executor(self):
+    def test_prelaunch_failure_proves_executor_not_started(self):
         with tempfile.TemporaryDirectory(prefix="capacity-supervisor-deny-") as folder:
             root = Path(folder)
+            args = SimpleNamespace(
+                action="audit", request=Path("/request"), request_sha256="a" * 64,
+                plan_output=root / "plan", telemetry_output=root / "child.jsonl",
+                containment_output=root / "containment.json",
+                memory_max_bytes=256 * 1024 * 1024, timeout_seconds=10,
+                stdout_output=root / "stdout", stderr_output=root / "stderr",
+                terminal_output=root / "terminal.json",
+                supervisor_telemetry_output=root / "supervisor.jsonl")
+            with mock.patch.object(MODULE, "parser") as parser, \
+                    mock.patch.object(MODULE, "trusted_system_binary"), \
+                    mock.patch.object(MODULE.subprocess, "Popen",
+                                      side_effect=OSError("launch denied")), \
+                    self.assertRaises(SystemExit) as stopped:
+                parser.return_value.parse_args.return_value = args
+                MODULE.main()
+            self.assertEqual(stopped.exception.code, 78)
+            self.assertFalse(args.plan_output.exists())
+            terminal = json.loads(args.terminal_output.read_text())
+            self.assertEqual(terminal["reason"], "AUDIT_CONTAINMENT_NOT_APPLIED")
+            self.assertEqual(terminal["executorState"], "EXECUTOR_NOT_STARTED")
+
+    def test_launcher_started_without_proof_is_inconclusive_not_not_started(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-supervisor-inconclusive-") as folder:
+            root = Path(folder)
             failed_run = root / "systemd-run"
-            executor_marker = root / "executor-ran"
             failed_run.write_text("#!/bin/sh\nexit 1\n")
             failed_run.chmod(0o700)
             args = SimpleNamespace(
@@ -184,19 +397,19 @@ class SupervisorTests(unittest.TestCase):
             with mock.patch.object(MODULE, "parser") as parser, \
                     mock.patch.object(MODULE, "SYSTEMD_RUN", failed_run), \
                     mock.patch.object(MODULE, "trusted_system_binary"), \
-                    mock.patch.object(MODULE, "scope_properties",
-                                      return_value={"LoadState": "not-found"}), \
-                    mock.patch.object(MODULE, "executor_argv",
-                                      return_value=["/bin/sh", "-c",
-                                                    f"touch {executor_marker}"]), \
+                    mock.patch.object(MODULE, "scope_termination_snapshot",
+                                      return_value={"state": "TERMINATED_CONFIRMED",
+                                                    "properties": {"LoadState": "not-found"},
+                                                    "cgroupMembers": None,
+                                                    "cgroupAbsent": True}), \
                     self.assertRaises(SystemExit) as stopped:
                 parser.return_value.parse_args.return_value = args
                 MODULE.main()
             self.assertEqual(stopped.exception.code, 78)
-            self.assertFalse(executor_marker.exists())
-            self.assertFalse(args.plan_output.exists())
             terminal = json.loads(args.terminal_output.read_text())
-            self.assertEqual(terminal["reason"], "AUDIT_CONTAINMENT_NOT_APPLIED")
+            self.assertEqual(terminal["reason"], "AUDIT_LAUNCH_STATE_INCONCLUSIVE")
+            self.assertEqual(terminal["executorState"],
+                             "EXECUTOR_STATE_INCONCLUSIVE")
 
 
 if __name__ == "__main__":

@@ -145,6 +145,15 @@
       ],
       "stopGraceSeconds": 5,
       "internalCgroupVerification": true,
+      "executorExecutionStates": [
+        "EXECUTOR_NOT_STARTED",
+        "EXECUTOR_STARTED",
+        "EXECUTOR_STATE_INCONCLUSIVE"
+      ],
+      "executorStartedProof": "AUTHENTICATED_TELEMETRY_STARTED_EVENT",
+      "boundedRecoverySeconds": 10,
+      "recoveryPendingOnUnconfirmedTermination": true,
+      "terminationProof": "EXACT_UNIT_INACTIVE_OR_ABSENT_CGROUP_EMPTY_OR_ABSENT_AND_LAUNCHER_EXITED",
       "containedDescendants": [
         "pythonExecutor",
         "nodePm2Cli",
@@ -161,6 +170,9 @@
         "timeoutGraceSeconds": 5,
         "timeoutResult": "timeout",
         "externalSentinelPreserved": true,
+        "postLaunchExceptionScopeClosed": true,
+        "killFailureRecoveryPending": true,
+        "launcherExitWithLiveDescendantCovered": true,
         "representativeAuthenticatorRevalidated": true
       },
       "testMemoryBudgetBytes": 268435456,

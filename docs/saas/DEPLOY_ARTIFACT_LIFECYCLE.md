@@ -581,6 +581,11 @@ herdam o mesmo escopo, enquanto o daemon PM2 existente permanece externo. Falha 
 aplicar ou autenticar a contenção nega antes do executor. O mecanismo não muda o
 lifecycle, a retirada nem os protocolos de `prepare`/`execute`, e não converte
 resíduo temporário após sinal em artefato automaticamente removível.
+Após o launcher, ausência de prova não equivale a “executor não iniciado”. O
+supervisor autentica o primeiro evento do executor, encerra somente a unidade
+exata e confirma cgroup vazio/ausente mais launcher terminado dentro de prazo
+fechado. Sem essa prova, o resultado é `RECOVERY_PENDING`; unidade, identidades e
+evidências permanecem para recuperação dirigida, sem cleanup ou retry automático.
 
 ## Inventário histórico anterior aos lotes de 25/10/2026
 

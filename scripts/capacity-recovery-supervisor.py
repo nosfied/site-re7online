@@ -32,8 +32,21 @@ AUDIT_MEMORY_MAX_BYTES = 512 * 1024 * 1024
 AUDIT_TIMEOUT_MIN_SECONDS = 10
 AUDIT_TIMEOUT_MAX_SECONDS = 30 * 60
 AUDIT_STOP_GRACE_SECONDS = 5
+AUDIT_RECOVERY_WAIT_SECONDS = 10
+AUDIT_RECOVERY_TERM_GRACE_SECONDS = 1
 AUDIT_SCOPE_PREFIX = "re7-capacity-audit-"
 INTERNAL_ACTION = "__contained-audit"
+EXECUTOR_PROOF_MAX_BYTES = 64 * 1024
+
+
+class AuditPostLaunchError(RuntimeError):
+    def __init__(self, predicate: str, *, unit: str, child_pid: int,
+                 executor_state: str, termination_state: str) -> None:
+        super().__init__(predicate)
+        self.unit = unit
+        self.child_pid = child_pid
+        self.executor_state = executor_state
+        self.termination_state = termination_state
 
 
 def canonical(value: Any) -> bytes:
@@ -280,10 +293,14 @@ def systemctl(args: list[str], *, timeout: int = 5) -> subprocess.CompletedProce
 
 
 def scope_properties(unit: str) -> dict[str, str]:
-    names = ("LoadState", "ActiveState", "Result", "MemoryMax", "MemorySwapMax",
-             "RuntimeMaxUSec", "OOMPolicy", "ControlGroup")
-    result = systemctl(["show", unit, *(item for name in names for item in ("-p", name)),
-                        "--no-pager"])
+    names = ("LoadState", "ActiveState", "SubState", "Result", "MemoryMax",
+             "MemorySwapMax", "RuntimeMaxUSec", "OOMPolicy", "ControlGroup")
+    try:
+        result = systemctl(["show", unit,
+                            *(item for name in names for item in ("-p", name)),
+                            "--no-pager"])
+    except (OSError, subprocess.TimeoutExpired):
+        return {"queryError": "SYSTEMCTL_SHOW"}
     if result.returncode != 0:
         return {"queryError": "SYSTEMCTL_SHOW"}
     projection: dict[str, str] = {}
@@ -312,6 +329,152 @@ def read_containment(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def executor_telemetry_started(path: Path) -> bool:
+    """Authenticate the executor's first durable event without trusting existence."""
+    fd = -1
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        before = os.fstat(fd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                before.st_gid != os.getegid() or stat.S_IMODE(before.st_mode) != 0o600 or
+                before.st_nlink != 1):
+            return False
+        raw = os.read(fd, EXECUTOR_PROOF_MAX_BYTES + 1)
+        after = os.fstat(fd)
+        if ((before.st_dev, before.st_ino) != (after.st_dev, after.st_ino) or
+                len(raw) > EXECUTOR_PROOF_MAX_BYTES):
+            return False
+        first, separator, _rest = raw.partition(b"\n")
+        if not separator:
+            return False
+        row = json.loads(first)
+        return (isinstance(row, dict) and row.get("schemaVersion") == 1 and
+                row.get("phase") == "telemetry_started")
+    except (OSError, ValueError, TypeError):
+        return False
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def executor_execution_state(*, launcher_started: bool,
+                             containment: dict[str, Any] | None,
+                             telemetry_path: Path) -> str:
+    if not launcher_started:
+        return "EXECUTOR_NOT_STARTED"
+    if executor_telemetry_started(telemetry_path):
+        return "EXECUTOR_STARTED"
+    if containment is not None and containment.get("state") == "DENY":
+        return "EXECUTOR_NOT_STARTED"
+    return "EXECUTOR_STATE_INCONCLUSIVE"
+
+
+def scope_termination_snapshot(unit: str,
+                               containment: dict[str, Any] | None) -> dict[str, Any]:
+    properties = scope_properties(unit)
+    if "queryError" in properties:
+        return {"state": "INCONCLUSIVE", "predicate": properties["queryError"],
+                "properties": properties, "cgroupMembers": None}
+
+    relative: str | None = None
+    if containment is not None and isinstance(containment.get("cgroup"), str):
+        relative = containment["cgroup"]
+    elif isinstance(properties.get("ControlGroup"), str):
+        relative = properties["ControlGroup"]
+    if relative is not None and (not relative.startswith("/") or ".." in Path(relative).parts):
+        return {"state": "INCONCLUSIVE", "predicate": "SCOPE_CGROUP_IDENTITY",
+                "properties": properties, "cgroupMembers": None}
+
+    members: int | None = None
+    cgroup_absent = relative in (None, "")
+    if relative not in (None, ""):
+        member_path = CGROUP_FS / relative.lstrip("/") / "cgroup.procs"
+        try:
+            members = len([line for line in member_path.read_text().splitlines() if line])
+            cgroup_absent = False
+        except FileNotFoundError:
+            cgroup_absent = not member_path.parent.exists()
+            if not cgroup_absent:
+                return {"state": "INCONCLUSIVE", "predicate": "SCOPE_MEMBERS_UNREADABLE",
+                        "properties": properties, "cgroupMembers": None}
+        except OSError:
+            return {"state": "INCONCLUSIVE", "predicate": "SCOPE_MEMBERS_UNREADABLE",
+                    "properties": properties, "cgroupMembers": None}
+
+    load = properties.get("LoadState")
+    active = properties.get("ActiveState")
+    if load == "not-found" and cgroup_absent:
+        state = "TERMINATED_CONFIRMED"
+    elif active in {"inactive", "failed"} and (cgroup_absent or members == 0):
+        state = "TERMINATED_CONFIRMED"
+    elif active in {"active", "activating", "deactivating", "reloading"} or (members or 0) > 0:
+        state = "ACTIVE"
+    else:
+        state = "INCONCLUSIVE"
+    return {"state": state, "properties": properties, "cgroupMembers": members,
+            "cgroupAbsent": cgroup_absent}
+
+
+def wait_scope_termination(unit: str, containment: dict[str, Any] | None,
+                           deadline: float) -> dict[str, Any]:
+    while True:
+        snapshot = scope_termination_snapshot(unit, containment)
+        if snapshot["state"] == "TERMINATED_CONFIRMED" or time.monotonic() >= deadline:
+            return snapshot
+        time.sleep(0.05)
+
+
+def close_supervised_scope(unit: str, containment: dict[str, Any] | None,
+                           child: subprocess.Popen[bytes], supervisor_fd: int,
+                           *, deadline_seconds: int = AUDIT_RECOVERY_WAIT_SECONDS) -> dict[str, Any]:
+    """Bounded exact-unit recovery; never discovers or signals by process name."""
+    deadline = time.monotonic() + deadline_seconds
+    attempts: list[dict[str, Any]] = []
+    evidence_errors = 0
+    snapshot = scope_termination_snapshot(unit, containment)
+    for signal_name, grace in (("SIGTERM", AUDIT_RECOVERY_TERM_GRACE_SECONDS),
+                               ("SIGKILL", deadline_seconds)):
+        if snapshot["state"] == "TERMINATED_CONFIRMED":
+            break
+        succeeded = kill_scope(unit, signal_name)
+        attempts.append({"signal": signal_name, "succeeded": succeeded})
+        try:
+            append(supervisor_fd, "scope_termination_requested", unit=unit,
+                   signal=signal_name, succeeded=succeeded,
+                   observedState=snapshot.get("state"))
+        except OSError:
+            evidence_errors += 1
+        signal_deadline = min(deadline, time.monotonic() + grace)
+        snapshot = wait_scope_termination(unit, containment, signal_deadline)
+
+    if snapshot["state"] != "TERMINATED_CONFIRMED" and time.monotonic() < deadline:
+        snapshot = wait_scope_termination(unit, containment, deadline)
+
+    launcher_code = child.poll()
+    if snapshot["state"] == "TERMINATED_CONFIRMED" and launcher_code is None:
+        try:
+            child.terminate()
+        except OSError:
+            pass
+        try:
+            launcher_code = child.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            try:
+                child.kill()
+            except OSError:
+                pass
+            try:
+                launcher_code = child.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                launcher_code = None
+
+    confirmed = snapshot["state"] == "TERMINATED_CONFIRMED" and launcher_code is not None
+    return {"state": "TERMINATED_CONFIRMED" if confirmed else "RECOVERY_PENDING",
+            "scope": snapshot, "killAttempts": attempts,
+            "launcherExitCode": launcher_code,
+            "evidenceErrors": evidence_errors}
+
+
 def scope_memory_snapshot(containment: dict[str, Any] | None) -> dict[str, Any]:
     result = {"scopeMemoryCurrentBytes": None, "scopeMemoryPeakBytes": None,
               "scopeMemoryEvents": None}
@@ -328,29 +491,47 @@ def scope_memory_snapshot(containment: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def kill_scope(unit: str, signal_name: str) -> bool:
-    result = systemctl(["kill", "--kill-whom=all", f"--signal={signal_name}", unit])
-    return result.returncode == 0
+    try:
+        result = systemctl(["kill", "--kill-whom=all", f"--signal={signal_name}", unit])
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def cleanup_scope(unit: str) -> bool:
-    result = systemctl(["reset-failed", unit])
-    return result.returncode == 0
+    try:
+        result = systemctl(["reset-failed", unit])
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def audit_terminal_reason(*, received_signal: int | None, fail_safe_kill: bool,
                           scope_result: str | None,
                           containment: dict[str, Any] | None,
+                          executor_state: str, termination_state: str,
+                          post_launch_failure: bool,
+                          launcher_exited_scope_active: bool,
                           exit_code: int) -> str:
+    if termination_state != "TERMINATED_CONFIRMED":
+        return "AUDIT_RECOVERY_PENDING"
+    if post_launch_failure:
+        return "AUDIT_POST_LAUNCH_FAILURE"
     if received_signal is not None:
         return "SUPERVISOR_SIGNAL"
     if fail_safe_kill:
         return "AUDIT_SCOPE_FAIL_SAFE_TIMEOUT"
+    if launcher_exited_scope_active:
+        return "AUDIT_LAUNCHER_EXITED_SCOPE_ACTIVE"
     if scope_result == "timeout":
         return "AUDIT_TIMEOUT"
     if scope_result == "oom-kill":
         return "AUDIT_MEMORY_MAX"
-    if containment is None or containment.get("state") != "PASS":
+    if (containment is None or containment.get("state") != "PASS") and \
+            executor_state == "EXECUTOR_NOT_STARTED":
         return "AUDIT_CONTAINMENT_NOT_APPLIED"
+    if containment is None or containment.get("state") != "PASS":
+        return "AUDIT_LAUNCH_STATE_INCONCLUSIVE"
     if exit_code != 0:
         return "CHILD_EXIT_NONZERO"
     return "COMPLETED"
@@ -375,8 +556,9 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
     trusted_system_binary(SYSTEMD_RUN)
     trusted_system_binary(SYSTEMCTL)
     trusted_system_binary(PYTHON, allow_root_symlink=True)
-    if args.containment_output.exists() or args.containment_output.is_symlink():
-        raise FileExistsError(args.containment_output)
+    for output in (args.containment_output, args.telemetry_output, args.plan_output):
+        if output.exists() or output.is_symlink():
+            raise FileExistsError(output)
 
     unit = audit_scope_unit()
     child: subprocess.Popen[bytes] | None = None
@@ -387,6 +569,9 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
     sampled_peak: int | None = None
     sampled_current: int | None = None
     sampled_events: dict[str, int] | None = None
+    termination: dict[str, Any] | None = None
+    post_launch_failure: str | None = None
+    launcher_exited_scope_active = False
 
     def forward(signum: int, _frame: Any) -> None:
         nonlocal received_signal
@@ -407,7 +592,7 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                                  stderr=err_fd, close_fds=True)
         fail_safe_deadline = (time.monotonic() + args.timeout_seconds +
                               AUDIT_STOP_GRACE_SECONDS + 10)
-        while child.poll() is None:
+        while True:
             if containment is None:
                 containment = read_containment(args.containment_output)
                 if containment is not None:
@@ -426,21 +611,60 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                 sampled_events = events
             if received_signal is not None and not forwarded_signal:
                 forwarded_signal = True
-                kill_scope(unit, signal.Signals(received_signal).name)
+                termination = close_supervised_scope(
+                    unit, containment, child, supervisor_fd)
+                break
             if time.monotonic() > fail_safe_deadline:
                 fail_safe_kill = True
-                kill_scope(unit, "SIGKILL")
+                termination = close_supervised_scope(
+                    unit, containment, child, supervisor_fd)
+                break
+            if child.poll() is not None:
+                snapshot = scope_termination_snapshot(unit, containment)
+                if snapshot["state"] == "TERMINATED_CONFIRMED":
+                    termination = {"state": "TERMINATED_CONFIRMED", "scope": snapshot,
+                                   "killAttempts": [], "launcherExitCode": child.poll(),
+                                   "evidenceErrors": 0}
+                else:
+                    launcher_exited_scope_active = snapshot["state"] == "ACTIVE"
+                    termination = close_supervised_scope(
+                        unit, containment, child, supervisor_fd)
                 break
             time.sleep(0.05)
-        code = child.wait()
+    except Exception as error:
+        if child is None:
+            for number, handler in previous.items():
+                signal.signal(number, handler)
+            raise
+        post_launch_failure = type(error).__name__
+        termination = close_supervised_scope(unit, containment, child, supervisor_fd)
+
+    try:
+        if termination is None:
+            termination = close_supervised_scope(unit, containment, child, supervisor_fd)
+        code = termination.get("launcherExitCode")
+        if not isinstance(code, int):
+            code = 78
         child_rss_peak = child_rss_peak_bytes()
         containment = read_containment(args.containment_output)
-        properties = scope_properties(unit)
+        properties = termination.get("scope", {}).get("properties", {})
         result = properties.get("Result")
+        executor_state = executor_execution_state(
+            launcher_started=True, containment=containment,
+            telemetry_path=args.telemetry_output)
         reason = audit_terminal_reason(
             received_signal=received_signal, fail_safe_kill=fail_safe_kill,
-            scope_result=result, containment=containment, exit_code=code)
-        cleanup_ok = cleanup_scope(unit) if properties.get("LoadState") != "not-found" else True
+            scope_result=result, containment=containment,
+            executor_state=executor_state, termination_state=termination["state"],
+            post_launch_failure=post_launch_failure is not None,
+            launcher_exited_scope_active=launcher_exited_scope_active,
+            exit_code=code)
+        cleanup_ok = False
+        if termination["state"] == "TERMINATED_CONFIRMED":
+            cleanup_ok = (cleanup_scope(unit)
+                          if properties.get("LoadState") != "not-found" else True)
+        if not cleanup_ok and reason == "COMPLETED":
+            reason = "AUDIT_SCOPE_CLEANUP_FAILED"
         elapsed_ns = time.monotonic_ns() - started_ns
         os.fsync(out_fd); os.fsync(err_fd)
         append(supervisor_fd, "after_child", unit=unit, childPid=child.pid,
@@ -449,10 +673,18 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                scopeMemoryCurrentBytes=sampled_current,
                scopeMemoryPeakBytes=sampled_peak,
                scopeMemoryEvents=sampled_events, scopeResult=result,
-               scopeCleanupOk=cleanup_ok)
-        terminal = {"schemaVersion": 2, "state": "TERMINAL", "action": "audit",
+               scopeCleanupOk=cleanup_ok, executorState=executor_state,
+               terminationState=termination["state"],
+               postLaunchFailure=post_launch_failure)
+        terminal = {"schemaVersion": 3,
+                    "state": ("TERMINAL" if termination["state"] ==
+                              "TERMINATED_CONFIRMED" else "RECOVERY_PENDING"),
+                    "action": "audit",
                     "exitCode": code, "signal": -code if code < 0 else received_signal,
                     "reason": reason, "childPid": child.pid, "unit": unit,
+                    "executorState": executor_state,
+                    "terminationState": termination["state"],
+                    "postLaunchFailure": post_launch_failure,
                     "memoryMaxBytes": args.memory_max_bytes,
                     "timeoutSeconds": args.timeout_seconds,
                     "elapsedMonotonicNs": elapsed_ns,
@@ -460,13 +692,29 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                     "scopeMemoryPeakBytes": sampled_peak,
                     "scopeMemoryEvents": sampled_events,
                     "scopeResult": result, "scopeCleanupOk": cleanup_ok,
+                    "scopeTermination": termination.get("scope"),
+                    "killAttempts": termination.get("killAttempts", []),
                     "containmentState": None if containment is None else containment.get("state")}
         publish_terminal(args.terminal_output, terminal)
+        if termination["state"] != "TERMINATED_CONFIRMED":
+            return 78
         if not cleanup_ok and code == 0:
             return 78
-        if reason == "AUDIT_CONTAINMENT_NOT_APPLIED":
+        if reason in {"AUDIT_CONTAINMENT_NOT_APPLIED",
+                      "AUDIT_LAUNCH_STATE_INCONCLUSIVE",
+                      "AUDIT_POST_LAUNCH_FAILURE",
+                      "AUDIT_LAUNCHER_EXITED_SCOPE_ACTIVE",
+                      "AUDIT_SCOPE_CLEANUP_FAILED"}:
             return 78
         return code if code != 0 or reason == "COMPLETED" else 78
+    except Exception as error:
+        executor_state = executor_execution_state(
+            launcher_started=True, containment=read_containment(args.containment_output),
+            telemetry_path=args.telemetry_output)
+        raise AuditPostLaunchError(
+            type(error).__name__, unit=unit, child_pid=child.pid,
+            executor_state=executor_state,
+            termination_state=(termination or {}).get("state", "RECOVERY_PENDING")) from error
     finally:
         for number, handler in previous.items():
             signal.signal(number, handler)
@@ -492,15 +740,36 @@ def main() -> None:
     if args.action == "audit":
         try:
             code = run_contained_audit(args, out_fd, err_fd, supervisor_fd)
+        except AuditPostLaunchError as error:
+            state = ("TERMINAL" if error.termination_state ==
+                     "TERMINATED_CONFIRMED" else "RECOVERY_PENDING")
+            reason = ("AUDIT_POST_LAUNCH_FAILURE" if state == "TERMINAL"
+                      else "AUDIT_RECOVERY_PENDING")
+            append(supervisor_fd, "post_launch_finalization_failure", action="audit",
+                   predicate=str(error), unit=error.unit, childPid=error.child_pid,
+                   executorState=error.executor_state,
+                   terminationState=error.termination_state, reason=reason)
+            if not args.terminal_output.exists() and not args.terminal_output.is_symlink():
+                publish_terminal(args.terminal_output, {
+                    "schemaVersion": 3, "state": state, "action": "audit",
+                    "exitCode": 78, "signal": None, "reason": reason,
+                    "predicate": str(error), "unit": error.unit,
+                    "childPid": error.child_pid,
+                    "executorState": error.executor_state,
+                    "terminationState": error.termination_state,
+                })
+            code = 78
         except Exception as error:
             append(supervisor_fd, "containment_denied", action="audit",
                    predicate=type(error).__name__, detail=str(error))
             os.fsync(out_fd); os.fsync(err_fd)
             publish_terminal(args.terminal_output, {
-                "schemaVersion": 2, "state": "TERMINAL", "action": "audit",
+                "schemaVersion": 3, "state": "TERMINAL", "action": "audit",
                 "exitCode": 78, "signal": None,
                 "reason": "AUDIT_CONTAINMENT_NOT_APPLIED",
                 "predicate": type(error).__name__, "detail": str(error),
+                "executorState": "EXECUTOR_NOT_STARTED",
+                "terminationState": "NOT_APPLICABLE",
             })
             code = 78
         finally:

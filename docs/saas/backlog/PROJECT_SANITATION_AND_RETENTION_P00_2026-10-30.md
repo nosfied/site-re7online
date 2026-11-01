@@ -166,6 +166,11 @@ OOM real, timeout de descendente resistente e preservação de sentinela externo
 O valor de 256 MiB continua hipótese de ensaio; orçamento produtivo, integração e
 autorização de nova operação permanecem pendentes. `prepare`, `execute`, o lote
 3/3 e suas autoridades não foram alterados.
+O fechamento local revisado separa executor não iniciado, iniciado por
+`telemetry_started` e estado inconclusivo; exceção pós-lançamento nunca reutiliza
+o predicado de pré-lançamento. A espera é limitada e falha de kill/confirmação
+termina em `RECOVERY_PENDING`. O ensaio afetado comprovou descendente resistente
+encerrado no escopo e sentinela externo preservado, sem nova tentativa produtiva.
 
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
