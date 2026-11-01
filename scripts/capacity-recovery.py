@@ -14,12 +14,12 @@ import errno
 import fcntl
 import grp
 import hashlib
-import io
 import json
 import os
 from pathlib import Path, PurePosixPath
 import pwd
 import re
+import resource
 import secrets
 import stat
 import subprocess
@@ -158,6 +158,102 @@ class Denied(RuntimeError):
     pass
 
 
+class Telemetry:
+    """Durable, content-free memory/phase evidence for long recovery phases."""
+
+    def __init__(self, path: Path):
+        if not path.is_absolute() or path.parent.is_symlink():
+            deny(f"TELEMETRY_PATH:{path}")
+        self.path = path
+        self.started_ns = time.monotonic_ns()
+        self.cgroup = self._cgroup_root()
+        self.baseline_events = self._memory_events()
+        self.fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                          os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
+        self.emit("telemetry_started", memory_events_baseline=self.baseline_events)
+
+    @staticmethod
+    def _cgroup_root() -> Path | None:
+        try:
+            for line in Path("/proc/self/cgroup").read_text().splitlines():
+                fields = line.split(":", 2)
+                if len(fields) == 3 and fields[0] == "0":
+                    relative = fields[2].lstrip("/")
+                    return Path("/sys/fs/cgroup") / relative
+        except OSError:
+            pass
+        return None
+
+    def _cgroup_number(self, name: str) -> int | None:
+        if self.cgroup is None:
+            return None
+        try:
+            raw = (self.cgroup / name).read_text().strip()
+            return int(raw) if raw != "max" else None
+        except (OSError, ValueError):
+            return None
+
+    def _memory_events(self) -> dict[str, int] | None:
+        if self.cgroup is None:
+            return None
+        try:
+            result: dict[str, int] = {}
+            for line in (self.cgroup / "memory.events").read_text().splitlines():
+                key, value = line.split()
+                result[key] = int(value)
+            return result
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _rss() -> tuple[int | None, int]:
+        current: int | None = None
+        try:
+            resident = int(Path("/proc/self/statm").read_text().split()[1])
+            current = resident * os.sysconf("SC_PAGE_SIZE")
+        except (OSError, ValueError, IndexError):
+            pass
+        return current, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+
+    def emit(self, phase: str, *, candidate: str | None = None,
+             member_count: int = 0, memory_events_baseline: dict[str, int] | None = None) -> None:
+        rss_current, rss_peak = self._rss()
+        row: dict[str, Any] = {
+            "schemaVersion": 1, "phase": phase, "candidate": candidate,
+            "memberCount": member_count, "monotonicNs": time.monotonic_ns(),
+            "elapsedNs": time.monotonic_ns() - self.started_ns,
+            "rssCurrentBytes": rss_current, "rssPeakBytes": rss_peak,
+            "memoryCurrentBytes": self._cgroup_number("memory.current"),
+            "memoryPeakBytes": self._cgroup_number("memory.peak"),
+            "memoryEvents": self._memory_events(),
+        }
+        if memory_events_baseline is not None:
+            row["memoryEventsBaseline"] = memory_events_baseline
+        os.write(self.fd, canonical(row))
+        os.fsync(self.fd)
+
+    def close(self) -> None:
+        if self.fd >= 0:
+            os.fsync(self.fd)
+            os.close(self.fd)
+            self.fd = -1
+
+
+_TELEMETRY: Telemetry | None = None
+
+
+def telemetry(phase: str, *, candidate: Path | str | None = None,
+              member_count: int = 0) -> None:
+    if _TELEMETRY is not None:
+        _TELEMETRY.emit(phase, candidate=str(candidate) if candidate is not None else None,
+                        member_count=member_count)
+
+
 def deny(predicate: str) -> None:
     raise Denied(predicate)
 
@@ -247,6 +343,81 @@ def stable_regular(path: Path, expected_sha: str, *, private: bool = True,
     if digest_bytes(raw) != expected_sha:
         deny(f"FILE_SHA256:{path}")
     return raw, stat_identity(current, include_nlink=include_nlink)
+
+
+def stable_regular_digest(path: Path, expected_sha: str, *, private: bool = True,
+                          allowed_modes: set[int] | None = None,
+                          include_nlink: bool = False,
+                          allowed_owner_pairs: set[tuple[int, int]] | None = None,
+                          expected_size: int | None = None
+                          ) -> dict[str, Any]:
+    """Authenticate a regular file without ever retaining its contents."""
+    if not valid_sha(expected_sha):
+        deny(f"FILE_SHA_SCHEMA:{path.name}")
+    try:
+        before = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(before.st_mode):
+            deny(f"FILE_TYPE:{path}")
+        mode = stat.S_IMODE(before.st_mode)
+        expected_owners = (allowed_owner_pairs if allowed_owner_pairs is not None else
+                           {(os.geteuid(), os.getegid())})
+        if allowed_modes is not None and (mode not in allowed_modes or
+                                          (before.st_uid, before.st_gid) not in expected_owners):
+            deny(f"FILE_MODE_IDENTITY:{path}")
+        if private and allowed_modes is None and (mode & 0o077 or
+                                                   before.st_uid != os.geteuid() or
+                                                   before.st_gid != os.getegid()):
+            deny(f"FILE_PRIVATE_IDENTITY:{path}")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            opened = os.fstat(fd)
+            digest = hashlib.sha256()
+            while block := os.read(fd, 1024 * 1024):
+                digest.update(block)
+            after = os.fstat(fd)
+        finally:
+            os.close(fd)
+        current = path.lstat()
+    except OSError:
+        deny(f"FILE_READ:{path}")
+    identities = [(item.st_dev, item.st_ino, item.st_mode, item.st_uid, item.st_gid,
+                   item.st_size, item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
+                  for item in (before, opened, after, current)]
+    if len(set(identities)) != 1:
+        deny(f"FILE_CHANGED:{path}")
+    if expected_size is not None and current.st_size != expected_size:
+        deny(f"FILE_SIZE:{path}")
+    if digest.hexdigest() != expected_sha:
+        deny(f"FILE_SHA256:{path}")
+    return stat_identity(current, include_nlink=include_nlink)
+
+
+class FramedRelationDigest:
+    """Canonical incremental relation digest with unambiguous length framing."""
+
+    DOMAIN = b"re7-capacity-relation-v1\0"
+
+    def __init__(self) -> None:
+        self._digest = hashlib.sha256(self.DOMAIN)
+        self.count = 0
+
+    def add(self, value: dict[str, Any]) -> None:
+        raw = canonical(value)
+        self._digest.update(len(raw).to_bytes(8, "big"))
+        self._digest.update(raw)
+        self.count += 1
+
+    def hexdigest(self) -> str:
+        return self._digest.hexdigest()
+
+
+def _same_open_identity(expected: dict[str, Any], info: os.stat_result) -> bool:
+    return all(expected.get(key) == value for key, value in {
+        "device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
+        "gid": info.st_gid, "mode": f"0{stat.S_IMODE(info.st_mode):03o}",
+        "size": info.st_size, "mtimeNs": info.st_mtime_ns, "ctimeNs": info.st_ctime_ns,
+        "nlink": info.st_nlink,
+    }.items() if key in expected)
 
 
 def object_json(raw: bytes, predicate: str) -> dict[str, Any]:
@@ -1738,78 +1909,97 @@ def _protected_archive_member(relative: str, entry: dict[str, Any], payload_sha:
 
 def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
                                       manifest: dict[str, Any]) -> dict[str, Any]:
-    raw, identity = stable_regular(path, entry["sha256"],
-                                   allowed_modes={int(entry["identity"]["mode"], 8)},
-                                   include_nlink=True)
+    telemetry("before_archive_hash", candidate=path)
+    identity = stable_regular_digest(
+        path, entry["sha256"],
+        allowed_modes={int(entry["identity"]["mode"], 8)}, include_nlink=True)
+    telemetry("after_archive_hash", candidate=path)
     expected_identity = entry["identity"]
     if ({key: identity[key] for key in expected_identity} != expected_identity or
             identity["nlink"] != 1):
         deny("DISPOSITION_IDENTITY_DIVERGED")
     authority = Path(entry["authority"])
     authority_root, authority_root_identity = _authority_root(authority, entry)
-    relation: list[dict[str, Any]] = []
+    relation = FramedRelationDigest()
     seen: set[str] = set()
+    telemetry("before_tar_scan", candidate=path)
+    telemetry("before_authority_compare", candidate=path)
     try:
-        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as archive:
-            for member in archive:
-                relative = _normalized_archive_member(member.name).as_posix()
-                if relative in seen:
-                    deny("DISPOSITION_ARCHIVE_MEMBER_DUPLICATE")
-                seen.add(relative)
-                if member.isreg():
-                    stream = archive.extractfile(member)
-                    if stream is None:
-                        deny("DISPOSITION_ARCHIVE_READ")
-                    digest = hashlib.sha256()
-                    while chunk := stream.read(1024 * 1024):
-                        digest.update(chunk)
-                    member_sha = digest.hexdigest()
-                    _protected_archive_member(relative, entry, member_sha, manifest)
-                    authoritative, authority_ancestors = _authority_leaf(
-                        authority, authority_root, relative)
-                    try:
-                        authority_mode = stat.S_IMODE(authoritative.lstat().st_mode)
-                    except OSError:
-                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                    authority_raw, authority_identity = stable_regular(
-                        authoritative, member_sha, private=False,
-                        allowed_modes={authority_mode},
-                        allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
-                    if len(authority_raw) != member.size:
-                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                    relation.append({"path": relative, "type": "file", "size": member.size,
-                                     "sha256": member_sha, "tarMode": f"0{member.mode & 0o7777:03o}",
-                                     "authority": authority_identity,
-                                     "authorityAncestors": authority_ancestors})
-                elif member.isdir():
-                    authoritative, authority_ancestors = _authority_leaf(
-                        authority, authority_root, relative)
-                    directory_info = physical_directory(
-                        authoritative, "DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                    if directory_info.st_dev != authority_root.st_dev or not _identity_owner_allowed(directory_info):
-                        deny("DISPOSITION_AUTHORITY_IDENTITY")
-                    _protected_archive_member(relative, entry, None, manifest)
-                    relation.append({"path": relative, "type": "directory", "size": 0,
-                                     "authority": stat_identity(directory_info, include_nlink=True),
-                                     "authorityAncestors": authority_ancestors})
-                elif member.issym():
-                    target = _safe_archive_link(member, PurePosixPath(relative))
-                    authoritative, authority_ancestors = _authority_leaf(
-                        authority, authority_root, relative)
-                    try:
-                        info = authoritative.lstat()
-                    except OSError:
-                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                    if not stat.S_ISLNK(info.st_mode) or os.readlink(authoritative) != target:
-                        deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
-                    relation.append({"path": relative, "type": "symlink", "target": target,
-                                     "authority": stat_identity(info, include_nlink=True),
-                                     "authorityAncestors": authority_ancestors})
-                else:
-                    deny("DISPOSITION_ARCHIVE_MEMBER_UNSAFE")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            opened = os.fstat(fd)
+            if not _same_open_identity(identity, opened):
+                deny("DISPOSITION_IDENTITY_DIVERGED")
+            with os.fdopen(os.dup(fd), "rb") as source, \
+                    tarfile.open(fileobj=source, mode="r|gz") as archive:
+                for member in archive:
+                    relative = _normalized_archive_member(member.name).as_posix()
+                    if relative in seen:
+                        deny("DISPOSITION_ARCHIVE_MEMBER_DUPLICATE")
+                    seen.add(relative)
+                    if member.isreg():
+                        stream = archive.extractfile(member)
+                        if stream is None:
+                            deny("DISPOSITION_ARCHIVE_READ")
+                        digest = hashlib.sha256()
+                        while chunk := stream.read(1024 * 1024):
+                            digest.update(chunk)
+                        member_sha = digest.hexdigest()
+                        _protected_archive_member(relative, entry, member_sha, manifest)
+                        authoritative, authority_ancestors = _authority_leaf(
+                            authority, authority_root, relative)
+                        try:
+                            authority_mode = stat.S_IMODE(authoritative.lstat().st_mode)
+                        except OSError:
+                            deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                        authority_identity = stable_regular_digest(
+                            authoritative, member_sha, private=False,
+                            allowed_modes={authority_mode}, expected_size=member.size,
+                            allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
+                        relation.add({"path": relative, "type": "file", "size": member.size,
+                                      "sha256": member_sha,
+                                      "tarMode": f"0{member.mode & 0o7777:03o}",
+                                      "authority": authority_identity,
+                                      "authorityAncestors": authority_ancestors})
+                    elif member.isdir():
+                        authoritative, authority_ancestors = _authority_leaf(
+                            authority, authority_root, relative)
+                        directory_info = physical_directory(
+                            authoritative, "DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                        if (directory_info.st_dev != authority_root.st_dev or
+                                not _identity_owner_allowed(directory_info)):
+                            deny("DISPOSITION_AUTHORITY_IDENTITY")
+                        _protected_archive_member(relative, entry, None, manifest)
+                        relation.add({"path": relative, "type": "directory", "size": 0,
+                                      "authority": stat_identity(directory_info,
+                                                                 include_nlink=True),
+                                      "authorityAncestors": authority_ancestors})
+                    elif member.issym():
+                        target = _safe_archive_link(member, PurePosixPath(relative))
+                        authoritative, authority_ancestors = _authority_leaf(
+                            authority, authority_root, relative)
+                        try:
+                            info = authoritative.lstat()
+                        except OSError:
+                            deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                        if not stat.S_ISLNK(info.st_mode) or os.readlink(authoritative) != target:
+                            deny("DISPOSITION_ARCHIVE_AUTHORITY_DIVERGED")
+                        relation.add({"path": relative, "type": "symlink", "target": target,
+                                      "authority": stat_identity(info, include_nlink=True),
+                                      "authorityAncestors": authority_ancestors})
+                    else:
+                        deny("DISPOSITION_ARCHIVE_MEMBER_UNSAFE")
+            after = os.fstat(fd)
+        finally:
+            os.close(fd)
+        current = path.lstat()
+        if not _same_open_identity(identity, after) or not _same_open_identity(identity, current):
+            deny("DISPOSITION_IDENTITY_DIVERGED")
     except (tarfile.TarError, OSError):
         deny("DISPOSITION_ARCHIVE_READ")
-    return {"memberCount": len(relation), "relationSha256": digest_bytes(canonical(relation)),
+    telemetry("after_authority_compare", candidate=path, member_count=relation.count)
+    telemetry("after_tar_scan", candidate=path, member_count=relation.count)
+    return {"memberCount": relation.count, "relationSha256": relation.hexdigest(),
             "authority": str(authority), "authorityIdentity": authority_root_identity,
             "effects": [[*LITERAL_UNLINK, str(path)]]}
 
@@ -2046,16 +2236,20 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     policy, policy_path, policy_sha = root_policy(value["rootPolicy"])
     op_path, op_sha, op_raw, _ = load_binding(value["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
+    telemetry("before_live_recapture")
     operational, live_recapture = capture_live_operational(operational)
+    telemetry("after_live_recapture")
     candidate_paths = [str(normalized_absolute(item.get("path"), "CANDIDATE_PATH"))
                        for item in value["candidates"] if isinstance(item, dict)]
     if len(candidate_paths) != len(value["candidates"]):
         deny("CANDIDATE_SCHEMA")
+    telemetry("before_process_recapture")
     if value["schemaVersion"] in {2, 3}:
         process_data, process_evidence = _privileged_proc_targets(
             value["procObserver"], candidate_paths, "audit")
     else:
         process_data, process_evidence = _proc_targets(), {"mechanism": "unprivileged-legacy"}
+    telemetry("after_process_recapture")
     observations: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -2114,7 +2308,9 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
         plan["processObservation"] = process_evidence
     if value["schemaVersion"] == 3:
         plan["incrementalBatch"] = True
+    telemetry("before_plan_write")
     write_exclusive(plan_output, canonical(plan))
+    telemetry("after_plan_write")
     return plan
 
 
@@ -2154,18 +2350,24 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
     errors: list[str] = []
     refreshed: list[dict[str, Any]] = []
     priors: list[dict[str, Any]] = []
+    telemetry("before_live_recapture")
     try:
         operational, live_recapture = capture_live_operational(operational)
     except Denied as exc:
         errors.append(str(exc))
+    telemetry("after_live_recapture")
     candidate_paths = [item.get("observation", {}).get("path") for item in plan.get("candidates", [])]
     if not candidate_paths or any(not isinstance(item, str) for item in candidate_paths):
         deny("PLAN_CANDIDATE_PATHS")
     if version in {2, 3}:
+        telemetry("before_process_recapture")
         process_data, process_evidence = _privileged_proc_targets(
             plan["procObserver"], candidate_paths, phase)
+        telemetry("after_process_recapture")
     else:
+        telemetry("before_process_recapture")
         process_data, process_evidence = _proc_targets(), {"mechanism": "unprivileged-legacy"}
+        telemetry("after_process_recapture")
     for item in plan.get("candidates", []):
         try:
             source = item["source"]
@@ -2433,25 +2635,32 @@ def parse_args() -> argparse.Namespace:
     audit.add_argument("--request", type=Path, required=True)
     audit.add_argument("--request-sha256", required=True)
     audit.add_argument("--plan-output", type=Path, required=True)
+    audit.add_argument("--telemetry-output", type=Path, required=True)
     prepare = actions.add_parser("prepare")
     prepare.add_argument("--plan", type=Path, required=True)
     prepare.add_argument("--plan-sha256", required=True)
     prepare.add_argument("--intent-output", type=Path, required=True)
     prepare.add_argument("--commands-output", type=Path, required=True)
     prepare.add_argument("--manifest-output", type=Path, required=True)
+    prepare.add_argument("--telemetry-output", type=Path, required=True)
     execute = actions.add_parser("execute")
     execute.add_argument("--intent", type=Path, required=True)
     execute.add_argument("--intent-sha256", required=True)
     execute.add_argument("--authorization", type=Path, required=True)
     execute.add_argument("--authorization-sha256", required=True)
     execute.add_argument("--receipt-root", type=Path, required=True)
+    execute.add_argument("--telemetry-output", type=Path, required=True)
     return parser.parse_args()
 
 
 def main() -> None:
+    global _TELEMETRY
     os.umask(0o077)
     args = parse_args()
+    telemetry_path = getattr(args, "telemetry_output", None)
     try:
+        if telemetry_path is not None:
+            _TELEMETRY = Telemetry(telemetry_path)
         if args.action == "audit":
             result = audit_request(args.request, args.request_sha256, args.plan_output)
         elif args.action == "prepare":
@@ -2467,6 +2676,11 @@ def main() -> None:
     except Denied as exc:
         print(json.dumps({"state": "CAPACITY_RECOVERY_DENY", "predicate": str(exc)}, sort_keys=True))
         raise SystemExit(2)
+    finally:
+        if _TELEMETRY is not None:
+            _TELEMETRY.emit("process_terminating")
+            _TELEMETRY.close()
+            _TELEMETRY = None
 
 
 if __name__ == "__main__":

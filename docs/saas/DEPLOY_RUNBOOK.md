@@ -24,7 +24,7 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 - PM2 6.0.14, worker fora do impacto, lock global livre e autorização da janela;
 - migration/SQL classificados antes da janela.
 - contrato privado de capacidade revisado conforme [ciclo de vida dos artefatos](DEPLOY_ARTIFACT_LIFECYCLE.md), incluindo pico temporário e reserva operacional.
-- recuperação extraordinária segue a [política canônica](CAPACITY_RECOVERY_POLICY.md) e `scripts/capacity-recovery.py`, que autentica journals fixed-current e frontend-only.
+- recuperação extraordinária segue a [política canônica](CAPACITY_RECOVERY_POLICY.md), `scripts/capacity-recovery.py` e o supervisor durável `scripts/capacity-recovery-supervisor.py`; archives são lidos em streaming e cada fase preserva telemetria JSONL de memória, sem conteúdo ou credenciais.
 
 Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
 shell, derivar definição executável de introspecção, usar `--update-env`, executar
