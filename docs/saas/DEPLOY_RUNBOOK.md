@@ -165,7 +165,7 @@ Quando o merge apenas integra um head já aprovado, a CI pode ser transferida ao
 merge somente com prova Git de igualdade exata das árvores e zero arquivos
 diferentes. Preservar SHA das duas árvores, head testado, merge e run da CI. Qualquer
 diferença de árvore exige CI própria do target resultante; não criar commit vazio
-apenas para fabricar execução.
+apenas para fabricar execução. Para `worker-package-audit`, usar somente `scripts/capacity-recovery-worker-package-materialize.py` copiado: prova privada do instalador (sem ler o helper `root:root 0500`), `/usr/bin/node`, PM2 original por FD, fotografia final antes de seu SHA, request novo, readback de fotografia/request/manifesto e fingerprint pela projeção canônica do consumidor; caminho NVM, template anterior, helper presumido, fallback ao checkout ou binding divergente negam antes do supervisor, e custódias anteriores permanecem terminais.
 
 ```bash
 TARGET=<sha-completo>

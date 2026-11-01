@@ -626,6 +626,36 @@ equivalência folha a folha, referências vivas, capacidade e locks serão recap
 nessa fase. Nenhum `prepare`, autorização ou efeito é criado por esta habilitação.
 O manifesto terminal 3/3 permanece byte-exato.
 
+A montagem operacional dessa qualificação reutiliza o procedimento comprovado em
+`p00-capacity-three-archives-916f8d6b-v2` e na retirada sucessora concluída:
+finaliza a fotografia, autentica seus bytes, constrói um request novo, reabre cada
+binding e só então sela o SHA do request. A serialização do fingerprint PM2 é a
+mesma função canônica do consumidor (ordenação por `name`, fallback de
+`pm2_env` e newline final). O PM2 é invocado pelo arquivo original autenticado e
+por FD; o Node fechado é `/usr/bin/node` `v20.20.0`, não um caminho NVM.
+
+Para o helper `root:root 0500`, o materializador não tenta ler seus bytes como
+`deploy`. Ele consome a prova privada produzida pelo instalador autenticado, fixa
+SHA do instalador e do sudoers, e confronta por `lstat` caminho, SHA declarado,
+device, inode, UID, GID e modo. Prova ausente, pertencente a outro helper ou com
+identidade divergente nega. O único delta em relação ao lote 3/3 é o contrato
+fechado de `worker-package-audit`: um candidato `ENUMERATED_TREE`, seu manifesto
+específico e o helper cuja allowlist contém apenas esse caminho adicional. Não há
+fallback para checkout, caminho livre ou reaproveitamento de fotografia/request.
+
+O materializador versionado
+`scripts/capacity-recovery-worker-package-materialize.py` deriva `ROOT` de sua
+própria custódia, autentica por SHA o consumidor copiado e reutiliza dele
+`canonical()`, `_pm2_projection()` e os validadores de binding. A regressão
+executa ambos fora do checkout e chama `audit_request()` real: fotografia,
+recaptura de current/PM2/dump/grafo/transações e autenticação da árvore sintética
+permanecem reais; somente a invocação sudo do observador `/proc` é substituída
+por sua fronteira sintética. O teste produz plano PASS e também nega fingerprint
+adulterado, troca do consumidor, drift entre fotografia/request e o readback
+pré-selagem, manifesto, prova e identidade do helper. Isso é controle
+implementado e ensaiado localmente; não é auditoria produtiva, autorização ou
+renovação das tentativas v1/v2/v3 preservadas.
+
 Arquivos regulares da autoridade são comparados por conteúdo e tamanho. O modo
 observado do arquivo físico é autenticado na relação, mas não precisa reproduzir o
 modo armazenado no tar; ambos são registrados. Drift de owner, device, inode,

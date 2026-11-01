@@ -7,6 +7,7 @@ import os
 from pathlib import Path, PurePosixPath
 import resource
 import signal
+import shutil
 import stat
 import subprocess
 import sys
@@ -1145,6 +1146,187 @@ class CapacityRecoveryTests(unittest.TestCase):
                             for command in commands))
         self.assertFalse(any(str(authority) in argument
                              for command in commands for argument in command))
+
+    def test_worker_package_materializer_matches_consumer_outside_checkout(self):
+        fixture = self.worker_package_audit_disposition_fixture("materializer-e2e")
+        external = self.base / "external-custody"
+        control = external / "control"
+        scripts = control / "scripts"
+        config = control / "config/capacity-recovery"
+        scripts.mkdir(parents=True); config.mkdir(parents=True)
+        source = Path(__file__).resolve().parents[1]
+        shutil.copy2(source / "capacity-recovery-worker-package-materialize.py",
+                     scripts / "capacity-recovery-worker-package-materialize.py")
+        shutil.copy2(source / "capacity-recovery.py", scripts / "capacity-recovery.py")
+        (scripts / "capacity-recovery.py").chmod(0o644)
+        shutil.copy2(fixture["manifest"], config / "worker-package-audit-disposition.v1.json")
+        shutil.copytree(fixture["control"] / "apps", control / "apps")
+        shutil.copytree(fixture["control"] / "docs", control / "docs")
+        materializer_spec = importlib.util.spec_from_file_location(
+            "external_materializer", scripts / "capacity-recovery-worker-package-materialize.py")
+        materializer = importlib.util.module_from_spec(materializer_spec)
+        assert materializer_spec.loader is not None; materializer_spec.loader.exec_module(materializer)
+        consumer_spec = importlib.util.spec_from_file_location(
+            "external_consumer", scripts / "capacity-recovery.py")
+        consumer = importlib.util.module_from_spec(consumer_spec)
+        assert consumer_spec.loader is not None; consumer_spec.loader.exec_module(consumer)
+
+        def configure_consumer(module):
+            module.ROOT = control
+            module.PREPARATIONS_ROOT = self.preparations
+            module.RELEASES_ROOT = self.releases
+            module.WORKER_PACKAGE_AUDIT_MANIFEST_PATH = manifest
+            module.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256 = sha(manifest)
+            module.WORKER_PACKAGE_AUDIT_DISPOSITION_ID = "fixture-worker-package-audit-v1"
+            module.PROC_OBSERVER_PATH = helper
+            return module
+
+        node = external / "node"; node.write_text("#!/bin/sh\necho v20.20.0\n"); node.chmod(0o755)
+        rows = [{"name": "api", "pid": 7, "pm2_env": {"status": "online",
+                 "restart_time": 1, "pm_cwd": "/release", "pm_exec_path": "/release/app.js"}}]
+        pm2 = external / "pm2"; pm2.write_text(
+            "#!/usr/bin/python3\nimport json\nprint(json.dumps(" + repr(rows) + "))\n"); pm2.chmod(0o700)
+        dump = external / "dump.json"; private_json(dump, [])
+        graph = external / "release-graph.private.json"; private_json(
+            graph, {"schemaVersion": 1, "protectedGraphPaths": []})
+        policy = external / "deploy-artifact-roots.json"; shutil.copy2(self.policy, policy); policy.chmod(0o600)
+        helper = external / "helper"; helper.write_bytes(b"helper"); helper.chmod(0o500)
+        helper_info = helper.lstat()
+        proof = external / "helper-installation-proof.private.json"
+        private_json(proof, {"schemaVersion": 1,
+            "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+            "installerSha256": materializer.INSTALLER_SHA256,
+            "sudoersSha256": materializer.SUDOERS_SHA256,
+            "helper": {"path": str(helper), "sha256": sha(helper),
+                "identity": {"device": helper_info.st_dev, "inode": helper_info.st_ino,
+                    "uid": helper_info.st_uid, "gid": helper_info.st_gid, "mode": "0500"}}})
+        current = external / "current"; current.mkdir()
+        api = external / "api"; frontend = external / "frontend"; api.mkdir(); frontend.mkdir()
+        (current / "api").symlink_to(api); (current / "frontend").symlink_to(frontend)
+        transactions = external / "transactions"; transactions.mkdir(mode=0o700)
+        deployment_lock = external / "deploy.lock"; deployment_lock.write_bytes(b"")
+        writer_lock = external / "writer.lock"; writer_lock.write_bytes(b"")
+        manifest = config / "worker-package-audit-disposition.v1.json"
+        configure_consumer(consumer)
+        load_authenticated = materializer.authenticated_consumer
+
+        def load_configured_consumer():
+            return configure_consumer(load_authenticated())
+
+        fd_identity_checks = []
+        confirm_identity = materializer.confirm_open_identity
+
+        def confirm_same_fd(fd, path, expected):
+            fd_identity_checks.append((os.fstat(fd).st_dev, os.fstat(fd).st_ino,
+                                       path.lstat().st_dev, path.lstat().st_ino))
+            return confirm_identity(fd, path, expected)
+
+        with mock.patch.multiple(materializer, CUSTODY=external, ROOT=control, PM2=pm2,
+                PM2_SHA256=sha(pm2), NODE=node, NODE_SHA256=sha(node), DUMP=dump,
+                GRAPH=graph, POLICY=policy, MANIFEST=manifest, HELPER=helper,
+                HELPER_SHA256=sha(helper), HELPER_PROOF=proof, CANDIDATE=fixture["root"],
+                CURRENT=current, TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
+                WRITER_LOCK=writer_lock, MINIMUM_RECOVERY_BYTES=1,
+                authenticated_consumer=load_configured_consumer,
+                confirm_open_identity=confirm_same_fd):
+            result = materializer.materialize()
+        self.assertEqual(fd_identity_checks, [(pm2.stat().st_dev, pm2.stat().st_ino,
+                                               pm2.stat().st_dev, pm2.stat().st_ino)])
+        request_path = external / "audit-request.private.json"
+        request = json.loads(request_path.read_text())
+        binding_readback = json.loads((external / "binding-readback.private.json").read_text())
+        self.assertEqual(binding_readback["requestSha256"], sha(request_path))
+        self.assertEqual(binding_readback["operationalStateSha256"],
+                         request["operationalState"]["sha256"])
+        self.assertEqual(binding_readback["manifestSha256"],
+                         request["candidates"][0]["dispositionManifest"]["sha256"])
+        self.assertEqual(binding_readback["rootPolicySha256"], request["rootPolicy"]["sha256"])
+        self.assertEqual(result["pm2FingerprintSha256"],
+            consumer.digest_bytes(consumer.canonical(consumer._pm2_projection(rows))))
+        plan_path = external / "plan.private.json"
+        process_evidence = {"mechanism": "synthetic-privileged-boundary"}
+        with mock.patch.object(consumer, "_privileged_proc_targets",
+                               return_value=(scan(), process_evidence)):
+            plan = consumer.audit_request(request_path, sha(request_path), plan_path)
+        self.assertEqual(plan["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+        self.assertEqual(plan["errors"], [])
+        self.assertEqual(len(plan["candidates"]), 1)
+        self.assertEqual(plan["candidates"][0]["observation"]["path"], str(fixture["root"]))
+        self.assertEqual(plan["processObservation"], process_evidence)
+        self.assertEqual(json.loads(plan_path.read_text()), plan)
+
+        bad_operational = json.loads((external / "operational-state.schema2.private.json").read_text())
+        bad_operational["liveObservations"]["pm2"]["fingerprintSha256"] = "0" * 64
+        bad_operational_path = external / "operational-state.bad-fingerprint.private.json"
+        private_json(bad_operational_path, bad_operational)
+        bad_request = json.loads(request_path.read_text())
+        bad_request["operationalState"] = {"path": str(bad_operational_path),
+                                           "sha256": sha(bad_operational_path)}
+        bad_request_path = external / "audit-request.bad-fingerprint.private.json"
+        bad_request_path.write_bytes(consumer.canonical(bad_request)); bad_request_path.chmod(0o600)
+        with mock.patch.object(consumer, "_privileged_proc_targets",
+                               return_value=(scan(), process_evidence)), \
+                self.assertRaisesRegex(consumer.Denied, "LIVE_PM2_CHANGED"):
+            consumer.audit_request(bad_request_path, sha(bad_request_path),
+                                   external / "bad-plan.private.json")
+
+        operational_path = external / "operational-state.schema2.private.json"
+        operational_raw = operational_path.read_bytes()
+        binding_path = external / "binding-readback.private.json"
+        binding_path.unlink()
+        operational_path.write_bytes(operational_raw + b"\n")
+        with self.assertRaises(consumer.Denied):
+            materializer.final_readback(consumer, request_path, sha(request_path),
+                                        request["procObserver"])
+        self.assertFalse(binding_path.exists())
+        operational_path.write_bytes(operational_raw)
+        manifest_raw = manifest.read_bytes()
+        manifest.write_bytes(manifest_raw + b"\n")
+        with self.assertRaises(consumer.Denied):
+            consumer.validate_audit_request(request)
+        manifest.write_bytes(manifest_raw)
+        consumer_path = scripts / "capacity-recovery.py"
+        consumer_raw = consumer_path.read_bytes()
+        consumer_path.write_bytes(consumer_raw + b"\n")
+        with self.assertRaisesRegex(RuntimeError, "SHA256"):
+            materializer.authenticated_consumer()
+        consumer_path.write_bytes(consumer_raw); consumer_path.chmod(0o644)
+        proof.unlink()
+        with mock.patch.multiple(materializer, HELPER_PROOF=proof):
+            with self.assertRaises((FileNotFoundError, RuntimeError)):
+                materializer.helper_binding()
+        private_json(proof, {"schemaVersion": 1,
+            "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+            "installerSha256": "0" * 64,
+            "sudoersSha256": materializer.SUDOERS_SHA256,
+            "helper": {"path": str(helper), "sha256": sha(helper),
+                "identity": {"device": helper_info.st_dev, "inode": helper_info.st_ino,
+                    "uid": helper_info.st_uid, "gid": helper_info.st_gid, "mode": "0500"}}})
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_SHA256=sha(helper)), \
+                self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+            materializer.helper_binding()
+        proof.unlink()
+        private_json(proof, {"schemaVersion": 1,
+            "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+            "installerSha256": materializer.INSTALLER_SHA256,
+            "sudoersSha256": materializer.SUDOERS_SHA256,
+            "helper": {"path": str(helper) + ".other", "sha256": sha(helper),
+                "identity": {"device": helper_info.st_dev, "inode": helper_info.st_ino,
+                    "uid": helper_info.st_uid, "gid": helper_info.st_gid, "mode": "0500"}}})
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_SHA256=sha(helper)), \
+                self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+            materializer.helper_binding()
+        proof.unlink()
+        private_json(proof, {"schemaVersion": 1,
+            "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+            "installerSha256": materializer.INSTALLER_SHA256,
+            "sudoersSha256": materializer.SUDOERS_SHA256,
+            "helper": {"path": str(helper), "sha256": sha(helper),
+                "identity": {"device": helper_info.st_dev, "inode": helper_info.st_ino + 1,
+                    "uid": helper_info.st_uid, "gid": helper_info.st_gid, "mode": "0500"}}})
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_SHA256=sha(helper)), \
+                self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_IDENTITY"):
+            materializer.helper_binding()
 
     def test_manifest_disposition_tree_link_set_target_type_and_escape_deny(self):
         for mutation, predicate in (
