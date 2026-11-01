@@ -7,7 +7,7 @@
   "activeApiDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "capacityRecoveryControlPlane": {
-    "state": "PRODUCTION_ATTEMPT_INTERRUPTED_LOCAL_FIX_PENDING_REVIEW",
+    "state": "PRODUCTION_ATTEMPT_INTERRUPTED_CARDINALITY_FIX_INTEGRATED_CONTAINMENT_FIX_LOCAL",
     "script": "scripts/capacity-recovery.py",
     "policy": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
     "phases": [
@@ -58,7 +58,7 @@
       "evidenceHashes": "PRESERVED_IN_PRIVATE_CUSTODY_INDEX_NOT_REHASHED_HERE"
     },
     "localCardinalityValidation": {
-      "state": "IMPLEMENTED_AND_LOCALLY_TESTED_NOT_INTEGRATED_NOT_PRODUCTION_EXECUTED",
+      "state": "INTEGRATED_AND_LOCALLY_REVALIDATED_NOT_PRODUCTION_EXECUTED",
       "memberScales": [
         30000,
         60000
@@ -125,6 +125,47 @@
         "treatment": "PRESERVE_TERMINAL_CUSTODY_AND_CLASSIFY_LITERAL_IDENTITY"
       },
       "productionBudgetApproved": false
+    },
+    "localAuditResourceContainment": {
+      "state": "IMPLEMENTED_AND_LOCALLY_TESTED_NOT_INTEGRATED_NOT_PRODUCTION_EXECUTED",
+      "auditOnly": true,
+      "mechanism": "SYSTEMD_USER_TRANSIENT_SCOPE_CGROUP_V2",
+      "memoryLimit": "CGROUP_AGGREGATE_MEMORY_MAX",
+      "memorySwapMaxBytes": 0,
+      "oomGroup": true,
+      "memoryBudgetRequired": true,
+      "memoryBoundsBytes": [
+        134217728,
+        536870912
+      ],
+      "durationBudgetRequired": true,
+      "durationBoundsSeconds": [
+        10,
+        1800
+      ],
+      "stopGraceSeconds": 5,
+      "internalCgroupVerification": true,
+      "containedDescendants": [
+        "pythonExecutor",
+        "nodePm2Cli",
+        "privilegedProcHelper"
+      ],
+      "existingPm2DaemonOutsideScope": true,
+      "prepareExecuteBehaviorChanged": false,
+      "localValidation": {
+        "normalScopePeakBytes": 34140160,
+        "oomMemoryMaxBytes": 134217728,
+        "oomScopePeakBytes": 132980736,
+        "oomResult": "oom-kill",
+        "timeoutSeconds": 10,
+        "timeoutGraceSeconds": 5,
+        "timeoutResult": "timeout",
+        "externalSentinelPreserved": true,
+        "representativeAuthenticatorRevalidated": true
+      },
+      "testMemoryBudgetBytes": 268435456,
+      "productionBudgetApproved": false,
+      "productionOperationAuthorized": false
     },
     "productionEffectsInThisChange": false,
     "lastCompleted": {

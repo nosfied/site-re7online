@@ -2230,7 +2230,7 @@ from pathlib import Path
 spec=importlib.util.spec_from_file_location("supervisor",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 child=[sys.executable,"-B","-c",sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]]
 m.executor_argv=lambda _args:child
-sys.argv=["supervisor","--stdout-output",sys.argv[6],"--stderr-output",sys.argv[7],"--terminal-output",sys.argv[8],"--telemetry-output",sys.argv[9],"--supervisor-telemetry-output",sys.argv[10],"audit","--request","/synthetic-request","--request-sha256","0"*64,"--plan-output","/synthetic-plan"]
+sys.argv=["supervisor","--stdout-output",sys.argv[6],"--stderr-output",sys.argv[7],"--terminal-output",sys.argv[8],"--telemetry-output",sys.argv[9],"--supervisor-telemetry-output",sys.argv[10],"prepare","--plan","/synthetic-plan","--plan-sha256","0"*64,"--intent-output","/synthetic-intent","--commands-output","/synthetic-commands","--manifest-output","/synthetic-manifest"]
 m.main()
 ''')
         stdout = root / "stdout"

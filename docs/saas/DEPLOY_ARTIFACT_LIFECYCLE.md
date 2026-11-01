@@ -573,6 +573,15 @@ permanecer na custódia da fase. Ele deve entrar no inventário terminal pelo ca
 e identidade exatos e só pode ser retirado após classificação canônica; não há
 varredura ou limpeza automática da raiz de custódia.
 
+O supervisor integrado após o PR #300 aplica contenção somente ao `audit`, por
+escopo transitório autenticado do `systemd --user`: memória agregada do cgroup,
+swap zero e prazo monotônico. Essa fronteira protege os serviços vivos sem usar
+RSS como limite e sem sinalizar por nome; Python, Node/PM2 CLI e helper descendentes
+herdam o mesmo escopo, enquanto o daemon PM2 existente permanece externo. Falha em
+aplicar ou autenticar a contenção nega antes do executor. O mecanismo não muda o
+lifecycle, a retirada nem os protocolos de `prepare`/`execute`, e não converte
+resíduo temporário após sinal em artefato automaticamente removível.
+
 ## Inventário histórico anterior aos lotes de 25/10/2026
 
 Esta fotografia e suas classificações precedem as retiradas relatadas abaixo; não
