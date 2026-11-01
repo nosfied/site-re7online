@@ -626,6 +626,31 @@ equivalência folha a folha, referências vivas, capacidade e locks serão recap
 nessa fase. Nenhum `prepare`, autorização ou efeito é criado por esta habilitação.
 O manifesto terminal 3/3 permanece byte-exato.
 
+A montagem operacional dessa qualificação reutiliza o procedimento comprovado em
+`p00-capacity-three-archives-916f8d6b-v2` e na retirada sucessora concluída:
+finaliza a fotografia, autentica seus bytes, constrói um request novo, reabre cada
+binding e só então sela o SHA do request. A serialização do fingerprint PM2 é a
+mesma função canônica do consumidor (ordenação por `name`, fallback de
+`pm2_env` e newline final). O PM2 é invocado pelo arquivo original autenticado e
+por FD; o Node fechado é `/usr/bin/node` `v20.20.0`, não um caminho NVM.
+
+Para o helper `root:root 0500`, o materializador não tenta ler seus bytes como
+`deploy`. Ele consome a prova privada produzida pelo instalador autenticado, fixa
+SHA do instalador e do sudoers, e confronta por `lstat` caminho, SHA declarado,
+device, inode, UID, GID e modo. Prova ausente, pertencente a outro helper ou com
+identidade divergente nega. O único delta em relação ao lote 3/3 é o contrato
+fechado de `worker-package-audit`: um candidato `ENUMERATED_TREE`, seu manifesto
+específico e o helper cuja allowlist contém apenas esse caminho adicional. Não há
+fallback para checkout, caminho livre ou reaproveitamento de fotografia/request.
+
+O materializador versionado
+`scripts/capacity-recovery-worker-package-materialize.py` deriva `ROOT` de sua
+própria custódia e foi exercitado, junto com o consumidor real copiado, fora do
+checkout até a autenticação de uma árvore sintética. A regressão também nega
+drift da fotografia, manifesto, prova e identidade do helper. Isso é controle
+implementado e ensaiado localmente; não é auditoria produtiva, autorização ou
+renovação das tentativas v1/v2/v3 preservadas.
+
 Arquivos regulares da autoridade são comparados por conteúdo e tamanho. O modo
 observado do arquivo físico é autenticado na relação, mas não precisa reproduzir o
 modo armazenado no tar; ambos são registrados. Drift de owner, device, inode,
