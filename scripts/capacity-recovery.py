@@ -1968,12 +1968,30 @@ def authenticate_preparation_archive(candidate: dict[str, Any], operational: dic
             "processScan": scan_summary}
 
 
-def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+def _disposition_manifest(
+    binding: Any, *, sealed_binding: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
         deny("DISPOSITION_MANIFEST_BINDING")
     path = normalized_absolute(binding.get("path"), "DISPOSITION_MANIFEST_PATH")
-    if path != DISPOSITION_MANIFEST_PATH or binding.get("sha256") != DISPOSITION_MANIFEST_SHA256:
+    expected = ({"path": str(DISPOSITION_MANIFEST_PATH),
+                 "sha256": DISPOSITION_MANIFEST_SHA256}
+                if sealed_binding is None else sealed_binding)
+    if (not isinstance(expected, dict) or set(expected) != {"path", "sha256"} or
+            binding != expected or binding.get("sha256") != DISPOSITION_MANIFEST_SHA256):
         deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+    try:
+        relative = DISPOSITION_MANIFEST_PATH.relative_to(ROOT)
+    except ValueError:
+        deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+    if not relative.parts or tuple(path.parts[-len(relative.parts):]) != relative.parts:
+        deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+    manifest_root = path.parents[len(relative.parts) - 1]
+    if sealed_binding is not None and path != DISPOSITION_MANIFEST_PATH:
+        try:
+            manifest_root.relative_to(PREPARATIONS_ROOT)
+        except ValueError:
+            deny("DISPOSITION_MANIFEST_FIXED_BINDING")
     raw, _ = stable_regular(path, DISPOSITION_MANIFEST_SHA256, private=False,
                             allowed_modes={0o600, 0o640, 0o644})
     value = object_json(raw, "DISPOSITION_MANIFEST_JSON")
@@ -1987,8 +2005,8 @@ def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[
     env = value.get("versionedEnvExample")
     if not isinstance(env, dict) or set(env) != {"path", "sha256"}:
         deny("DISPOSITION_MANIFEST_ENV_EXAMPLE")
-    env_path = ROOT / env.get("path", "")
-    if env_path != ROOT / "apps/whatsapp-agent/.env.example":
+    env_path = manifest_root / env.get("path", "")
+    if env_path != manifest_root / "apps/whatsapp-agent/.env.example":
         deny("DISPOSITION_MANIFEST_ENV_EXAMPLE")
     stable_regular(env_path, env.get("sha256"), private=False,
                    allowed_modes={0o600, 0o640, 0o644})
@@ -2050,9 +2068,9 @@ def _disposition_manifest(binding: Any) -> tuple[dict[str, Any], dict[str, dict[
         for record in entry["historicalRecords"]:
             if not isinstance(record, dict) or set(record) != {"path", "sha256"}:
                 deny("DISPOSITION_MANIFEST_RECORD_SCHEMA")
-            record_path = ROOT / record.get("path", "")
+            record_path = manifest_root / record.get("path", "")
             try:
-                record_path.relative_to(ROOT)
+                record_path.relative_to(manifest_root)
             except ValueError:
                 deny("DISPOSITION_MANIFEST_RECORD_SCOPE")
             stable_regular(record_path, record.get("sha256"), private=False,
@@ -2467,10 +2485,14 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
 
 
 def authenticate_manifest_disposition(candidate: dict[str, Any], operational: dict[str, Any],
-                                      process_data: ProcessScan) -> dict[str, Any]:
+                                      process_data: ProcessScan, *,
+                                      sealed_manifest_binding: dict[str, Any] | None = None,
+                                      ) -> dict[str, Any]:
     if set(candidate) != MANIFEST_DISPOSITION_CANDIDATE_KEYS:
         deny("DISPOSITION_CANDIDATE_SCHEMA")
-    manifest, entries = _disposition_manifest(candidate.get("dispositionManifest"))
+    manifest_binding = candidate.get("dispositionManifest")
+    manifest, entries = _disposition_manifest(
+        manifest_binding, sealed_binding=sealed_manifest_binding)
     path = normalized_absolute(candidate.get("path"), "DISPOSITION_CANDIDATE_PATH")
     entry = entries.get(str(path))
     if entry is None:
@@ -2487,15 +2509,16 @@ def authenticate_manifest_disposition(candidate: dict[str, Any], operational: di
     if usage["allocatedBytes"] != entry["physicalBytes"]:
         deny("DISPOSITION_PHYSICAL_BYTES_DIVERGED")
     return {"class": candidate["class"], "path": str(path), "dispositionId": DISPOSITION_ID,
-            "dispositionManifest": {"path": str(DISPOSITION_MANIFEST_PATH),
-                                    "sha256": DISPOSITION_MANIFEST_SHA256},
+            "dispositionManifest": manifest_binding,
             "entry": entry, "identity": identity, "detail": detail,
             "candidateAncestors": ancestor_identities,
             "processScan": process_summary}
 
 
 def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict[str, Any],
-                       process_data: ProcessScan) -> dict[str, Any]:
+                       process_data: ProcessScan, *,
+                       sealed_manifest_binding: dict[str, Any] | None = None,
+                       ) -> dict[str, Any]:
     if not isinstance(candidate, dict) or candidate.get("class") not in CLASSES:
         deny("CANDIDATE_CLASS")
     if candidate["class"] == "NPM_CACHE_MAINTENANCE":
@@ -2504,7 +2527,9 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
         return authenticate_output(candidate, policy, operational, process_data)
     if candidate["class"] == "CLOSED_PREPARATION_DERIVED_ARCHIVE":
         return authenticate_preparation_archive(candidate, operational, process_data)
-    return authenticate_manifest_disposition(candidate, operational, process_data)
+    return authenticate_manifest_disposition(
+        candidate, operational, process_data,
+        sealed_manifest_binding=sealed_manifest_binding)
 
 
 def removal_command(observation: dict[str, Any]) -> list[str]:
@@ -2663,8 +2688,9 @@ def candidate_bindings(observations: list[dict[str, Any]]) -> list[dict[str, Any
     return [candidate_binding(item) for item in observations]
 
 
-def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
-                    phase: str = "prepare", include_process_evidence: bool = False) -> Any:
+def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
+                    check_locks: bool = True, phase: str = "prepare",
+                    include_process_evidence: bool = False) -> Any:
     required = {"schemaVersion", "kind", "state", "requestSha256", "minimumRecoveryBytes",
                 "targetAvailableBytes", "qualifiedBytes", "qualifiedInodes", "availableBytesBefore",
                 "projectedAvailableBytes", "minimumRecoverySatisfied", "targetAvailableSatisfied",
@@ -2706,8 +2732,26 @@ def revalidate_plan(plan: dict[str, Any], *, check_locks: bool = True,
     for item in plan.get("candidates", []):
         try:
             source = item["source"]
-            observed = validate_candidate(source, policy, operational, process_data)
             prior = item["observation"]
+            sealed_manifest_binding = (prior.get("dispositionManifest")
+                                       if source.get("class") ==
+                                       "CLOSED_PREPARATION_MANIFEST_DISPOSITION" else None)
+            if sealed_manifest_binding is not None:
+                if plan_path is None:
+                    deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+                try:
+                    manifest_relative = DISPOSITION_MANIFEST_PATH.relative_to(ROOT)
+                except ValueError:
+                    deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+                expected_manifest_binding = {
+                    "path": str(plan_path.parent / "control" / manifest_relative),
+                    "sha256": DISPOSITION_MANIFEST_SHA256,
+                }
+                if sealed_manifest_binding != expected_manifest_binding:
+                    deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+            observed = validate_candidate(
+                source, policy, operational, process_data,
+                sealed_manifest_binding=sealed_manifest_binding)
             refreshed.append(observed)
             priors.append(prior)
         except (Denied, KeyError, TypeError) as exc:
@@ -2745,7 +2789,7 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
     raw, _ = stable_regular(plan_path, plan_sha)
     plan = object_json(raw, "PLAN_JSON")
     refreshed, errors, live_recapture, process_evidence = revalidate_plan(
-        plan, include_process_evidence=True)
+        plan, plan_path=plan_path, include_process_evidence=True)
     if errors:
         result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors,
                   "processObservation": process_evidence}
@@ -2876,7 +2920,8 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
         if version in {2, 3} and intent["procObserver"] != plan_value.get("procObserver"):
             deny("PROC_OBSERVER_BINDING_DIVERGED")
         refreshed, errors, live_recapture, process_evidence = revalidate_plan(
-            plan_value, check_locks=False, phase="execute", include_process_evidence=True)
+            plan_value, plan_path=plan_path, check_locks=False, phase="execute",
+            include_process_evidence=True)
         candidates_changed = candidate_bindings(refreshed) != candidate_bindings(intent["candidates"])
         pre_attempt = {"event": "RECAPTURE_DENY" if errors or candidates_changed else "RECAPTURE_PASS",
                        "intentSha256": intent_sha,

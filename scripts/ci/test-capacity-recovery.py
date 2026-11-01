@@ -293,7 +293,7 @@ class CapacityRecoveryTests(unittest.TestCase):
         return authority, duplicates, candidates
 
     def manifest_disposition_fixture(self, suffix="default"):
-        control = self.base / f"disposition-control-{suffix}"
+        control = self.base / f"disposition-control-{suffix}" / "control"
         env = control / "apps/whatsapp-agent/.env.example"
         env.parent.mkdir(parents=True)
         env.write_bytes(b"EXAMPLE_ONLY=yes\n"); env.chmod(0o644)
@@ -853,6 +853,7 @@ class CapacityRecoveryTests(unittest.TestCase):
 
     def _seal_manifest_disposition(self, fixture):
         private_json(self.request, self.request_value(fixture["candidates"]))
+        plan = fixture["control"].parent / "plan.private.json"
         patch_values = dict(
             ROOT=fixture["control"], PREPARATIONS_ROOT=self.preparations,
             RELEASES_ROOT=self.releases,
@@ -860,8 +861,8 @@ class CapacityRecoveryTests(unittest.TestCase):
             DISPOSITION_MANIFEST_SHA256=sha(fixture["manifest"]),
             DISPOSITION_ID="fixture-disposition-v1")
         with mock.patch.multiple(MODULE, **patch_values), self.process_patch():
-            MODULE.audit_request(self.request, sha(self.request), self.plan)
-            MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
+            MODULE.audit_request(self.request, sha(self.request), plan)
+            MODULE.prepare_plan(plan, sha(plan), self.intent,
                                 self.commands, self.seal_manifest)
         intent = json.loads(self.intent.read_text())
         authorization = self.base / "disposition-authorization.private.json"
@@ -916,6 +917,114 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual((evidence["attemptedCommands"],
                           evidence["completedCommands"]),
                          (result["attemptedCommands"], result["completedCommands"]))
+
+    def test_manifest_disposition_complete_lifecycle_preserves_sealed_binding_across_roots(self):
+        fixture = self.manifest_disposition_fixture("relocated-lifecycle")
+
+        def phase_module(name):
+            root = self.preparations / name / "control"
+            sources = {
+                "apps/whatsapp-agent/.env.example":
+                    fixture["control"] / "apps/whatsapp-agent/.env.example",
+                "docs/evidence.md": fixture["control"] / "docs/evidence.md",
+                "config/capacity-recovery/closed-preparation-manifest-disposition.v1.json":
+                    fixture["manifest"],
+                "scripts/capacity-recovery.py": TOOL,
+            }
+            for relative, source in sources.items():
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(source.read_bytes())
+                destination.chmod(stat.S_IMODE(source.stat().st_mode))
+            spec = importlib.util.spec_from_file_location(
+                "capacity_recovery_" + name.replace("-", "_"),
+                root / "scripts/capacity-recovery.py")
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            self.assertEqual(Path(module.__file__).resolve(),
+                             (root / "scripts/capacity-recovery.py").resolve())
+            self.assertEqual(module.ROOT, root.resolve())
+            return root, module
+
+        audit_root, audit_module = phase_module("phase-audit")
+        prepare_root, prepare_module = phase_module("phase-prepare")
+        execute_root, execute_module = phase_module("phase-execute")
+        self.assertEqual(len({audit_root, prepare_root, execute_root}), 3)
+        audit_manifest = audit_module.DISPOSITION_MANIFEST_PATH
+        binding = {"path": str(audit_manifest), "sha256": sha(audit_manifest)}
+        candidates = [{**candidate, "dispositionManifest": binding}
+                      for candidate in fixture["candidates"]]
+        private_json(self.request, self.request_value(candidates))
+        plan = audit_root.parent / "plan.private.json"
+
+        common = dict(PREPARATIONS_ROOT=self.preparations, RELEASES_ROOT=self.releases,
+                      DISPOSITION_MANIFEST_SHA256=sha(audit_manifest),
+                      DISPOSITION_ID="fixture-disposition-v1")
+        with mock.patch.multiple(
+                audit_module, **common), \
+                mock.patch.object(audit_module, "_proc_targets", return_value=scan()):
+            audit_module.audit_request(self.request, sha(self.request), plan)
+
+        with mock.patch.multiple(
+                prepare_module, **common), \
+                mock.patch.object(prepare_module, "_proc_targets", return_value=scan()):
+            with self.assertRaisesRegex(prepare_module.Denied,
+                                        "DISPOSITION_MANIFEST_FIXED_BINDING"):
+                prepare_module._disposition_manifest(binding)
+            prepare_module.prepare_plan(plan, sha(plan), self.intent,
+                                        self.commands, self.seal_manifest)
+
+        intent = json.loads(self.intent.read_text())
+        self.assertTrue(all(item["dispositionManifest"] == binding
+                            for item in intent["candidates"]))
+        authorization = self.base / "relocated-authorization.private.json"
+        private_json(authorization, {
+            "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+            "authorization": "AUTHORIZE_ONCE", "intentSha256": sha(self.intent),
+            "commandsSha256": intent["commandsSha256"],
+            "paths": [item["path"] for item in intent["candidates"]],
+        })
+        receipt = self.base / "receipts/relocated-lifecycle"
+        receipt.parent.mkdir(mode=0o700)
+        with mock.patch.multiple(
+                execute_module, **common), \
+                mock.patch.object(execute_module, "_proc_targets", return_value=scan()):
+            result = execute_module.execute_intent(
+                self.intent, sha(self.intent), authorization, sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertTrue(all(not path.exists() for path in fixture["paths"]))
+        self.assertTrue(all(Path(entry["authority"]).exists()
+                            for entry in fixture["entries"]))
+
+    def test_manifest_disposition_relocated_binding_remains_closed(self):
+        fixture = self.manifest_disposition_fixture("relocated-binding-negative")
+        audit_root = self.preparations / "phase-audit-negative" / "control"
+        audit_manifest = audit_root / "config/disposition.json"
+        audit_manifest.parent.mkdir(parents=True)
+        audit_manifest.write_bytes(fixture["manifest"].read_bytes())
+        audit_manifest.chmod(0o600)
+        binding = {"path": str(audit_manifest), "sha256": sha(audit_manifest)}
+        current_root = self.preparations / "phase-current-negative" / "control"
+        current_manifest = current_root / "config/disposition.json"
+        with mock.patch.multiple(
+                MODULE, ROOT=current_root, PREPARATIONS_ROOT=self.preparations,
+                DISPOSITION_MANIFEST_PATH=current_manifest,
+                DISPOSITION_MANIFEST_SHA256=sha(audit_manifest)):
+            with self.assertRaisesRegex(
+                    MODULE.Denied, "DISPOSITION_MANIFEST_FIXED_BINDING"):
+                MODULE._disposition_manifest(
+                    {**binding, "path": str(current_manifest)},
+                    sealed_binding=binding)
+            for changed in (
+                    {**binding, "sha256": "0" * 64},
+                    {**binding, "path": str(audit_root / "config/other.json")},
+                    {**binding, "path": str(self.base / "control/config/disposition.json")},
+            ):
+                with self.subTest(binding=changed), \
+                        self.assertRaisesRegex(
+                            MODULE.Denied, "DISPOSITION_MANIFEST_FIXED_BINDING"):
+                    MODULE._disposition_manifest(changed, sealed_binding=changed)
 
     def test_manifest_disposition_partial_execution_never_repeats_completed_unlink(self):
         fixture = self.manifest_disposition_fixture("partial")

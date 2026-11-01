@@ -331,6 +331,38 @@ sintéticos cobrem 3/3 completo, drift sob locks, contenção indisponível,
 interrupções antes/depois do primeiro efeito e sentinela externo. Esta entrega é
 somente código/teste/documentação para revisão e não autoriza `execute` produtivo.
 
+O PR #305 foi integrado no merge
+`4e85ff75048ad428137d3497292f0906927c2cd2`, árvore testada
+`5f42de235ad9936ab8eaa23cd050a3fb421e0f2e`. A única autorização posterior
+materializou SHA-256
+`6bfaa944a4d3bb2701a6949d5cd7811bf90fb22578949b85ce22f2a5a80e3d48`
+e iniciou `execute` uma vez. A recaptura sob locks encerrou antes de qualquer
+`ATTEMPT` com
+`EXECUTE_RECAPTURE_DENY:DISPOSITION_MANIFEST_FIXED_BINDING`. Receipt
+`0e9631f8…`, journal `9a2762bc…`, terminal `63da1875…` e recaptura
+`cc82ebf3…` ficam preservados na custódia
+`p00-capacity-three-archives-4e85ff75-execute-v1`. Resultado terminal:
+`FAILED_RECONCILED`, 0/3 tentados, 0/3 concluídos, os três archives presentes e
+zero ganho físico. Capacidade posterior `8.388.939.776` bytes; nenhuma nova
+classificação ou exclusão foi iniciada. Não reutilizar autorização, intenção ou
+receipt para replay.
+
+Diagnóstico dirigido: plano e intenção apontam para o manifesto da custódia de
+audit `916f8d6b-v2`, SHA `b2b5bff4…`. Prepare-v2 executou a partir desse control
+root. Execute materializou o mesmo executor `fa323125…` em outro control root;
+por derivar `ROOT` de `__file__`, calculou outro caminho absoluto para o
+manifesto. O SHA histórico permaneceu igual, mas o caminho calculado divergiu e
+o arquivo não existia na nova localização. Prepare-v1 já havia exposto a mesma
+incompatibilidade ao relocar executor/manifesto; prepare-v2 usou o root original,
+mas a lição não foi aplicada à materialização do execute.
+
+Correção mínima vinculada ao PR #306: audit segue fixo ao manifesto local;
+recapturas posteriores reabrem apenas o binding exato previamente autenticado e
+selado, ainda preso ao SHA compilado, layout canônico e raiz de preparações.
+Teste integral sintético usa três localizações físicas e nega drift de caminho,
+SHA e escopo antes de qualquer efeito. Autorização `6bfaa944…` e receipt
+`0e9631f8…` permanecem terminais; não há autorização de replay.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico
