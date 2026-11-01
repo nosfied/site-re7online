@@ -64,6 +64,8 @@ jobs:
         run: python3 -m unittest -v scripts/ci/test-generation-retirement.py
       - name: Validate aggregate deploy-preparation admission
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-deploy-preparation-admission.py
+      - name: Validate preparation artifact lifecycle
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-preparation-artifact-lifecycle.py scripts/test_operational_preparers_v3.py
       - name: Validate canonical capacity recovery control plane
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery.py
       - name: Validate canonical capacity recovery supervisor

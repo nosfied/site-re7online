@@ -251,6 +251,18 @@ Não criar inputs por edição de baselines históricas para fazer capturas coin
 
 Input adicional ao coordenador anterior:
 
+- pedido de admissão schema 2 materializa uma árvore `preparation-producer-root`
+  com este entrypoint, coordenador, inventário, lifecycle e três dependências
+  históricas por caminho/hash fixos. Executar o entrypoint copiado dessa árvore;
+  copiar somente o arquivo principal não é suportado.
+- a mesma dependência lifecycle autenticada é materializada ao lado do
+  `generation-retirement.py` copiado; ambos os entrypoints fixam seu SHA e negam
+  ausência ou drift, sem procurar módulos no checkout.
+- `preparationArtifactContract` vincula o contrato materializado. Cada item fixa
+  `reservationRoot`, path/scope/owner, proteção/autoridade, operação, custo previsto
+  positivo e orçamento de bytes/inodes. O lock e a varredura abrangem filhos diretos
+  dessa raiz comum; não representam reserva global de todo o filesystem.
+
 - `review`: input do coordenador (estado READY/REVIEW para preparar, CONSUMED/
   REFUSED/SUPERSEDED para encerrar), fontes originais/dependências/runtime e revisão.
 - `captureBindings` contém exatamente `contextObservation` e `capacitySamples`:

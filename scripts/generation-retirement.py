@@ -16,6 +16,21 @@ import subprocess
 import sys
 from typing import Any
 
+import importlib.util
+
+PREPARATION_LIFECYCLE_SHA256 = "a67fb3361c17372896241469683104cb2e3bab3e892b8bf32127882612ad0f2a"
+_preparation_path = Path(__file__).resolve().parent / "preparation_artifact_lifecycle.py"
+try:
+    _preparation_raw = _preparation_path.read_bytes()
+except OSError as error:
+    raise RuntimeError("preparation_lifecycle_dependency_missing") from error
+if hashlib.sha256(_preparation_raw).hexdigest() != PREPARATION_LIFECYCLE_SHA256:
+    raise RuntimeError("preparation_lifecycle_dependency_drift")
+_preparation_spec = importlib.util.spec_from_file_location(
+    "preparation_artifact_lifecycle", _preparation_path)
+preparation_lifecycle = importlib.util.module_from_spec(_preparation_spec)
+_preparation_spec.loader.exec_module(preparation_lifecycle)
+
 SHA256 = re.compile(r"[0-9a-f]{64}")
 TERMINAL_DEPLOYMENT = {"DEPLOYED", "ROLLED_BACK", "SUPERSEDED"}
 PRESERVE_CLASSES = {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "PRIVATE_DATA_NEVER_RETIRE"}
@@ -2367,6 +2382,20 @@ def append_event(path: Path, value: dict[str, Any]) -> None:
     fsync_dir(path.parent)
 
 
+def review_preparation(args: argparse.Namespace) -> None:
+    """Close only the preparation lifecycle record; never remove an artifact."""
+    evidence_raw, _ = stable_private(args.evidence, args.evidence_sha256)
+    if digest_bytes(evidence_raw) != args.evidence_sha256:
+        deny("preparation_review_evidence")
+    result = preparation_lifecycle.close_lifecycle(
+        args.preparation_lifecycle, args.preparation_lifecycle_sha256,
+        args.state, args.evidence_sha256, args.reviewer, args.reason)
+    print(canonical({"result": "PREPARATION_LIFECYCLE_REVIEWED",
+                     "state": result["state"],
+                     "lifecycleSha256": digest_bytes(
+                         args.preparation_lifecycle.read_bytes())}).decode().strip())
+
+
 def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_sha256: str) -> list[dict[str, Any]]:
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
                 "authorizationGranted", "contractSha256", "lifecycleSha256",
@@ -2633,6 +2662,15 @@ def parser() -> argparse.ArgumentParser:
         prepare_parser.add_argument(f"--{name}", type=Path)
         prepare_parser.add_argument(f"--{name}-sha256")
     prepare_parser.set_defaults(handler=prepare)
+    preparation_parser = commands.add_parser("review-preparation")
+    preparation_parser.add_argument("--preparation-lifecycle", type=Path, required=True)
+    preparation_parser.add_argument("--preparation-lifecycle-sha256", required=True)
+    preparation_parser.add_argument("--evidence", type=Path, required=True)
+    preparation_parser.add_argument("--evidence-sha256", required=True)
+    preparation_parser.add_argument("--state", choices=("SANITIZED", "RETENTION_DEBT"), required=True)
+    preparation_parser.add_argument("--reviewer", required=True)
+    preparation_parser.add_argument("--reason", required=True)
+    preparation_parser.set_defaults(handler=review_preparation)
     execute_parser = commands.add_parser("execute")
     for name in ("intent", "authorization", "operational-state"):
         execute_parser.add_argument(f"--{name}", type=Path, required=True)

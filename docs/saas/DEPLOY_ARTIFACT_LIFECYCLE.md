@@ -1071,17 +1071,20 @@ Ela separa ativo, rollback, evidência, dado único, derivado e duplicado; idade
 tamanho isolados não autorizam retirada.
 
 
-## Extensão preventiva proposta — preparações volumosas (01/11/2026)
+## Extensão preventiva versionada — preparações volumosas (01/11/2026)
 
-**Estado: PROPOSTA / NÃO IMPLEMENTADA NEM INSTALADA POR ESTA ATUALIZAÇÃO.**
+**Estado: IMPLEMENTADA E ENSAIADA NO REPOSITÓRIO / NÃO INSTALADA NA VPS.**
 
 O gate de reviews já protege outputs de gerações. Archives volumosos criados em
 `backups/.../preparations` continuam fora dessa cobertura. O sucesso da retirada
 3/3 não fecha essa lacuna.
 
-Estender o lifecycle e a admissão existentes com `preparationArtifacts`, sem
-outro executor, launcher ou cron de limpeza. Antes da primeira alocação volumosa,
-o contrato deve identificar:
+O schema 2 da admissão materializa `preparationArtifacts` e uma árvore executável
+autenticada com o preparador, coordenador, inventário e dependências pinadas. O
+adapter versionado `operational_preparers_v3.py` autentica o contrato antes da
+primeira cópia ou compactação. A implementação reutiliza o lifecycle, o preparador e
+`generation-retirement.py review-preparation`, sem executor, launcher ou cron de
+limpeza novo. O contrato identifica:
 
 | Campo do contrato proposto | Finalidade |
 | --- | --- |
@@ -1093,19 +1096,29 @@ o contrato deve identificar:
 | Intenção/receipt/journal e respectivos hashes | Provar efeitos e permitir continuidade sem repetição |
 | Owner, prazo e impedimento nominal para dívida | Tornar dívida acompanhável, sem autorizar exclusão por idade |
 
-A proposta de bloqueio de nova preparação diante de OPEN ou dívida precisa ter
-escopo e consumidor explícitos no contrato. Não presumir que um diagnóstico antigo
-ou um tenant possa bloquear globalmente operações independentes. Capacidade é
-global; dados e efeitos dos tenants permanecem isolados.
+`OPEN` ou `RETENTION_DEBT` bloqueia somente artefato equivalente no mesmo `scope`.
+Operações independentes não são bloqueadas pela dívida de outro escopo. O contrato
+fixa uma `reservationRoot`; o mesmo lock serializa seus filhos diretos e as reservas
+abertas encontradas nesse domínio são somadas antes da alocação. Isso não é inventário
+de todo o filesystem nem cobre outra raiz. A capacidade livre atual ainda é medida no
+filesystem da raiz. Dados e efeitos dos tenants permanecem isolados.
 
 Admissão deve qualificar orçamento/reserva e preparação equivalente pendente antes
 da cópia. Finalize/rollback devem registrar sanitização ou dívida nominal, sem
 confundir dívida registrada com limpeza concluída. Falta de owner/prazo não pode
 ser resolvida inventando valor padrão ou descartando evidência.
 
-Aceite da implementação futura: teste com produtor/materializador e consumidor
-reais, negativa antes de alocação indevida, reuso de artefato válido, encerramento
-em sucesso/negação/rollback, interrupção com resíduo identificado e proibição de
-nova cópia equivalente sem resolução da pendência. Exigir código, regressões,
-runbook, estado e registro estruturado coerentes antes de declarar implantação.
-Esta proposta não modifica schemas nem habilita coleta ou retirada.
+O produtor grava `OPEN` antes do primeiro efeito; falha ou interrupção posterior
+grava `RETENTION_DEBT`. `SANITIZED` só é aceito pelo consumidor terminal quando os
+caminhos literais já estão ausentes; o consumidor não remove nada. Histórico sem
+registro continua histórico não classificado, nunca `SANITIZED` por inferência.
+Os testes cobrem materialização, produtor, duplicação, orçamento, resíduo e
+fechamento. Esta implementação versionada não autoriza instalação ou retirada.
+
+Cobertura comprovada: somente invocações pelo CLI/API de
+`operational_preparers_v3.py`. A busca de chamadores não encontrou integração desse
+adapter no produtor canônico `converta-release.py` nem em outro criador atual; o
+producer de release usa `build-output` e seu lifecycle de geração. Scripts e kits
+históricos que criaram archives em `preparations` não são retroativamente
+interceptados. Portanto esta é uma fronteira preventiva disponível e testada, não
+uma proibição técnica global de qualquer escrita manual nessa árvore.

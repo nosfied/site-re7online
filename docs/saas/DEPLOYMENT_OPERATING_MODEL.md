@@ -255,6 +255,11 @@ Os itens abaixo são históricos e **não utilizáveis**:
 - observador ou executor de ativação temporário em `/tmp`, inclusive polling de
   socket com amostra única logo após `pm2 start`;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
+- Preparações volumosas sem `preparationArtifacts` autenticado e lifecycle `OPEN`
+  antes da alocação quando usam o adapter versionado. Schema legado continua
+  compatível. A fronteira de equivalência é o scope; reservas abrangem somente a
+  `reservationRoot` comum sob o lock do adapter. Produtores históricos/manuais não
+  são tecnicamente interceptados por esse contrato.
 
 ## Histórico de produção — observação de 28/10/2026 (superada)
 

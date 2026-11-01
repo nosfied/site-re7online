@@ -13,7 +13,24 @@ from pathlib import Path
 import stat
 import tarfile
 
+
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+RUNTIME_DEPENDENCIES = {
+    'scripts/preparation_artifact_lifecycle.py': 'a67fb3361c17372896241469683104cb2e3bab3e892b8bf32127882612ad0f2a',
+    'scripts/operational_preparation_review.py': 'cbcb7896adeb9a90504c78c4c043644486a311a4d0c7daa9b9bcfd3b1e7a2cbc',
+    'scripts/operational-retention-report.py': '7d76a567b35c006bca53f45300f8543164095fb3b373414b6889a013a298a9fb',
+    'docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/capacity_budget.py': '58d621121124481b9d3040321a131511b8e88918f49c16175dad716fb4b10a83',
+    'docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/saved_reference_capture.py': '36e29e431ebdb8afeea5f034c4e1291739e50ab887c02b17b5de250832f93aa8',
+    'docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/third-withdrawal/references.py': '07c14ea6db6fbe1e918128258a422e385690384b08eff9d5de0e62e9871b0683',
+}
+for relative, expected in RUNTIME_DEPENDENCIES.items():
+    if hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() != expected:
+        raise ValueError('preparation_runtime_dependency_drift:' + relative)
+preparation_spec = importlib.util.spec_from_file_location(
+    'preparation_artifact_lifecycle', HERE / 'preparation_artifact_lifecycle.py')
+preparation_lifecycle = importlib.util.module_from_spec(preparation_spec)
+preparation_spec.loader.exec_module(preparation_lifecycle)
 COORDINATOR_SHA = 'cbcb7896adeb9a90504c78c4c043644486a311a4d0c7daa9b9bcfd3b1e7a2cbc'
 p = HERE / 'operational_preparation_review.py'
 if hashlib.sha256(p.read_bytes()).hexdigest() != COORDINATOR_SHA:
@@ -145,6 +162,9 @@ def preparation_adapter(kind, value, parent, runners, now=None):
     lock = None
     generation = None
     output = None
+    lifecycle_contract = None
+    lifecycle_path = None
+    realized = []
     denial_name = None
     try:
         lock = os.open('.future-preparation.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600, dir_fd=directory)
@@ -157,12 +177,30 @@ def preparation_adapter(kind, value, parent, runners, now=None):
         review, result = evaluate(value, now)
         require(review['state'] in ('READY', 'REVIEW'), 'preparation_state_invalid')
         operations = value['operations']; operation_guard(review, operations, result['artifactDecisions'])
+        reservation = {'reservedBytes': 0, 'reservedInodes': 0,
+                       'requiredBytes': 0, 'requiredInodes': 0}
+        if operations:
+            binding = value.get('preparationArtifactContract')
+            require(isinstance(binding, dict) and set(binding) == {'path', 'sha256'},
+                    'preparation_artifact_contract_binding_missing')
+            lifecycle_contract, _ = preparation_lifecycle.stable_contract(
+                Path(binding['path']), binding['sha256'])
+            require(lifecycle_contract['generationId'] == review['generation'],
+                    'preparation_artifact_generation_drift')
+            reservation = preparation_lifecycle.validate_existing_lifecycles(parent, lifecycle_contract)
         require(all(op['kind'] in runners for op in operations), 'operation_runner_missing')
         generation = local_generation(parent, review['generation'])
+        if operations:
+            preparation_lifecycle.authenticate_operations(lifecycle_contract, operations, generation)
         require(not any(generation.is_relative_to(Path(os.path.abspath(r))) for r in review['inventoryRoots']), 'generation_inside_inventory')
         os.mkdir(generation.name, mode=0o700, dir_fd=directory)
         output = c.reporter.private_output_directory(generation)
+        if operations:
+            lifecycle_path = generation / 'preparation-artifacts.lifecycle.private.json'
+            exclusive_json(output, lifecycle_path.name,
+                           preparation_lifecycle.lifecycle_value(lifecycle_contract, 'OPEN', 'CREATION_STARTED'))
         exclusive_json(output, 'before.private.json', dict(result, adapter=kind, coordinatorSha256=COORDINATOR_SHA))
+        exclusive_json(output, 'preparation-capacity.private.json', reservation)
         exclusive_json(output, 'operations.intent.private.json', {'operations': operations, 'automaticRetry': False})
         for i, operation in enumerate(operations):
             # Reread exact sources and inputs, reject drift/staleness at every boundary.
@@ -176,6 +214,12 @@ def preparation_adapter(kind, value, parent, runners, now=None):
                 require((a.st_dev, a.st_ino) == (b.st_dev, b.st_ino), 'generation_directory_drift')
             finally: os.close(current)
             runners[operation['kind']](operation, generation)
+        if operations:
+            realized = preparation_lifecycle.measure_realized(lifecycle_contract)
+            preparation_lifecycle.replace_lifecycle(
+                lifecycle_path,
+                preparation_lifecycle.lifecycle_value(lifecycle_contract, 'OPEN',
+                                                      'CREATION_COMPLETED', realized=realized))
         # Post-staging inventory uses the existing reader; no atomic/production PASS is inferred.
         inventory = c.reporter.inventory([generation])
         require(inventory['metadataCompleteWithinBudget'], 'post_inventory_incomplete')
@@ -187,6 +231,18 @@ def preparation_adapter(kind, value, parent, runners, now=None):
         return {'result': 'LOCAL_PREPARED', 'adapter': kind, 'executionAuthorized': False}
     except BaseException as e:
         if output is not None:
+            if lifecycle_path is not None and lifecycle_contract is not None:
+                if not realized:
+                    try:
+                        realized = preparation_lifecycle.measure_realized(
+                            lifecycle_contract, require_all=False, enforce_budget=False)
+                    except (OSError, ValueError):
+                        realized = []
+                preparation_lifecycle.replace_lifecycle(
+                    lifecycle_path,
+                    preparation_lifecycle.lifecycle_value(lifecycle_contract, 'RETENTION_DEBT',
+                                                          'CREATION_INTERRUPTED', type(e).__name__,
+                                                          realized))
             exclusive_json(output, 'denial.private.json', {'result': 'DENY', 'errorClass': type(e).__name__,
                            'automaticRetry': False, 'partialGenerationPreserved': True})
         elif denial_name is not None:

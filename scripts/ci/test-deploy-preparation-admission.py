@@ -132,6 +132,27 @@ class AdmissionTests(unittest.TestCase):
             ],
         }
 
+    def producer_artifacts(self):
+        root = SCRIPT.resolve().parents[1]
+        roles = {
+            "preparation-producer": "scripts/operational_preparers_v3.py",
+            "preparation-review": "scripts/operational_preparation_review.py",
+            "preparation-inventory": "scripts/operational-retention-report.py",
+            "preparation-lifecycle": "scripts/preparation_artifact_lifecycle.py",
+            "capacity-dependency": "docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/capacity_budget.py",
+            "capture-dependency": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/saved_reference_capture.py",
+            "reference-dependency": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/third-withdrawal/references.py",
+        }
+        result = []
+        for role, relative in roles.items():
+            source = root / relative
+            private = self.sources / 'producer-root' / relative
+            private.parent.mkdir(parents=True, exist_ok=True)
+            private.write_bytes(source.read_bytes()); private.chmod(0o600)
+            result.append({"role": role, "sourcePath": str(private),
+                           "sourceSha256": hashlib.sha256(private.read_bytes()).hexdigest()})
+        return result
+
     def run_request(self, value):
         request = self.private / "request.private.json"
         request.write_text(json.dumps(value))
@@ -163,7 +184,8 @@ class AdmissionTests(unittest.TestCase):
             ["generation-retirement.py", "converta-release.py", "deploy-artifact-roots.json"],
         )
         for name in ("generation-retirement.py", "converta-release.py",
-                     "deploy-artifact-roots.json", "operational-state.private.json",
+                     "deploy-artifact-roots.json", "preparation_artifact_lifecycle.py",
+                     "operational-state.private.json",
                      "admission-report.private.json"):
             self.assertEqual((root / name).stat().st_mode & 0o777, 0o600)
         self.assertFalse(any(self.base.rglob("__pycache__")))
@@ -172,6 +194,123 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
         self.assertEqual(reused["result"], "P00_AGGREGATE_ADMISSION_REUSED")
         self.assertTrue(reused["reusedExactDestination"])
+
+    def test_v2_materializes_closed_preparation_artifact_contract(self):
+        value = self.request()
+        value["schemaVersion"] = 2
+        value["finalRoot"] = str(self.private / "admitted-v2")
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = self.producer_artifacts()
+        value["preparationArtifacts"] = [{
+            "path": str(self.private / "future/archive.tar"),
+            "scope": "api:fixture", "owner": "release-owner",
+            "budgetBytes": 4096, "budgetInodes": 1,
+            "protection": "DERIVED_WITH_AUTHORITY",
+            "authority": {"path": str(self.paths["contract"]),
+                          "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
+            "terminalDisposition": "SANITIZE_AFTER_USE",
+            "equivalenceSha256": "b" * 64,
+            "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                          "predictedBytes": 4096, "predictedInodes": 1},
+        }]
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        contract_path = Path(report["preparationArtifactContract"]["path"])
+        self.assertEqual(hashlib.sha256(contract_path.read_bytes()).hexdigest(),
+                         report["preparationArtifactContract"]["sha256"])
+        self.assertEqual(json.loads(contract_path.read_text())["preparationArtifacts"],
+                         value["preparationArtifacts"])
+        dependency = Path(report["preparationRuntimeDependencies"][0]["path"])
+        self.assertEqual(dependency.parent, Path(value["finalRoot"]))
+        self.assertEqual(hashlib.sha256(dependency.read_bytes()).hexdigest(),
+                         report["preparationRuntimeDependencies"][0]["sha256"])
+
+    def test_copied_generation_retirement_reviews_preparation_without_checkout(self):
+        value = self.request()
+        value["finalRoot"] = str(self.private / "copied-retirement")
+        preparation_artifacts = [{
+            "path": str(self.private / "future/absent.tar"), "scope": "api:fixture",
+            "owner": "owner", "budgetBytes": 4096, "budgetInodes": 1,
+            "protection": "DERIVED_WITH_AUTHORITY",
+            "authority": {"path": str(self.paths["contract"]),
+                          "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
+            "terminalDisposition": "SANITIZE_AFTER_USE", "equivalenceSha256": "b" * 64,
+            "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                          "predictedBytes": 4096, "predictedInodes": 1}}]
+        retirement_source = SCRIPT.parent / "generation-retirement.py"
+        private_retirement = next(Path(item["sourcePath"]) for item in value["controlPlaneArtifacts"]
+                                  if item["role"] == "generation-retirement")
+        private_retirement.write_bytes(retirement_source.read_bytes()); private_retirement.chmod(0o644)
+        for item in value["controlPlaneArtifacts"]:
+            if item["role"] == "generation-retirement":
+                item["sourceSha256"] = hashlib.sha256(private_retirement.read_bytes()).hexdigest()
+        admitted, report = self.run_request(value)
+        self.assertEqual(admitted.returncode, 0, admitted.stderr)
+        root = Path(value["finalRoot"]); copied = root / "generation-retirement.py"
+        dependency = root / "preparation_artifact_lifecycle.py"
+        lifecycle = self.private / "synthetic-preparation-lifecycle.private.json"
+        lifecycle.write_text(json.dumps({
+            "schemaVersion": 1, "generationId": value["generationId"], "state": "OPEN",
+            "event": "CREATION_COMPLETED", "reservationRoot": str(self.private),
+            "preparationArtifacts": preparation_artifacts,
+        }, sort_keys=True, separators=(",", ":")) + "\n"); lifecycle.chmod(0o600)
+        evidence = self.private / "synthetic-review-evidence.private.json"
+        evidence.write_text("{}\n"); evidence.chmod(0o600)
+        environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+        command = [sys.executable, "-B", str(copied), "review-preparation",
+                   "--preparation-lifecycle", str(lifecycle),
+                   "--preparation-lifecycle-sha256", hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+                   "--evidence", str(evidence),
+                   "--evidence-sha256", hashlib.sha256(evidence.read_bytes()).hexdigest(),
+                   "--state", "SANITIZED", "--reviewer", "fixture-owner",
+                   "--reason", "synthetic copied-entrypoint review"]
+        reviewed = subprocess.run(command, capture_output=True, text=True, env=environment)
+        self.assertEqual(reviewed.returncode, 0, reviewed.stdout + reviewed.stderr)
+        self.assertEqual(json.loads(lifecycle.read_text())["state"], "SANITIZED")
+        help_result = subprocess.run([sys.executable, "-B", str(copied), "--help"],
+                                     capture_output=True, text=True, env=environment)
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        for legacy in ("bootstrap-legacy", "prepare", "execute"):
+            self.assertIn(legacy, help_result.stdout)
+        original = dependency.read_bytes(); dependency.unlink()
+        missing = subprocess.run([sys.executable, "-B", str(copied), "--help"],
+                                 capture_output=True, text=True, env=environment)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("preparation_lifecycle_dependency_missing", missing.stderr)
+        dependency.write_bytes(original); dependency.chmod(0o600)
+        dependency.write_bytes(original + b"\n# drift\n")
+        altered = subprocess.run([sys.executable, "-B", str(copied), "--help"],
+                                 capture_output=True, text=True, env=environment)
+        self.assertNotEqual(altered.returncode, 0)
+        self.assertIn("preparation_lifecycle_dependency_drift", altered.stderr)
+
+    def test_v2_rejects_open_schema_and_invalid_budget(self):
+        value = self.request(); value["schemaVersion"] = 2
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = []
+        value["preparationArtifacts"] = [{"path": "/tmp/x", "extra": True}]
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 2)
+        self.assertTrue(any(item.startswith("preparationArtifacts:") for item in report["errors"]))
+
+    def test_v2_missing_runtime_dependency_denies_without_custody(self):
+        value = self.request(); value["schemaVersion"] = 2
+        value["finalRoot"] = str(self.private / "missing-dependency")
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = self.producer_artifacts()[:-1]
+        value["preparationArtifacts"] = [{
+            "path": str(self.private / "future/archive.tar"), "scope": "api:fixture",
+            "owner": "owner", "budgetBytes": 4096, "budgetInodes": 1,
+            "protection": "DERIVED_WITH_AUTHORITY",
+            "authority": {"path": str(self.paths["contract"]),
+                          "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
+            "terminalDisposition": "SANITIZE_AFTER_USE", "equivalenceSha256": "b" * 64,
+            "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                          "predictedBytes": 4096, "predictedInodes": 1}}]
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 2)
+        self.assertTrue(any("reference-dependency:missing" in error for error in report["errors"]))
+        self.assertFalse(Path(value["finalRoot"]).exists())
 
     def test_aggregate_denial_reports_all_known_defects_without_partial_root(self):
         value = self.request()
