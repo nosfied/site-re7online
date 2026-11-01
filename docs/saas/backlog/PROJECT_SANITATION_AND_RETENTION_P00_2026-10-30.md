@@ -312,6 +312,13 @@ Terminal `f4792439…`, telemetrias `2454a7f5…`/`7b1fdd1e…`, índice
 e autoridades seguem presentes e a custódia parou antes de `prepare`/`execute`.
 O resultado é prova reutilizável, não autorização destrutiva.
 
+Próxima transição, ainda somente em revisão: reutilizar o plano
+`502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`
+em `prepare` contido por 512 MiB, swap zero e prazo monotônico. Não repetir
+`audit`. A correção do leitor autentica apenas a primeira linha limitada da
+telemetria; eventos posteriores não invalidam a prova de início. `execute`, locks,
+journal, elegibilidade e os três caminhos permanecem inalterados.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico

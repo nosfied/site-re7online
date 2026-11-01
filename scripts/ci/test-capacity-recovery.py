@@ -1843,6 +1843,22 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(cache["currentProcessScan"]["processesObserved"], 11)
         self.assertFalse(self.intent.exists())
 
+    def test_valid_plan_revalidates_and_seals_prepare_outputs_without_effects(self):
+        self.audit()
+        candidates_before = [self.cache.exists(), self.runtime.exists()]
+        manifest = self.prepare()
+        intent = json.loads(self.intent.read_text())
+        commands = self.commands.read_text().splitlines()
+        sealed = json.loads(self.seal_manifest.read_text())
+        self.assertEqual(manifest, sealed)
+        self.assertEqual(intent["state"], "SEALED_FOR_EXPLICIT_AUTHORIZATION")
+        self.assertEqual(sealed["state"], "SEALED_FOR_EXPLICIT_AUTHORIZATION")
+        self.assertEqual(sealed["planSha256"], sha(self.plan))
+        self.assertEqual(sealed["intentSha256"], sha(self.intent))
+        self.assertEqual(sealed["commandsSha256"], sha(self.commands))
+        self.assertEqual(len(commands), 2)
+        self.assertEqual([self.cache.exists(), self.runtime.exists()], candidates_before)
+
     def seal_and_authorize(self, candidates=None):
         self.audit(candidates); self.prepare()
         intent_sha = sha(self.intent)
@@ -2352,7 +2368,7 @@ from pathlib import Path
 spec=importlib.util.spec_from_file_location("supervisor",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 child=[sys.executable,"-B","-c",sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]]
 m.executor_argv=lambda _args:child
-sys.argv=["supervisor","--stdout-output",sys.argv[6],"--stderr-output",sys.argv[7],"--terminal-output",sys.argv[8],"--telemetry-output",sys.argv[9],"--supervisor-telemetry-output",sys.argv[10],"prepare","--plan","/synthetic-plan","--plan-sha256","0"*64,"--intent-output","/synthetic-intent","--commands-output","/synthetic-commands","--manifest-output","/synthetic-manifest"]
+sys.argv=["supervisor","--stdout-output",sys.argv[6],"--stderr-output",sys.argv[7],"--terminal-output",sys.argv[8],"--telemetry-output",sys.argv[9],"--supervisor-telemetry-output",sys.argv[10],"execute","--intent","/synthetic-intent","--intent-sha256","0"*64,"--authorization","/synthetic-authorization","--authorization-sha256","1"*64,"--receipt-root","/synthetic-receipt"]
 m.main()
 ''')
         stdout = root / "stdout"

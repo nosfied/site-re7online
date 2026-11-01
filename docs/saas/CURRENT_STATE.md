@@ -178,6 +178,11 @@ filho 57.942.016 bytes e duração 165,185 s. A comparação posterior
 três candidatos continuam presentes. Índice `5b2635c2…`. `prepare`, `execute` e
 exclusão não foram executados nem autorizados por este resultado.
 
+O plano PASS `502cc4b7…` está concluído e deve ser reutilizado byte-exatamente;
+outro audit é proibido. O patch local em revisão contém somente `prepare` no
+mesmo cgroup validado e a autenticação limitada da primeira linha da telemetria.
+Nenhuma fase produtiva posterior foi executada.
+
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
 memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou

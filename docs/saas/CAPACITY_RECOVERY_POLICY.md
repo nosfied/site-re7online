@@ -7,14 +7,14 @@ adaptações de `generation-retirement.py` para cache npm são proibidos. Execu�
 longas usam exclusivamente `scripts/capacity-recovery-supervisor.py`, que chama o
 executor irmão sem shell e preserva canais e código de saída. Na fase `audit`, o
 supervisor exige um escopo transitório do `systemd --user` em cgroup v2 antes de
-executar o auditor. `MemoryMax`, `MemorySwapMax=0`, `OOMPolicy=kill` e
+executar `audit` ou `prepare`. `MemoryMax`, `MemorySwapMax=0`, `OOMPolicy=kill` e
 `memory.oom.group=1` limitam a memória agregada do Python, Node/PM2 CLI, helper e
-demais descendentes da auditoria; RSS continua evidência, não mecanismo de limite.
+demais descendentes da fase; RSS continua evidência, não mecanismo de limite.
 `RuntimeMaxSec` usa relógio monotônico e encerra somente o control group desse
 escopo. O daemon PM2 e os serviços já existentes ficam fora dele. Ausência do
 escopo, limites divergentes ou impossibilidade de autenticá-lo negam antes do
-executor. `prepare` e `execute` conservam o comportamento histórico de sinais,
-locks e journals.
+executor. `execute` conserva o comportamento histórico de sinais, locks e
+journals; esta extensão não altera sua aquisição de locks nem seus efeitos.
 
 ## Estados e separação de autoridade
 
@@ -337,6 +337,17 @@ Produção permaneceu inalterada, comprovada por
 `e53272249a28b9d7d152c401b8f063f0967f8a89b079278ee028ec428ad86631`;
 os três archives e suas autoridades continuam presentes. Esta etapa parou antes
 de `prepare`/`execute` e não autoriza exclusão.
+
+O plano PASS acima é a entrada imutável da próxima fase; outro `audit` é
+proibido. A extensão local seguinte reutiliza no `prepare` a mesma contenção já
+validada (`MemoryMax=536870912`, swap zero, prazo monotônico e encerramento do
+scope confirmado), sem alterar elegibilidade, locks, journals ou `execute`.
+Também corrige somente a autenticação do primeiro evento da telemetria: o arquivo
+produtivo tinha 102.129 bytes, enquanto o leitor anterior lia 65.537 bytes e
+rejeitava o arquivo inteiro por exceder 64 KiB. O novo leitor limita a primeira
+linha a 64 KiB, autentica `telemetry_started` e não rejeita eventos posteriores.
+A evidência original permanece imutável. Esta seção descreve patch local em
+revisão; não registra `prepare` produtivo executado.
 
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e

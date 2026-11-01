@@ -2,8 +2,8 @@
 """Closed supervisor for durable capacity-recovery execution evidence.
 
 It invokes only the sibling canonical executor and preserves its channels/exit
-code. Audit is additionally confined to an authenticated transient cgroup v2
-scope; prepare and execute retain the historical signal behavior.
+code. Audit and prepare are confined to an authenticated transient cgroup v2
+scope; execute retains the historical signal behavior.
 """
 
 from __future__ import annotations
@@ -35,8 +35,10 @@ AUDIT_TIMEOUT_MAX_SECONDS = 30 * 60
 AUDIT_STOP_GRACE_SECONDS = 5
 AUDIT_RECOVERY_WAIT_SECONDS = 10
 AUDIT_RECOVERY_TERM_GRACE_SECONDS = 1
-AUDIT_SCOPE_PREFIX = "re7-capacity-audit-"
-INTERNAL_ACTION = "__contained-audit"
+CONTAINED_SCOPE_PREFIX = "re7-capacity-"
+INTERNAL_AUDIT_ACTION = "__contained-audit"
+INTERNAL_PREPARE_ACTION = "__contained-prepare"
+INTERNAL_ACTIONS = {INTERNAL_AUDIT_ACTION, INTERNAL_PREPARE_ACTION}
 EXECUTOR_PROOF_MAX_BYTES = 64 * 1024
 AUDIT_RESOURCE_SAMPLE_INTERVAL_SECONDS = 1.0
 AUDIT_RESOURCE_SAMPLE_LIMIT = AUDIT_TIMEOUT_MAX_SECONDS + 2
@@ -346,18 +348,23 @@ def verify_contained_cgroup(unit: str, memory_max_bytes: int,
 
 def internal_parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(add_help=False)
-    result.add_argument("action", choices=[INTERNAL_ACTION])
+    result.add_argument("action", choices=sorted(INTERNAL_ACTIONS))
     result.add_argument("--unit", required=True)
     result.add_argument("--memory-max-bytes", type=int, required=True)
     result.add_argument("--containment-output", type=Path, required=True)
-    result.add_argument("--request", type=Path, required=True)
-    result.add_argument("--request-sha256", required=True)
-    result.add_argument("--plan-output", type=Path, required=True)
+    result.add_argument("--request", type=Path)
+    result.add_argument("--request-sha256")
+    result.add_argument("--plan-output", type=Path)
+    result.add_argument("--plan", type=Path)
+    result.add_argument("--plan-sha256")
+    result.add_argument("--intent-output", type=Path)
+    result.add_argument("--commands-output", type=Path)
+    result.add_argument("--manifest-output", type=Path)
     result.add_argument("--telemetry-output", type=Path, required=True)
     return result
 
 
-def contained_audit_main() -> None:
+def contained_phase_main() -> None:
     args = internal_parser().parse_args()
     try:
         relative, projection = verify_contained_cgroup(args.unit, args.memory_max_bytes)
@@ -375,9 +382,22 @@ def contained_audit_main() -> None:
         os.close(fd)
     if code:
         raise SystemExit(code)
-    executor_args = argparse.Namespace(
-        action="audit", request=args.request, request_sha256=args.request_sha256,
-        plan_output=args.plan_output, telemetry_output=args.telemetry_output)
+    if args.action == INTERNAL_AUDIT_ACTION:
+        required = (args.request, args.request_sha256, args.plan_output)
+        if any(item is None for item in required):
+            raise SystemExit(78)
+        executor_args = argparse.Namespace(
+            action="audit", request=args.request, request_sha256=args.request_sha256,
+            plan_output=args.plan_output, telemetry_output=args.telemetry_output)
+    else:
+        required = (args.plan, args.plan_sha256, args.intent_output,
+                    args.commands_output, args.manifest_output)
+        if any(item is None for item in required):
+            raise SystemExit(78)
+        executor_args = argparse.Namespace(
+            action="prepare", plan=args.plan, plan_sha256=args.plan_sha256,
+            intent_output=args.intent_output, commands_output=args.commands_output,
+            manifest_output=args.manifest_output, telemetry_output=args.telemetry_output)
     os.execv(str(PYTHON), executor_argv(executor_args))
 
 
@@ -409,6 +429,9 @@ def parser() -> argparse.ArgumentParser:
     prepare.add_argument("--intent-output", type=Path, required=True)
     prepare.add_argument("--commands-output", type=Path, required=True)
     prepare.add_argument("--manifest-output", type=Path, required=True)
+    prepare.add_argument("--containment-output", type=Path, required=True)
+    prepare.add_argument("--memory-max-bytes", type=int, required=True)
+    prepare.add_argument("--timeout-seconds", type=int, required=True)
     execute = actions.add_parser("execute")
     execute.add_argument("--intent", type=Path, required=True)
     execute.add_argument("--intent-sha256", required=True)
@@ -438,12 +461,14 @@ def validate_audit_limits(args: argparse.Namespace) -> None:
         raise RuntimeError("AUDIT_DURATION_BUDGET")
 
 
-def audit_scope_unit() -> str:
-    return f"{AUDIT_SCOPE_PREFIX}{os.getpid()}-{secrets.token_hex(8)}.scope"
+def contained_scope_unit(action: str) -> str:
+    return f"{CONTAINED_SCOPE_PREFIX}{action}-{os.getpid()}-{secrets.token_hex(8)}.scope"
 
 
 def systemd_scope_argv(args: argparse.Namespace, unit: str) -> list[str]:
-    return [
+    internal_action = (INTERNAL_AUDIT_ACTION if args.action == "audit"
+                       else INTERNAL_PREPARE_ACTION)
+    result = [
         str(SYSTEMD_RUN), "--user", "--scope", "--quiet", f"--unit={unit}",
         "--property=MemoryAccounting=yes",
         f"--property=MemoryMax={args.memory_max_bytes}",
@@ -451,13 +476,22 @@ def systemd_scope_argv(args: argparse.Namespace, unit: str) -> list[str]:
         f"--property=RuntimeMaxSec={args.timeout_seconds}s",
         f"--property=TimeoutStopSec={AUDIT_STOP_GRACE_SECONDS}s",
         "--property=KillMode=control-group", "--property=SendSIGKILL=yes",
-        str(PYTHON), "-B", str(Path(__file__).resolve()), INTERNAL_ACTION,
+        str(PYTHON), "-B", str(Path(__file__).resolve()), internal_action,
         "--unit", unit, "--memory-max-bytes", str(args.memory_max_bytes),
         "--containment-output", str(args.containment_output),
-        "--request", str(args.request), "--request-sha256", args.request_sha256,
-        "--plan-output", str(args.plan_output),
-        "--telemetry-output", str(args.telemetry_output),
     ]
+    if args.action == "audit":
+        result.extend(("--request", str(args.request),
+                       "--request-sha256", args.request_sha256,
+                       "--plan-output", str(args.plan_output)))
+    else:
+        result.extend(("--plan", str(args.plan),
+                       "--plan-sha256", args.plan_sha256,
+                       "--intent-output", str(args.intent_output),
+                       "--commands-output", str(args.commands_output),
+                       "--manifest-output", str(args.manifest_output)))
+    result.extend(("--telemetry-output", str(args.telemetry_output)))
+    return result
 
 
 def systemctl(args: list[str], *, timeout: int = 5) -> subprocess.CompletedProcess[str]:
@@ -512,12 +546,19 @@ def executor_telemetry_started(path: Path) -> bool:
                 before.st_gid != os.getegid() or stat.S_IMODE(before.st_mode) != 0o600 or
                 before.st_nlink != 1):
             return False
-        raw = os.read(fd, EXECUTOR_PROOF_MAX_BYTES + 1)
+        raw = bytearray()
+        while len(raw) <= EXECUTOR_PROOF_MAX_BYTES:
+            chunk = os.read(fd, min(4096, EXECUTOR_PROOF_MAX_BYTES + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+            if b"\n" in chunk:
+                break
         after = os.fstat(fd)
         if ((before.st_dev, before.st_ino) != (after.st_dev, after.st_ino) or
                 len(raw) > EXECUTOR_PROOF_MAX_BYTES):
             return False
-        first, separator, _rest = raw.partition(b"\n")
+        first, separator, _rest = bytes(raw).partition(b"\n")
         if not separator:
             return False
         row = json.loads(first)
@@ -723,17 +764,19 @@ def publish_terminal(path: Path, value: dict[str, Any]) -> None:
         os.close(parent)
 
 
-def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
+def run_contained_phase(args: argparse.Namespace, out_fd: int, err_fd: int,
                         supervisor_fd: int) -> int:
     validate_audit_limits(args)
     trusted_system_binary(SYSTEMD_RUN)
     trusted_system_binary(SYSTEMCTL)
     trusted_system_binary(PYTHON, allow_root_symlink=True)
-    for output in (args.containment_output, args.telemetry_output, args.plan_output):
+    phase_outputs = ([args.plan_output] if args.action == "audit" else
+                     [args.intent_output, args.commands_output, args.manifest_output])
+    for output in [args.containment_output, args.telemetry_output, *phase_outputs]:
         if output.exists() or output.is_symlink():
             raise FileExistsError(output)
 
-    unit = audit_scope_unit()
+    unit = contained_scope_unit(args.action)
     child: subprocess.Popen[bytes] | None = None
     received_signal: int | None = None
     forwarded_signal = False
@@ -760,7 +803,7 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                 for number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
     started_ns = time.monotonic_ns()
     try:
-        append(supervisor_fd, "before_child", unit=unit, action="audit",
+        append(supervisor_fd, "before_child", unit=unit, action=args.action,
                memoryMaxBytes=args.memory_max_bytes,
                timeoutSeconds=args.timeout_seconds,
                containmentMechanism="SYSTEMD_USER_SCOPE_CGROUP_V2")
@@ -876,7 +919,7 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
         terminal = {"schemaVersion": 3,
                     "state": ("TERMINAL" if termination["state"] ==
                               "TERMINATED_CONFIRMED" else "RECOVERY_PENDING"),
-                    "action": "audit",
+                    "action": args.action,
                     "exitCode": code, "signal": -code if code < 0 else received_signal,
                     "reason": reason, "childPid": child.pid, "unit": unit,
                     "executorState": executor_state,
@@ -922,8 +965,8 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
 
 def main() -> None:
     os.umask(0o077)
-    if len(sys.argv) > 1 and sys.argv[1] == INTERNAL_ACTION:
-        contained_audit_main()
+    if len(sys.argv) > 1 and sys.argv[1] in INTERNAL_ACTIONS:
+        contained_phase_main()
         return
     args = parser().parse_args()
     out_fd = exclusive(args.stdout_output)
@@ -937,21 +980,21 @@ def main() -> None:
     except Exception:
         os.close(out_fd); os.close(err_fd)
         raise
-    if args.action == "audit":
+    if args.action in {"audit", "prepare"}:
         try:
-            code = run_contained_audit(args, out_fd, err_fd, supervisor_fd)
+            code = run_contained_phase(args, out_fd, err_fd, supervisor_fd)
         except AuditPostLaunchError as error:
             state = ("TERMINAL" if error.termination_state ==
                      "TERMINATED_CONFIRMED" else "RECOVERY_PENDING")
             reason = ("AUDIT_POST_LAUNCH_FAILURE" if state == "TERMINAL"
                       else "AUDIT_RECOVERY_PENDING")
-            append(supervisor_fd, "post_launch_finalization_failure", action="audit",
+            append(supervisor_fd, "post_launch_finalization_failure", action=args.action,
                    predicate=str(error), unit=error.unit, childPid=error.child_pid,
                    executorState=error.executor_state,
                    terminationState=error.termination_state, reason=reason)
             if not args.terminal_output.exists() and not args.terminal_output.is_symlink():
                 publish_terminal(args.terminal_output, {
-                    "schemaVersion": 3, "state": state, "action": "audit",
+                    "schemaVersion": 3, "state": state, "action": args.action,
                     "exitCode": 78, "signal": None, "reason": reason,
                     "predicate": str(error), "unit": error.unit,
                     "childPid": error.child_pid,
@@ -960,11 +1003,11 @@ def main() -> None:
                 })
             code = 78
         except Exception as error:
-            append(supervisor_fd, "containment_denied", action="audit",
+            append(supervisor_fd, "containment_denied", action=args.action,
                    predicate=type(error).__name__, detail=str(error))
             os.fsync(out_fd); os.fsync(err_fd)
             publish_terminal(args.terminal_output, {
-                "schemaVersion": 3, "state": "TERMINAL", "action": "audit",
+                "schemaVersion": 3, "state": "TERMINAL", "action": args.action,
                 "exitCode": 78, "signal": None,
                 "reason": "AUDIT_CONTAINMENT_NOT_APPLIED",
                 "predicate": type(error).__name__, "detail": str(error),
