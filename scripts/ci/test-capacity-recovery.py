@@ -1952,6 +1952,32 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(observed["memberCount"], 1)
         self.assertTrue(requested)
 
+    def test_long_archive_comparison_emits_bounded_temporal_progress(self):
+        fixture = self.manifest_disposition_fixture("temporal-progress")
+        entry = fixture["entries"][0]
+        manifest = json.loads(fixture["manifest"].read_text())
+        telemetry_path = self.base / "temporal-progress.jsonl"
+        with fixture["patches"], \
+                mock.patch.object(MODULE, "TAR_PROGRESS_TIME_INTERVAL_SECONDS", 0), \
+                mock.patch.object(MODULE, "TAR_PROGRESS_EVENT_LIMIT", 8):
+            MODULE._TELEMETRY = MODULE.Telemetry(telemetry_path)
+            try:
+                MODULE._authenticate_disposition_archive(
+                    Path(entry["path"]), entry, manifest)
+            finally:
+                MODULE._TELEMETRY.close()
+                MODULE._TELEMETRY = None
+        rows = [json.loads(line) for line in telemetry_path.read_text().splitlines()]
+        progress = [row for row in rows if row["phase"] == "tar_scan_progress"]
+        self.assertLessEqual(len(progress), 8)
+        self.assertIn("archive_hash", {row.get("progressKind") for row in progress})
+        self.assertIn("archive_payload", {row.get("progressKind") for row in progress})
+        self.assertIn("authority_leaf", {row.get("progressKind") for row in progress})
+        self.assertTrue(all(isinstance(row.get("progressBytes"), int) for row in progress))
+        serialized = telemetry_path.read_text()
+        self.assertNotIn("representative-payload", serialized)
+        self.assertNotIn("environment", serialized)
+
     def test_incremental_relation_digest_is_framed_and_deterministic(self):
         rows = [{"path": "a", "size": 1}, {"path": "bc", "size": 2}]
         first = MODULE.FramedRelationDigest()

@@ -68,6 +68,54 @@ não presumido como limpo pelo contexto Python.
 O escopo 3/3, a telemetria preservada e a proibição de repetição estão no
 [plano P00 de sanitização](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md).
 
+A tentativa posterior sob o merge de control plane
+`c0146133f5c2e03cce8623876c61cfe320de0c5b`, custódia
+`p00-capacity-three-archives-c0146133-v1`, também é terminal e irrepetível.
+O supervisor autenticou o cgroup de 256 MiB e encerrou em
+`AUDIT_MEMORY_MAX`: `scopeMemoryPeakBytes=268435456`, `exitCode=-9`, escopo
+vazio/encerrado e nenhum plano ou efeito. O primeiro archive concluiu 7.056
+membros; o segundo chegou a `before_authority_compare`, sem progresso de membro
+persistido, e o terceiro não iniciou. `memory.stat`, consumo individual dos PIDs
+do escopo e progresso interno no intervalo final não foram coletados, portanto a
+composição do OOM produtivo não é declarada. Request, terminal e telemetrias
+permanecem na custódia; produção, dump, guarda e locks ficaram preservados.
+
+O ensaio local dirigido mostrou a lacuna do orçamento, sem atribuir retroativamente
+a causa produtiva: 180 MiB físicos aconselhados como frios, sem residência inicial
+medida, autenticados pelo mesmo percurso, levaram
+o cgroup exatamente a 256 MiB com aproximadamente 249 MiB em `file`, enquanto o
+RSS observado permaneceu perto de 31 MiB; o kernel local conseguiu reclaim e o
+ensaio passou. Payload esparso de 200 MiB e 3.000 arquivos/192 MiB descompactados
+também passaram com picos do cgroup de aproximadamente 33/28 MiB. Assim, cardinalidade,
+payload lógico e RSS isolados não explicam o evento; nova operação exige orçamento
+com residência inicial e recuperação medidas, além de regressão de `memory.stat`, não replay do
+request `2b1d438d...`.
+
+A entrega local complementar preserva essa negativa e acrescenta observabilidade
+limitada no supervisor/executor. O perfil sintético 3/3 reutilizou
+458.973.184 bytes apenas como escala física declarada do lote — não como volume
+descompactado produtivo — e seus archives somaram 459.113.917 bytes lógicos. A
+qualificação única reutilizou a fixture e capturou sua residência imediatamente
+antes do lançamento: zero de 224.144 páginas residentes, sem lacunas e sem
+hashing/leitura intermediária. O autenticador 3/3 concluiu em 4,146 s no teto de
+512 MiB: `oom/oom_kill/high=0`, `max=1508`, `file=515.809.280`,
+`anon=19.091.456`, `kernel=1.880.064`, dirty/writeback/shmem zero e RSS somado
+30.838.784 bytes. As alocações anônimas e o RSS permaneceram estáveis enquanto
+`file` dominou a pressão. O cgroup desapareceu após o término, sem amostra direta
+de decaimento posterior.
+
+Não há fundamento para a fórmula pico + 128 MiB: 128 MiB era orçamento de disco
+da custódia. A conclusão vigente é
+`SYNTHETIC_PROFILE_512_MIB_QUALIFIED / VPS_OPERATIONAL_BUDGET_NOT_APPROVED`.
+O perfil sintético frio foi qualificado; ele não prova o volume descompactado
+produtivo nem explica a composição do OOM anterior. Código, regressões e essa
+qualificação são somente entrega local/em revisão; nenhum novo `audit`, `prepare`
+ou `execute` foi executado na VPS. Resultado, terminal, telemetria do supervisor
+e plano: `1601d3ea7a357046bb3b38f24f2ea765e5f7fd33cdff3771e65bde9956e6d337`,
+`2a2a4d2e20080d2de1d2a6050f636fa0d5cdff96bca2be820c4b84805f1390f0`,
+`cf0357ff48713f39372f1c3616edb2c2e92b9a01a281776411f844a78e494548` e
+`cc496bdb21ca7aa808fc2ed2ef875dc6eae249c26964a0583f6374c04ef3f2a5`.
+
 A extensão mínima seguinte está implementada e ensaiada somente em checkout
 isolado: `audit` roda em escopo transitório cgroup v2 do `systemd --user`, com
 memória agregada, swap zero e prazo monotônico; impossibilidade de aplicar ou

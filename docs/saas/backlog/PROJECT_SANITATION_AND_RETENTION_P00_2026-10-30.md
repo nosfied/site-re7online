@@ -172,6 +172,65 @@ o predicado de pré-lançamento. A espera é limitada e falha de kill/confirmaç
 termina em `RECOVERY_PENDING`. O ensaio afetado comprovou descendente resistente
 encerrado no escopo e sentinela externo preservado, sem nova tentativa produtiva.
 
+#### Tentativa c0146133-v1 — `AUDIT_MEMORY_MAX`, terminal
+
+A custódia `p00-capacity-three-archives-c0146133-v1` consumiu uma única auditoria
+do mesmo lote 3/3, request SHA-256
+`2b1d438d71af5d22dfb0c253b8595656f1ab27b59d4a910062fa07b767272f7e`.
+O supervisor encerrou em `AUDIT_MEMORY_MAX`, sinal 9, pico do cgroup igual ao
+limite de 268.435.456 bytes e escopo confirmado vazio. Terminal
+`b62a630b4ca092b7f58a2d6d5ddcecab58deec0b559acf4925813a62d4ebd9f5`;
+telemetrias `51008da92a34eff0257043068bde0fffaa2c578885b3a8737a47989d3cfb9e73`
+e `f2c8ce4a8d4c8a485e1a338f491b8f44b34a22d7ec18731895c59f47730335d7`.
+Plano ausente e zero efeitos.
+
+| Candidato | Última prova persistida |
+| --- | --- |
+| `worker-reactive-afbb7455.tar.gz` | hash, 7.056 membros e autoridade concluídos |
+| `frontend-9f4cbe0f-v2.tar.gz` | hash concluído; `before_authority_compare`; zero progresso persistido |
+| `frontend-fa60-css-corrected.tar.gz` | não iniciado |
+
+O diagnóstico local não promoveu hipótese a fato produtivo. Casos esparsos e
+3.000 arquivos/192 MiB passaram com baixo pico. Um payload físico de 180 MiB,
+aconselhado como frio mas sem residência inicial medida,
+atingiu o teto de 256 MiB com cerca de 249 MiB em `file`, mesmo com RSS próximo de
+31 MiB, e concluiu somente porque houve reclaim local. Como a tentativa produtiva
+não preservou `memory.stat` nem consumo por PID no intervalo final de 27,2 s, a
+composição do OOM permanece não atribuível. O orçamento de 256 MiB está recusado
+para replay; qualquer proposta futura exige residência inicial, recuperação e
+componentes do cgroup medidos, sem alterar candidatos ou reaproveitar esta autorização.
+
+#### Telemetria complementar e perfil frio local
+
+A mesma entrega local amplia apenas observabilidade: o supervisor amostra uma vez
+por segundo, com limites fechados, `memory.stat`, eventos, processos do cgroup e
+correlação com o executor; o autenticador emite progresso temporal limitado ao
+longo de hashes/payloads/autoridades. Falha de coleta permanece visível como
+lacuna e não vira completude presumida.
+
+O perfil dirigido percorreu o autenticador completo pelo supervisor real com três
+archives sintéticos próprios, sem `drop_caches` global ou bytes produtivos. A
+soma de 458.973.184 bytes foi escolhida somente a partir do espaço físico
+declarado do lote original; não é prova de seu volume descompactado. Os archives
+sintéticos ocuparam 459.113.917 bytes lógicos. Na qualificação única, os seis
+arquivos tiveram residência capturada imediatamente antes do lançamento: zero de
+224.144 páginas residentes, sem lacunas ou leitura intermediária. Em 4,146 s, o
+cgroup alcançou o teto de 536.870.912 bytes. Na última amostra viva, tomada no
+mesmo instante, `file`, `anon`, `kernel`, shmem, dirty/writeback e RSS somado
+foram 515.809.280, 19.091.456, 1.880.064, zero, zero e 30.838.784 bytes. O
+terminal registrou `max=1508`, mas `high=oom=oom_kill=0`; os três candidatos
+passaram sob pressão. Não se presume que todo `file` seja recuperável, e não há
+amostra direta de decaimento depois que o cgroup desapareceu.
+
+Os 128 MiB pertenciam ao orçamento de **disco da custódia**, não a uma margem
+canônica de memória, e essa fórmula foi retirada. Critério atual:
+`SYNTHETIC_PROFILE_512_MIB_QUALIFIED / VPS_OPERATIONAL_BUDGET_NOT_APPROVED`.
+A fixture complementa — não substitui — a regressão de 30k/60k membros. A
+qualificação sintética não prova o volume descompactado dos archives produtivos
+nem a composição do OOM anterior. Próximo ato: revisão desta entrega. Produção e
+a custódia terminal continuam proibidas para replay; qualquer operação na VPS
+depende de autorização separada e orçamento representativo.
+
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
 continuam nas seções próprias; não são reabertos por esta correção.

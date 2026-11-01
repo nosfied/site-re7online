@@ -155,6 +155,94 @@ custódia. A contenção limita a memória e a duração, mas não autoriza limp
 automática: o resíduo continua limitado pelo contrato do registro, deve ser
 identificado literalmente e tratado pelo procedimento de custódia já existente.
 
+### Tentativa terminal c0146133-v1 e diagnóstico dirigido
+
+A única auditoria da custódia
+`p00-capacity-three-archives-c0146133-v1`, request SHA-256
+`2b1d438d71af5d22dfb0c253b8595656f1ab27b59d4a910062fa07b767272f7e`,
+autenticou o escopo e terminou em `AUDIT_MEMORY_MAX`. O terminal SHA-256
+`b62a630b4ca092b7f58a2d6d5ddcecab58deec0b559acf4925813a62d4ebd9f5`
+registra `exitCode=-9`, `signal=9`, pico do cgroup de 268.435.456 bytes,
+`oom=1`, `oom_kill=2`, `oom_group_kill=1` e encerramento confirmado. Não houve
+plano, `prepare`, `execute` ou efeito. Telemetrias do executor e supervisor:
+`51008da92a34eff0257043068bde0fffaa2c578885b3a8737a47989d3cfb9e73`
+e `f2c8ce4a8d4c8a485e1a338f491b8f44b34a22d7ec18731895c59f47730335d7`.
+
+O primeiro archive concluiu 7.056 membros com último RSS amostrado de 34.066.432
+bytes. O segundo teve o hash concluído e publicou `before_authority_compare` em
+23,255 s; não houve `tar_scan_progress` para ele. O supervisor publicou o OOM em
+50,451 s. O intervalo de aproximadamente 27,2 s não contém amostra de progresso,
+`memory.stat`, PIDs/RSS individuais nem eventos do kernel. O valor 268.435.456 é
+`memory.peak`/`MemoryMax` do cgroup; 277.770.240 é `ru_maxrss` reportado por
+`RUSAGE_CHILDREN` depois de `wait()` e não deve ser interpretado como a mesma
+medida nem como RSS instantâneo do executor.
+
+Ensaios locais sintéticos, sem bytes produtivos, confrontaram o percurso real do
+autenticador sob cgroup v2 de 256 MiB. Um payload esparso de 200 MiB passou com
+pico do cgroup de 32.919.552 bytes; 3.000 arquivos regulares totalizando 192 MiB
+descompactados antes do marco de 4.096 membros passaram com 27.844.608 bytes.
+Um payload físico incompressível de 180 MiB já aquecido passou com 24.137.728
+bytes. Depois de `POSIX_FADV_DONTNEED`, o mesmo caso aconselhado como frio atingiu
+exatamente
+268.435.456 bytes: máximos amostrados de `file=248.836.096`, `anon=19.587.072`,
+`kernel=1.081.344` e RSS do processo de 31.260.672 bytes; houve reclaim local e
+conclusão. O retorno de `POSIX_FADV_DONTNEED` não comprovou sozinho a residência
+anterior ou posterior das páginas; esse ensaio demonstra pressão de cache, não
+uma leitura fria autenticada nem a composição do OOM produtivo, cujo
+`memory.stat` não foi coletado.
+
+Antes de nova autorização, a regressão necessária deve executar autoridade e
+archive físicos com residência inicial medida no cgroup real, amostrar
+`memory.stat` e PIDs durante toda a passagem e avaliar pico, eventos, recuperação
+e progresso conjuntamente. Eventual margem obrigatória precisa ter fundamento
+versionado ou medido; não é derivada de orçamento de disco.
+Elevar apenas `RLIMIT_AS`, contar nomes ou observar RSS não cobre esse caso. O
+request e a custódia c014 são terminais e não podem ser repetidos.
+
+Essa regressão foi materializada localmente, ainda sem operação produtiva. O
+supervisor passa a publicar, no JSONL já limitado, amostras periódicas de
+`memory.current`, `memory.peak`, `memory.events`, componentes selecionados de
+`memory.stat`, PID/start ticks/UIDs/RSS do escopo e correlação sanitizada com o
+último evento do executor. São no máximo 1.802 amostras, uma por segundo, e 32
+PIDs por amostra; truncagem ou leitura indisponível tornam-se lacunas nominais.
+O executor também emite progresso temporal, limitado aos mesmos 256 eventos por
+candidato, durante hash, payload e comparação da autoridade, sem nomes ou
+conteúdo.
+
+O perfil dirigido criou três archives e autoridades exclusivamente sintéticos.
+Os tamanhos das três folhas somam 458.973.184 bytes porque reutilizam apenas a
+escala física declarada do lote original; isso **não** comprova o volume
+descompactado dos archives produtivos. Os archives sintéticos somaram
+459.113.917 bytes lógicos. Pelo supervisor/cgroup real, com
+`MemoryMax=536870912`, a qualificação única reutilizou esses arquivos sem
+recriá-los. Imediatamente antes do lançamento, após `fsync`,
+`POSIX_FADV_DONTNEED` e `mincore`, os seis arquivos registraram zero de 224.144
+páginas residentes e nenhuma lacuna. Não houve hashing ou leitura dos arquivos
+entre essa captura e o supervisor. O autenticador completo passou os três
+candidatos em 4,146 s e atingiu o teto. Na última amostra viva, tomada no mesmo
+instante, `file=515.809.280`, `anon=19.091.456`, `kernel=1.880.064`, `shmem=0`,
+dirty/writeback zero e RSS somado de 30.838.784 bytes. `high`, `oom` e
+`oom_kill` permaneceram zero; o contador terminal `max=1508` comprova pressão e
+reclaim suficiente para concluir, não OOM. O cgroup desapareceu após o término,
+portanto não existe amostra direta de decaimento posterior. Cache `file` limpo é
+potencialmente recuperável, mas não é presumido integralmente recuperável.
+
+Não existe fundamento canônico ou medido para exigir 128 MiB acima do pico; os
+128 MiB anteriores eram orçamento **de disco da custódia**, não margem de
+memória. A conclusão corrigida é
+`SYNTHETIC_PROFILE_512_MIB_QUALIFIED / VPS_OPERATIONAL_BUDGET_NOT_APPROVED`.
+Ela qualifica somente o perfil sintético frio: não qualifica replay produtivo,
+pois a equivalência de volume descompactado não foi provada e a composição do
+OOM produtivo permanece desconhecida. Evidências: resultado
+`1601d3ea7a357046bb3b38f24f2ea765e5f7fd33cdff3771e65bde9956e6d337`, terminal
+`2a2a4d2e20080d2de1d2a6050f636fa0d5cdff96bca2be820c4b84805f1390f0`,
+telemetria do supervisor
+`cf0357ff48713f39372f1c3616edb2c2e92b9a01a281776411f844a78e494548` e plano
+`cc496bdb21ca7aa808fc2ed2ef875dc6eae249c26964a0583f6374c04ef3f2a5`.
+O próximo ato é revisão desta entrega; qualquer operação na VPS continua
+dependente de autorização separada e de orçamento representativo do volume
+produtivo desconhecido.
+
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
 `frontend-fa60-css-corrected.tar.gz`, total físico declarado de `458.973.184`

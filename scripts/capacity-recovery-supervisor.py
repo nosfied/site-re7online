@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import resource
+import re
 import secrets
 import signal
 import stat
@@ -37,6 +38,16 @@ AUDIT_RECOVERY_TERM_GRACE_SECONDS = 1
 AUDIT_SCOPE_PREFIX = "re7-capacity-audit-"
 INTERNAL_ACTION = "__contained-audit"
 EXECUTOR_PROOF_MAX_BYTES = 64 * 1024
+AUDIT_RESOURCE_SAMPLE_INTERVAL_SECONDS = 1.0
+AUDIT_RESOURCE_SAMPLE_LIMIT = AUDIT_TIMEOUT_MAX_SECONDS + 2
+AUDIT_SCOPE_PID_LIMIT = 32
+EXECUTOR_CORRELATION_TAIL_BYTES = 64 * 1024
+MEMORY_STAT_FIELDS = {
+    "anon", "file", "kernel", "kernel_stack", "pagetables", "sock", "shmem",
+    "file_mapped", "file_dirty", "file_writeback", "swapcached", "slab",
+    "active_anon", "inactive_anon", "active_file", "inactive_file",
+    "workingset_refault_anon", "workingset_refault_file",
+}
 
 
 class AuditPostLaunchError(RuntimeError):
@@ -149,6 +160,168 @@ def cgroup_events(path: Path) -> dict[str, int] | None:
                 (line.split() for line in (path / "memory.events").read_text().splitlines())}
     except (OSError, ValueError):
         return None
+
+
+def _keyed_numbers(path: Path, allowed: set[str]) -> tuple[dict[str, int] | None, str | None]:
+    try:
+        values: dict[str, int] = {}
+        for line in path.read_text().splitlines():
+            key, raw = line.split()
+            if key in allowed:
+                values[key] = int(raw)
+        return values, None
+    except FileNotFoundError:
+        return None, "NOT_FOUND"
+    except PermissionError:
+        return None, "PERMISSION_DENIED"
+    except (OSError, ValueError):
+        return None, "UNREADABLE"
+
+
+def _process_start_ticks(raw: str) -> int:
+    close = raw.rfind(") ")
+    if close < 0:
+        raise ValueError("stat format")
+    fields = raw[close + 2:].split()
+    return int(fields[19])
+
+
+def _scope_process(pid: int, proc_root: Path) -> tuple[dict[str, Any] | None, str | None]:
+    root = proc_root / str(pid)
+    try:
+        before = _process_start_ticks((root / "stat").read_text())
+        status: dict[str, str] = {}
+        for line in (root / "status").read_text().splitlines():
+            key, separator, value = line.partition(":")
+            if separator and key in {"Uid", "VmRSS"}:
+                status[key] = value.strip()
+        uid_values = [int(item) for item in status["Uid"].split()]
+        if len(uid_values) != 4:
+            raise ValueError("uid format")
+        rss_fields = status.get("VmRSS", "0 kB").split()
+        if len(rss_fields) != 2 or rss_fields[1] != "kB":
+            raise ValueError("rss format")
+        rss_bytes = int(rss_fields[0]) * 1024
+        after = _process_start_ticks((root / "stat").read_text())
+        if before != after:
+            return None, "IDENTITY_CHANGED"
+        return {"pid": pid, "startTicks": before, "uids": uid_values,
+                "rssBytes": rss_bytes}, None
+    except FileNotFoundError:
+        return None, "PROCESS_VANISHED" if not root.exists() else "PROCESS_FILE_MISSING"
+    except PermissionError:
+        return None, "PERMISSION_DENIED"
+    except (OSError, ValueError, KeyError):
+        return None, "UNREADABLE"
+
+
+def _executor_correlation(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    fd = -1
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or
+                info.st_gid != os.getegid() or stat.S_IMODE(info.st_mode) != 0o600 or
+                info.st_nlink != 1):
+            return None, "IDENTITY"
+        offset = max(0, info.st_size - EXECUTOR_CORRELATION_TAIL_BYTES)
+        os.lseek(fd, offset, os.SEEK_SET)
+        raw = os.read(fd, EXECUTOR_CORRELATION_TAIL_BYTES)
+        after = os.fstat(fd)
+        if (info.st_dev, info.st_ino) != (after.st_dev, after.st_ino):
+            return None, "IDENTITY_CHANGED"
+        if offset:
+            _prefix, separator, raw = raw.partition(b"\n")
+            if not separator:
+                return None, "TAIL_INCOMPLETE"
+        rows = [line for line in raw.splitlines() if line]
+        if not rows:
+            return None, "EMPTY"
+        value = json.loads(rows[-1])
+        if not isinstance(value, dict):
+            return None, "SCHEMA"
+        phase = value.get("phase")
+        progress_kind = value.get("progressKind")
+        numeric = (value.get("monotonicNs"), value.get("memberCount"),
+                   value.get("progressBytes"))
+        if (not isinstance(phase, str) or re.fullmatch(r"[a-z0-9_]{1,64}", phase) is None or
+                (progress_kind is not None and
+                 (not isinstance(progress_kind, str) or
+                  re.fullmatch(r"[a-z0-9_]{1,64}", progress_kind) is None)) or
+                any(item is not None and
+                    (not isinstance(item, int) or isinstance(item, bool) or item < 0)
+                    for item in numeric)):
+            return None, "SCHEMA"
+        return {
+            "phase": phase,
+            "monotonicNs": value.get("monotonicNs"),
+            "memberCount": value.get("memberCount"),
+            "progressKind": progress_kind,
+            "progressBytes": value.get("progressBytes"),
+        }, None
+    except FileNotFoundError:
+        return None, "NOT_FOUND"
+    except PermissionError:
+        return None, "PERMISSION_DENIED"
+    except (OSError, ValueError, TypeError):
+        return None, "UNREADABLE"
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def scope_resource_snapshot(containment: dict[str, Any] | None,
+                            telemetry_path: Path, *, cgroup_fs: Path = CGROUP_FS,
+                            proc_root: Path = Path("/proc")) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "scopeMemoryCurrentBytes": None, "scopeMemoryPeakBytes": None,
+        "scopeMemoryEvents": None, "scopeMemoryStat": None,
+        "scopeProcesses": [], "observationGaps": [],
+        "executorCorrelation": None,
+    }
+    if not containment or containment.get("state") != "PASS":
+        result["observationGaps"].append("CONTAINMENT_NOT_AUTHENTICATED")
+        return result
+    relative = containment.get("cgroup")
+    if not isinstance(relative, str) or not relative.startswith("/") or ".." in Path(relative).parts:
+        result["observationGaps"].append("CGROUP_IDENTITY")
+        return result
+    path = cgroup_fs / relative.lstrip("/")
+    result["scopeMemoryCurrentBytes"] = cgroup_number(path, "memory.current")
+    if result["scopeMemoryCurrentBytes"] is None:
+        result["observationGaps"].append("memory.current:UNAVAILABLE")
+    result["scopeMemoryPeakBytes"] = cgroup_number(path, "memory.peak")
+    if result["scopeMemoryPeakBytes"] is None:
+        result["observationGaps"].append("memory.peak:UNAVAILABLE")
+    result["scopeMemoryEvents"] = cgroup_events(path)
+    if result["scopeMemoryEvents"] is None:
+        result["observationGaps"].append("memory.events:UNAVAILABLE")
+    result["scopeMemoryStat"], stat_gap = _keyed_numbers(path / "memory.stat", MEMORY_STAT_FIELDS)
+    if stat_gap is not None:
+        result["observationGaps"].append(f"memory.stat:{stat_gap}")
+    try:
+        pids = sorted({int(item) for item in (path / "cgroup.procs").read_text().splitlines()})
+        result["scopeProcessCount"] = len(pids)
+        if len(pids) > AUDIT_SCOPE_PID_LIMIT:
+            result["scopeProcessesTruncated"] = True
+            result["observationGaps"].append("cgroup.procs:TRUNCATED")
+        for pid in pids[:AUDIT_SCOPE_PID_LIMIT]:
+            process, gap = _scope_process(pid, proc_root)
+            if process is not None:
+                result["scopeProcesses"].append(process)
+            if gap is not None:
+                result["observationGaps"].append(f"pid:{pid}:{gap}")
+    except FileNotFoundError:
+        result["observationGaps"].append("cgroup.procs:NOT_FOUND")
+    except PermissionError:
+        result["observationGaps"].append("cgroup.procs:PERMISSION_DENIED")
+    except (OSError, ValueError):
+        result["observationGaps"].append("cgroup.procs:UNREADABLE")
+    correlation, correlation_gap = _executor_correlation(telemetry_path)
+    result["executorCorrelation"] = correlation
+    if correlation_gap is not None:
+        result["observationGaps"].append(f"executorTelemetry:{correlation_gap}")
+    return result
 
 
 def verify_contained_cgroup(unit: str, memory_max_bytes: int,
@@ -569,6 +742,10 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
     sampled_peak: int | None = None
     sampled_current: int | None = None
     sampled_events: dict[str, int] | None = None
+    resource_samples = 0
+    last_resource_sample: dict[str, Any] | None = None
+    final_resource_sample: dict[str, Any] | None = None
+    next_resource_sample = 0.0
     termination: dict[str, Any] | None = None
     post_launch_failure: str | None = None
     launcher_exited_scope_active = False
@@ -599,6 +776,15 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                     append(supervisor_fd, "containment_authenticated", unit=unit,
                            containmentState=containment.get("state"),
                            cgroup=containment.get("cgroup"))
+            now = time.monotonic()
+            if (containment is not None and now >= next_resource_sample and
+                    resource_samples < AUDIT_RESOURCE_SAMPLE_LIMIT):
+                last_resource_sample = scope_resource_snapshot(
+                    containment, args.telemetry_output)
+                append(supervisor_fd, "scope_resource_sample", unit=unit,
+                       sampleOrdinal=resource_samples + 1, **last_resource_sample)
+                resource_samples += 1
+                next_resource_sample = now + AUDIT_RESOURCE_SAMPLE_INTERVAL_SECONDS
             snapshot = scope_memory_snapshot(containment)
             current = snapshot["scopeMemoryCurrentBytes"]
             peak = snapshot["scopeMemoryPeakBytes"]
@@ -647,6 +833,14 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
             code = 78
         child_rss_peak = child_rss_peak_bytes()
         containment = read_containment(args.containment_output)
+        if containment is not None and resource_samples < AUDIT_RESOURCE_SAMPLE_LIMIT:
+            final_sample = scope_resource_snapshot(containment, args.telemetry_output)
+            append(supervisor_fd, "scope_resource_sample", unit=unit,
+                   sampleOrdinal=resource_samples + 1, finalSample=True, **final_sample)
+            resource_samples += 1
+            final_resource_sample = final_sample
+            if final_sample.get("scopeMemoryCurrentBytes") is not None:
+                last_resource_sample = final_sample
         properties = termination.get("scope", {}).get("properties", {})
         result = properties.get("Result")
         executor_state = executor_execution_state(
@@ -675,7 +869,10 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                scopeMemoryEvents=sampled_events, scopeResult=result,
                scopeCleanupOk=cleanup_ok, executorState=executor_state,
                terminationState=termination["state"],
-               postLaunchFailure=post_launch_failure)
+               postLaunchFailure=post_launch_failure,
+               resourceSampleCount=resource_samples,
+               lastScopeResourceSample=last_resource_sample,
+               finalScopeResourceSample=final_resource_sample)
         terminal = {"schemaVersion": 3,
                     "state": ("TERMINAL" if termination["state"] ==
                               "TERMINATED_CONFIRMED" else "RECOVERY_PENDING"),
@@ -691,6 +888,9 @@ def run_contained_audit(args: argparse.Namespace, out_fd: int, err_fd: int,
                     "childRssPeakBytes": child_rss_peak,
                     "scopeMemoryPeakBytes": sampled_peak,
                     "scopeMemoryEvents": sampled_events,
+                    "resourceSampleCount": resource_samples,
+                    "lastScopeResourceSample": last_resource_sample,
+                    "finalScopeResourceSample": final_resource_sample,
                     "scopeResult": result, "scopeCleanupOk": cleanup_ok,
                     "scopeTermination": termination.get("scope"),
                     "killAttempts": termination.get("killAttempts", []),
