@@ -312,12 +312,24 @@ Terminal `f4792439…`, telemetrias `2454a7f5…`/`7b1fdd1e…`, índice
 e autoridades seguem presentes e a custódia parou antes de `prepare`/`execute`.
 O resultado é prova reutilizável, não autorização destrutiva.
 
-Próxima transição, ainda somente em revisão: reutilizar o plano
-`502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`
-em `prepare` contido por 512 MiB, swap zero e prazo monotônico. Não repetir
-`audit`. A correção do leitor autentica apenas a primeira linha limitada da
-telemetria; eventos posteriores não invalidam a prova de início. `execute`, locks,
-journal, elegibilidade e os três caminhos permanecem inalterados.
+O plano `502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`
+foi consumido byte-exatamente por um único `prepare` contido por 512 MiB, swap
+zero e prazo monotônico. Audit e prepare não devem ser repetidos. Intenção,
+comandos e manifesto selados permanecem imutáveis na custódia; o leitor autentica
+somente a primeira linha limitada da telemetria e eventos posteriores não
+invalidam a prova de início. Nenhum `execute` ou efeito foi realizado por essa
+transição.
+
+A revisão local seguinte estende somente o supervisor canônico para iniciar
+`execute` no mesmo scope contido de 512 MiB, swap zero e prazo monotônico. O
+executor permanece a única autoridade de locks, journal, receipt e efeitos. O
+supervisor lê evidência existente sem repará-la: journal sem `ATTEMPT` comprova
+zero efeitos, receipt íntegro reconcilia falha ou sucesso e qualquer efeito não
+integralmente reconciliado termina `RECOVERY_PENDING`. Não há replay automático,
+receipt sintético ou regeneração da intenção selada. Regressões com caminhos
+sintéticos cobrem 3/3 completo, drift sob locks, contenção indisponível,
+interrupções antes/depois do primeiro efeito e sentinela externo. Esta entrega é
+somente código/teste/documentação para revisão e não autoriza `execute` produtivo.
 
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases

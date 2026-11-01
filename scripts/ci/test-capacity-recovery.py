@@ -27,6 +27,12 @@ PRODUCER_SPEC = importlib.util.spec_from_file_location("converta_release", PRODU
 PRODUCER = importlib.util.module_from_spec(PRODUCER_SPEC)
 assert PRODUCER_SPEC.loader is not None
 PRODUCER_SPEC.loader.exec_module(PRODUCER)
+SUPERVISOR_TOOL = Path(__file__).resolve().parents[1] / "capacity-recovery-supervisor.py"
+SUPERVISOR_SPEC = importlib.util.spec_from_file_location(
+    "capacity_recovery_supervisor", SUPERVISOR_TOOL)
+SUPERVISOR = importlib.util.module_from_spec(SUPERVISOR_SPEC)
+assert SUPERVISOR_SPEC.loader is not None
+SUPERVISOR_SPEC.loader.exec_module(SUPERVISOR)
 
 
 def sha(path: Path) -> str:
@@ -890,16 +896,26 @@ class CapacityRecoveryTests(unittest.TestCase):
         fixture = self.manifest_disposition_fixture("complete")
         patch_values, authorization = self._seal_manifest_disposition(fixture)
         receipt = self.base / "receipts/disposition-complete"; receipt.parent.mkdir(mode=0o700)
+        sealed_intent_sha = sha(self.intent)
+        sealed_authorization_sha = sha(authorization)
         with mock.patch.multiple(MODULE, **patch_values), self.process_patch():
-            result = MODULE.execute_intent(self.intent, sha(self.intent), authorization,
-                                           sha(authorization), receipt)
+            result = MODULE.execute_intent(self.intent, sealed_intent_sha, authorization,
+                                           sealed_authorization_sha, receipt)
         self.assertEqual(result["state"], "COMPLETED")
+        self.assertEqual(sha(self.intent), sealed_intent_sha)
+        self.assertEqual(sha(authorization), sealed_authorization_sha)
         self.assertTrue(all(not path.exists() for path in fixture["paths"]))
         self.assertTrue(all(Path(entry["authority"]).exists() for entry in fixture["entries"]))
         events = [json.loads(line) for line in
                   (receipt / "command-journal.private.jsonl").read_text().splitlines()]
         self.assertEqual(sum(item["event"] == "VERIFIED" for item in events),
                          result["completedCommands"])
+        evidence = SUPERVISOR.execution_effect_evidence(
+            receipt, self.intent, sealed_intent_sha, sealed_authorization_sha)
+        self.assertEqual(evidence["state"], "COMPLETED_RECONCILED")
+        self.assertEqual((evidence["attemptedCommands"],
+                          evidence["completedCommands"]),
+                         (result["attemptedCommands"], result["completedCommands"]))
 
     def test_manifest_disposition_partial_execution_never_repeats_completed_unlink(self):
         fixture = self.manifest_disposition_fixture("partial")
@@ -1901,6 +1917,11 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(result["attemptedCommands"], 0)
         self.assertIn("PREPARATION_ARCHIVE_PROCESS_REFERENCE", result["failurePredicate"])
         self.assertTrue(self.archive.exists())
+        evidence = SUPERVISOR.execution_effect_evidence(
+            receipt, self.intent, intent_sha, sha(authorization))
+        self.assertEqual(evidence["state"], "FAILED_RECONCILED")
+        self.assertEqual((evidence["attemptedCommands"],
+                          evidence["completedCommands"]), (0, 0))
 
     def test_execute_stops_first_failure_and_preserves_sources(self):
         intent_sha, authorization = self.seal_and_authorize()
@@ -2342,14 +2363,12 @@ print(json.dumps({"result":r,"rssPeak":resource.getrusage(resource.RUSAGE_SELF).
                         "counts": fixture_counts},
         }, sort_keys=True))
 
-    def test_sigterm_leaves_bounded_registry_residue_and_supervisor_records_terminal(self):
+    def test_sigterm_leaves_bounded_registry_residue(self):
         root = self.base / "signal-registry"
         root.mkdir(mode=0o700)
         scratch = root / "scratch"
         scratch.mkdir(mode=0o700)
         ready = root / "ready.json"
-        supervisor = TOOL.with_name("capacity-recovery-supervisor.py")
-
         child_source = r'''
 import importlib.util,json,os,sys,time
 from pathlib import Path
@@ -2361,25 +2380,9 @@ with m.ExactNameRegistry(parent) as registry:
     ready.write_text(json.dumps({"path":str(registry.directory),"device":info.st_dev,"inode":info.st_ino,"mode":oct(info.st_mode & 0o777),"physicalBytes":physical,"distinctNames":registry.count},sort_keys=True))
     time.sleep(60)
 '''
-        harness = root / "supervisor-harness.py"
-        harness.write_text(r'''
-import importlib.util,sys
-from pathlib import Path
-spec=importlib.util.spec_from_file_location("supervisor",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-child=[sys.executable,"-B","-c",sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]]
-m.executor_argv=lambda _args:child
-sys.argv=["supervisor","--stdout-output",sys.argv[6],"--stderr-output",sys.argv[7],"--terminal-output",sys.argv[8],"--telemetry-output",sys.argv[9],"--supervisor-telemetry-output",sys.argv[10],"execute","--intent","/synthetic-intent","--intent-sha256","0"*64,"--authorization","/synthetic-authorization","--authorization-sha256","1"*64,"--receipt-root","/synthetic-receipt"]
-m.main()
-''')
-        stdout = root / "stdout"
-        stderr = root / "stderr"
-        terminal = root / "terminal.json"
-        child_telemetry = root / "child.jsonl"
-        supervisor_telemetry = root / "supervisor.jsonl"
         process = subprocess.Popen([
-            sys.executable, "-B", str(harness), str(supervisor), child_source,
-            str(TOOL), str(scratch), str(ready), str(stdout), str(stderr),
-            str(terminal), str(child_telemetry), str(supervisor_telemetry),
+            sys.executable, "-B", "-c", child_source,
+            str(TOOL), str(scratch), str(ready),
         ])
         deadline = time.monotonic() + 15
         while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
@@ -2404,25 +2407,16 @@ m.main()
         self.assertLessEqual(database_info.st_blocks * 512,
                              MODULE.NAME_REGISTRY_MAX_BYTES)
 
-        terminal_row = json.loads(terminal.read_text())
-        supervisor_rows = [json.loads(line) for line in supervisor_telemetry.read_text().splitlines()]
-        self.assertEqual(terminal_row["state"], "TERMINAL")
-        self.assertEqual(terminal_row["exitCode"], -signal.SIGTERM)
-        self.assertEqual(terminal_row["signal"], signal.SIGTERM)
-        self.assertEqual([row["phase"] for row in supervisor_rows],
-                         ["before_child", "signal_received", "after_child"])
-        self.assertGreater(terminal_row["childRssPeakBytes"], 0)
+        self.assertEqual(process.returncode, -signal.SIGTERM)
         print("SIGNAL_REGISTRY_RESIDUE=" + json.dumps({
-            "supervisorExitCode": process.returncode,
-            "childExitCode": terminal_row["exitCode"],
-            "childSignal": terminal_row["signal"],
+            "childExitCode": process.returncode,
+            "childSignal": signal.SIGTERM,
             "directoryMode": residue["mode"],
             "databaseMode": oct(stat.S_IMODE(database_info.st_mode)),
             "databaseLogicalBytes": database_info.st_size,
             "databasePhysicalBytes": database_info.st_blocks * 512,
             "distinctNames": residue["distinctNames"],
             "boundedByBytes": MODULE.NAME_REGISTRY_MAX_BYTES,
-            "supervisorPhases": [row["phase"] for row in supervisor_rows],
         }, sort_keys=True))
 
         # Test-only cleanup is confined to the exact identity published by the child.
