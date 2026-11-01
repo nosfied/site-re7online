@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import resource
 import signal
 import subprocess
 import sys
@@ -71,6 +72,11 @@ def memory_snapshot() -> dict[str, Any]:
     except (OSError, ValueError):
         pass
     return result
+
+
+def child_rss_peak_bytes() -> int:
+    """Linux reports ru_maxrss in KiB; the supervisor has exactly one child."""
+    return resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024
 
 
 def append(fd: int, phase: str, **fields: Any) -> None:
@@ -152,12 +158,13 @@ def main() -> None:
         child = subprocess.Popen(executor_argv(args), stdin=subprocess.DEVNULL,
                                  stdout=out_fd, stderr=err_fd, close_fds=True)
         code = child.wait()
+        child_rss_peak = child_rss_peak_bytes()
         os.fsync(out_fd); os.fsync(err_fd)
         append(supervisor_fd, "after_child", childPid=child.pid, exitCode=code,
-               receivedSignal=received_signal)
+               receivedSignal=received_signal, childRssPeakBytes=child_rss_peak)
         terminal = canonical({"schemaVersion": 1, "state": "TERMINAL", "exitCode": code,
                               "signal": -code if code < 0 else received_signal,
-                              "childPid": child.pid})
+                              "childPid": child.pid, "childRssPeakBytes": child_rss_peak})
         terminal_fd = exclusive(args.terminal_output)
         try:
             os.write(terminal_fd, terminal); os.fsync(terminal_fd)

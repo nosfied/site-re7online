@@ -6,7 +6,8 @@ capacidade fora do encerramento obrigatório de uma geração. A implementação
 adaptações de `generation-retirement.py` para cache npm são proibidos. Execuções
 longas usam exclusivamente `scripts/capacity-recovery-supervisor.py`, que chama o
 executor irmão sem shell, preserva canais e código de saída e registra a última
-fotografia de memória do cgroup após término ou sinal.
+fotografia de memória do cgroup e o pico RSS do processo filho via
+`RUSAGE_CHILDREN` após término normal ou por sinal.
 
 ## Estados e separação de autoridade
 
@@ -31,7 +32,8 @@ Cada fase exige `--telemetry-output` para um JSONL privado criado com
 `O_EXCL|O_NOFOLLOW`. Cada evento é sincronizado individualmente e contém somente
 fase, candidato, contador de membros, relógio monotônico, RSS atual/pico e, quando
 legíveis, `memory.current`, `memory.peak` e `memory.events`. O supervisor mantém
-um segundo JSONL e recaptura os contadores após o filho terminar ou receber sinal;
+um segundo JSONL e recaptura os contadores e `childRssPeakBytes` após o filho
+terminar normalmente ou por sinal;
 nenhum dos dois registros contém conteúdo de arquivo, ambiente ou credencial.
 
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
