@@ -363,6 +363,19 @@ Teste integral sintético usa três localizações físicas e nega drift de cami
 SHA e escopo antes de qualquer efeito. Autorização `6bfaa944…` e receipt
 `0e9631f8…` permanecem terminais; não há autorização de replay.
 
+Fechamento sucessor: o PR #306 foi integrado no merge `04a9650d…`, com árvore
+idêntica ao HEAD testado `42e4dee8…`. A custódia exclusiva
+`p00-capacity-three-archives-04a9650d-prepare-successor-v1` reutilizou o plano
+PASS `502cc4b7…`, produziu intenção `b3b1e7f7…`, preservou a tentativa anterior
+e consumiu uma única autorização `2330c848…`. O executor concluiu exatamente os
+três `unlink` já selados: receipt `6662af79…`, journal `b13da490…`, terminal
+`24455815…`, 3/3 verificados e ganho físico real de `458.964.992` bytes. Os três
+archives estão ausentes; as três autoridades, a produção, o dump, o grafo, a
+guarda operacional e os locks foram preservados. O saldo do receipt foi
+`8.846.487.552` bytes; a medição final, após as evidências, foi
+`8.846.467.072` bytes e `8.727.609` inodes disponíveis. O lote está encerrado,
+é irrepetível e não autoriza qualquer caminho adicional.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico

@@ -94,6 +94,16 @@ preparações; caminho fornecido livremente pelo chamador continua proibido. Ess
 distinção evita que relocar bytes idênticos do executor torne impossível consumir
 um plano válido sem afrouxar a allowlist ou editar artefatos históricos.
 
+O contrato corrigido foi exercido pela operação sucessora da custódia
+`p00-capacity-three-archives-04a9650d-prepare-successor-v1`. Ela reutilizou o
+plano PASS `502cc4b7…`, preservou como terminal a autorização/receipt anteriores
+e consumiu somente a nova autorização `2330c848…`, vinculada à intenção
+`b3b1e7f7…` e aos mesmos comandos `725ecbdc…`. O resultado foi
+`COMPLETED_RECONCILED`, 3/3 efeitos, receipt `6662af79…`, journal `b13da490…` e
+ganho físico medido de `458.964.992` bytes, com autoridades e produção
+preservadas. A operação não pode ser repetida e não concede autorização para
+outro lote.
+
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
 owner/group/mode, métricas físicas, hashes das fontes e comando fazem parte do
 binding. A fotografia operacional schema 2 exige fontes de recaptura ao vivo;
