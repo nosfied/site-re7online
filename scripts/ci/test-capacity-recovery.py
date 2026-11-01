@@ -27,6 +27,12 @@ PRODUCER_SPEC = importlib.util.spec_from_file_location("converta_release", PRODU
 PRODUCER = importlib.util.module_from_spec(PRODUCER_SPEC)
 assert PRODUCER_SPEC.loader is not None
 PRODUCER_SPEC.loader.exec_module(PRODUCER)
+SUPERVISOR_TOOL = Path(__file__).resolve().parents[1] / "capacity-recovery-supervisor.py"
+SUPERVISOR_SPEC = importlib.util.spec_from_file_location(
+    "capacity_recovery_supervisor", SUPERVISOR_TOOL)
+SUPERVISOR = importlib.util.module_from_spec(SUPERVISOR_SPEC)
+assert SUPERVISOR_SPEC.loader is not None
+SUPERVISOR_SPEC.loader.exec_module(SUPERVISOR)
 
 
 def sha(path: Path) -> str:
@@ -890,16 +896,26 @@ class CapacityRecoveryTests(unittest.TestCase):
         fixture = self.manifest_disposition_fixture("complete")
         patch_values, authorization = self._seal_manifest_disposition(fixture)
         receipt = self.base / "receipts/disposition-complete"; receipt.parent.mkdir(mode=0o700)
+        sealed_intent_sha = sha(self.intent)
+        sealed_authorization_sha = sha(authorization)
         with mock.patch.multiple(MODULE, **patch_values), self.process_patch():
-            result = MODULE.execute_intent(self.intent, sha(self.intent), authorization,
-                                           sha(authorization), receipt)
+            result = MODULE.execute_intent(self.intent, sealed_intent_sha, authorization,
+                                           sealed_authorization_sha, receipt)
         self.assertEqual(result["state"], "COMPLETED")
+        self.assertEqual(sha(self.intent), sealed_intent_sha)
+        self.assertEqual(sha(authorization), sealed_authorization_sha)
         self.assertTrue(all(not path.exists() for path in fixture["paths"]))
         self.assertTrue(all(Path(entry["authority"]).exists() for entry in fixture["entries"]))
         events = [json.loads(line) for line in
                   (receipt / "command-journal.private.jsonl").read_text().splitlines()]
         self.assertEqual(sum(item["event"] == "VERIFIED" for item in events),
                          result["completedCommands"])
+        evidence = SUPERVISOR.execution_effect_evidence(
+            receipt, self.intent, sealed_intent_sha, sealed_authorization_sha)
+        self.assertEqual(evidence["state"], "COMPLETED_RECONCILED")
+        self.assertEqual((evidence["attemptedCommands"],
+                          evidence["completedCommands"]),
+                         (result["attemptedCommands"], result["completedCommands"]))
 
     def test_manifest_disposition_partial_execution_never_repeats_completed_unlink(self):
         fixture = self.manifest_disposition_fixture("partial")
@@ -1901,6 +1917,11 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(result["attemptedCommands"], 0)
         self.assertIn("PREPARATION_ARCHIVE_PROCESS_REFERENCE", result["failurePredicate"])
         self.assertTrue(self.archive.exists())
+        evidence = SUPERVISOR.execution_effect_evidence(
+            receipt, self.intent, intent_sha, sha(authorization))
+        self.assertEqual(evidence["state"], "FAILED_RECONCILED")
+        self.assertEqual((evidence["attemptedCommands"],
+                          evidence["completedCommands"]), (0, 0))
 
     def test_execute_stops_first_failure_and_preserves_sources(self):
         intent_sha, authorization = self.seal_and_authorize()

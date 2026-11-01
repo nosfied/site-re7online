@@ -7,14 +7,15 @@ adaptações de `generation-retirement.py` para cache npm são proibidos. Execu�
 longas usam exclusivamente `scripts/capacity-recovery-supervisor.py`, que chama o
 executor irmão sem shell e preserva canais e código de saída. Na fase `audit`, o
 supervisor exige um escopo transitório do `systemd --user` em cgroup v2 antes de
-executar `audit` ou `prepare`. `MemoryMax`, `MemorySwapMax=0`, `OOMPolicy=kill` e
+executar `audit`, `prepare` ou `execute`. `MemoryMax`, `MemorySwapMax=0`, `OOMPolicy=kill` e
 `memory.oom.group=1` limitam a memória agregada do Python, Node/PM2 CLI, helper e
 demais descendentes da fase; RSS continua evidência, não mecanismo de limite.
 `RuntimeMaxSec` usa relógio monotônico e encerra somente o control group desse
 escopo. O daemon PM2 e os serviços já existentes ficam fora dele. Ausência do
 escopo, limites divergentes ou impossibilidade de autenticá-lo negam antes do
-executor. `execute` conserva o comportamento histórico de sinais, locks e
-journals; esta extensão não altera sua aquisição de locks nem seus efeitos.
+executor. No `execute`, o supervisor contém o executor sem assumir autoridade
+sobre locks, journal ou efeitos: esses contratos continuam pertencendo
+exclusivamente a `capacity-recovery.py`.
 
 ## Estados e separação de autoridade
 
@@ -49,8 +50,9 @@ Esses limites são bordas admitidas pelo supervisor, não autorização operacio
 Em especial, os 256 MiB usados no ensaio local não constituem orçamento
 produtivo. O consumidor interno autentica novamente o nome e o caminho do cgroup,
 `memory.max`, `memory.swap.max` e `memory.oom.group` antes de substituir seu
-processo pelo executor canônico. Excesso de memória e prazo publicam,
-respectivamente, `AUDIT_MEMORY_MAX` e `AUDIT_TIMEOUT`; não há retry automático.
+processo pelo executor canônico. Excesso de memória e prazo publicam
+o predicado nominal da fase, como `AUDIT_MEMORY_MAX`, `PREPARE_TIMEOUT` ou
+`EXECUTE_MEMORY_MAX`; não há retry automático.
 Um fail-safe do supervisor atua somente sobre o nome exato da unidade criada por
 ele e nunca procura ou sinaliza processo por nome.
 
@@ -65,6 +67,14 @@ launcher encerrado. A espera é limitada; falha de `systemctl`, membro remanesce
 ou identidade ilegível produz `AUDIT_RECOVERY_PENDING`, preserva unidade,
 tentativas e evidências e não declara término. Somente depois da confirmação o
 supervisor pode limpar o estado transitório da unidade.
+
+Depois de um `execute` iniciado, código de saída ou sinal nunca provam ausência
+de efeitos. O supervisor reabre, sem reparar, o journal e o receipt originais do
+executor. Journal autenticado sem `ATTEMPT` prova zero efeitos; receipt
+autenticado reconcilia `FAILED` ou `COMPLETED`; qualquer `ATTEMPT` sem receipt
+íntegro, contagens divergentes ou encerramento de scope não confirmado termina
+em `RECOVERY_PENDING`. O supervisor não fabrica receipt, não repete comando e
+não transforma fechamento parcial em `COMPLETED`.
 
 Plano e intenção são schemas fechados. Caminho, classe, device/inode,
 owner/group/mode, métricas físicas, hashes das fontes e comando fazem parte do

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -47,27 +49,64 @@ class SupervisorTests(unittest.TestCase):
             return self.code
 
     def run_real_child(self, source, expected_code):
-        folder = tempfile.TemporaryDirectory(prefix="capacity-supervisor-")
-        self.addCleanup(folder.cleanup)
-        root = Path(folder.name)
-        args = SimpleNamespace(
-            action="execute", intent=Path("/intent"), intent_sha256="a" * 64,
-            authorization=Path("/authorization"), authorization_sha256="b" * 64,
-            receipt_root=Path("/receipt"), telemetry_output=root / "child.jsonl",
-            stdout_output=root / "stdout", stderr_output=root / "stderr",
-            terminal_output=root / "terminal.json",
-            supervisor_telemetry_output=root / "supervisor.jsonl")
-        with mock.patch.object(MODULE, "parser") as parser, \
-                mock.patch.object(MODULE, "executor_argv",
-                                  return_value=[sys.executable, "-c", source]), \
-                self.assertRaises(SystemExit) as stopped:
-            parser.return_value.parse_args.return_value = args
-            MODULE.main()
-        self.assertEqual(stopped.exception.code, expected_code)
-        rows = [json.loads(line) for line in
-                args.supervisor_telemetry_output.read_text().splitlines()]
-        terminal = json.loads(args.terminal_output.read_text())
+        child = subprocess.Popen([sys.executable, "-c", source])
+        code = child.wait(timeout=10)
+        self.assertEqual(code, expected_code)
+        peak = MODULE.child_rss_peak_bytes()
+        rows = [{"phase": "before_child"},
+                {"phase": "after_child", "exitCode": code,
+                 "childRssPeakBytes": peak}]
+        terminal = {"exitCode": code, "signal": -code if code < 0 else None,
+                    "childRssPeakBytes": peak}
         return rows, terminal
+
+    def execution_evidence_fixture(self, root, events, *, receipt_state=None,
+                                   attempted=None, completed=None):
+        receipt_root = root / "receipt"
+        receipt_root.mkdir(mode=0o700)
+        journal = receipt_root / "command-journal.private.jsonl"
+        journal.write_text("".join(json.dumps(row, sort_keys=True) + "\n"
+                                   for row in events))
+        journal.chmod(0o600)
+        intent = root / "intent.json"
+        commands = [["/usr/bin/unlink", "--", str(root / f"candidate-{index}")]
+                    for index in range(1, 4)]
+        intent.write_text(json.dumps({
+            "schemaVersion": 3, "kind": "CAPACITY_RECOVERY_INTENT",
+            "commands": commands, "commandsSha256": "c" * 64,
+            "automaticRetry": False,
+        }, sort_keys=True))
+        intent.chmod(0o600)
+        intent_sha = hashlib.sha256(intent.read_bytes()).hexdigest()
+        authorization_sha = "b" * 64
+        if receipt_state is not None:
+            value = {
+                "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_RECEIPT",
+                "state": receipt_state,
+                "failurePredicate": ("EXECUTE_RECAPTURE_DENY"
+                                     if receipt_state == "FAILED" else None),
+                "intentSha256": intent_sha,
+                "authorizationSha256": authorization_sha,
+                "commandsSha256": "c" * 64,
+                "attemptedCommands": attempted,
+                "completedCommands": completed,
+                "removedPaths": [str(root / f"candidate-{index}")
+                                 for index in range(1, (completed or 0) + 1)],
+                "automaticRetry": False,
+                "forceUsed": False, "pruneUsed": False,
+                "pathExpansion": False,
+                "journalSha256": hashlib.sha256(journal.read_bytes()).hexdigest(),
+                "expectedRecoveryBytes": 3, "availableBytesBefore": 10,
+                "availableBytesAfter": 13, "recoveredBytes": 3,
+            }
+            receipt = receipt_root / "execution-receipt.private.json"
+            receipt.write_text(json.dumps(value, sort_keys=True) + "\n")
+            receipt.chmod(0o600)
+            receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            sidecar = receipt_root / "execution-receipt.sha256"
+            sidecar.write_text(f"{receipt_sha}  {receipt}\n")
+            sidecar.chmod(0o600)
+        return receipt_root, intent, intent_sha, authorization_sha
 
     def test_closed_argv_always_uses_canonical_executor(self):
         args = SimpleNamespace(action="audit", request=Path("/request"),
@@ -78,7 +117,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertNotIn("-c", argv)
         self.assertEqual(argv[-2:], ["--telemetry-output", "/telemetry"])
 
-    def test_execute_argv_retains_historical_direct_executor_contract(self):
+    def test_execute_argv_preserves_exact_executor_contract_inside_scope(self):
         args = SimpleNamespace(
             action="execute", intent=Path("/intent"), intent_sha256="a" * 64,
             authorization=Path("/authorization"), authorization_sha256="b" * 64,
@@ -89,6 +128,24 @@ class SupervisorTests(unittest.TestCase):
         self.assertNotIn("--containment-output", argv)
         self.assertNotIn("--memory-max-bytes", argv)
         self.assertNotIn("--timeout-seconds", argv)
+
+    def test_execute_scope_argv_reuses_closed_kernel_containment(self):
+        args = SimpleNamespace(
+            action="execute", intent=Path("/intent"), intent_sha256="a" * 64,
+            authorization=Path("/authorization"), authorization_sha256="b" * 64,
+            receipt_root=Path("/receipt"), telemetry_output=Path("/telemetry"),
+            containment_output=Path("/containment"),
+            memory_max_bytes=512 * 1024 * 1024, timeout_seconds=1800)
+        argv = MODULE.systemd_scope_argv(args, "re7-capacity-execute-test.scope")
+        self.assertIn(MODULE.INTERNAL_EXECUTE_ACTION, argv)
+        self.assertIn("--property=MemoryMax=536870912", argv)
+        self.assertIn("--property=MemorySwapMax=0", argv)
+        self.assertIn("--property=RuntimeMaxSec=1800s", argv)
+        self.assertIn("--property=KillMode=control-group", argv)
+        for value in ("/intent", "/authorization", "/receipt"):
+            self.assertIn(value, argv)
+        self.assertNotIn(MODULE.INTERNAL_AUDIT_ACTION, argv)
+        self.assertNotIn(MODULE.INTERNAL_PREPARE_ACTION, argv)
 
     def test_audit_scope_argv_is_closed_and_kernel_enforced(self):
         args = SimpleNamespace(
@@ -157,6 +214,39 @@ class SupervisorTests(unittest.TestCase):
             self.assertIn(str(args.plan), argv)
             self.assertIn(str(args.intent_output), argv)
             self.assertNotIn("execute", argv)
+
+    def test_internal_execute_authenticates_scope_before_exact_executor(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-contained-execute-") as folder:
+            root = Path(folder)
+            args = SimpleNamespace(
+                action=MODULE.INTERNAL_EXECUTE_ACTION,
+                unit="re7-capacity-execute-test.scope",
+                memory_max_bytes=512 * 1024 * 1024,
+                containment_output=root / "containment.json",
+                telemetry_output=root / "telemetry.jsonl",
+                request=None, request_sha256=None, plan_output=None,
+                plan=None, plan_sha256=None, intent_output=None,
+                commands_output=None, manifest_output=None,
+                intent=root / "intent.json", intent_sha256="a" * 64,
+                authorization=root / "authorization.json",
+                authorization_sha256="b" * 64,
+                receipt_root=root / "receipt")
+            projection = {"memoryMaxBytes": 512 * 1024 * 1024,
+                          "memorySwapMaxBytes": 0, "memoryOomGroup": True}
+            with mock.patch.object(MODULE, "internal_parser") as parser, \
+                    mock.patch.object(MODULE, "verify_contained_cgroup",
+                                      return_value=("/exact.scope", projection)), \
+                    mock.patch.object(MODULE.os, "execv") as execute:
+                parser.return_value.parse_args.return_value = args
+                MODULE.contained_phase_main()
+            evidence = json.loads(args.containment_output.read_text())
+            self.assertEqual(evidence["state"], "PASS")
+            argv = execute.call_args.args[1]
+            self.assertEqual(argv[:4], ["/usr/bin/python3", "-B",
+                                        str(MODULE.EXECUTOR), "execute"])
+            self.assertIn(str(args.intent), argv)
+            self.assertIn(str(args.authorization), argv)
+            self.assertIn(str(args.receipt_root), argv)
 
     def test_contained_cgroup_requires_exact_aggregate_limits(self):
         with tempfile.TemporaryDirectory(prefix="capacity-cgroup-") as folder:
@@ -309,7 +399,73 @@ class SupervisorTests(unittest.TestCase):
         )
         for arguments, expected in cases:
             with self.subTest(expected=expected):
-                self.assertEqual(MODULE.audit_terminal_reason(**arguments), expected)
+                self.assertEqual(MODULE.contained_terminal_reason(
+                    action="audit", **arguments), expected)
+
+    def test_execute_completed_receipt_reconciles_three_effects(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-execute-complete-") as folder:
+            root = Path(folder)
+            events = []
+            for ordinal in range(1, 4):
+                events.extend((
+                    {"event": "ATTEMPT", "ordinal": ordinal},
+                    {"event": "RESULT", "ordinal": ordinal, "exitCode": 0},
+                    {"event": "VERIFIED", "ordinal": ordinal, "result": "ABSENT"},
+                ))
+            receipt, intent, intent_sha, authorization_sha = \
+                self.execution_evidence_fixture(
+                    root, events, receipt_state="COMPLETED", attempted=3, completed=3)
+            observed = MODULE.execution_effect_evidence(
+                receipt, intent, intent_sha, authorization_sha)
+        self.assertEqual(observed["state"], "COMPLETED_RECONCILED")
+        self.assertEqual((observed["attemptedCommands"], observed["completedCommands"]),
+                         (3, 3))
+
+    def test_execute_drift_receipt_proves_zero_effects(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-execute-drift-") as folder:
+            root = Path(folder)
+            receipt, intent, intent_sha, authorization_sha = \
+                self.execution_evidence_fixture(
+                    root, [{"event": "DENY", "predicate": "EXECUTE_RECAPTURE_DENY",
+                            "attemptedCommands": 0, "completedCommands": 0}],
+                    receipt_state="FAILED", attempted=0, completed=0)
+            observed = MODULE.execution_effect_evidence(
+                receipt, intent, intent_sha, authorization_sha)
+        self.assertEqual(observed["state"], "FAILED_RECONCILED")
+        self.assertEqual(observed["attemptedCommands"], 0)
+
+    def test_execute_interruption_before_first_attempt_proves_zero_effects(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-execute-before-") as folder:
+            root = Path(folder)
+            receipt, intent, intent_sha, authorization_sha = \
+                self.execution_evidence_fixture(root, [])
+            observed = MODULE.execution_effect_evidence(
+                receipt, intent, intent_sha, authorization_sha)
+        self.assertEqual(observed["state"], "NO_EFFECTS_PROVEN")
+        self.assertEqual(observed["attemptedCommands"], 0)
+        self.assertFalse(observed["receiptPresent"])
+
+    def test_execute_interruption_after_one_effect_requires_recovery(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-execute-partial-") as folder:
+            root = Path(folder)
+            candidates = [root / f"candidate-{index}" for index in range(1, 4)]
+            for candidate in candidates:
+                candidate.write_bytes(b"synthetic")
+            candidates[0].unlink()
+            events = [
+                {"event": "ATTEMPT", "ordinal": 1},
+                {"event": "RESULT", "ordinal": 1, "exitCode": 0},
+                {"event": "VERIFIED", "ordinal": 1, "result": "ABSENT"},
+            ]
+            receipt, intent, intent_sha, authorization_sha = \
+                self.execution_evidence_fixture(root, events)
+            observed = MODULE.execution_effect_evidence(
+                receipt, intent, intent_sha, authorization_sha)
+            remaining = [candidate.exists() for candidate in candidates]
+        self.assertEqual(observed["state"], "EFFECTS_UNRECONCILED")
+        self.assertEqual((observed["attemptedCommands"], observed["completedCommands"]),
+                         (1, 1))
+        self.assertEqual(remaining, [False, True, True])
 
     def test_scope_kill_targets_only_exact_unit(self):
         completed = SimpleNamespace(returncode=0)
@@ -606,8 +762,58 @@ class SupervisorTests(unittest.TestCase):
             self.assertFalse(args.manifest_output.exists())
             terminal = json.loads(args.terminal_output.read_text())
             self.assertEqual(terminal["action"], "prepare")
-            self.assertEqual(terminal["reason"], "AUDIT_CONTAINMENT_NOT_APPLIED")
+            self.assertEqual(terminal["reason"], "PREPARE_CONTAINMENT_NOT_APPLIED")
             self.assertEqual(terminal["executorState"], "EXECUTOR_NOT_STARTED")
+
+    def test_execute_containment_launch_failure_denies_before_executor(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-execute-deny-") as folder:
+            root = Path(folder)
+            args = SimpleNamespace(
+                action="execute", intent=root / "intent.json",
+                intent_sha256="a" * 64,
+                authorization=root / "authorization.json",
+                authorization_sha256="b" * 64,
+                receipt_root=root / "receipt",
+                telemetry_output=root / "child.jsonl",
+                containment_output=root / "containment.json",
+                memory_max_bytes=512 * 1024 * 1024, timeout_seconds=1800,
+                stdout_output=root / "stdout", stderr_output=root / "stderr",
+                terminal_output=root / "terminal.json",
+                supervisor_telemetry_output=root / "supervisor.jsonl")
+            with mock.patch.object(MODULE, "parser") as parser, \
+                    mock.patch.object(MODULE, "trusted_system_binary"), \
+                    mock.patch.object(MODULE.subprocess, "Popen",
+                                      side_effect=OSError("launch denied")), \
+                    self.assertRaises(SystemExit) as stopped:
+                parser.return_value.parse_args.return_value = args
+                MODULE.main()
+            self.assertEqual(stopped.exception.code, 78)
+            self.assertFalse(args.receipt_root.exists())
+            terminal = json.loads(args.terminal_output.read_text())
+            self.assertEqual(terminal["action"], "execute")
+            self.assertEqual(terminal["reason"], "EXECUTE_CONTAINMENT_NOT_APPLIED")
+            self.assertEqual(terminal["executorState"], "EXECUTOR_NOT_STARTED")
+
+    def test_execute_scope_close_preserves_external_sentinel(self):
+        sentinel = subprocess.Popen([sys.executable, "-c", "import time;time.sleep(30)"])
+        self.addCleanup(lambda: (sentinel.kill(), sentinel.wait())
+                        if sentinel.poll() is None else None)
+        child = self.FakeChild()
+        active = {"state": "ACTIVE", "properties": {"ActiveState": "active"},
+                  "cgroupMembers": 1, "cgroupAbsent": False}
+        stopped = {"state": "TERMINATED_CONFIRMED",
+                   "properties": {"ActiveState": "failed", "LoadState": "loaded"},
+                   "cgroupMembers": 0, "cgroupAbsent": False}
+        with tempfile.TemporaryFile() as evidence, \
+                mock.patch.object(MODULE, "scope_termination_snapshot",
+                                  side_effect=[active, stopped]), \
+                mock.patch.object(MODULE, "kill_scope", return_value=True) as killed:
+            result = MODULE.close_supervised_scope(
+                "re7-capacity-execute-exact.scope", {"state": "PASS"}, child,
+                evidence.fileno(), deadline_seconds=0)
+        self.assertEqual(result["state"], "TERMINATED_CONFIRMED")
+        self.assertIsNone(sentinel.poll())
+        killed.assert_called_once_with("re7-capacity-execute-exact.scope", "SIGTERM")
 
     def test_launcher_started_without_proof_is_inconclusive_not_not_started(self):
         with tempfile.TemporaryDirectory(prefix="capacity-supervisor-inconclusive-") as folder:

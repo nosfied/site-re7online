@@ -146,7 +146,7 @@
       "executeExecuted": false
     },
     "prepareContainmentPatch": {
-      "state": "LOCAL_REVIEW_ONLY_NOT_PRODUCTION_EXECUTED",
+      "state": "INTEGRATED_PRODUCTION_PREPARE_COMPLETED",
       "inputPlanSha256": "502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5",
       "repeatAuditPermitted": false,
       "memoryMaxBytes": 536870912,
@@ -155,10 +155,27 @@
       "stopGraceSeconds": 5,
       "telemetryFirstLineLimitBytes": 65536,
       "preservedTelemetryBytes": 102129,
-      "prepareProductionExecuted": false,
+      "prepareProductionExecuted": true,
       "executeChanged": false,
       "eligibilityChanged": false,
       "locksOrJournalsChanged": false
+    },
+    "executeContainmentPatch": {
+      "state": "LOCAL_REVIEW_ONLY_NOT_PRODUCTION_EXECUTED",
+      "inputPlanSha256": "502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5",
+      "repeatAuditOrPreparePermitted": false,
+      "memoryMaxBytes": 536870912,
+      "memorySwapMaxBytes": 0,
+      "timeoutSeconds": 1800,
+      "stopGraceSeconds": 5,
+      "executorChanged": false,
+      "eligibilityChanged": false,
+      "commandsOrAuthorizationChanged": false,
+      "locksOrJournalsChanged": false,
+      "receiptCreatedBySupervisor": false,
+      "automaticReplay": false,
+      "unreconciledEffectsState": "RECOVERY_PENDING",
+      "productionExecutePerformed": false
     },
     "authorityRootMemberGuard": {
       "state": "INTEGRATED_PRODUCTION_AUDIT_REACHED_PRE_BINDING_ONLY",

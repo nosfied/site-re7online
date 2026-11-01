@@ -2,13 +2,15 @@
 """Closed supervisor for durable capacity-recovery execution evidence.
 
 It invokes only the sibling canonical executor and preserves its channels/exit
-code. Audit and prepare are confined to an authenticated transient cgroup v2
-scope; execute retains the historical signal behavior.
+code. Audit, prepare and execute are confined to an authenticated transient
+cgroup v2 scope. Execute effects remain exclusively owned and journaled by the
+canonical executor.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -38,7 +40,10 @@ AUDIT_RECOVERY_TERM_GRACE_SECONDS = 1
 CONTAINED_SCOPE_PREFIX = "re7-capacity-"
 INTERNAL_AUDIT_ACTION = "__contained-audit"
 INTERNAL_PREPARE_ACTION = "__contained-prepare"
-INTERNAL_ACTIONS = {INTERNAL_AUDIT_ACTION, INTERNAL_PREPARE_ACTION}
+INTERNAL_EXECUTE_ACTION = "__contained-execute"
+INTERNAL_ACTIONS = {
+    INTERNAL_AUDIT_ACTION, INTERNAL_PREPARE_ACTION, INTERNAL_EXECUTE_ACTION,
+}
 EXECUTOR_PROOF_MAX_BYTES = 64 * 1024
 AUDIT_RESOURCE_SAMPLE_INTERVAL_SECONDS = 1.0
 AUDIT_RESOURCE_SAMPLE_LIMIT = AUDIT_TIMEOUT_MAX_SECONDS + 2
@@ -50,6 +55,8 @@ MEMORY_STAT_FIELDS = {
     "active_anon", "inactive_anon", "active_file", "inactive_file",
     "workingset_refault_anon", "workingset_refault_file",
 }
+EXECUTION_JOURNAL_MAX_BYTES = 1024 * 1024
+EXECUTION_RECEIPT_MAX_BYTES = 64 * 1024
 
 
 class AuditPostLaunchError(RuntimeError):
@@ -64,6 +71,137 @@ class AuditPostLaunchError(RuntimeError):
 
 def canonical(value: Any) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def digest_bytes(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def stable_private_bytes(path: Path, limit: int) -> bytes:
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        before = os.fstat(fd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                before.st_gid != os.getegid() or stat.S_IMODE(before.st_mode) != 0o600 or
+                before.st_nlink != 1 or before.st_size > limit):
+            raise RuntimeError("EXECUTE_EVIDENCE_IDENTITY")
+        raw = bytearray()
+        while len(raw) <= limit:
+            chunk = os.read(fd, min(64 * 1024, limit + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+        after = os.fstat(fd)
+        if (len(raw) > limit or
+                (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) !=
+                (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)):
+            raise RuntimeError("EXECUTE_EVIDENCE_UNSTABLE")
+        return bytes(raw)
+    finally:
+        os.close(fd)
+
+
+def execution_effect_evidence(receipt_root: Path, intent_path: Path,
+                              intent_sha256: str,
+                              authorization_sha256: str) -> dict[str, Any]:
+    """Read, never repair, the executor's durable journal and receipt.
+
+    ATTEMPT is fsynced by the executor before each possible effect. An empty
+    authenticated journal therefore proves zero attempted effects; any ATTEMPT
+    without a fully authenticated receipt remains recovery-pending.
+    """
+    base: dict[str, Any] = {
+        "state": "EFFECTS_INCONCLUSIVE", "receiptRoot": str(receipt_root),
+        "journalPresent": False, "receiptPresent": False,
+        "attemptedCommands": None, "completedCommands": None,
+        "journalSha256": None, "receiptSha256": None,
+    }
+    try:
+        info = receipt_root.lstat()
+    except FileNotFoundError:
+        return base
+    except OSError:
+        return base
+    if (receipt_root.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+            info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+            stat.S_IMODE(info.st_mode) != 0o700):
+        return base
+
+    journal = receipt_root / "command-journal.private.jsonl"
+    try:
+        journal_raw = stable_private_bytes(journal, EXECUTION_JOURNAL_MAX_BYTES)
+    except (OSError, RuntimeError):
+        return base
+    base["journalPresent"] = True
+    base["journalSha256"] = digest_bytes(journal_raw)
+    events: list[dict[str, Any]] = []
+    try:
+        for raw_line in journal_raw.splitlines():
+            value = json.loads(raw_line)
+            if not isinstance(value, dict) or value.get("event") not in {
+                    "ATTEMPT", "RESULT", "VERIFIED", "DENY"}:
+                raise ValueError("journal event")
+            events.append(value)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return base
+    attempts = sum(item.get("event") == "ATTEMPT" for item in events)
+    completed = sum(item.get("event") == "VERIFIED" for item in events)
+    base.update({"attemptedCommands": attempts, "completedCommands": completed,
+                 "lastJournalEvent": events[-1].get("event") if events else None})
+
+    receipt = receipt_root / "execution-receipt.private.json"
+    sidecar = receipt_root / "execution-receipt.sha256"
+    try:
+        receipt_raw = stable_private_bytes(receipt, EXECUTION_RECEIPT_MAX_BYTES)
+        sidecar_raw = stable_private_bytes(sidecar, 4096)
+        receipt_value = json.loads(receipt_raw)
+        expected_sidecar = f"{digest_bytes(receipt_raw)}  {receipt}\n".encode()
+        intent_raw = stable_private_bytes(intent_path, EXECUTION_RECEIPT_MAX_BYTES)
+        intent_value = json.loads(intent_raw)
+        expected_count = len(intent_value.get("commands", []))
+        if (digest_bytes(intent_raw) != intent_sha256 or sidecar_raw != expected_sidecar or
+                not isinstance(intent_value, dict) or
+                intent_value.get("kind") != "CAPACITY_RECOVERY_INTENT" or
+                intent_value.get("automaticRetry") is not False or
+                not isinstance(receipt_value, dict) or
+                receipt_value.get("schemaVersion") != 1 or
+                receipt_value.get("kind") != "CAPACITY_RECOVERY_RECEIPT" or
+                receipt_value.get("intentSha256") != intent_sha256 or
+                receipt_value.get("authorizationSha256") != authorization_sha256 or
+                receipt_value.get("commandsSha256") !=
+                intent_value.get("commandsSha256") or
+                receipt_value.get("journalSha256") != base["journalSha256"] or
+                receipt_value.get("attemptedCommands") != attempts or
+                receipt_value.get("completedCommands") != completed or
+                not isinstance(receipt_value.get("removedPaths"), list) or
+                len(receipt_value["removedPaths"]) != completed or
+                receipt_value.get("automaticRetry") is not False or
+                receipt_value.get("forceUsed") is not False or
+                receipt_value.get("pruneUsed") is not False or
+                receipt_value.get("pathExpansion") is not False or
+                not isinstance(expected_count, int) or expected_count <= 0):
+            raise ValueError("receipt binding")
+        state = receipt_value.get("state")
+        if state == "COMPLETED" and not (attempts == completed == expected_count):
+            raise ValueError("completed receipt counts")
+        if state == "FAILED" and not isinstance(
+                receipt_value.get("failurePredicate"), str):
+            raise ValueError("failed receipt predicate")
+        if state not in {"COMPLETED", "FAILED"}:
+            raise ValueError("receipt state")
+    except (OSError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError,
+            ValueError, TypeError):
+        if attempts == 0:
+            base["state"] = "NO_EFFECTS_PROVEN"
+        else:
+            base["state"] = "EFFECTS_UNRECONCILED"
+        return base
+
+    base.update({"receiptPresent": True, "receiptSha256": digest_bytes(receipt_raw),
+                 "receiptState": state,
+                 "state": ("COMPLETED_RECONCILED" if state == "COMPLETED"
+                           else "FAILED_RECONCILED")})
+    return base
 
 
 def exclusive(path: Path, mode: int = 0o600) -> int:
@@ -360,6 +498,11 @@ def internal_parser() -> argparse.ArgumentParser:
     result.add_argument("--intent-output", type=Path)
     result.add_argument("--commands-output", type=Path)
     result.add_argument("--manifest-output", type=Path)
+    result.add_argument("--intent", type=Path)
+    result.add_argument("--intent-sha256")
+    result.add_argument("--authorization", type=Path)
+    result.add_argument("--authorization-sha256")
+    result.add_argument("--receipt-root", type=Path)
     result.add_argument("--telemetry-output", type=Path, required=True)
     return result
 
@@ -389,7 +532,7 @@ def contained_phase_main() -> None:
         executor_args = argparse.Namespace(
             action="audit", request=args.request, request_sha256=args.request_sha256,
             plan_output=args.plan_output, telemetry_output=args.telemetry_output)
-    else:
+    elif args.action == INTERNAL_PREPARE_ACTION:
         required = (args.plan, args.plan_sha256, args.intent_output,
                     args.commands_output, args.manifest_output)
         if any(item is None for item in required):
@@ -398,6 +541,16 @@ def contained_phase_main() -> None:
             action="prepare", plan=args.plan, plan_sha256=args.plan_sha256,
             intent_output=args.intent_output, commands_output=args.commands_output,
             manifest_output=args.manifest_output, telemetry_output=args.telemetry_output)
+    else:
+        required = (args.intent, args.intent_sha256, args.authorization,
+                    args.authorization_sha256, args.receipt_root)
+        if any(item is None for item in required):
+            raise SystemExit(78)
+        executor_args = argparse.Namespace(
+            action="execute", intent=args.intent, intent_sha256=args.intent_sha256,
+            authorization=args.authorization,
+            authorization_sha256=args.authorization_sha256,
+            receipt_root=args.receipt_root, telemetry_output=args.telemetry_output)
     os.execv(str(PYTHON), executor_argv(executor_args))
 
 
@@ -438,6 +591,9 @@ def parser() -> argparse.ArgumentParser:
     execute.add_argument("--authorization", type=Path, required=True)
     execute.add_argument("--authorization-sha256", required=True)
     execute.add_argument("--receipt-root", type=Path, required=True)
+    execute.add_argument("--containment-output", type=Path, required=True)
+    execute.add_argument("--memory-max-bytes", type=int, required=True)
+    execute.add_argument("--timeout-seconds", type=int, required=True)
     return result
 
 
@@ -466,8 +622,9 @@ def contained_scope_unit(action: str) -> str:
 
 
 def systemd_scope_argv(args: argparse.Namespace, unit: str) -> list[str]:
-    internal_action = (INTERNAL_AUDIT_ACTION if args.action == "audit"
-                       else INTERNAL_PREPARE_ACTION)
+    internal_action = ({"audit": INTERNAL_AUDIT_ACTION,
+                        "prepare": INTERNAL_PREPARE_ACTION,
+                        "execute": INTERNAL_EXECUTE_ACTION})[args.action]
     result = [
         str(SYSTEMD_RUN), "--user", "--scope", "--quiet", f"--unit={unit}",
         "--property=MemoryAccounting=yes",
@@ -484,12 +641,18 @@ def systemd_scope_argv(args: argparse.Namespace, unit: str) -> list[str]:
         result.extend(("--request", str(args.request),
                        "--request-sha256", args.request_sha256,
                        "--plan-output", str(args.plan_output)))
-    else:
+    elif args.action == "prepare":
         result.extend(("--plan", str(args.plan),
                        "--plan-sha256", args.plan_sha256,
                        "--intent-output", str(args.intent_output),
                        "--commands-output", str(args.commands_output),
                        "--manifest-output", str(args.manifest_output)))
+    else:
+        result.extend(("--intent", str(args.intent),
+                       "--intent-sha256", args.intent_sha256,
+                       "--authorization", str(args.authorization),
+                       "--authorization-sha256", args.authorization_sha256,
+                       "--receipt-root", str(args.receipt_root)))
     result.extend(("--telemetry-output", str(args.telemetry_output)))
     return result
 
@@ -720,32 +883,33 @@ def cleanup_scope(unit: str) -> bool:
         return False
 
 
-def audit_terminal_reason(*, received_signal: int | None, fail_safe_kill: bool,
-                          scope_result: str | None,
-                          containment: dict[str, Any] | None,
-                          executor_state: str, termination_state: str,
-                          post_launch_failure: bool,
-                          launcher_exited_scope_active: bool,
-                          exit_code: int) -> str:
+def contained_terminal_reason(*, action: str, received_signal: int | None,
+                              fail_safe_kill: bool, scope_result: str | None,
+                              containment: dict[str, Any] | None,
+                              executor_state: str, termination_state: str,
+                              post_launch_failure: bool,
+                              launcher_exited_scope_active: bool,
+                              exit_code: int) -> str:
+    prefix = action.upper()
     if termination_state != "TERMINATED_CONFIRMED":
-        return "AUDIT_RECOVERY_PENDING"
+        return f"{prefix}_RECOVERY_PENDING"
     if post_launch_failure:
-        return "AUDIT_POST_LAUNCH_FAILURE"
+        return f"{prefix}_POST_LAUNCH_FAILURE"
     if received_signal is not None:
         return "SUPERVISOR_SIGNAL"
     if fail_safe_kill:
-        return "AUDIT_SCOPE_FAIL_SAFE_TIMEOUT"
+        return f"{prefix}_SCOPE_FAIL_SAFE_TIMEOUT"
     if launcher_exited_scope_active:
-        return "AUDIT_LAUNCHER_EXITED_SCOPE_ACTIVE"
+        return f"{prefix}_LAUNCHER_EXITED_SCOPE_ACTIVE"
     if scope_result == "timeout":
-        return "AUDIT_TIMEOUT"
+        return f"{prefix}_TIMEOUT"
     if scope_result == "oom-kill":
-        return "AUDIT_MEMORY_MAX"
+        return f"{prefix}_MEMORY_MAX"
     if (containment is None or containment.get("state") != "PASS") and \
             executor_state == "EXECUTOR_NOT_STARTED":
-        return "AUDIT_CONTAINMENT_NOT_APPLIED"
+        return f"{prefix}_CONTAINMENT_NOT_APPLIED"
     if containment is None or containment.get("state") != "PASS":
-        return "AUDIT_LAUNCH_STATE_INCONCLUSIVE"
+        return f"{prefix}_LAUNCH_STATE_INCONCLUSIVE"
     if exit_code != 0:
         return "CHILD_EXIT_NONZERO"
     return "COMPLETED"
@@ -770,8 +934,12 @@ def run_contained_phase(args: argparse.Namespace, out_fd: int, err_fd: int,
     trusted_system_binary(SYSTEMD_RUN)
     trusted_system_binary(SYSTEMCTL)
     trusted_system_binary(PYTHON, allow_root_symlink=True)
-    phase_outputs = ([args.plan_output] if args.action == "audit" else
-                     [args.intent_output, args.commands_output, args.manifest_output])
+    if args.action == "audit":
+        phase_outputs = [args.plan_output]
+    elif args.action == "prepare":
+        phase_outputs = [args.intent_output, args.commands_output, args.manifest_output]
+    else:
+        phase_outputs = [args.receipt_root]
     for output in [args.containment_output, args.telemetry_output, *phase_outputs]:
         if output.exists() or output.is_symlink():
             raise FileExistsError(output)
@@ -889,8 +1057,9 @@ def run_contained_phase(args: argparse.Namespace, out_fd: int, err_fd: int,
         executor_state = executor_execution_state(
             launcher_started=True, containment=containment,
             telemetry_path=args.telemetry_output)
-        reason = audit_terminal_reason(
-            received_signal=received_signal, fail_safe_kill=fail_safe_kill,
+        reason = contained_terminal_reason(
+            action=args.action, received_signal=received_signal,
+            fail_safe_kill=fail_safe_kill,
             scope_result=result, containment=containment,
             executor_state=executor_state, termination_state=termination["state"],
             post_launch_failure=post_launch_failure is not None,
@@ -901,7 +1070,14 @@ def run_contained_phase(args: argparse.Namespace, out_fd: int, err_fd: int,
             cleanup_ok = (cleanup_scope(unit)
                           if properties.get("LoadState") != "not-found" else True)
         if not cleanup_ok and reason == "COMPLETED":
-            reason = "AUDIT_SCOPE_CLEANUP_FAILED"
+            reason = f"{args.action.upper()}_SCOPE_CLEANUP_FAILED"
+        effect_evidence = None
+        if args.action == "execute":
+            effect_evidence = execution_effect_evidence(
+                args.receipt_root, args.intent, args.intent_sha256,
+                args.authorization_sha256)
+            if reason == "COMPLETED" and effect_evidence["state"] != "COMPLETED_RECONCILED":
+                reason = "EXECUTE_RECOVERY_PENDING"
         elapsed_ns = time.monotonic_ns() - started_ns
         os.fsync(out_fd); os.fsync(err_fd)
         append(supervisor_fd, "after_child", unit=unit, childPid=child.pid,
@@ -913,18 +1089,26 @@ def run_contained_phase(args: argparse.Namespace, out_fd: int, err_fd: int,
                scopeCleanupOk=cleanup_ok, executorState=executor_state,
                terminationState=termination["state"],
                postLaunchFailure=post_launch_failure,
+               executionEvidence=effect_evidence,
                resourceSampleCount=resource_samples,
                lastScopeResourceSample=last_resource_sample,
                finalScopeResourceSample=final_resource_sample)
+        terminal_state = ("TERMINAL" if termination["state"] ==
+                          "TERMINATED_CONFIRMED" else "RECOVERY_PENDING")
+        if (args.action == "execute" and
+                (effect_evidence is None or effect_evidence["state"] in {
+                    "EFFECTS_INCONCLUSIVE", "EFFECTS_UNRECONCILED"} or
+                 reason == "EXECUTE_RECOVERY_PENDING")):
+            terminal_state = "RECOVERY_PENDING"
         terminal = {"schemaVersion": 3,
-                    "state": ("TERMINAL" if termination["state"] ==
-                              "TERMINATED_CONFIRMED" else "RECOVERY_PENDING"),
+                    "state": terminal_state,
                     "action": args.action,
                     "exitCode": code, "signal": -code if code < 0 else received_signal,
                     "reason": reason, "childPid": child.pid, "unit": unit,
                     "executorState": executor_state,
                     "terminationState": termination["state"],
                     "postLaunchFailure": post_launch_failure,
+                    "executionEvidence": effect_evidence,
                     "memoryMaxBytes": args.memory_max_bytes,
                     "timeoutSeconds": args.timeout_seconds,
                     "elapsedMonotonicNs": elapsed_ns,
@@ -943,11 +1127,12 @@ def run_contained_phase(args: argparse.Namespace, out_fd: int, err_fd: int,
             return 78
         if not cleanup_ok and code == 0:
             return 78
-        if reason in {"AUDIT_CONTAINMENT_NOT_APPLIED",
-                      "AUDIT_LAUNCH_STATE_INCONCLUSIVE",
-                      "AUDIT_POST_LAUNCH_FAILURE",
-                      "AUDIT_LAUNCHER_EXITED_SCOPE_ACTIVE",
-                      "AUDIT_SCOPE_CLEANUP_FAILED"}:
+        if reason in {f"{args.action.upper()}_CONTAINMENT_NOT_APPLIED",
+                      f"{args.action.upper()}_LAUNCH_STATE_INCONCLUSIVE",
+                      f"{args.action.upper()}_POST_LAUNCH_FAILURE",
+                      f"{args.action.upper()}_LAUNCHER_EXITED_SCOPE_ACTIVE",
+                      f"{args.action.upper()}_SCOPE_CLEANUP_FAILED",
+                      "EXECUTE_RECOVERY_PENDING"}:
             return 78
         return code if code != 0 or reason == "COMPLETED" else 78
     except Exception as error:
@@ -980,18 +1165,29 @@ def main() -> None:
     except Exception:
         os.close(out_fd); os.close(err_fd)
         raise
-    if args.action in {"audit", "prepare"}:
+    if args.action in {"audit", "prepare", "execute"}:
         try:
             code = run_contained_phase(args, out_fd, err_fd, supervisor_fd)
         except AuditPostLaunchError as error:
             state = ("TERMINAL" if error.termination_state ==
                      "TERMINATED_CONFIRMED" else "RECOVERY_PENDING")
-            reason = ("AUDIT_POST_LAUNCH_FAILURE" if state == "TERMINAL"
-                      else "AUDIT_RECOVERY_PENDING")
+            prefix = args.action.upper()
+            reason = (f"{prefix}_POST_LAUNCH_FAILURE" if state == "TERMINAL"
+                      else f"{prefix}_RECOVERY_PENDING")
+            effect_evidence = None
+            if args.action == "execute":
+                effect_evidence = execution_effect_evidence(
+                    args.receipt_root, args.intent, args.intent_sha256,
+                    args.authorization_sha256)
+                if effect_evidence["state"] in {
+                        "EFFECTS_INCONCLUSIVE", "EFFECTS_UNRECONCILED"}:
+                    state = "RECOVERY_PENDING"
+                    reason = "EXECUTE_RECOVERY_PENDING"
             append(supervisor_fd, "post_launch_finalization_failure", action=args.action,
                    predicate=str(error), unit=error.unit, childPid=error.child_pid,
                    executorState=error.executor_state,
-                   terminationState=error.termination_state, reason=reason)
+                   terminationState=error.termination_state, reason=reason,
+                   executionEvidence=effect_evidence)
             if not args.terminal_output.exists() and not args.terminal_output.is_symlink():
                 publish_terminal(args.terminal_output, {
                     "schemaVersion": 3, "state": state, "action": args.action,
@@ -1000,6 +1196,7 @@ def main() -> None:
                     "childPid": error.child_pid,
                     "executorState": error.executor_state,
                     "terminationState": error.termination_state,
+                    "executionEvidence": effect_evidence,
                 })
             code = 78
         except Exception as error:
@@ -1009,7 +1206,7 @@ def main() -> None:
             publish_terminal(args.terminal_output, {
                 "schemaVersion": 3, "state": "TERMINAL", "action": args.action,
                 "exitCode": 78, "signal": None,
-                "reason": "AUDIT_CONTAINMENT_NOT_APPLIED",
+                "reason": f"{args.action.upper()}_CONTAINMENT_NOT_APPLIED",
                 "predicate": type(error).__name__, "detail": str(error),
                 "executorState": "EXECUTOR_NOT_STARTED",
                 "terminationState": "NOT_APPLICABLE",
@@ -1019,39 +1216,6 @@ def main() -> None:
             os.fsync(supervisor_fd)
             os.close(supervisor_fd); os.close(out_fd); os.close(err_fd)
         raise SystemExit(code)
-
-    child: subprocess.Popen[bytes] | None = None
-    received_signal: int | None = None
-
-    def forward(signum: int, _frame: Any) -> None:
-        nonlocal received_signal
-        received_signal = signum
-        append(supervisor_fd, "signal_received", signal=signum,
-               childPid=child.pid if child is not None else None)
-        if child is not None and child.poll() is None:
-            child.send_signal(signum)
-
-    previous = {number: signal.signal(number, forward)
-                for number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
-    try:
-        append(supervisor_fd, "before_child")
-        child = subprocess.Popen(executor_argv(args), stdin=subprocess.DEVNULL,
-                                 stdout=out_fd, stderr=err_fd, close_fds=True)
-        code = child.wait()
-        child_rss_peak = child_rss_peak_bytes()
-        os.fsync(out_fd); os.fsync(err_fd)
-        append(supervisor_fd, "after_child", childPid=child.pid, exitCode=code,
-               receivedSignal=received_signal, childRssPeakBytes=child_rss_peak)
-        terminal = canonical({"schemaVersion": 1, "state": "TERMINAL", "exitCode": code,
-                              "signal": -code if code < 0 else received_signal,
-                              "childPid": child.pid, "childRssPeakBytes": child_rss_peak})
-        publish_terminal(args.terminal_output, json.loads(terminal))
-    finally:
-        for number, handler in previous.items():
-            signal.signal(number, handler)
-        os.fsync(supervisor_fd)
-        os.close(supervisor_fd); os.close(out_fd); os.close(err_fd)
-    raise SystemExit(code)
 
 
 if __name__ == "__main__":
