@@ -231,6 +231,39 @@ nem a composição do OOM anterior. Próximo ato: revisão desta entrega. Produ�
 a custódia terminal continuam proibidas para replay; qualquer operação na VPS
 depende de autorização separada e orçamento representativo.
 
+#### Tentativa 3950b67c-v1 e guard do membro raiz
+
+A operação única seguinte usou o mesmo lote 3/3, control plane
+`3950b67c01c10f9a3db84a06f51d45b023d9e527`, custódia
+`p00-capacity-three-archives-3950b67c-v1` e request
+`1d0ad4d9dae5e21bb65ea2c7150b3ddc36570e804a9c07cb83022676aa92d762`.
+Terminou `AUDIT_MEMORY_MAX` no teto de 512 MiB, `oom=1`, `oom_kill=2`, sinal 9,
+scope encerrado, plano ausente e zero efeitos. O primeiro candidato chegou a
+`after_tar_scan` com 7.056 membros; o 9f4 parou em
+`before_authority_compare`; fa60 não iniciou. A custódia e o request são
+terminais e proibidos para replay.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| terminal | `9cca7e1bc6f8176f2c97e1bff941e887a4483bc997db6983c9b0b8b7ff3f3034` |
+| telemetria do executor | `3240fb4dc6cdc141269e23cb0d9d568926354c7606a4977ac0d684165db22064` |
+| telemetria do supervisor | `ab4f7caa183003c9ec9148f8b3b36e6e4053e93aacc4f87af50c78663c2035f1` |
+| índice privado | `4995c169c57f70cd2c2771f6f439a32bfc8544dcf6c63f2ebea8228426d309a9` |
+
+O diagnóstico local reproduziu, no autenticador real e sob timeout de cinco
+segundos, um loop anterior para membro normalizado `.`. O percurso partia de
+`root.parent`, ultrapassava a autoridade e permanecia em `/` quando todos os
+owners intermediários eram admitidos. A correção mínima autentica a própria raiz
+somente quando o membro raiz é diretório, prova confinamento antes de subir e
+nega tipos diferentes, escapes, autoridade `/` e duplicatas de `.`, `./.` ou
+`./`. Digest determinístico e autoridades intactas são regressões explícitas.
+
+Os registros/listagens versionados do 9f4 não revelam o membro raiz nem o comando
+de criação. Logo, a falha do percurso é fato reproduzido; atribuí-la ao archive
+produtivo ainda seria inferência. Nenhum payload produtivo foi relido para
+resolver essa diferença. A próxima etapa permitida é somente revisão do patch;
+não há autorização renovada para `audit`, `prepare` ou `execute`.
+
 Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
 continuam nas seções próprias; não são reabertos por esta correção.

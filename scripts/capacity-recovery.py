@@ -2080,8 +2080,14 @@ def _disposition_reference_checks(path: Path, operational: dict[str, Any],
 
 
 def _normalized_archive_member(name: str) -> PurePosixPath:
+    original = name
     while name.startswith("./"):
         name = name[2:]
+    if name in {"", "."}:
+        if (original and not original.startswith("/") and
+                all(part in {"", "."} for part in original.split("/"))):
+            return PurePosixPath(".")
+        deny("DISPOSITION_ARCHIVE_MEMBER_PATH")
     pure = PurePosixPath(name)
     if (not name or pure.is_absolute() or any(part in {"", ".", ".."} for part in pure.parts) or
             any(ord(character) < 32 for character in name)):
@@ -2106,10 +2112,28 @@ def _authority_root(path: Path, entry: dict[str, Any], *,
 def _authority_leaf(root: Path, root_info: os.stat_result,
                     relative: str, *, require_not_group_writable: bool = False
                     ) -> tuple[Path, list[dict[str, Any]]]:
-    leaf = root / relative
+    normalized_root = Path(os.path.abspath(root))
+    if normalized_root != root or root == root.parent:
+        deny("DISPOSITION_AUTHORITY_CONFINEMENT")
+    if relative == ".":
+        current_root = physical_directory(root, "DISPOSITION_AUTHORITY_DIRECTORY")
+        if _directory_identity(current_root) != _directory_identity(root_info):
+            deny("DISPOSITION_AUTHORITY_IDENTITY")
+        return root, []
+    leaf = Path(os.path.abspath(root / relative))
+    try:
+        leaf.relative_to(root)
+    except ValueError:
+        deny("DISPOSITION_AUTHORITY_CONFINEMENT")
     current = leaf.parent
     ancestors: list[dict[str, Any]] = []
     while current != root:
+        if current == current.parent:
+            deny("DISPOSITION_AUTHORITY_CONFINEMENT")
+        try:
+            current.relative_to(root)
+        except ValueError:
+            deny("DISPOSITION_AUTHORITY_CONFINEMENT")
         info = physical_directory(current, "DISPOSITION_AUTHORITY_ANCESTOR")
         if (info.st_dev != root_info.st_dev or not _identity_owner_allowed(info) or
                 (require_not_group_writable and stat.S_IMODE(info.st_mode) & 0o022)):
@@ -2214,6 +2238,8 @@ def _authenticate_disposition_archive(path: Path, entry: dict[str, Any],
                                                    len(archive.members))
                     try:
                         relative = _normalized_archive_member(member.name).as_posix()
+                        if relative == "." and not member.isdir():
+                            deny("DISPOSITION_ARCHIVE_ROOT_MEMBER")
                         names.add(relative)
                         if member.isreg():
                             stream = archive.extractfile(member)

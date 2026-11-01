@@ -1952,6 +1952,102 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(observed["memberCount"], 1)
         self.assertTrue(requested)
 
+    def test_manifest_archive_root_directory_member_terminates_and_is_deterministic(self):
+        fixture = self.manifest_disposition_fixture("root-directory-member")
+        entry = fixture["entries"][0]
+        manifest = json.loads(fixture["manifest"].read_text())
+        candidate = Path(entry["path"])
+        authority = Path(entry["authority"])
+        authority_before = MODULE.stat_identity(
+            authority.lstat(), include_nlink=True)
+        leaf_before = sha(authority / "dist/app.js")
+
+        with tarfile.open(candidate, "w:gz") as archive:
+            root = tarfile.TarInfo(".")
+            root.type = tarfile.DIRTYPE
+            archive.addfile(root)
+            payload = (authority / "dist/app.js").read_bytes()
+            leaf = tarfile.TarInfo("dist/app.js")
+            leaf.size = len(payload)
+            archive.addfile(leaf, io.BytesIO(payload))
+        candidate.chmod(0o600)
+        info = candidate.lstat()
+        entry["sha256"] = sha(candidate)
+        entry["identity"] = {
+            "device": info.st_dev, "inode": info.st_ino, "nlink": info.st_nlink,
+            "uid": info.st_uid, "gid": info.st_gid,
+            "mode": f"0{stat.S_IMODE(info.st_mode):03o}",
+        }
+
+        started = time.monotonic()
+        with fixture["patches"]:
+            first = MODULE._authenticate_disposition_archive(candidate, entry, manifest)
+            second = MODULE._authenticate_disposition_archive(candidate, entry, manifest)
+        self.assertLess(time.monotonic() - started, 2.0)
+        self.assertEqual(first["memberCount"], 2)
+        self.assertEqual(first["relationSha256"], second["relationSha256"])
+        self.assertEqual(MODULE.stat_identity(authority.lstat(), include_nlink=True),
+                         authority_before)
+        self.assertEqual(sha(authority / "dist/app.js"), leaf_before)
+
+    def test_archive_root_aliases_descendants_and_confinement_are_explicit(self):
+        for value in (".", "./.", "./"):
+            self.assertEqual(MODULE._normalized_archive_member(value).as_posix(), ".")
+
+        root = self.base / "authority-confinement"
+        child = root / "child"
+        child.mkdir(parents=True, mode=0o755)
+        leaf, ancestors = MODULE._authority_leaf(root, root.stat(), "child/file.js")
+        self.assertEqual(leaf, child / "file.js")
+        self.assertEqual([row["path"] for row in ancestors], [str(child)])
+
+        for relative in ("../outside", "/", "child/../../outside"):
+            with self.assertRaisesRegex(MODULE.Denied,
+                                        "DISPOSITION_AUTHORITY_CONFINEMENT"):
+                MODULE._authority_leaf(root, root.stat(), relative)
+        with self.assertRaisesRegex(MODULE.Denied,
+                                    "DISPOSITION_AUTHORITY_CONFINEMENT"):
+            MODULE._authority_leaf(Path("/"), Path("/").stat(), ".")
+        with self.assertRaisesRegex(MODULE.Denied,
+                                    "DISPOSITION_ARCHIVE_MEMBER_PATH"):
+            MODULE._normalized_archive_member("../outside")
+
+    def test_archive_root_alias_duplicate_and_non_directory_are_denied(self):
+        fixture = self.manifest_disposition_fixture("root-alias-negative")
+        entry = fixture["entries"][0]
+        manifest = json.loads(fixture["manifest"].read_text())
+        candidate = Path(entry["path"])
+
+        def bind_candidate():
+            candidate.chmod(0o600)
+            info = candidate.lstat()
+            entry["sha256"] = sha(candidate)
+            entry["identity"] = {
+                "device": info.st_dev, "inode": info.st_ino,
+                "nlink": info.st_nlink, "uid": info.st_uid, "gid": info.st_gid,
+                "mode": f"0{stat.S_IMODE(info.st_mode):03o}",
+            }
+
+        with tarfile.open(candidate, "w:gz") as archive:
+            for name in (".", "./."):
+                item = tarfile.TarInfo(name)
+                item.type = tarfile.DIRTYPE
+                archive.addfile(item)
+        bind_candidate()
+        with fixture["patches"], self.assertRaisesRegex(
+                MODULE.Denied, "DISPOSITION_ARCHIVE_MEMBER_DUPLICATE"):
+            MODULE._authenticate_disposition_archive(candidate, entry, manifest)
+
+        with tarfile.open(candidate, "w:gz") as archive:
+            item = tarfile.TarInfo("./")
+            item.type = tarfile.REGTYPE
+            item.size = 0
+            archive.addfile(item, io.BytesIO(b""))
+        bind_candidate()
+        with fixture["patches"], self.assertRaisesRegex(
+                MODULE.Denied, "DISPOSITION_ARCHIVE_ROOT_MEMBER"):
+            MODULE._authenticate_disposition_archive(candidate, entry, manifest)
+
     def test_long_archive_comparison_emits_bounded_temporal_progress(self):
         fixture = self.manifest_disposition_fixture("temporal-progress")
         entry = fixture["entries"][0]

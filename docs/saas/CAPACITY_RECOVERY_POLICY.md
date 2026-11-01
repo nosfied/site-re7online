@@ -243,6 +243,44 @@ O próximo ato é revisão desta entrega; qualquer operação na VPS continua
 dependente de autorização separada e de orçamento representativo do volume
 produtivo desconhecido.
 
+### Tentativa terminal 3950b67c-v1 e membro raiz da autoridade
+
+A única auditoria posterior, control plane
+`3950b67c01c10f9a3db84a06f51d45b023d9e527`, custódia
+`p00-capacity-three-archives-3950b67c-v1` e request SHA-256
+`1d0ad4d9dae5e21bb65ea2c7150b3ddc36570e804a9c07cb83022676aa92d762`,
+também é terminal e não autoriza replay. O scope de 512 MiB terminou em
+`AUDIT_MEMORY_MAX`: pico do cgroup `536870912`, `oom=1`, `oom_kill=2`,
+`exitCode=-9`, sinal 9 e encerramento confirmado. Não houve plano, `prepare`,
+`execute` ou efeito. Terminal `9cca7e1bc6f8176f2c97e1bff941e887a4483bc997db6983c9b0b8b7ff3f3034`,
+telemetrias do executor e supervisor
+`3240fb4dc6cdc141269e23cb0d9d568926354c7606a4977ac0d684165db22064`
+e `ab4f7caa183003c9ec9148f8b3b36e6e4053e93aacc4f87af50c78663c2035f1`.
+
+A última amostra viva, no segundo archive e na fase
+`before_authority_compare`, registrou `memory.current=534433792`,
+`anon=531619840`, `file=393216`, `kernel=2195456` e RSS do único processo
+`543903744`. O contador `max=37` não é usado isoladamente: houve OOM nominal.
+O primeiro archive concluiu 7.056 membros; o segundo não publicou resultado de
+candidato e o terceiro não iniciou.
+
+O diagnóstico local encontrou um defeito independente e reproduzível: o membro
+tar normalizado `.` fazia `_authority_leaf()` começar em `root.parent`; quando
+todos os ancestrais eram identidades admitidas, o percurso alcançava `/`, cujo
+pai é ele próprio, e não terminava. A versão anterior foi reproduzida pelo
+autenticador real em subprocesso limitado a cinco segundos e terminou por
+timeout. O contrato corrigido admite `.`, `./.` e `./` somente como diretório que
+representa a própria raiz autenticada, sem percorrer seus pais. Outros tipos,
+escapes, raiz `/` e duplicatas após normalização continuam negados. Descendentes
+provam confinamento antes de cada subida e negam antes de `parent == current`.
+
+Os registros versionados do frontend 9f4 preservam hash, tamanho, 22.784
+arquivos, 31 symlinks e a afirmação histórica `tar -tzf PASS`, mas não preservam
+o comando de criação nem a linha de listagem do membro raiz. Assim, o defeito
+está comprovado localmente; sua ocorrência no archive produtivo permanece
+hipótese compatível com a última fase, não fato atribuído. Nenhum archive
+produtivo foi relido para fechar essa lacuna.
+
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e
 `frontend-fa60-css-corrected.tar.gz`, total físico declarado de `458.973.184`
