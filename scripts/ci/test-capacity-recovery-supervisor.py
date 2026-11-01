@@ -51,9 +51,9 @@ class SupervisorTests(unittest.TestCase):
         self.addCleanup(folder.cleanup)
         root = Path(folder.name)
         args = SimpleNamespace(
-            action="prepare", plan=Path("/plan"), plan_sha256="a" * 64,
-            intent_output=Path("/intent"), commands_output=Path("/commands"),
-            manifest_output=Path("/manifest"), telemetry_output=root / "child.jsonl",
+            action="execute", intent=Path("/intent"), intent_sha256="a" * 64,
+            authorization=Path("/authorization"), authorization_sha256="b" * 64,
+            receipt_root=Path("/receipt"), telemetry_output=root / "child.jsonl",
             stdout_output=root / "stdout", stderr_output=root / "stderr",
             terminal_output=root / "terminal.json",
             supervisor_telemetry_output=root / "supervisor.jsonl")
@@ -78,6 +78,18 @@ class SupervisorTests(unittest.TestCase):
         self.assertNotIn("-c", argv)
         self.assertEqual(argv[-2:], ["--telemetry-output", "/telemetry"])
 
+    def test_execute_argv_retains_historical_direct_executor_contract(self):
+        args = SimpleNamespace(
+            action="execute", intent=Path("/intent"), intent_sha256="a" * 64,
+            authorization=Path("/authorization"), authorization_sha256="b" * 64,
+            receipt_root=Path("/receipt"), telemetry_output=Path("/telemetry"))
+        argv = MODULE.executor_argv(args)
+        self.assertEqual(argv[:4], ["/usr/bin/python3", "-B", str(MODULE.EXECUTOR),
+                                    "execute"])
+        self.assertNotIn("--containment-output", argv)
+        self.assertNotIn("--memory-max-bytes", argv)
+        self.assertNotIn("--timeout-seconds", argv)
+
     def test_audit_scope_argv_is_closed_and_kernel_enforced(self):
         args = SimpleNamespace(
             action="audit", request=Path("/request"), request_sha256="a" * 64,
@@ -92,9 +104,59 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn("--property=OOMPolicy=kill", argv)
         self.assertIn("--property=RuntimeMaxSec=900s", argv)
         self.assertIn("--property=KillMode=control-group", argv)
-        self.assertIn(MODULE.INTERNAL_ACTION, argv)
+        self.assertIn(MODULE.INTERNAL_AUDIT_ACTION, argv)
         self.assertNotIn("prepare", argv)
         self.assertNotIn("execute", argv)
+
+    def test_prepare_scope_argv_reuses_closed_kernel_containment(self):
+        args = SimpleNamespace(
+            action="prepare", plan=Path("/plan"), plan_sha256="a" * 64,
+            intent_output=Path("/intent"), commands_output=Path("/commands"),
+            manifest_output=Path("/manifest"), telemetry_output=Path("/telemetry"),
+            containment_output=Path("/containment"),
+            memory_max_bytes=512 * 1024 * 1024, timeout_seconds=1800)
+        argv = MODULE.systemd_scope_argv(args, "re7-capacity-prepare-test.scope")
+        self.assertIn(MODULE.INTERNAL_PREPARE_ACTION, argv)
+        self.assertIn("--property=MemoryMax=536870912", argv)
+        self.assertIn("--property=MemorySwapMax=0", argv)
+        self.assertIn("--property=RuntimeMaxSec=1800s", argv)
+        self.assertIn("--property=KillMode=control-group", argv)
+        self.assertIn("--plan", argv)
+        self.assertIn("--plan-sha256", argv)
+        self.assertIn("--intent-output", argv)
+        self.assertIn("--commands-output", argv)
+        self.assertIn("--manifest-output", argv)
+        self.assertNotIn("execute", argv)
+
+    def test_internal_prepare_authenticates_scope_before_exact_executor(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-contained-prepare-") as folder:
+            root = Path(folder)
+            args = SimpleNamespace(
+                action=MODULE.INTERNAL_PREPARE_ACTION,
+                unit="re7-capacity-prepare-test.scope",
+                memory_max_bytes=512 * 1024 * 1024,
+                containment_output=root / "containment.json",
+                telemetry_output=root / "telemetry.jsonl",
+                request=None, request_sha256=None, plan_output=None,
+                plan=root / "plan.json", plan_sha256="a" * 64,
+                intent_output=root / "intent.json", commands_output=root / "commands.txt",
+                manifest_output=root / "manifest.json")
+            projection = {"memoryMaxBytes": 512 * 1024 * 1024,
+                          "memorySwapMaxBytes": 0, "memoryOomGroup": True}
+            with mock.patch.object(MODULE, "internal_parser") as parser, \
+                    mock.patch.object(MODULE, "verify_contained_cgroup",
+                                      return_value=("/exact.scope", projection)), \
+                    mock.patch.object(MODULE.os, "execv") as execute:
+                parser.return_value.parse_args.return_value = args
+                MODULE.contained_phase_main()
+            evidence = json.loads(args.containment_output.read_text())
+            self.assertEqual(evidence["state"], "PASS")
+            argv = execute.call_args.args[1]
+            self.assertEqual(argv[:4], ["/usr/bin/python3", "-B",
+                                        str(MODULE.EXECUTOR), "prepare"])
+            self.assertIn(str(args.plan), argv)
+            self.assertIn(str(args.intent_output), argv)
+            self.assertNotIn("execute", argv)
 
     def test_contained_cgroup_requires_exact_aggregate_limits(self):
         with tempfile.TemporaryDirectory(prefix="capacity-cgroup-") as folder:
@@ -270,6 +332,23 @@ class SupervisorTests(unittest.TestCase):
                 launcher_started=True, containment={"state": "PASS"},
                 telemetry_path=path), "EXECUTOR_STATE_INCONCLUSIVE")
 
+    def test_executor_started_authenticates_first_line_of_large_telemetry(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-start-proof-large-") as folder:
+            path = Path(folder) / "telemetry.jsonl"
+            first = '{"phase":"telemetry_started","schemaVersion":1}\n'
+            path.write_text(first + ('{"phase":"later"}\n' * 5000))
+            path.chmod(0o600)
+            self.assertGreater(path.stat().st_size, MODULE.EXECUTOR_PROOF_MAX_BYTES)
+            self.assertEqual(MODULE.executor_execution_state(
+                launcher_started=True, containment={"state": "PASS"},
+                telemetry_path=path), "EXECUTOR_STARTED")
+
+            path.write_text('{"phase":"' + ('x' * MODULE.EXECUTOR_PROOF_MAX_BYTES) +
+                            '","schemaVersion":1}\n')
+            self.assertEqual(MODULE.executor_execution_state(
+                launcher_started=True, containment={"state": "PASS"},
+                telemetry_path=path), "EXECUTOR_STATE_INCONCLUSIVE")
+
     def test_kill_failure_is_bounded_and_keeps_recovery_pending(self):
         child = self.FakeChild()
         active = {"state": "ACTIVE", "properties": {"ActiveState": "active"},
@@ -342,7 +421,7 @@ class SupervisorTests(unittest.TestCase):
 
             with mock.patch.object(MODULE, "parser") as parser, \
                     mock.patch.object(MODULE, "trusted_system_binary"), \
-                    mock.patch.object(MODULE, "audit_scope_unit",
+                    mock.patch.object(MODULE, "contained_scope_unit",
                                       return_value="re7-capacity-audit-test.scope"), \
                     mock.patch.object(MODULE.subprocess, "Popen", side_effect=launch), \
                     mock.patch.object(MODULE, "scope_memory_snapshot",
@@ -468,6 +547,65 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(stopped.exception.code, 78)
             self.assertFalse(args.plan_output.exists())
             terminal = json.loads(args.terminal_output.read_text())
+            self.assertEqual(terminal["reason"], "AUDIT_CONTAINMENT_NOT_APPLIED")
+            self.assertEqual(terminal["executorState"], "EXECUTOR_NOT_STARTED")
+
+    def test_prepare_existing_sealed_output_denies_before_child(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-prepare-existing-") as folder:
+            root = Path(folder)
+            intent = root / "intent.json"
+            intent.write_text("preserved\n")
+            args = SimpleNamespace(
+                action="prepare", plan=root / "plan.json", plan_sha256="a" * 64,
+                intent_output=intent, commands_output=root / "commands.txt",
+                manifest_output=root / "manifest.json",
+                telemetry_output=root / "child.jsonl",
+                containment_output=root / "containment.json",
+                memory_max_bytes=512 * 1024 * 1024, timeout_seconds=1800,
+                stdout_output=root / "stdout", stderr_output=root / "stderr",
+                terminal_output=root / "terminal.json",
+                supervisor_telemetry_output=root / "supervisor.jsonl")
+            with mock.patch.object(MODULE, "parser") as parser, \
+                    mock.patch.object(MODULE, "trusted_system_binary"), \
+                    mock.patch.object(MODULE.subprocess, "Popen") as child, \
+                    self.assertRaises(SystemExit) as stopped:
+                parser.return_value.parse_args.return_value = args
+                MODULE.main()
+            self.assertEqual(stopped.exception.code, 78)
+            child.assert_not_called()
+            self.assertEqual(intent.read_text(), "preserved\n")
+            self.assertFalse(args.commands_output.exists())
+            self.assertFalse(args.manifest_output.exists())
+            terminal = json.loads(args.terminal_output.read_text())
+            self.assertEqual(terminal["action"], "prepare")
+            self.assertEqual(terminal["executorState"], "EXECUTOR_NOT_STARTED")
+
+    def test_prepare_containment_launch_failure_denies_before_executor(self):
+        with tempfile.TemporaryDirectory(prefix="capacity-prepare-deny-") as folder:
+            root = Path(folder)
+            args = SimpleNamespace(
+                action="prepare", plan=root / "plan.json", plan_sha256="a" * 64,
+                intent_output=root / "intent.json", commands_output=root / "commands.txt",
+                manifest_output=root / "manifest.json",
+                telemetry_output=root / "child.jsonl",
+                containment_output=root / "containment.json",
+                memory_max_bytes=512 * 1024 * 1024, timeout_seconds=1800,
+                stdout_output=root / "stdout", stderr_output=root / "stderr",
+                terminal_output=root / "terminal.json",
+                supervisor_telemetry_output=root / "supervisor.jsonl")
+            with mock.patch.object(MODULE, "parser") as parser, \
+                    mock.patch.object(MODULE, "trusted_system_binary"), \
+                    mock.patch.object(MODULE.subprocess, "Popen",
+                                      side_effect=OSError("launch denied")), \
+                    self.assertRaises(SystemExit) as stopped:
+                parser.return_value.parse_args.return_value = args
+                MODULE.main()
+            self.assertEqual(stopped.exception.code, 78)
+            self.assertFalse(args.intent_output.exists())
+            self.assertFalse(args.commands_output.exists())
+            self.assertFalse(args.manifest_output.exists())
+            terminal = json.loads(args.terminal_output.read_text())
+            self.assertEqual(terminal["action"], "prepare")
             self.assertEqual(terminal["reason"], "AUDIT_CONTAINMENT_NOT_APPLIED")
             self.assertEqual(terminal["executorState"], "EXECUTOR_NOT_STARTED")
 

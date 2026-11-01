@@ -7,14 +7,14 @@ adaptações de `generation-retirement.py` para cache npm são proibidos. Execu�
 longas usam exclusivamente `scripts/capacity-recovery-supervisor.py`, que chama o
 executor irmão sem shell e preserva canais e código de saída. Na fase `audit`, o
 supervisor exige um escopo transitório do `systemd --user` em cgroup v2 antes de
-executar o auditor. `MemoryMax`, `MemorySwapMax=0`, `OOMPolicy=kill` e
+executar `audit` ou `prepare`. `MemoryMax`, `MemorySwapMax=0`, `OOMPolicy=kill` e
 `memory.oom.group=1` limitam a memória agregada do Python, Node/PM2 CLI, helper e
-demais descendentes da auditoria; RSS continua evidência, não mecanismo de limite.
+demais descendentes da fase; RSS continua evidência, não mecanismo de limite.
 `RuntimeMaxSec` usa relógio monotônico e encerra somente o control group desse
 escopo. O daemon PM2 e os serviços já existentes ficam fora dele. Ausência do
 escopo, limites divergentes ou impossibilidade de autenticá-lo negam antes do
-executor. `prepare` e `execute` conservam o comportamento histórico de sinais,
-locks e journals.
+executor. `execute` conserva o comportamento histórico de sinais, locks e
+journals; esta extensão não altera sua aquisição de locks nem seus efeitos.
 
 ## Estados e separação de autoridade
 
@@ -280,6 +280,74 @@ o comando de criação nem a linha de listagem do membro raiz. Assim, o defeito
 está comprovado localmente; sua ocorrência no archive produtivo permanece
 hipótese compatível com a última fase, não fato atribuído. Nenhum archive
 produtivo foi relido para fechar essa lacuna.
+
+### Tentativa terminal 916f8d6b-v1
+
+O guard do membro raiz foi integrado pelo merge
+`916f8d6b4e8696c821c40eec910dbca39449a319`, com árvore idêntica ao HEAD
+testado e CI `41343829157` 4/4 PASS. A operação única seguinte usou custódia
+`p00-capacity-three-archives-916f8d6b-v1` e request
+`113abf0a6f770d6353abfc1fb7479134e599b329f572d0fdd409fe3819f73c15`.
+O executor negou em 0,386 s com exit code 2 e
+`FILE_SHA256:operational-state.schema2.private.json`: o estado operacional
+materializado tinha SHA-256
+`fd2c68d8d0889cc55799695f55225495b4c6cf2136f3a151b93fd0e731ed0d96`,
+enquanto o request ainda vinculava o SHA anterior
+`6641d581af300cd81f13ba3febffef377e4f78feb40ede7d82d886994953ea6c`.
+
+Não houve avaliação por candidato, plano, `prepare`, `execute` ou efeito. O
+scope terminou confirmado, sem OOM ou timeout; pico do cgroup 17.289.216 bytes,
+pico RSS do filho 28.717.056 bytes. Terminal
+`4ab144e806a8ea8ec43d013f40a6479c9d95bd557917ce51493697b3d944bdec`,
+telemetrias `7235a80d617eaa1aa25df8828798a26c2ddb657083fc3bd2a71ea9dd75ed24b5`
+e `d41fde756979d9b340243d39bef0439a263b18613575fa1bc4be6abffc86596e`,
+índice `d2902c27a570e4a9e7d69e3278eb4ad2b3180b1a576b6fc2930a7b0a8130ce6f`.
+A negativa comprova que caminho e SHA do estado operacional formam um binding
+único: atualizar um exige atualizar atomicamente o outro antes do lançamento.
+Essa custódia e esse request são terminais e proibidos para replay.
+
+### Auditoria corrigida 916f8d6b-v2
+
+A causa da v1 foi confirmada na montagem: um template do request anterior teve
+os caminhos atualizados, mas conservou o SHA antigo da fotografia operacional.
+Não houve defeito do consumidor. Na custódia exclusiva
+`p00-capacity-three-archives-916f8d6b-v2`, a fotografia foi finalizada primeiro,
+reaberta por leitura estável e autenticada em
+`7c719d20eb94a7df6c2e6ac92eacfb38407eebc97d7a9c3f2158dc92039dbda5`.
+Só então o request foi gerado do zero, reaberto e conferido campo a campo; seu
+SHA final é `4cfaab66119ea9f06c96e26781d40fc5be158442a7ac0baa4386326b5b4c1c6e`
+e a conferência selada é
+`d53ca8c9094f7c249614de2db5c3d50ff8747b90a37d543c6ed9bf85e948a863`.
+Nenhum insumo selado foi reescrito depois da conferência e nenhum payload foi
+relido para montar os bindings.
+
+O único `audit` terminou em 165,185 s, exit code 0, scope encerrado e estado
+`P00_CAPACITY_RECOVERY_AUDIT_PASS`. O plano
+`502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`
+qualificou 3/3, `458.973.184` bytes e três inodes, sem referências ou writers;
+`errors=[]`. O espaço observado foi `8.391.720.960` bytes e a projeção
+`8.850.694.144`: o mínimo incremental passou e o alvo agregado não passou, como
+esperado. A contenção chegou a `536.870.912` bytes, com 3.729 eventos `max`, mas
+zero `oom`, `oom_kill` e `oom_group_kill`; RSS pico do filho 57.942.016 bytes.
+Terminal `f4792439ba120732af502a7d49763a7cea12e084b7e022bb86e87da9f75ea03d`,
+telemetrias `2454a7f595cd7accf59338424f65f26eb8df939e942a7853f63ad3309dfe8312`
+e `7b1fdd1e4d9fb036ec91a328bb4576c76b06918a3eb183a2577ba95b314211f3`,
+índice `5b2635c2e410de18a3847fcc84c41c9b672a865c31a3e981c7c8dc2f114c170d`.
+Produção permaneceu inalterada, comprovada por
+`e53272249a28b9d7d152c401b8f063f0967f8a89b079278ee028ec428ad86631`;
+os três archives e suas autoridades continuam presentes. Esta etapa parou antes
+de `prepare`/`execute` e não autoriza exclusão.
+
+O plano PASS acima é a entrada imutável da próxima fase; outro `audit` é
+proibido. A extensão local seguinte reutiliza no `prepare` a mesma contenção já
+validada (`MemoryMax=536870912`, swap zero, prazo monotônico e encerramento do
+scope confirmado), sem alterar elegibilidade, locks, journals ou `execute`.
+Também corrige somente a autenticação do primeiro evento da telemetria: o arquivo
+produtivo tinha 102.129 bytes, enquanto o leitor anterior lia 65.537 bytes e
+rejeitava o arquivo inteiro por exceder 64 KiB. O novo leitor limita a primeira
+linha a 64 KiB, autentica `telemetry_started` e não rejeita eventos posteriores.
+A evidência original permanece imutável. Esta seção descreve patch local em
+revisão; não registra `prepare` produtivo executado.
 
 O escopo continua fechado nos três archives
 `worker-reactive-afbb7455.tar.gz`, `frontend-9f4cbe0f-v2.tar.gz` e

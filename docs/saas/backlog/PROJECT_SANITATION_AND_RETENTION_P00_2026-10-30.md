@@ -268,6 +268,57 @@ Os sucessos `automation-20260929`, `hybrid-b9`, recuperação #288 e fechamento
 `fa63994a` permanecem terminais e irrepetíveis. Seus receipts, journals e hashes
 continuam nas seções próprias; não são reabertos por esta correção.
 
+#### Tentativa terminal 916f8d6b-v1
+
+O PR #303 foi integrado no merge
+`916f8d6b4e8696c821c40eec910dbca39449a319`; sua árvore
+`38fd61326d494a1d312a723653bfaee10d92a12d` é idêntica à do HEAD testado
+`e75c48280c1e56bd96e497e59acc21107a45bf31`, coberto pela CI `41343829157`
+4/4 PASS. A auditoria única da custódia
+`p00-capacity-three-archives-916f8d6b-v1`, request
+`113abf0a6f770d6353abfc1fb7479134e599b329f572d0fdd409fe3819f73c15`,
+foi consumida por negativa de binding antes de classificar qualquer archive.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| estado operacional materializado | `fd2c68d8d0889cc55799695f55225495b4c6cf2136f3a151b93fd0e731ed0d96` |
+| SHA antigo ainda vinculado pelo request | `6641d581af300cd81f13ba3febffef377e4f78feb40ede7d82d886994953ea6c` |
+| terminal | `4ab144e806a8ea8ec43d013f40a6479c9d95bd557917ce51493697b3d944bdec` |
+| telemetria do executor | `7235a80d617eaa1aa25df8828798a26c2ddb657083fc3bd2a71ea9dd75ed24b5` |
+| telemetria do supervisor | `d41fde756979d9b340243d39bef0439a263b18613575fa1bc4be6abffc86596e` |
+| índice privado | `d2902c27a570e4a9e7d69e3278eb4ad2b3180b1a576b6fc2930a7b0a8130ce6f` |
+
+Predicado: `FILE_SHA256:operational-state.schema2.private.json`; exit code 2;
+scope encerrado e zero plano/efeito. Os três candidatos e autoridades continuam
+presentes, e PM2, current, dump, guarda, health e locks foram preservados. Essa
+operação não produziu resultado de elegibilidade 3/3 e não pode ser repetida.
+
+#### Auditoria corrigida 916f8d6b-v2
+
+A v1 conservou o hash antigo porque o request foi derivado de template antes de
+o estado operacional final ser autenticado. A v2 não transportou esse binding:
+finalizou `operational-state.schema2.private.json`, confirmou
+`7c719d20eb94a7df6c2e6ac92eacfb38407eebc97d7a9c3f2158dc92039dbda5`,
+gerou o request e só o selou após readback integral dos bindings. Request
+`4cfaab66119ea9f06c96e26781d40fc5be158442a7ac0baa4386326b5b4c1c6e`;
+conferência `d53ca8c9094f7c249614de2db5c3d50ff8747b90a37d543c6ed9bf85e948a863`.
+
+O audit único passou 3/3 e qualificou `458.973.184` bytes/3 inodes, plano
+`502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`,
+sem executar efeitos. Disponível antes `8.391.720.960`; projetado
+`8.850.694.144`; mínimo incremental satisfeito e alvo agregado ainda não.
+Terminal `f4792439…`, telemetrias `2454a7f5…`/`7b1fdd1e…`, índice
+`5b2635c2…`. A produção permaneceu inalterada (`e5327224…`), os três candidatos
+e autoridades seguem presentes e a custódia parou antes de `prepare`/`execute`.
+O resultado é prova reutilizável, não autorização destrutiva.
+
+Próxima transição, ainda somente em revisão: reutilizar o plano
+`502cc4b7213f9db745ceb88bf3df13adcfeab27a1f243313962d6c97ca53abf5`
+em `prepare` contido por 512 MiB, swap zero e prazo monotônico. Não repetir
+`audit`. A correção do leitor autentica apenas a primeira linha limitada da
+telemetria; eventos posteriores não invalidam a prova de início. `execute`, locks,
+journal, elegibilidade e os três caminhos permanecem inalterados.
+
 O ensaio dirigido adicional encerrou um filho real por `SIGTERM` enquanto o
 `ExactNameRegistry` estava aberto. O supervisor persistiu as fases
 `before_child → signal_received → after_child`, `exitCode=-15`, sinal 15 e pico
