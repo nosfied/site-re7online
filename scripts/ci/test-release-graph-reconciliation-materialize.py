@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
+SOURCE_COMMIT = "bcbe5c5617ee1e6ff7cd9b49e03bc4da9610fb9a"
 SOURCE = ROOT / "scripts/release-graph-reconciliation-materialize.py"
 SPEC = importlib.util.spec_from_file_location("reconciliation_materializer", SOURCE)
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -48,7 +49,7 @@ class ReconciliationMaterializerTest(unittest.TestCase):
     def test_materializes_integrated_controls_and_both_descriptors(self):
         with tempfile.TemporaryDirectory() as temporary:
             custody = Path(temporary) / "custody"
-            result = MODULE.materialize(ROOT, custody, "89c41eeda5e65858f6b9492d3bdb0524494ca558")
+            result = MODULE.materialize(ROOT, custody, SOURCE_COMMIT)
             self.assertEqual(len(result["readback"]["files"]), 5)
             releases = {item["releaseId"] for item in result["readback"]["descriptors"]}
             self.assertEqual(releases, {
@@ -79,7 +80,7 @@ class ReconciliationMaterializerTest(unittest.TestCase):
     def test_truncated_hash_denies(self):
         with tempfile.TemporaryDirectory() as temporary:
             custody = Path(temporary) / "custody"
-            result = MODULE.materialize(ROOT, custody, "89c41eeda5e65858f6b9492d3bdb0524494ca558")
+            result = MODULE.materialize(ROOT, custody, SOURCE_COMMIT)
             index = copy.deepcopy(result["index"])
             index["files"][0]["sha256"] = index["files"][0]["sha256"][:12]
             with self.assertRaisesRegex(MODULE.MaterializationDenied,
@@ -89,7 +90,7 @@ class ReconciliationMaterializerTest(unittest.TestCase):
     def test_divergent_hash_denies(self):
         with tempfile.TemporaryDirectory() as temporary:
             custody = Path(temporary) / "custody"
-            result = MODULE.materialize(ROOT, custody, "89c41eeda5e65858f6b9492d3bdb0524494ca558")
+            result = MODULE.materialize(ROOT, custody, SOURCE_COMMIT)
             index = copy.deepcopy(result["index"])
             index["files"][0]["sha256"] = "0" * 64
             with self.assertRaisesRegex(MODULE.MaterializationDenied,
@@ -100,7 +101,7 @@ class ReconciliationMaterializerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             custody = Path(temporary) / "custody"
             result = MODULE.materialize(
-                ROOT, custody, "89c41eeda5e65858f6b9492d3bdb0524494ca558")
+                ROOT, custody, SOURCE_COMMIT)
             request = self.synthetic_request(custody, result)
             request["sourceGraph"]["sha256"] = request["sourceGraph"]["sha256"][:16]
             with self.assertRaisesRegex(MODULE.MaterializationDenied,
@@ -116,7 +117,7 @@ class ReconciliationMaterializerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             custody = Path(temporary) / "custody"
             result = MODULE.materialize(
-                ROOT, custody, "89c41eeda5e65858f6b9492d3bdb0524494ca558")
+                ROOT, custody, SOURCE_COMMIT)
             request = self.synthetic_request(custody, result)
             evidence = custody / "synthetic-evidence.json"
             original_write = MODULE.write_json_exclusive
