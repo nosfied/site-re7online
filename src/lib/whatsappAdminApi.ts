@@ -663,6 +663,12 @@ export type CampaignItem = {
       version: 1;
       crmBusinessStatusId: string;
     } | null;
+    staticAudienceSelection?: {
+      version: 1;
+      mode: "STATIC_FILTER";
+      filters: Record<string, unknown>;
+      audienceSignature: string;
+    } | null;
     templateVariableMappings?: Array<{
       position: string;
       source: string;

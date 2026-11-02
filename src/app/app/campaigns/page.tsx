@@ -1313,11 +1313,6 @@ export default function AppCampaignsPage() {
     [selectedCampaignTemplate]
   );
 
-  const audienceEligibleItems = useMemo(
-    () => audiencePreview?.items.filter((item) => item.eligible) ?? [],
-    [audiencePreview]
-  );
-
   useEffect(() => {
     csvRequestGenerationRef.current += 1;
     setCsvVariableColumns((previous) =>
@@ -2745,7 +2740,6 @@ export default function AppCampaignsPage() {
       showToast("warning", "Prévia em atualização", message);
       return;
     }
-    const selectedLeadIds = audienceEligibleItems.map((item) => item.leadId);
     const name = form.name.trim() || defaultDraftName;
     const templateId = form.templateId.trim();
 
@@ -2760,7 +2754,7 @@ export default function AppCampaignsPage() {
       showToast("error", "Rascunho incompleto", templateVariableMappingError);
       return;
     }
-    if (selectedLeadIds.length === 0) {
+    if (audiencePreview.summary.eligible === 0) {
       const message = "Não há contatos elegíveis nesta prévia para criar rascunho.";
       setAudiencePreviewError(message);
       showToast("warning", "Sem audiência elegível", message);
@@ -2776,10 +2770,31 @@ export default function AppCampaignsPage() {
     setCreatingDraft(true);
     setAudiencePreviewError(null);
     try {
+      const selectionPayload = buildAudienceSplitPayload();
+      if (!selectionPayload.ok) {
+        setAudiencePreviewError(selectionPayload.message);
+        showToast("error", "Rascunho incompleto", selectionPayload.message);
+        return;
+      }
+      const resolvedAudience = await previewAppCampaignDraftSplit(session, selectionPayload.value);
+      if (resolvedAudience.plan.draftCount > 1) {
+        setAudienceSplitPlan(resolvedAudience.plan);
+        setAudienceSplitRequestId(globalThis.crypto?.randomUUID?.() ?? `split-${Date.now()}`);
+        const message = `A audiência integral tem ${resolvedAudience.plan.totalEligible} destinatários e precisa ser dividida em ${resolvedAudience.plan.draftCount} rascunhos.`;
+        setAudiencePreviewError(message);
+        showToast("warning", "Divisão necessária", message);
+        return;
+      }
       const created = await createAppCampaignDraft(session, {
         name,
         templateId,
-        selectedLeadIds,
+        selectedLeadIds: [],
+        staticAudienceSelection: {
+          version: 1,
+          mode: "STATIC_FILTER",
+          filters: selectionPayload.value.filters ?? {},
+          audienceSignature: resolvedAudience.plan.audienceSignature,
+        },
         returnDestination: returnDestination.value,
         ...(form.templateMediaAssetId ? { templateMediaAssetId: form.templateMediaAssetId } : {}),
         ...(templateVariableLabels.length > 0
@@ -3906,7 +3921,7 @@ export default function AppCampaignsPage() {
                   <p className="text-xs text-white/60">
                     {audienceRecipientMode === "DYNAMIC_CRM_FILTER"
                       ? `${audiencePreview.summary.total} correspondências neste momento. Os destinatários finais serão definidos no momento do envio.`
-                      : `${audienceEligibleItems.length} contato(s) elegível(is) serão incluídos.`}
+                      : `${audiencePreview.summary.eligible} contato(s) elegível(is) da audiência integral serão incluídos.`}
                   </p>
                   {audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? (
                     <label className="grid max-w-xs gap-1 text-sm">
@@ -3926,7 +3941,7 @@ export default function AppCampaignsPage() {
                     disabled={
                       !campaignOperationsOpen || checkingCampaignOperations || creatingDraft ||
                       campaignReusePreviewState === "loading" ||
-                      (audienceRecipientMode === "STATIC_RECIPIENTS" && audienceEligibleItems.length === 0) ||
+                      (audienceRecipientMode === "STATIC_RECIPIENTS" && audiencePreview.summary.eligible === 0) ||
                       (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && (!audienceFilters.status || !composerScheduleInput)) ||
                       !form.templateId ||
                       templates.length === 0 ||

@@ -16253,11 +16253,13 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       if (!body) return;
       const name = String(body.name ?? body.campaignName ?? "").trim();
       const templateId = String(body.templateId ?? "").trim();
-      const selectedLeadIds = Array.isArray(body.selectedLeadIds)
+      let selectedLeadIds = Array.isArray(body.selectedLeadIds)
         ? body.selectedLeadIds.map((value) => String(value ?? "").trim()).filter(Boolean)
         : [];
       const selectionMode = normalizeCampaignSelectionMode(body.selectionMode);
       const dynamicFilter = extractCampaignDynamicCrmFilter(body.dynamicFilter);
+      const staticAudienceSelection = extractCampaignStaticAudienceSelection(body.staticAudienceSelection);
+      let staticAudienceSummary: CampaignDraftRecipientSummary | null = null;
       const components = parseTemplateComponents(body.templateParams);
       if (!name) {
         json(res, 400, httpError("bad_request", "Informe o nome da campanha."));
@@ -16267,7 +16269,19 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 400, httpError("template_required", "Selecione um modelo aprovado antes de continuar."));
         return;
       }
-      if (selectionMode === "STATIC_RECIPIENTS" && selectedLeadIds.length === 0) {
+      if (body.staticAudienceSelection !== undefined && !staticAudienceSelection) {
+        json(res, 400, httpError("invalid_audience_selection", "A seleção integral da audiência é inválida."));
+        return;
+      }
+      if (staticAudienceSelection && selectedLeadIds.length > 0) {
+        json(res, 400, httpError("ambiguous_audience_selection", "Use apenas uma origem de audiência por rascunho."));
+        return;
+      }
+      if (staticAudienceSelection && selectionMode !== "STATIC_RECIPIENTS") {
+        json(res, 400, httpError("ambiguous_audience_selection", "Use apenas um modo de seleção por rascunho."));
+        return;
+      }
+      if (selectionMode === "STATIC_RECIPIENTS" && selectedLeadIds.length === 0 && !staticAudienceSelection) {
         json(res, 400, httpError("invalid_recipients", "Selecione ao menos um contato elegível."));
         return;
       }
@@ -16278,6 +16292,54 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       if (selectedLeadIds.length > CAMPAIGN_DRAFT_RECIPIENT_LIMIT) {
         json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: CAMPAIGN_DRAFT_RECIPIENT_LIMIT }));
         return;
+      }
+      if (staticAudienceSelection) {
+        if (!(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: pathname,
+          requestId,
+        }))) return;
+        const audience = await resolveCampaignAudienceSplitLeadIds(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          mode: "STATIC_FILTER",
+          query: staticAudienceSelection.filters,
+          dynamicFilter: null,
+        });
+        if (!audience.ok) {
+          json(res, 400, httpError(audience.error, audience.message, audience.plan ? { plan: audience.plan } : undefined));
+          return;
+        }
+        const resolvedAudience = await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
+          clientId: client.id,
+          selectedLeadIds: audience.leadIds,
+          maxRecipients: CAMPAIGN_SPLIT_MAX_ANALYZED,
+        });
+        const acceptedLeadIds = resolvedAudience.acceptedVariableValues.map((item) => item.leadId);
+        const plan = serializeCampaignAudienceSplitPlan({
+          mode: "STATIC_FILTER",
+          leadIds: acceptedLeadIds,
+          truncated: audience.plan.truncated,
+          sourceDescription: audience.plan.sourceDescription,
+        });
+        if (plan.audienceSignature !== staticAudienceSelection.audienceSignature) {
+          json(res, 409, httpError("audience_changed", "A audiência mudou. Gere uma nova prévia antes de criar o rascunho.", {
+            plan,
+            summary: resolvedAudience.summary,
+          }));
+          return;
+        }
+        if (plan.totalEligible > CAMPAIGN_DRAFT_RECIPIENT_LIMIT) {
+          json(res, 409, httpError("audience_requires_split", "A audiência precisa ser dividida em rascunhos de até 1.000 destinatários.", {
+            plan,
+            summary: resolvedAudience.summary,
+          }));
+          return;
+        }
+        selectedLeadIds = acceptedLeadIds;
+        staticAudienceSummary = resolvedAudience.summary;
       }
       if (selectionMode === "DYNAMIC_CRM_FILTER") {
         if (!(await enforceAppCapability(prisma, res, {
@@ -16351,6 +16413,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         returnDestination: returnDestination.destination,
         selectionMode,
         dynamicFilter,
+        staticAudienceSelection,
+        staticAudienceSummary,
         templateMedia: templateMedia.media,
       });
       if (!created.ok) {
@@ -30823,12 +30887,20 @@ type CampaignDraftSeed = {
   summary?: CampaignDraftRecipientSummary | null;
   selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  staticAudienceSelection?: CampaignStaticAudienceSelection | null;
   templateMedia?: CampaignTemplateMediaSnapshot | null;
 };
 
 type CampaignDynamicCrmFilter = {
   version: 1;
   crmBusinessStatusId: string;
+};
+
+type CampaignStaticAudienceSelection = {
+  version: 1;
+  mode: "STATIC_FILTER";
+  filters: CampaignAudiencePreviewQuery;
+  audienceSignature: string;
 };
 
 const CAMPAIGN_DRAFT_RECIPIENT_LIMIT = 1000;
@@ -31060,6 +31132,46 @@ function extractCampaignDynamicCrmFilter(input: unknown): CampaignDynamicCrmFilt
   return { version: 1, crmBusinessStatusId };
 }
 
+function extractCampaignStaticAudienceSelection(input: unknown): CampaignStaticAudienceSelection | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const typed = input as Record<string, unknown>;
+  const filters = typed.filters;
+  const audienceSignature = String(typed.audienceSignature ?? "").trim().toLowerCase();
+  if (
+    typed.version !== 1 ||
+    typed.mode !== "STATIC_FILTER" ||
+    !filters ||
+    typeof filters !== "object" ||
+    Array.isArray(filters) ||
+    !/^[a-f0-9]{64}$/.test(audienceSignature)
+  ) {
+    return null;
+  }
+  const rawFilters = filters as Record<string, unknown>;
+  return {
+    version: 1,
+    mode: "STATIC_FILTER",
+    filters: {
+      q: normalizeCampaignAudienceSplitText(rawFilters.q),
+      status: normalizeCampaignAudienceSplitText(rawFilters.status),
+      channel: normalizeCampaignAudienceSplitText(rawFilters.channel),
+      hasConversation: normalizeCampaignAudienceSplitBoolean(rawFilters.hasConversation),
+      optOut: normalizeCampaignAudienceSplitBoolean(rawFilters.optOut),
+      updatedFrom: normalizeCampaignAudienceSplitText(rawFilters.updatedFrom),
+      updatedTo: normalizeCampaignAudienceSplitText(rawFilters.updatedTo),
+      onlyWhatsappEligible: normalizeCampaignAudienceSplitBoolean(rawFilters.onlyWhatsappEligible),
+      excludeOptOut: normalizeCampaignAudienceSplitBoolean(rawFilters.excludeOptOut),
+      crmStatus: normalizeCampaignAudienceSplitText(rawFilters.crmStatus),
+      city: normalizeCampaignAudienceSplitText(rawFilters.city),
+      importedSource: normalizeCampaignAudienceSplitText(rawFilters.importedSource),
+      origin: normalizeCampaignAudienceSplitText(rawFilters.origin),
+      page: 1,
+      limit: CAMPAIGN_SPLIT_PREVIEW_PAGE_LIMIT,
+    },
+    audienceSignature,
+  };
+}
+
 function extractCampaignDraftSeed(rawPayload: unknown, clientId: string): CampaignDraftSeed | null {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
   const typed = rawPayload as Record<string, unknown>;
@@ -31099,6 +31211,7 @@ function extractCampaignDraftSeed(rawPayload: unknown, clientId: string): Campai
   const returnDestination = parseOutboundReturnDestination(typed.returnDestination);
   const selectionMode = normalizeCampaignSelectionMode(typed.selectionMode);
   const dynamicFilter = extractCampaignDynamicCrmFilter(typed.dynamicFilter);
+  const staticAudienceSelection = extractCampaignStaticAudienceSelection(typed.staticAudienceSelection);
   const templateMedia = extractCampaignTemplateMediaSnapshot(typed.templateMedia);
   if (!name || !templateName) return null;
   return {
@@ -31119,6 +31232,7 @@ function extractCampaignDraftSeed(rawPayload: unknown, clientId: string): Campai
         : null,
     selectionMode,
     dynamicFilter,
+    staticAudienceSelection,
     templateMedia,
   };
 }
@@ -31165,6 +31279,22 @@ function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
     default:
       return "Indeterminado";
   }
+}
+
+function mergeCampaignDraftBlockedReasonCounts(
+  ...groups: CampaignDraftRecipientSummary["blockedByReason"][]
+): CampaignDraftRecipientSummary["blockedByReason"] {
+  const counts = new Map<CampaignDraftBlockedReason, number>();
+  for (const group of groups) {
+    for (const item of group) {
+      counts.set(item.reason, (counts.get(item.reason) ?? 0) + item.count);
+    }
+  }
+  return Array.from(counts, ([reason, count]) => ({
+    reason,
+    label: getCampaignBlockedReasonLabel(reason),
+    count,
+  }));
 }
 
 async function resolveCampaignReturnDestinationOrHttpError(
@@ -38311,6 +38441,8 @@ async function createScopedCampaignDraft(params: {
   returnDestination: OutboundReturnDestination;
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  staticAudienceSelection?: CampaignStaticAudienceSelection | null;
+  staticAudienceSummary?: CampaignDraftRecipientSummary | null;
   templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   const prisma = getPrisma();
@@ -38375,12 +38507,28 @@ async function createScopedCampaignDraft(params: {
   if (recipients.acceptedWaIds.length === 0) {
     return { ok: false as const, reason: "no_eligible_recipients" as const, recipients };
   }
+  const persistedRecipients = params.staticAudienceSummary
+    ? {
+        ...recipients,
+        summary: {
+          requested: params.staticAudienceSummary.requested,
+          accepted: recipients.summary.accepted,
+          blocked: params.staticAudienceSummary.blocked + recipients.summary.blocked,
+          duplicatesRemoved:
+            params.staticAudienceSummary.duplicatesRemoved + recipients.summary.duplicatesRemoved,
+          blockedByReason: mergeCampaignDraftBlockedReasonCounts(
+            params.staticAudienceSummary.blockedByReason,
+            recipients.summary.blockedByReason
+          ),
+        },
+      }
+    : recipients;
   const campaign = await createCampaign({
     clientId: params.clientId,
     templateId: params.templateId,
     name: params.name,
     templateName: params.templateName,
-    totalRecipients: recipients.acceptedWaIds.length,
+    totalRecipients: persistedRecipients.acceptedWaIds.length,
     status: "draft",
     templateMediaAssetId: params.templateMedia?.assetId ?? null,
     templateMediaSnapshot: params.templateMedia ?? null,
@@ -38392,17 +38540,18 @@ async function createScopedCampaignDraft(params: {
     name: params.name,
     templateName: params.templateName,
     leadIds: params.selectedLeadIds,
-    waIds: recipients.acceptedWaIds,
+    waIds: persistedRecipients.acceptedWaIds,
     components: params.components,
     templateVariableMappings: params.templateVariableMappings ?? [],
     returnDestination: params.returnDestination,
-    source: "crm_audience_preview",
-    summary: recipients.summary,
+    source: params.staticAudienceSelection ? "crm_audience_filter" : "crm_audience_preview",
+    summary: persistedRecipients.summary,
     selectionMode: "STATIC_RECIPIENTS",
     dynamicFilter: null,
+    staticAudienceSelection: params.staticAudienceSelection ?? null,
     templateMedia: params.templateMedia ?? null,
   });
-  return { ok: true as const, campaign, recipients };
+  return { ok: true as const, campaign, recipients: persistedRecipients };
 }
 
 async function sendScopedCampaignDraft(params: {
@@ -39501,6 +39650,7 @@ async function persistCampaignDraftSeed(params: {
   summary?: CampaignDraftRecipientSummary | null;
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  staticAudienceSelection?: CampaignStaticAudienceSelection | null;
   templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   await persistEvent({
@@ -39529,6 +39679,7 @@ function buildCampaignDraftSeedPayload(params: {
   summary?: CampaignDraftRecipientSummary | null;
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  staticAudienceSelection?: CampaignStaticAudienceSelection | null;
   templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   return {
@@ -39550,6 +39701,7 @@ function buildCampaignDraftSeedPayload(params: {
     summary: params.summary ?? null,
     selectionMode: params.selectionMode ?? "STATIC_RECIPIENTS",
     dynamicFilter: params.dynamicFilter ?? null,
+    staticAudienceSelection: params.staticAudienceSelection ?? null,
     templateMedia: params.templateMedia ?? null,
   };
 }

@@ -182,6 +182,24 @@ test("new draft identity wins before detail and delayed list reconciliation", ()
   assert.ok(!block.includes("setSelectedCampaign(detail.campaign)"));
 });
 
+test("static audience draft is resolved server-side and never from the visible page", () => {
+  const start = pageSource.indexOf("const handleCreateDraftFromAudience = async () => {");
+  const end = pageSource.indexOf("const buildAudienceSplitFiltersPayload", start);
+  assert.ok(start >= 0 && end > start);
+  const block = pageSource.slice(start, end);
+
+  assert.ok(block.includes("await previewAppCampaignDraftSplit(session, selectionPayload.value)"));
+  assert.ok(block.includes('mode: "STATIC_FILTER"'));
+  assert.ok(block.includes("filters: selectionPayload.value.filters ?? {}"));
+  assert.ok(block.includes("audienceSignature: resolvedAudience.plan.audienceSignature"));
+  assert.ok(block.includes("resolvedAudience.plan.draftCount > 1"));
+  assert.ok(block.includes("setAudienceSplitPlan(resolvedAudience.plan)"));
+  assert.ok(block.includes("selectedLeadIds: []"));
+  assert.ok(!block.includes("audienceEligibleItems.map"));
+  assert.ok(pageSource.includes("audiencePreview.summary.eligible === 0"));
+  assert.ok(pageSource.includes("audiencePreview.summary.eligible} contato(s) elegível(is) da audiência integral"));
+});
+
 test("campaign result detail exposes status, CRM situation and text filters", () => {
   assert.ok(pageSource.includes("const [resultStatusFilter, setResultStatusFilter]"));
   assert.ok(pageSource.includes("const [resultCrmStatusFilter, setResultCrmStatusFilter]"));

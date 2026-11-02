@@ -1072,6 +1072,21 @@ links = 0. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
 remains owner PASS and real `****6787` repair remains a separate pending gate.
 
+Campaign static audience integrity (2026-11-02): LOCAL VALIDATED / NOT
+DEPLOYED. Read-only production evidence for Demo campaign `Campanha teste
+nov.01` proves a real creation-time truncation: campaign and encrypted seed
+metadata both persist 25 recipients/IDs, `STATIC_RECIPIENTS`, while the detail
+is not the source of that count and no outbound exists. The existing draft is
+preserved. The local correction keeps the visual page at 25 but resolves and
+signs the complete filter server-side before creating one draft up to 1,000;
+larger audiences retain the explicit numbered split flow. Filter drift denies,
+tenant scope is enforced, and current eligibility, opt-out, deduplication,
+template variables, media and return destination remain authoritative. Local
+PostgreSQL regression covers 930 eligible recipients, page 2, blocked contacts,
+filter drift, cross-tenant exclusion, persisted seed and detail; no send,
+schedule, schema, production build or deploy occurred. Repairing the preserved
+25-recipient draft is a separate, not-authorized effect.
+
 Campaign UX / result truth integration (2026-09-18): integrated locally on the
 current Operational Queue baseline and ready for owner revalidation; not
 deployed. Campaign creation/return destination stays Department-only in the
