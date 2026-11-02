@@ -577,6 +577,21 @@ imediatos e autentica a projeção schema 2 no consumidor. O potencial de
 2.965.995.520 bytes não foi recapturado nem recuperado. Nenhum grafo produtivo foi
 alterado e nenhuma retirada foi autorizada.
 
+A primeira materialização operacional foi interrompida antes de qualquer escrita:
+a ativação frontend `aa9527cc` usa o formato frontend-only do control plane
+`9441de5a569219d38303c711d82c45870e8755cc`, não o journal fixed-current. A
+cadeia original preservada é completa: executor
+`36d3d623620fc5557a689270842cc5aba9322b8c8b7e026e6163fde01057ba99`,
+selection intent `6cce115f61e32e9f0675e894d1b1996d7f55bd92816919934eb826a206583fad`,
+activation intent `a48886eaee0ec2325aa29e05be0955d2f80486d378a2caff127e1c6546421f9f`,
+estado anterior `f1340234a0207e36a3f5205b098b37fa8eb4c2f25046b7f8a4a57a5008ad44c0`,
+aceite `c90b66aefb98dc842e2a2f4f6929de8744cc4e3f2a1e422be70eb2db3f20a694`,
+receipt final `c80e37abc9448ed1edf78eec40f420cb1ac595c0ee470964bed84fe139e74a23` e
+estado terminal `9c86b6ebfa6308ee4ea00ef3bbc412c70b60513239cf7dc2cc3a02fc79cb2989`.
+O leitor fechado desse formato foi preparado e ensaiado localmente; ainda depende de
+revisão, integração e nova autorização antes de qualquer operação. O pacote v2
+anterior permanece não consumível e não deve ser reapresentado.
+
 A única instrução executável vigente é o [runbook canônico](DEPLOY_RUNBOOK.md).
 O modelo é build once / promote the same artifact, com release imutável, seleção
 API→frontend, worker apenas quando impactado, três amostras de readiness, smoke

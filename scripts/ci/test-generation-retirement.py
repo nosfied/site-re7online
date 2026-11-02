@@ -1653,19 +1653,65 @@ class GenerationRetirementTest(unittest.TestCase):
                     "frontend": {"releaseId": active_frontend}}},
                 "previous": {"releases": {"api": immediate_api,
                                              "frontend": active_frontend}}})
-            frontend_manifest = fixture.evidence_root / "frontend-runtime-manifest.json"
-            private_json(frontend_manifest, {"schemaVersion": 1,
-                "rollbackReleases": {"frontend": {"releaseId": immediate_frontend}}})
-            frontend_transaction = fixture.evidence_root / "frontend-transaction.json"
-            private_json(frontend_transaction, {"schemaVersion": 1, "state": "DEPLOYED",
-                "components": ["frontend"],
-                "binding": {"release": active_frontend, "components": ["frontend"],
-                            "runtimeManifestSha256": sha(frontend_manifest)},
-                "preflight": {"selections": {
-                    "api": {"releaseId": active_api},
-                    "frontend": {"releaseId": immediate_frontend}}},
-                "previous": {"releases": {"api": active_api,
-                                             "frontend": immediate_frontend}}})
+            frontend_transaction_root = fixture.evidence_root / "frontend-only-transaction"
+            frontend_transaction_root.mkdir(mode=0o700)
+            frontend_executor = fixture.evidence_root / "frontend-only-activation.sh"
+            shutil.copyfile(ROOT / "scripts/frontend-only-activation.sh", frontend_executor)
+            frontend_executor.chmod(0o600)
+            frontend_target = "f" * 40
+            selection_intent = frontend_transaction_root / "selection-intent.private.json"
+            private_json(selection_intent, {"frontend": "candidate",
+                "expectedCurrent": str(fixture.releases_root / immediate_frontend /
+                                       "frontend-runtime"),
+                "target": str(fixture.releases_root / active_frontend / "frontend-runtime")})
+            activation_intent = fixture.evidence_root / "activation-intent.private.json"
+            private_json(activation_intent, {"schemaVersion": 1,
+                "state": "SEALED_AWAITING_EXPLICIT_ACTIVATION_AUTHORIZATION",
+                "activationExecuted": False, "authorizationReady": True,
+                "automaticRetry": False, "deployedMarkerBeforeAcceptance": False,
+                "saveCountBeforeAcceptance": 0, "retirementReceiptAbsent": True,
+                "buildId": "frontend-only-build", "release": active_frontend,
+                "rollbackRelease": immediate_frontend, "target": frontend_target,
+                "transactionRoot": str(frontend_transaction_root),
+                "executorSha256": sha(frontend_executor)})
+            awaiting_state = frontend_transaction_root / (
+                "window-state.private.json.previous." + "0" * 64)
+            private_json(awaiting_state, {"state": "AWAITING_ACCEPTANCE",
+                "target": frontend_target, "release": active_frontend,
+                "buildId": "frontend-only-build", "saveCount": 0,
+                "acceptance": False, "deployedMarker": False})
+            awaiting_bound = frontend_transaction_root / (
+                "window-state.private.json.previous." + sha(awaiting_state))
+            awaiting_state.rename(awaiting_bound)
+            acceptance = frontend_transaction_root / "technical-acceptance.private.json"
+            private_json(acceptance, {"accepted": True,
+                "acceptedAt": "2026-10-30T00:02:28.657234+00:00",
+                "decision": "TECHNICAL_ACCEPTANCE_PASS",
+                "ownerDecision": "TECHNICAL_ACCEPTANCE_GRANTED",
+                "release": active_frontend, "schemaVersion": 1,
+                "scope": "frontend-only technical acceptance",
+                "source": "owner_confirmation_in_active_window", "target": frontend_target})
+            finalization = frontend_transaction_root / "frontend-finalization-receipt.private.json"
+            final_common = {"state": "DEPLOYED_SANITIZED", "saveCount": 1,
+                "dumpSha256": "d" * 64, "retirementReceiptSha256": "e" * 64,
+                "restartCountDuringFinalize": 0}
+            private_json(finalization, final_common)
+            final_window = frontend_transaction_root / "window-state.private.json"
+            private_json(final_window, {**final_common, "acceptance": True,
+                                        "deployedMarker": True})
+            frontend_evidence = {"kind": "FRONTEND_ONLY_V1",
+                "executor": {"path": str(frontend_executor), "sha256": sha(frontend_executor)},
+                "selectionIntent": {"path": str(selection_intent),
+                                    "sha256": sha(selection_intent)},
+                "activationIntent": {"path": str(activation_intent),
+                                     "sha256": sha(activation_intent)},
+                "awaitingAcceptanceState": {"path": str(awaiting_bound),
+                                            "sha256": sha(awaiting_bound)},
+                "technicalAcceptance": {"path": str(acceptance), "sha256": sha(acceptance)},
+                "finalizationReceipt": {"path": str(finalization),
+                                        "sha256": sha(finalization)},
+                "finalWindowState": {"path": str(final_window),
+                                     "sha256": sha(final_window)}}
             request = fixture.evidence_root / "reconcile-request.json"
             private_json(request, {"schemaVersion": 2,
                 "reconciliationId": "emitted-producer-chain",
@@ -1678,11 +1724,7 @@ class GenerationRetirementTest(unittest.TestCase):
                                         "sha256": sha(runtime_manifest)},
                     "transactionJournal": {"path": str(transaction),
                                            "sha256": sha(transaction)}},
-                    "frontend": {
-                    "runtimeManifest": {"path": str(frontend_manifest),
-                                        "sha256": sha(frontend_manifest)},
-                    "transactionJournal": {"path": str(frontend_transaction),
-                                           "sha256": sha(frontend_transaction)}}},
+                    "frontend": frontend_evidence},
                 "entries": [{"releaseId": fixture.release_id,
                     "installedReleasePath": str(fixture.installed_release),
                     "expectedRole": "rollbackReleases",
@@ -1710,6 +1752,15 @@ class GenerationRetirementTest(unittest.TestCase):
             successor = fixture.evidence_root / "accepted-graph.json"
             self.assertNotIn(fixture.release_id,
                              json.loads(successor.read_text())["rollbackReleases"])
+            accepted_receipt = json.loads(
+                (fixture.evidence_root / "accepted-receipt.json").read_text())
+            self.assertEqual(accepted_receipt["activationEvidence"]["api"]["kind"],
+                             "FIXED_CURRENT")
+            self.assertEqual(accepted_receipt["activationEvidence"]["frontend"]["kind"],
+                             "FRONTEND_ONLY_V1")
+            self.assertEqual(
+                accepted_receipt["activationEvidence"]["frontend"]["immediateRollback"],
+                immediate_frontend)
 
             operational = json.loads(fixture.operational.read_text())
             successor_value = json.loads(successor.read_text())
@@ -1782,17 +1833,90 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertIn("release_reconciliation_activation_schema", denied.stderr)
 
             historical = json.loads(request.read_text())
-            historical_journal = fixture.evidence_root / "historical-selection.json"
-            historical_value = json.loads(frontend_transaction.read_text())
-            historical_value["binding"]["release"] = "immutable-old-api"
-            private_json(historical_journal, historical_value)
-            historical["activationEvidence"]["frontend"]["transactionJournal"] = {
-                "path": str(historical_journal), "sha256": sha(historical_journal)}
+            historical_intent = fixture.evidence_root / "historical-activation-intent.json"
+            historical_value = json.loads(activation_intent.read_text())
+            historical_value["release"] = "immutable-old-frontend"
+            private_json(historical_intent, historical_value)
+            historical["activationEvidence"]["frontend"]["activationIntent"] = {
+                "path": str(historical_intent), "sha256": sha(historical_intent)}
             historical_path = fixture.evidence_root / "historical-request.json"
             private_json(historical_path, historical)
             denied = reconcile("historical", historical_path)
             self.assertEqual(denied.returncode, 2)
-            self.assertIn("release_reconciliation_activation_identity", denied.stderr)
+            self.assertIn("release_reconciliation_frontend_selection_identity", denied.stderr)
+
+            crossed = json.loads(request.read_text())
+            crossed_acceptance = fixture.evidence_root / "crossed-acceptance.json"
+            crossed_value = json.loads(acceptance.read_text())
+            crossed_value["release"] = active_api
+            private_json(crossed_acceptance, crossed_value)
+            crossed["activationEvidence"]["frontend"]["technicalAcceptance"] = {
+                "path": str(crossed_acceptance), "sha256": sha(crossed_acceptance)}
+            crossed_path = fixture.evidence_root / "crossed-request.json"
+            private_json(crossed_path, crossed)
+            denied = reconcile("crossed", crossed_path)
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("release_reconciliation_frontend_transaction_identity", denied.stderr)
+
+            divergent = json.loads(request.read_text())
+            divergent_selection = fixture.evidence_root / "divergent-selection.json"
+            divergent_value = json.loads(selection_intent.read_text())
+            divergent_value["expectedCurrent"] = str(
+                fixture.releases_root / "immutable-other-frontend" / "frontend-runtime")
+            private_json(divergent_selection, divergent_value)
+            divergent["activationEvidence"]["frontend"]["selectionIntent"] = {
+                "path": str(divergent_selection), "sha256": sha(divergent_selection)}
+            divergent_path = fixture.evidence_root / "divergent-request.json"
+            private_json(divergent_path, divergent)
+            denied = reconcile("divergent", divergent_path)
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("release_reconciliation_frontend_selection_identity", denied.stderr)
+
+            frontend_rollback = json.loads(request.read_text())
+            frontend_rollback_root = fixture.evidence_root / "frontend-rollback-transaction"
+            frontend_rollback_root.mkdir(mode=0o700)
+            rollback_control_root = fixture.evidence_root / "frontend-rollback-control"
+            rollback_control_root.mkdir(mode=0o700)
+            rollback_executor = rollback_control_root / "frontend-only-activation.sh"
+            shutil.copyfile(frontend_executor, rollback_executor)
+            rollback_executor.chmod(0o600)
+            rollback_activation = rollback_control_root / "activation-intent.private.json"
+            rollback_activation_value = json.loads(activation_intent.read_text())
+            rollback_activation_value["rollbackRelease"] = fixture.release_id
+            rollback_activation_value["transactionRoot"] = str(frontend_rollback_root)
+            private_json(rollback_activation, rollback_activation_value)
+            rollback_selection = frontend_rollback_root / "selection-intent.private.json"
+            rollback_selection_value = json.loads(selection_intent.read_text())
+            rollback_selection_value["expectedCurrent"] = str(
+                fixture.releases_root / fixture.release_id / "frontend-runtime")
+            private_json(rollback_selection, rollback_selection_value)
+            rollback_awaiting = frontend_rollback_root / awaiting_bound.name
+            shutil.copyfile(awaiting_bound, rollback_awaiting); rollback_awaiting.chmod(0o600)
+            rollback_acceptance = frontend_rollback_root / acceptance.name
+            shutil.copyfile(acceptance, rollback_acceptance); rollback_acceptance.chmod(0o600)
+            rollback_finalization = frontend_rollback_root / finalization.name
+            shutil.copyfile(finalization, rollback_finalization); rollback_finalization.chmod(0o600)
+            rollback_final_window = frontend_rollback_root / final_window.name
+            shutil.copyfile(final_window, rollback_final_window); rollback_final_window.chmod(0o600)
+            frontend_rollback["activationEvidence"]["frontend"]["activationIntent"] = {
+                "path": str(rollback_activation), "sha256": sha(rollback_activation)}
+            frontend_rollback["activationEvidence"]["frontend"]["executor"] = {
+                "path": str(rollback_executor), "sha256": sha(rollback_executor)}
+            frontend_rollback["activationEvidence"]["frontend"]["selectionIntent"] = {
+                "path": str(rollback_selection), "sha256": sha(rollback_selection)}
+            frontend_rollback["activationEvidence"]["frontend"]["awaitingAcceptanceState"] = {
+                "path": str(rollback_awaiting), "sha256": sha(rollback_awaiting)}
+            frontend_rollback["activationEvidence"]["frontend"]["technicalAcceptance"] = {
+                "path": str(rollback_acceptance), "sha256": sha(rollback_acceptance)}
+            frontend_rollback["activationEvidence"]["frontend"]["finalizationReceipt"] = {
+                "path": str(rollback_finalization), "sha256": sha(rollback_finalization)}
+            frontend_rollback["activationEvidence"]["frontend"]["finalWindowState"] = {
+                "path": str(rollback_final_window), "sha256": sha(rollback_final_window)}
+            frontend_rollback_path = fixture.evidence_root / "frontend-rollback-request.json"
+            private_json(frontend_rollback_path, frontend_rollback)
+            denied = reconcile("frontend-rollback", frontend_rollback_path)
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("release_reconciliation_immediate_rollback_close", denied.stderr)
 
             for component, candidate in (("frontend", active_frontend),
                                          ("api", active_api)):
