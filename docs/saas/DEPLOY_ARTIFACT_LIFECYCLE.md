@@ -1109,9 +1109,14 @@ OPERACIONAL.**
 `installedVerifiedReleases` é inventário histórico, não proteção operacional por
 si só. O comando fechado `generation-retirement.py reconcile-release-graph`
 autentica o grafo rico anterior e, para cada geração explicitamente enumerada,
-contrato, lifecycle, cadeia de journals, review e receipts. Journal original
-incompleto só é aceito quando uma evidência posterior terminal aponta para seu
-SHA e mantém release, target e contrato; os bytes originais não são reescritos.
+contrato, lifecycle, review e a cadeia realmente emitida. No fluxo canônico,
+`review.evidenceSha256` autentica o receipt, o receipt autentica
+`intentSha256` e `commandLogSha256`, e a intenção autentica contrato e lifecycle.
+Nos lotes legados `d436`/`f160`, o descriptor fechado e os validadores existentes
+autenticam receipt/journal anteriores, receipt do bootstrap, intenção e review v2;
+nenhum campo é acrescentado ao histórico. Journal original incompleto só é aceito
+pela cadeia posterior completa prevista pelo contrato; os bytes originais não são
+reescritos.
 Ele publica, sem alterar
 os originais, um grafo rico sucessor, uma projeção plana schema 2 e um receipt
 `RECONCILED_NO_EFFECT`. A projeção vincula caminho e SHA do grafo rico de origem,
@@ -1120,9 +1125,11 @@ novamente `inventoryPaths` e `protectedGraphPaths` e exige igualdade exata.
 
 Uma aresta só deixa `rollbackReleases` ou `transitiveReturnReleases` quando o
 fechamento autenticado está completo e a recaptura não encontra referência viva.
-O rollback imediato por componente é provado pelo runtime manifest e pelo
-`previous.releases` do journal da transação e não pode ser fechado, mesmo ausente
-de PM2/current.
+O rollback imediato por componente é provado pelo runtime manifest, pelo
+`previous.releases`, pelas seleções do preflight e pelo binding de componentes do
+journal da ativação que produziu a seleção ativa. Evidência omitida, de ativação
+anterior ou sem cobertura simultânea de API e frontend nega; o rollback imediato
+não pode ser fechado, mesmo ausente de PM2/current.
 Omissão, binding divergente ou estado aberto preservam a aresta. Releases ativas,
 rollback imediato, candidatas e dependências transitivas não reconciliadas
 continuam protegidas.

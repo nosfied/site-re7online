@@ -2551,7 +2551,7 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
 
     def test_versioned_release_projection_authenticates_rich_graph_provenance(self):
         release_id = self.release.name
-        rich_keys = {"activeReleases": [release_id], "rollbackReleases": [],
+        rich_keys = {"activeReleases": [release_id], "rollbackReleases": [release_id],
                      "transitiveReturnReleases": [], "candidateReleases": [],
                      "installedVerifiedReleases": [release_id],
                      "supersededCandidates": []}
@@ -2561,6 +2561,17 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
         reconciliation_operational = self.base / "reconciliation-operational.private.json"
         private_json(reconciliation_operational, {"currentPaths": [], "pm2LivePaths": [],
             "pm2DumpPaths": [], "dependencies": []})
+        runtime_manifest = self.base / "activation-runtime-manifest.private.json"
+        private_json(runtime_manifest, {"rollbackReleases": {
+            "api": {"releaseId": release_id}}})
+        transaction = self.base / "activation-transaction.private.json"
+        private_json(transaction, {"components": ["api"],
+            "binding": {"release": release_id, "components": ["api"],
+                        "runtimeManifestSha256": sha(runtime_manifest)},
+            "preflight": {"selections": {
+                "api": {"releaseId": release_id},
+                "frontend": {"releaseId": release_id}}},
+            "previous": {"releases": {"api": release_id, "frontend": release_id}}})
         receipt = self.base / "reconciliation-receipt.private.json"
         private_json(receipt, {"schemaVersion": 2, "state": "RECONCILED_NO_EFFECT",
             "reconciliationId": "fixture", "requestSha256": "a" * 64,
@@ -2569,7 +2580,13 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
             "operationalState": {"path": str(reconciliation_operational),
                                  "sha256": sha(reconciliation_operational)},
             "successorGraph": {"path": str(successor), "sha256": sha(successor)},
-            "privateDataParents": [], "immediateRollbackEvidence": [], "results": [],
+            "privateDataParents": [], "activationEvidence": {
+                "runtimeManifest": {"path": str(runtime_manifest),
+                                    "sha256": sha(runtime_manifest)},
+                "transactionJournal": {"path": str(transaction), "sha256": sha(transaction)},
+                "components": ["api"],
+                "selectedReleases": {"api": release_id, "frontend": release_id},
+                "immediateRollbacks": {"api": release_id}}, "results": [],
             "originalsModified": False, "destructiveCommands": 0,
             "freshRecaptureRequiredBeforeRetirement": True})
         private_json(self.release_graph, {"schemaVersion": 2,

@@ -1226,7 +1226,8 @@ def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, An
     if (prior_receipt.get("intentSha256") != args.prior_intent_sha256 or
             prior_receipt.get("commandLogSha256") != args.prior_journal_sha256 or
             prior_receipt.get("state") not in {"QUARANTINED", "RETENTION_INCOMPLETE",
-                                               "DEPLOYED_RETENTION_INCOMPLETE"}):
+                                               "DEPLOYED_RETENTION_INCOMPLETE", "SANITIZED",
+                                               "DEPLOYED_SANITIZED"}):
         deny("reconciliation_receipt_identity")
     inherited = validate_reconciliation(prior_intent.get("reconciliation"),
                                         prior_intent.get("artifacts", []), require_absent=True)
@@ -2668,11 +2669,9 @@ RICH_GRAPH_KEYS = {
     "activeReleases", "rollbackReleases", "transitiveReturnReleases",
     "candidateReleases", "installedVerifiedReleases", "supersededCandidates",
 }
-RECONCILIATION_EVIDENCE_KINDS = {
-    "RETIREMENT_RECEIPT", "LEGACY_JOINT_RECEIPT", "REVIEW_EVIDENCE",
-}
-RECONCILIATION_JOURNAL_KINDS = {
-    "DEPLOYMENT_JOURNAL", "RETIREMENT_JOURNAL", "LEGACY_RETENTION_JOURNAL",
+RECONCILIATION_TERMINAL_RECEIPTS = {"SANITIZED", "DEPLOYED_SANITIZED"}
+RECONCILIATION_INCOMPLETE_RECEIPTS = {
+    "QUARANTINED", "RETENTION_INCOMPLETE", "DEPLOYED_RETENTION_INCOMPLETE",
 }
 
 
@@ -2708,83 +2707,184 @@ def _release_is_live(release: str, installed: Path, operational: dict[str, Any])
     return False
 
 
-def _journal_release(value: dict[str, Any]) -> Any:
-    binding = value.get("binding")
-    return value.get("releaseId", value.get("generationId",
-           binding.get("release") if isinstance(binding, dict) else None))
-
-
-def _journal_chain(value: Any, release: str, target: str,
-                   contract_sha: str) -> tuple[list[dict[str, str]], str]:
-    if not isinstance(value, list) or not value:
-        deny("release_reconciliation_journal_chain")
-    result: list[dict[str, str]] = []
-    prior_sha = None
-    final_state = None
-    for index, item in enumerate(value):
-        if (not isinstance(item, dict) or set(item) != {"kind", "path", "sha256"} or
-                item.get("kind") not in RECONCILIATION_JOURNAL_KINDS):
-            deny("release_reconciliation_journal_chain")
-        path, sha256, raw = _closed_file_binding(
-            {"path": item["path"], "sha256": item["sha256"]}, f"{release}:journal")
-        if item["kind"] == "LEGACY_RETENTION_JOURNAL":
-            if index or len(value) != 1:
-                deny("release_reconciliation_journal_chain")
-            events = _read_journal(raw)
-            attempts = {(event.get("ordinal"), event.get("path")) for event in events
-                        if event.get("event") == "ATTEMPT" and event.get("result") == "PENDING"}
-            verified = {(event.get("ordinal"), event.get("path")) for event in events
-                        if event.get("event") == "VERIFIED" and event.get("result") == "PASS"}
-            if not attempts or attempts != verified:
-                deny("release_reconciliation_journal_open")
-            final_state = "COMPLETED"
+def _activation_selection(value: Any, source: dict[str, list[str]]) -> tuple[dict[str, str], dict[str, Any]]:
+    if not isinstance(value, dict) or set(value) != {"runtimeManifest", "transactionJournal"}:
+        deny("release_reconciliation_activation_schema")
+    manifest_path, manifest_sha, manifest_raw = _closed_file_binding(
+        value["runtimeManifest"], "activation:manifest")
+    journal_path, journal_sha, journal_raw = _closed_file_binding(
+        value["transactionJournal"], "activation:journal")
+    manifest = object_json(manifest_raw, "activation:manifest")
+    journal = object_json(journal_raw, "activation:journal")
+    binding = journal.get("binding")
+    components = journal.get("components",
+                             binding.get("components") if isinstance(binding, dict) else None)
+    if (not isinstance(binding, dict) or binding.get("runtimeManifestSha256") != manifest_sha or
+            not isinstance(components, list) or not components or
+            any(item not in {"api", "frontend"} for item in components) or
+            len(components) != len(set(components))):
+        deny("release_reconciliation_activation_identity")
+    candidate = binding.get("release")
+    rollback = manifest.get("rollbackReleases")
+    previous = journal.get("previous", {}).get("releases")
+    selections = journal.get("preflight", {}).get("selections")
+    if (not isinstance(candidate, str) or candidate not in source["activeReleases"] or
+            not isinstance(rollback, dict) or not isinstance(previous, dict) or
+            not isinstance(selections, dict) or set(selections) != {"api", "frontend"}):
+        deny("release_reconciliation_activation_identity")
+    immediate: dict[str, str] = {}
+    selected_now: dict[str, str] = {}
+    for component in ("api", "frontend"):
+        selected = selections.get(component)
+        release = selected.get("releaseId") if isinstance(selected, dict) else None
+        if not isinstance(release, str) or release not in source["installedVerifiedReleases"]:
+            deny("release_reconciliation_component_coverage")
+        if component in components:
+            definition = rollback.get(component)
+            if (not isinstance(definition, dict) or definition.get("releaseId") != release or
+                    previous.get(component) != release):
+                deny("release_reconciliation_immediate_rollback_identity")
+            immediate[component] = release
+            selected_now[component] = candidate
         else:
-            journal = object_json(raw, f"{release}:journal")
-            if (_journal_release(journal) != release or
-                    journal.get("targetCommit", target) != target or
-                    journal.get("contractSha256", contract_sha) != contract_sha):
-                deny("release_reconciliation_journal_identity")
-            if index and journal.get("predecessorJournalSha256") != prior_sha:
-                deny("release_reconciliation_journal_chain")
-            final_state = journal.get("state")
-        prior_sha = sha256
-        result.append({"kind": item["kind"], "path": str(path), "sha256": sha256})
-    if final_state not in TERMINAL_RELEASE_JOURNAL:
-        deny("release_reconciliation_journal_open")
-    return result, str(prior_sha)
+            selected_now[component] = release
+        if selected_now[component] not in source["activeReleases"]:
+            deny("release_reconciliation_active_selection")
+    normalized = {"runtimeManifest": {"path": str(manifest_path), "sha256": manifest_sha},
+                  "transactionJournal": {"path": str(journal_path), "sha256": journal_sha},
+                  "components": sorted(components), "selectedReleases": selected_now,
+                  "immediateRollbacks": immediate}
+    return immediate, normalized
 
 
-def _immediate_rollbacks(value: Any) -> tuple[dict[str, str], list[dict[str, Any]]]:
-    if not isinstance(value, list) or not value:
-        deny("release_reconciliation_immediate_rollback_schema")
-    releases: dict[str, str] = {}
+def _canonical_retirement_closure(value: Any, release: str, target: str,
+                                  contract_sha: str, lifecycle_sha: str,
+                                  review: dict[str, Any]) -> dict[str, Any]:
+    if (not isinstance(value, dict) or set(value) != {"kind", "chain"} or
+            value.get("kind") != "CANONICAL_RETIREMENT" or
+            not isinstance(value.get("chain"), list) or not value["chain"]):
+        deny("release_reconciliation_canonical_schema")
     normalized = []
-    for item in value:
-        expected = {"component", "releaseId", "runtimeManifest", "transactionJournal"}
-        if (not isinstance(item, dict) or set(item) != expected or
-                item.get("component") not in {"api", "frontend"} or
-                not isinstance(item.get("releaseId"), str) or
-                item["component"] in releases):
-            deny("release_reconciliation_immediate_rollback_schema")
-        component = item["component"]
-        release = item["releaseId"]
-        manifest_path, manifest_sha, manifest_raw = _closed_file_binding(
-            item["runtimeManifest"], f"rollback:{component}:manifest")
+    previous_link = None
+    final_receipt = None
+    for item in value["chain"]:
+        if not isinstance(item, dict) or set(item) != {"intent", "receipt", "journal"}:
+            deny("release_reconciliation_canonical_schema")
+        intent_path, intent_sha, intent_raw = _closed_file_binding(
+            item["intent"], f"{release}:intent")
+        receipt_path, receipt_sha, receipt_raw = _closed_file_binding(
+            item["receipt"], f"{release}:receipt")
         journal_path, journal_sha, journal_raw = _closed_file_binding(
-            item["transactionJournal"], f"rollback:{component}:journal")
-        manifest = object_json(manifest_raw, f"rollback:{component}:manifest")
-        journal = object_json(journal_raw, f"rollback:{component}:journal")
-        rollback = manifest.get("rollbackReleases")
-        previous = journal.get("previous", {}).get("releases")
-        if (not isinstance(rollback, dict) or not isinstance(rollback.get(component), dict) or
-                rollback[component].get("releaseId") != release or
-                not isinstance(previous, dict) or previous.get(component) != release):
-            deny("release_reconciliation_immediate_rollback_identity")
-        releases[component] = release
-        normalized.append({"component": component, "releaseId": release,
-                           "runtimeManifest": {"path": str(manifest_path), "sha256": manifest_sha},
-                           "transactionJournal": {"path": str(journal_path), "sha256": journal_sha}})
-    return releases, normalized
+            item["journal"], f"{release}:journal")
+        intent = object_json(intent_raw, f"{release}:intent")
+        receipt = object_json(receipt_raw, f"{release}:receipt")
+        if (intent.get("generationId") != release or intent.get("releaseId") != release or
+                intent.get("targetCommit") != target or
+                intent.get("contractSha256") != contract_sha or
+                intent.get("lifecycleSha256") != lifecycle_sha):
+            deny("release_reconciliation_intent_identity")
+        inherited = validate_reconciliation(intent.get("reconciliation"),
+                                            intent.get("artifacts"), require_absent=True)
+        if previous_link is not None and previous_link not in inherited["chain"]:
+            deny("release_reconciliation_chain")
+        if (receipt.get("intentSha256") != intent_sha or
+                receipt.get("commandLogSha256") != journal_sha or
+                receipt.get("state") not in
+                RECONCILIATION_TERMINAL_RECEIPTS | RECONCILIATION_INCOMPLETE_RECEIPTS):
+            deny("release_reconciliation_receipt_identity")
+        commands = {entry.get("ordinal"): entry for entry in intent.get("commands", [])
+                    if isinstance(entry, dict) and isinstance(entry.get("ordinal"), int)}
+        progress: dict[int, list[dict[str, Any]]] = {}
+        for event in _read_journal(journal_raw):
+            ordinal = event.get("ordinal")
+            if ordinal not in commands:
+                deny("release_reconciliation_journal_ordinal")
+            progress.setdefault(ordinal, []).append(event)
+        completed_paths = [entry["path"] for entry in inherited["completed"]]
+        attempts = 0
+        for ordinal, events in sorted(progress.items()):
+            command = commands[ordinal]
+            if not events or events[0] != {"event": "ATTEMPT", "ordinal": ordinal,
+                                          "path": command["path"], "argv": command["argv"]}:
+                deny("release_reconciliation_attempt_identity")
+            attempts += 1
+            results = [event for event in events if event.get("event") == "RESULT"]
+            verified = [event for event in events if event.get("event") == "VERIFIED"]
+            if results and results[-1].get("exitCode") == 0 and verified and verified[-1] == {
+                    "event": "VERIFIED", "ordinal": ordinal, "absent": True}:
+                completed_paths.append(command["path"])
+        if (receipt.get("attemptedCommands") != attempts or
+                receipt.get("completedCommands") != len(completed_paths) or
+                receipt.get("removedPaths") != completed_paths):
+            deny("release_reconciliation_receipt_progress")
+        previous_link = {"intentSha256": intent_sha, "receiptSha256": receipt_sha,
+                         "journalSha256": journal_sha}
+        final_receipt = receipt
+        normalized.append({"intent": {"path": str(intent_path), "sha256": intent_sha},
+                           "receipt": {"path": str(receipt_path), "sha256": receipt_sha},
+                           "journal": {"path": str(journal_path), "sha256": journal_sha}})
+    if (final_receipt is None or
+            final_receipt.get("state") not in RECONCILIATION_TERMINAL_RECEIPTS or
+            review.get("evidenceSha256") != normalized[-1]["receipt"]["sha256"]):
+        deny("release_reconciliation_closure_incomplete")
+    return {"kind": "CANONICAL_RETIREMENT", "chain": normalized}
+
+
+def _legacy_batch_closure(value: Any, release: str, target: str,
+                          contract_path: Path, contract_sha: str,
+                          lifecycle_sha: str, review: dict[str, Any],
+                          operational: dict[str, Any]) -> dict[str, Any]:
+    expected = {"kind", "descriptor", "bootstrapReceipt", "priorRetentionReceipt",
+                "priorRetentionJournal", "intent"}
+    if (not isinstance(value, dict) or set(value) != expected or
+            value.get("kind") != "LEGACY_BATCH"):
+        deny("release_reconciliation_legacy_schema")
+    descriptor_path, descriptor_sha, descriptor_raw = _closed_file_binding(
+        value["descriptor"], f"{release}:legacy-descriptor")
+    descriptor = validate_batch_legacy_descriptor(descriptor_raw, descriptor_sha)
+    if (descriptor.get("releaseId") != release or descriptor.get("targetCommit") != target or
+            descriptor.get("contractOutput") != str(contract_path) or
+            descriptor.get("lifecycle", {}).get("sha256") != lifecycle_sha):
+        deny("release_reconciliation_legacy_identity")
+    bootstrap_path, bootstrap_sha, bootstrap_raw = _closed_file_binding(
+        value["bootstrapReceipt"], f"{release}:legacy-bootstrap-receipt")
+    bootstrap = object_json(bootstrap_raw, f"{release}:legacy-bootstrap-receipt")
+    prior_receipt_path, prior_receipt_sha, _ = _closed_file_binding(
+        value["priorRetentionReceipt"], f"{release}:legacy-prior-receipt")
+    prior_journal_path, prior_journal_sha, _ = _closed_file_binding(
+        value["priorRetentionJournal"], f"{release}:legacy-prior-journal")
+    prior = descriptor["priorRetention"]
+    if (bootstrap.get("state") != "LEGACY_CONTRACT_MATERIALIZED" or
+            bootstrap.get("releaseId") != release or bootstrap.get("targetCommit") != target or
+            bootstrap.get("contractSha256") != contract_sha or
+            bootstrap.get("preservedReviewSha256") != descriptor["review"]["sha256"] or
+            bootstrap.get("priorRetentionReceiptSha256") != prior_receipt_sha or
+            bootstrap.get("priorRetentionJournalSha256") != prior_journal_sha or
+            prior_receipt_sha != prior["receiptSha256"] or
+            prior_journal_sha != prior["journalSha256"]):
+        deny("release_reconciliation_legacy_bootstrap_identity")
+    legacy_args = argparse.Namespace(
+        retention_receipt=prior_receipt_path, retention_receipt_sha256=prior_receipt_sha,
+        retention_journal=prior_journal_path, retention_journal_sha256=prior_journal_sha)
+    _authenticate_batch_prior_retention(legacy_args, descriptor, operational)
+    intent_path, intent_sha, intent_raw = _closed_file_binding(value["intent"], f"{release}:intent")
+    intent = object_json(intent_raw, f"{release}:intent")
+    migration = intent.get("legacyMigration")
+    if (intent.get("generationId") != release or intent.get("releaseId") != release or
+            intent.get("targetCommit") != target or intent.get("contractSha256") != contract_sha or
+            intent.get("lifecycleSha256") != lifecycle_sha or
+            not isinstance(migration, dict) or
+            migration.get("reviewSha256") != descriptor["review"]["sha256"] or
+            review.get("evidenceSha256") != intent_sha):
+        deny("release_reconciliation_legacy_intent_identity")
+    return {"kind": "LEGACY_BATCH",
+            "descriptor": {"path": str(descriptor_path), "sha256": descriptor_sha},
+            "bootstrapReceipt": {"path": str(bootstrap_path), "sha256": bootstrap_sha},
+            "priorRetentionReceipt": {"path": str(prior_receipt_path),
+                                       "sha256": prior_receipt_sha},
+            "priorRetentionJournal": {"path": str(prior_journal_path),
+                                       "sha256": prior_journal_sha},
+            "intent": {"path": str(intent_path), "sha256": intent_sha}}
 
 
 def reconcile_release_graph(args: argparse.Namespace) -> None:
@@ -2796,7 +2896,7 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
     request_raw, _ = stable_private(args.request, args.request_sha256)
     request = object_json(request_raw, "release-reconciliation-request")
     required = {"schemaVersion", "reconciliationId", "releaseRoot", "sourceGraph",
-                "operationalState", "immediateRollbackEvidence", "entries"}
+                "operationalState", "activationEvidence", "entries"}
     if (set(request) != required or request.get("schemaVersion") != 2 or
             not isinstance(request.get("reconciliationId"), str) or
             not request["reconciliationId"].strip() or
@@ -2815,8 +2915,8 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
     if (not isinstance(observations, dict) or
             observations.get("releaseGraph") != {"path": str(source_path), "sha256": source_sha}):
         deny("release_reconciliation_source_graph_binding")
-    immediate_rollbacks, rollback_evidence = _immediate_rollbacks(
-        request["immediateRollbackEvidence"])
+    immediate_rollbacks, activation_evidence = _activation_selection(
+        request["activationEvidence"], source)
     if any(release not in source["rollbackReleases"] for release in immediate_rollbacks.values()):
         deny("release_reconciliation_immediate_rollback_role")
     successor = {key: list(value) for key, value in source.items()}
@@ -2825,7 +2925,7 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
     seen: set[str] = set()
     for entry in request["entries"]:
         expected = {"releaseId", "installedReleasePath", "expectedRole", "decision",
-                    "contract", "lifecycle", "journalChain", "review", "closureEvidence"}
+                    "contract", "lifecycle", "review", "closure"}
         if not isinstance(entry, dict) or set(entry) != expected:
             deny("release_reconciliation_entry_schema")
         release = entry.get("releaseId")
@@ -2850,56 +2950,25 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
         if (lifecycle.get("generationId") != release or
                 lifecycle.get("state") not in {"COMPLETE", "FAILED"}):
             deny("release_reconciliation_lifecycle_identity")
-        journals, journal_sha = _journal_chain(
-            entry["journalChain"], release, contract["targetCommit"], contract_sha)
         _, review_sha, review_raw = _closed_file_binding(entry["review"], f"{release}:review")
         review = object_json(review_raw, f"{release}:review")
         if (review.get("schemaVersion") != 2 or review.get("generationId") != release or
                 review.get("state") != "SANITIZED" or
                 review.get("lifecycleSha256") != lifecycle_sha):
             deny("release_reconciliation_review_identity")
-        evidence = entry.get("closureEvidence")
-        if not isinstance(evidence, list) or not evidence:
-            deny("release_reconciliation_evidence_schema")
-        evidence_hashes = set()
-        receipt_seen = False
-        receipt_links_release = False
-        normalized_evidence = []
-        for item in evidence:
-            if (not isinstance(item, dict) or set(item) != {"kind", "path", "sha256"} or
-                    item.get("kind") not in RECONCILIATION_EVIDENCE_KINDS):
-                deny("release_reconciliation_evidence_schema")
-            path, sha256, raw = _closed_file_binding(
-                {"path": item["path"], "sha256": item["sha256"]}, f"{release}:evidence")
-            value = object_json(raw, f"{release}:evidence")
-            if item["kind"] == "REVIEW_EVIDENCE":
-                if (value.get("generationId") != release or
-                        value.get("contractSha256") != contract_sha or
-                        value.get("lifecycleSha256") != lifecycle_sha):
-                    deny("release_reconciliation_review_evidence")
-            elif item["kind"] in {"RETIREMENT_RECEIPT", "LEGACY_JOINT_RECEIPT"}:
-                receipt_seen = True
-                state = value.get("state", value.get("result"))
-                if state not in {"SANITIZED", "DEPLOYED_SANITIZED", "COMPLETED",
-                                  "LEGACY_CONTRACT_MATERIALIZED"}:
-                    deny("release_reconciliation_receipt_state")
-                if item["kind"] == "LEGACY_JOINT_RECEIPT":
-                    receipt_links_release = (
-                        value.get("releaseId") == release and
-                        value.get("targetCommit") == contract["targetCommit"] and
-                        value.get("contractSha256") == contract_sha and
-                        value.get("priorRetentionJournalSha256") == journal_sha)
-                else:
-                    receipt_links_release = (
-                        value.get("releaseId") == release and
-                        value.get("contractSha256") == contract_sha and
-                        value.get("lifecycleSha256") == lifecycle_sha and
-                        value.get("journalSha256") == journal_sha)
-            evidence_hashes.add(sha256)
-            normalized_evidence.append({"kind": item["kind"], "path": str(path), "sha256": sha256})
-        if (not receipt_seen or not receipt_links_release or
-                review.get("evidenceSha256") not in evidence_hashes):
-            deny("release_reconciliation_review_evidence")
+        closure = entry.get("closure")
+        if not isinstance(closure, dict):
+            deny("release_reconciliation_closure_schema")
+        if closure.get("kind") == "CANONICAL_RETIREMENT":
+            normalized_closure = _canonical_retirement_closure(
+                closure, release, contract["targetCommit"], contract_sha,
+                lifecycle_sha, review)
+        elif closure.get("kind") == "LEGACY_BATCH":
+            normalized_closure = _legacy_batch_closure(
+                closure, release, contract["targetCommit"], contract_path,
+                contract_sha, lifecycle_sha, review, operational)
+        else:
+            deny("release_reconciliation_closure_schema")
         release_artifacts = [item for item in contract["artifacts"]
                              if item.get("class") == "RELEASE_RUNTIME" and
                              item.get("path") == str(installed)]
@@ -2923,9 +2992,8 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
         results.append({"releaseId": release, "priorRole": role, "result": result,
                         "contract": {"path": str(contract_path), "sha256": contract_sha},
                         "lifecycleSha256": lifecycle_sha,
-                        "journalChain": journals, "journalSha256": journal_sha,
                         "reviewSha256": review_sha,
-                        "closureEvidence": normalized_evidence})
+                        "closure": normalized_closure})
     successor = _rich_graph(successor, "successor")
     graph_raw = canonical(successor)
     write_exclusive(args.graph_output, graph_raw)
@@ -2951,7 +3019,7 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
                "operationalState": {"path": str(operational_path), "sha256": operational_sha},
                "successorGraph": {"path": str(args.graph_output), "sha256": graph_sha},
                "privateDataParents": sorted(private_parents),
-               "immediateRollbackEvidence": rollback_evidence,
+               "activationEvidence": activation_evidence,
                "results": results,
                "originalsModified": False, "destructiveCommands": 0,
                "freshRecaptureRequiredBeforeRetirement": True}
