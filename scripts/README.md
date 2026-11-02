@@ -249,12 +249,14 @@ janela produtiva. Não existe input produtivo novo selado por esta tarefa. `--ou
 impede reutilizar a geração negada. Recusa/parcial: conservar stdout e diretório/intent; não repetir nem modificar input para obter PASS.
 Não criar inputs por edição de baselines históricas para fazer capturas coincidir.
 
-API/frontend não invocam mais o produtor copiado diretamente. A ação
-`deploy-preparation-admission.py --run-preparation` reabre o report da admissão, o
-contrato e o input, autentica o caminho fixo e o SHA do produtor materializado e o
-executa pelo mesmo FD aberto com `O_NOFOLLOW`. Assim, `OPEN` e orçamento são
-persistidos antes do primeiro `copy`/`tar`. O encerramento continua exclusivamente
-em `generation-retirement.py review-preparation`: `SANITIZED` exige ausência dos
+Pelo procedimento canônico, API/frontend devem passar por
+`deploy-preparation-admission.py --run-preparation`. A ação reabre o report da
+admissão, o contrato e o input, autentica o caminho fixo e o SHA do produtor
+materializado e o executa pelo mesmo FD aberto com `O_NOFOLLOW`. Assim, `OPEN` e
+orçamento são persistidos antes do primeiro `copy`/`tar`. O entrypoint do produtor
+ainda aceita tecnicamente uma chamada direta; ela não é a rota canônica e não prova
+adoção pelos fluxos produtivos. O encerramento continua exclusivamente em
+`generation-retirement.py review-preparation`: `SANITIZED` exige ausência dos
 artefatos; resíduo ou interrupção permanece `RETENTION_DEBT`. Não há limpeza
 automática nem fallback para o checkout.
 

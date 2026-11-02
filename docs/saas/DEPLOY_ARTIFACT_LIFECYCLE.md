@@ -1231,5 +1231,7 @@ O produtor de release `converta-release.py` continua usando `build-output` e seu
 lifecycle de geração; não deve ser alterado por suposição. Scripts e kits históricos
 que escreveram diretamente em `preparations` não são retroativamente interceptados.
 Logo a garantia cobre a rota canônica integrada, não constitui bloqueio global de
-qualquer escrita manual no filesystem. Instalação/adoção produtiva ainda exige
-janela própria; não existe limpeza automática.
+qualquer escrita manual no filesystem. O entrypoint materializado permanece
+tecnicamente invocável de forma direta; somente o chamador autenticado é o
+procedimento obrigatório, e seu uso produtivo ainda não foi comprovado.
+Instalação/adoção produtiva exige janela própria; não existe limpeza automática.
