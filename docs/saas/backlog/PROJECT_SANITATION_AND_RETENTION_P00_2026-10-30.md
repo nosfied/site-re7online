@@ -684,3 +684,171 @@ dimensionar o ganho possível, juntamente com a proposta preventiva em
 [DEPLOY_ARTIFACT_LIFECYCLE](../DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026).
 Nenhum novo audit, prepare, execute, mudança de permissão ou retirada é autorizado
 por esta classificação documental.
+
+### Auditoria terminal de `worker-package-audit` — 01/11/2026
+
+O PR #312 foi integrado no merge
+`784b7da4c8268f32b9e36f88e4452ac5a152021b`, com árvore
+`e68e819db629886d6086a343d4d78a9ce1b43c99` idêntica ao HEAD testado
+`e139a98db132ff8a30a5a1051fb809b55051f921`. O materializador integrado
+produziu uma fotografia nova e um request novo na custódia exclusiva
+`p00-capacity-worker-package-audit-784b7da4c826-v5`; nenhuma fotografia ou
+request anterior foi reutilizado.
+
+A única fase `audit` terminou com exit code `2` e estado
+`P00_CAPACITY_RECOVERY_AUDIT_DENY`. O predicado primário foi
+`DISPOSITION_TREE_DIRECTORY_IDENTITY`; como o candidato não foi qualificado,
+o plano também registrou `MINIMUM_RECOVERY_NOT_MET`. O plano terminal tem
+SHA-256 `57eda79930ec4f24dcc56bccd6f46e9996f3855386264267d80b8071d18302ea`;
+o terminal tem SHA-256
+`fbae5eb81a62d03edbed26e4868511b3397e8b92d90a648977527fb4519a5a84`.
+
+Não houve OOM, timeout, sinal, `prepare`, `execute`, autorização ou efeito.
+O pico do cgroup foi 34.304.000 bytes, `oom=0`, `oom_kill=0`; o scope foi
+confirmado encerrado. API, frontend e worker mantiveram PID, estado e restart
+count, health local/público passou e os locks permaneceram livres. Esta
+custódia é terminal e não autoriza replay. O item continua
+`NOT_QUALIFIED`, agora pelo predicado nominal acima; o suporte técnico ensaiado
+não substitui a identidade física exigida pelo manifesto.
+
+#### Reconciliação dirigida da identidade dos diretórios
+
+As enumerações históricas autenticavam a raiz, os três ancestrais, o manifesto
+de arquivos e a relação de links, mas não continham identidade de cada diretório
+interno. Uma enumeração dirigida de metadados, sem seguir links ou abrir
+payloads, examinou 1.024 diretórios. A raiz permanece `deploy:deploy 0700`,
+device/inode `64769:3161329`. Todos os 1.023 descendentes são
+`deploy:deploy 0775`, no device `64769`; o owner é aceito, mas o bit de escrita
+do grupo viola literalmente `stat.S_IMODE(mode) & 0o022 == 0` em
+`_authenticate_disposition_tree()`.
+
+A relação completa de caminhos e identidades foi preservada em
+`p00-capacity-worker-package-audit-784b7da4c826-v5/directory-identity-diagnostic.private.tsv`,
+modo `0600`, SHA-256
+`7bbb3de300d01a6eb2f048d592cd50ee55c47a8a83aafe829aad1cbfeb00d7f7`.
+Ela contém 1.023 registros e 316.038 bytes. Não houve `chmod`, `chown`, mudança
+de gate ou novo audit. Decisão: `NOT_QUALIFIED / KEEP_PRESERVED`; a identidade
+histórica real é incompatível com a política vigente e não pode ser normalizada
+para fabricar elegibilidade.
+
+### Fotografia reconciliada da VPS inteira — 02/11/2026
+
+A auditoria proporcional somente leitura foi incorporada à
+[auditoria de capacidade de 26/10](../VPS_CAPACITY_AUDIT_2026-10-26.md#reconciliação-integral-somente-leitura--02112026).
+O filesystem raiz tem 82.086.711.296 B, dos quais 73.247.272.960 B usados e
+8.822.661.120 B disponíveis; 1.627.204 de 10.354.688 inodes estão ocupados.
+O crescimento líquido desde o receipt do lote v3 é 4.593.938.432 B, reconciliado
+entre releases, outputs, worktrees, preparações, transações, cache e um residual
+explicitamente não atribuído de 759.816.192 B.
+
+Os paths retirados nos lotes `automation`, `hybrid-b9` e 3/3 permanecem terminais
+e foram excluídos da lista de trabalho. O grafo protege 60/60 releases; dados,
+mídias, DB, WAL, overlays e backups necessários continuam `PRESERVE`. O ganho
+qualificado atual é zero. Próximos objetos de **qualificação**, não de retirada,
+são o cache npm (341.782.528 B), logs PM2 (405.860.352 B) e a materialização
+`deploy-control/ef7db111-prep` (1.023.299.584 B), cada qual exigindo sua autoridade
+e lifecycle próprios. Itens `KEEP_PROTECTED` e a árvore `worker-package-audit`
+negada por identidade não devem ser reciclados como candidatos.
+
+A causa preventiva permanece objetiva: o adapter de lifecycle para preparações
+volumosas foi implementado/ensaiado, mas ainda não é consumido por todas as rotas
+reais de produção. Encerramento dessa lacuna exige interceptar a alocação antes de
+cópia/compactação e registrar `OPEN → SANITIZED|RETENTION_DEBT`; não autoriza
+limpeza automática nem bloqueio global de escopos independentes.
+
+### Classificação consolidada das quatro famílias remanescentes — 02/11/2026
+
+Leitura proporcional de inventários, manifests, receipts e journals precedeu a
+enumeração de metadados. A soma por `(st_dev, st_ino)` encontrou **5.368.365.056 B**
+e 39.232 inodes únicos. Há 11.104.256 B de compartilhamento por hardlink dentro
+das famílias, já descontados, e **nenhuma sobreposição física entre as quatro
+famílias**. Não houve hash integral, extração, cópia, mudança de permissão ou
+efeito de retirada.
+
+| Família literal | Bytes físicos únicos | Classificação consolidada | Autoridade/prova | Impedimento e verificação restante |
+|---|---:|---|---|---|
+| `/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26` | 2.003.935.232 | 1.505.161.216 B protegidos (conteúdo, DB, runtime e configurações); 475.967.488 B de retornos principais necessários como evidência/autoridade; 22.806.528 B de controles e evidências | manifests e SHA históricos; três retornos principais e `v4-20261003/window/content.private.tar.gz` são as autoridades preservadas pelo terceiro lote | as cópias redundantes em `activation-*` e no backup V4 já foram retiradas entre os 20 efeitos terminais de 14/10; não reabrir. Nenhum ganho atual qualificado |
+| família `retention-third-files-*`, `retention-second-nine-*` e `retention-recent-generations-qualification-*` sob `/opt/re7online/backups/converta-persistent/preparations` | 1.186.054.144 | evidência necessária / não qualificada | receipts, journals, baseline, `source-inventory.v3.private.json` e selo V3 autenticam origem e cópia | os dois baselines de `retention-recent-generations` têm inventário e hashes equivalentes; 286.388.224 B são potencialmente consolidáveis, mas `sourcePreserved` e o selo V3 ainda exigem ambos. Fechar terminalidade e produzir disposição compacta sem apagar evidência; custo médio, apenas metadados já pinados |
+| `/opt/re7online/backups/converta-persistent/preparations/campaign-eligibility-reconciliation-20261008T150000Z` e `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-ecosystem-20261008T211000Z` | 1.155.076.096 | 1.125.556.224 B protegidos (conteúdo, DB, runtime e auth); 29.519.872 B de overlays, manifests e evidências | release inativa `campaign-eligibility-recovery-final-reviewed-20261008`, manifest completo de 8.820 arquivos/11 links e manifests dos overlays | a cópia redundante de conteúdo da reconciliação já foi retirada no lote terminal. Os três overlays restantes têm digests distintos (`5c2e…`, `2411…`, `56c8…`), portanto não são duplicatas. Nenhum ganho atual qualificado |
+| `/opt/re7online/deploy-control/ef7db111-prep` | 1.023.299.584 | 949.141.504 B derivados potencialmente retiráveis; 74.158.080 B de fonte/controle preservados | worktree físico em `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, tracked-clean; Git é autoridade para fonte, não para outputs ignorados | qualificar referências vivas e disposição literal de `node_modules` (593.416.192 B), `apps/whatsapp-agent/node_modules` (316.493.824 B), `.next` (29.827.072 B) e `apps/whatsapp-agent/dist` (9.404.416 B). Falta lifecycle/receipt; custo baixo-médio, sem hash de payload indiscriminado |
+
+O **ganho qualificado para retirada permanece 0 B**: esta etapa só classificou.
+O maior lote único de baixo risco é o conjunto derivado enumerado de
+`ef7db111-prep`, com teto físico de **949.141.504 B**. Ele supera o déficit
+histórico de 817.209.344 B, mas só se torna retirável após: (1) recaptura dirigida
+de current/PM2/dump/transações/processos para esses quatro caminhos; (2) contrato
+que preserve o commit e os 74.158.080 B de fonte/controle; e (3) disposição
+literal e receipt. Não remover a raiz do worktree. Como alternativa posterior,
+o baseline duplicado da família de retenção oferece até 286.388.224 B, com custo
+documental maior e sem necessidade de reler payloads.
+
+#### Produtores reais e lacuna do lifecycle
+
+Os callsites históricos não atravessaram o adapter atual:
+
+- `freeform-window-af26`: scripts de backup/janela e `ops.py` dos pacotes
+  `automation-freeform-window-release-af26`, antes de `preparationArtifacts`;
+- retenção: `audit.py`, `withdraw.py`, captura de textos e preparadores próprios
+  do `retention-audit-20261013`;
+- eligibility/reconciliation: `prepare-v4-*`,
+  `create-postack-backup.private.py`, sequencer e ferramentas de janela;
+- `ef7db111-prep`: worktree Git histórico com outputs ignorados de instalação e
+  build (`node_modules`, `.next`, `dist`), fora de uma reserva/lifecycle terminal.
+
+O adapter `operational_preparers_v3.py` e
+`preparation_artifact_lifecycle.py` está integrado e materializável pela admissão
+schema 2, mas a busca de chamadores continua sem mostrar essas quatro rotas reais
+consumindo-o. A menor integração preventiva é fazer cada produtor declarar, antes
+da primeira alocação, `preparationArtifacts`, custo previsto e `reservationRoot`,
+abrir lifecycle `OPEN` e fechar em `SANITIZED` ou `RETENTION_DEBT`. A reserva só
+agrega na raiz autenticada e serializada; não é bloqueio global do filesystem.
+Ausência de registro histórico não converte material antigo em `SANITIZED`.
+
+### Qualificação dirigida de `ef7db111-prep` — 02/11/2026
+
+Os quatro caminhos classificados acima foram reabertos somente por metadados. O
+worktree continua registrado pelo Git, detached no commit
+`ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, tracked-clean. A raiz, o `.git`,
+as fontes e controles não pertencem ao lote e permanecem preservados.
+
+| Caminho literal | Identidade da raiz | Bytes físicos | Conteúdo observado | Estado |
+|---|---|---:|---|---|
+| `/opt/re7online/deploy-control/ef7db111-prep/node_modules` | `64769:4281507`, `deploy:deploy 0755` | 593.416.192 | 2.326 diretórios, 21.808 arquivos e 31 links; somente dependências do lockfile; nenhum nome de `.env`, chave, dump, DB ou sessão | derivado, mas `NOT_QUALIFIED` |
+| `/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules` | `64769:4525243`, `deploy:deploy 0755` | 316.493.824 | 710 diretórios, 6.934 arquivos e 10 links; ocorrências `uploads`/`Secret` são código de bibliotecas OpenAI/Effect; nenhum arquivo privado encontrado | derivado, mas `NOT_QUALIFIED` |
+| `/opt/re7online/deploy-control/ef7db111-prep/.next` | `64769:4533437`, `deploy:deploy 0755` | 29.827.072 | 284 diretórios e 1.650 arquivos de build/cache Next; nenhum link ou nome privado encontrado | derivado, mas `NOT_QUALIFIED` |
+| `/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist` | `64769:4525321`, `deploy:deploy 0755` | 9.404.416 | 58 diretórios e 483 arquivos compilados; nomes `db`/`media` são módulos JavaScript, não payloads; nenhum arquivo privado encontrado | derivado, mas `NOT_QUALIFIED` |
+
+O tracked `package.json`, `package-lock.json`,
+`apps/whatsapp-agent/package.json`, `apps/whatsapp-agent/package-lock.json` e a
+fonte do agente permanecem no commit. Isso prova a proveniência reconstruível,
+mas não substitui autenticação de referência viva nem cria equivalência byte a
+byte com uma autoridade sobrevivente.
+
+Current aponta apenas para API `fa63994a` e frontend `aa9527cc`; PM2 live e dump
+apontam para esses runtimes e para o worker `e2e7f17a`. Nenhum deles referencia
+os quatro caminhos. A busca textual dirigida em transações, preparações,
+`build-output` e `deploy-control` encontrou apenas dois registros históricos do
+próprio worktree nos baselines de `retention-recent-generations`; não encontrou
+contrato ou transação consumindo os outputs ignorados. Esses registros e o
+registro Git são preservados, não efeitos de retirada.
+
+#### Incompatibilidade canônica — interrupção antes da disposição
+
+`capacity-recovery.py` possui somente as classes fechadas
+`NPM_CACHE_MAINTENANCE`, `DERIVED_OUTPUT_RUNTIME`,
+`CLOSED_PREPARATION_DERIVED_ARCHIVE` e
+`CLOSED_PREPARATION_MANIFEST_DISPOSITION`. `DERIVED_OUTPUT_RUNTIME` exige
+descendente estrito de `/opt/re7online/build-output`; nenhuma classe admite
+`/opt/re7online/deploy-control`. O helper privilegiado repete essa fronteira e
+nega esses quatro literais com `CANDIDATE_SCOPE`. Portanto, a varredura completa
+de processos por CWD/FD/maps não pode ser autenticada pelo mecanismo canônico.
+
+Resultado: **`EF7DB111_DERIVED_PATHS_NOT_QUALIFIED /
+CANONICAL_CLASS_AND_PROC_SCOPE_ABSENT`**. Não foram produzidos manifesto,
+lifecycle, comandos ou autorização. O teto estimado continua 949.141.504 B, não
+ganho qualificado. Antes de qualquer futura retirada seria necessária uma única
+extensão versionada e fechada do control plane para os quatro caminhos exatos,
+com observador igualmente literal, preservação da raiz/commit/fonte/controles,
+recaptura de referências em `audit`, `prepare` e sob locks, e efeitos por folhas
+enumeradas mais `rmdir` pós-ordem. Esta classificação não autoriza desenvolver
+essa extensão nem executar `rm -r`.
