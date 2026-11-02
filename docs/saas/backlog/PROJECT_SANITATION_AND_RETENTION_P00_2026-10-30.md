@@ -800,6 +800,9 @@ byte-exatos. O fechamento recuperou zero bytes adicionais. O ganho líquido medi
 continua `988.590.080 bytes` em f160 e totaliza `1.977.118.720 bytes` com d436.
 Ambas as retiradas são terminais e proibidas de replay.
 
-O fechamento deste lote não conclui a frente preventiva. O adapter de lifecycle
-para preparações volumosas continua sem integração comprovada nos produtores reais;
-essa ligação permanece pendente para interromper novo acúmulo na origem.
+O fechamento deste lote não instala a frente preventiva. A rota versionada agora
+liga a admissão ao produtor materializado: report, contrato e input são reabertos e
+o mesmo FD autenticado cria o artefato somente depois de registrar orçamento e
+`OPEN`; `review-preparation` faz o fechamento terminal. A cobertura é da rota
+canônica e da `reservationRoot`, não de escritores históricos/manuais nem do
+filesystem inteiro. Adoção produtiva permanece pendente e exige janela própria.

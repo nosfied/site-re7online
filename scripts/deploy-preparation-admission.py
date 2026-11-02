@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 from typing import Any
 import importlib.util
@@ -598,12 +599,110 @@ def materialize(value: dict[str, Any],
             pass
         raise
 
+
+def run_materialized_preparation(args: argparse.Namespace) -> int:
+    """Invoke only the producer authenticated and copied by this admission."""
+    errors: list[str] = []
+    root = normalized_absolute(args.materialized_root)
+    report_path = normalized_absolute(args.admission_report)
+    input_path = normalized_absolute(args.producer_input)
+    output = normalized_absolute(args.output)
+    if (root is None or report_path != root / "admission-report.private.json" or
+            input_path is None or output is None or args.adapter not in {"api", "frontend"} or
+            not valid_sha(args.admission_report_sha256) or
+            not valid_sha(args.producer_input_sha256)):
+        raise RuntimeError("preparation_run_binding")
+    root_info = root.lstat()
+    if (root.is_symlink() or not stat.S_ISDIR(root_info.st_mode) or
+            root_info.st_uid != os.geteuid() or root_info.st_gid != os.getegid() or
+            stat.S_IMODE(root_info.st_mode) != 0o700):
+        raise RuntimeError("preparation_run_root_identity")
+    observed_report = stable_regular(report_path, {0o600}, args.admission_report_sha256,
+                                     errors, "preparation_run_report")
+    observed_input = stable_regular(input_path, {0o600}, args.producer_input_sha256,
+                                    errors, "preparation_run_input")
+    if errors or observed_report is None or observed_input is None:
+        raise RuntimeError("preparation_run_readback:" + ",".join(sorted(set(errors))))
+    try:
+        report = json.loads(observed_report[0]); producer_input = json.loads(observed_input[0])
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("preparation_run_json") from error
+    if (report.get("result") not in {"P00_AGGREGATE_ADMISSION_PASS",
+                                     "P00_AGGREGATE_ADMISSION_REUSED"} or
+            report.get("consumableMaterialized") is not True or
+            not isinstance(report.get("preparationProducer"), list) or
+            not isinstance(report.get("preparationArtifactContract"), dict)):
+        raise RuntimeError("preparation_run_report_contract")
+    expected_contract = report["preparationArtifactContract"]
+    if producer_input.get("preparationArtifactContract") != expected_contract:
+        raise RuntimeError("preparation_run_contract_binding")
+    contract_path = normalized_absolute(expected_contract.get("path"))
+    if (contract_path != root / "preparation-artifacts.contract.private.json" or
+            not valid_sha(expected_contract.get("sha256"))):
+        raise RuntimeError("preparation_run_contract_location")
+    contract_observed = stable_regular(contract_path, {0o600}, expected_contract["sha256"],
+                                       errors, "preparation_run_contract")
+    if errors or contract_observed is None:
+        raise RuntimeError("preparation_run_contract_readback:" +
+                           ",".join(sorted(set(errors))))
+    contract = json.loads(contract_observed[0])
+    if contract.get("reservationRoot") != str(output):
+        raise RuntimeError("preparation_run_reservation_root")
+    relative = PREPARATION_PRODUCER_ROLES["preparation-producer"]
+    producer_path = root / "preparation-producer-root" / relative
+    matches = [item for item in report["preparationProducer"]
+               if isinstance(item, dict) and item.get("role") == "preparation-producer"]
+    if (len(matches) != 1 or matches[0].get("path") != str(producer_path) or
+            not valid_sha(matches[0].get("sha256")) or matches[0].get("copied") is not True):
+        raise RuntimeError("preparation_run_producer_binding")
+    producer_observed = stable_regular(producer_path, {0o600}, matches[0]["sha256"],
+                                       errors, "preparation_run_producer")
+    if errors or producer_observed is None:
+        raise RuntimeError("preparation_run_producer_readback:" +
+                           ",".join(sorted(set(errors))))
+    fd = os.open(producer_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        opened = os.fstat(fd)
+        if (identity(opened) != identity(producer_observed[1]) or
+                identity(opened) != identity(producer_path.lstat())):
+            raise RuntimeError("preparation_run_producer_identity")
+        fd_digest = hashlib.sha256()
+        while chunk := os.read(fd, 1024 * 1024):
+            fd_digest.update(chunk)
+        if fd_digest.hexdigest() != matches[0]["sha256"]:
+            raise RuntimeError("preparation_run_producer_fd_hash")
+        os.lseek(fd, 0, os.SEEK_SET)
+        command = ["/usr/bin/python3", "-I", "-B", "-E", "-s",
+                   f"/proc/self/fd/{fd}", "--adapter", args.adapter,
+                   "--input", str(input_path), "--input-sha256", args.producer_input_sha256,
+                   "--output", str(output), "--local-only"]
+        completed = subprocess.run(command, pass_fds=(fd,), check=False,
+                                   env={"PYTHONDONTWRITEBYTECODE": "1", "PATH": "/usr/bin:/bin"})
+    finally:
+        os.close(fd)
+    return completed.returncode
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--request", required=True)
-    parser.add_argument("--request-sha256", required=True)
+    parser.add_argument("--request")
+    parser.add_argument("--request-sha256")
+    parser.add_argument("--run-preparation", action="store_true")
+    parser.add_argument("--materialized-root")
+    parser.add_argument("--admission-report")
+    parser.add_argument("--admission-report-sha256")
+    parser.add_argument("--producer-input")
+    parser.add_argument("--producer-input-sha256")
+    parser.add_argument("--adapter", choices=("api", "frontend"))
+    parser.add_argument("--output")
     args = parser.parse_args()
     os.umask(0o077)
+    if args.run_preparation:
+        try:
+            return run_materialized_preparation(args)
+        except Exception as error:
+            print(canonical({"result": "P00_PREPARATION_PRODUCER_DENY",
+                             "errors": [str(error)], "automaticRetry": False}).decode(), end="")
+            return 2
     request_path = normalized_absolute(args.request)
     bootstrap_errors: list[str] = []
     if request_path is None or not valid_sha(args.request_sha256):

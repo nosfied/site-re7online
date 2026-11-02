@@ -1217,10 +1217,19 @@ registro continua histórico não classificado, nunca `SANITIZED` por inferênci
 Os testes cobrem materialização, produtor, duplicação, orçamento, resíduo e
 fechamento. Esta implementação versionada não autoriza instalação ou retirada.
 
-Cobertura comprovada: somente invocações pelo CLI/API de
-`operational_preparers_v3.py`. A busca de chamadores não encontrou integração desse
-adapter no produtor canônico `converta-release.py` nem em outro criador atual; o
-producer de release usa `build-output` e seu lifecycle de geração. Scripts e kits
-históricos que criaram archives em `preparations` não são retroativamente
-interceptados. Portanto esta é uma fronteira preventiva disponível e testada, não
-uma proibição técnica global de qualquer escrita manual nessa árvore.
+Cobertura comprovada: a admissão schema 2 materializa o produtor e a ação
+`deploy-preparation-admission.py --run-preparation` é o callsite canônico de criação
+API/frontend. Ela autentica por readback o report, o contrato, o input e o SHA do
+produtor copiado, abre o produtor com `O_NOFOLLOW` e executa esse mesmo FD. O
+produtor grava `OPEN` e a reserva antes do primeiro `copy`/`tar`; o fechamento
+terminal usa o `generation-retirement.py review-preparation` também materializado.
+A regressão atravessa admissão → produtor fora do checkout → cópia real → lifecycle
+`OPEN` → retirada sintética → `SANITIZED`, além de negar drift do contrato e do
+produtor antes de novo efeito.
+
+O produtor de release `converta-release.py` continua usando `build-output` e seu
+lifecycle de geração; não deve ser alterado por suposição. Scripts e kits históricos
+que escreveram diretamente em `preparations` não são retroativamente interceptados.
+Logo a garantia cobre a rota canônica integrada, não constitui bloqueio global de
+qualquer escrita manual no filesystem. Instalação/adoção produtiva ainda exige
+janela própria; não existe limpeza automática.

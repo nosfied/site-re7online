@@ -1383,7 +1383,7 @@
       "netRecoveredInodes": 34360,
       "productionChanged": false,
       "originalArtifactsRewritten": false,
-      "preventiveLifecycleProducerIntegration": "PENDING"
+      "preventiveLifecycleProducerIntegration": "VERSIONED_CANONICAL_ROUTE_NOT_INSTALLED"
     },
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
