@@ -1341,7 +1341,31 @@
       "canonicalClosureValidated": true,
       "repeatForbidden": true,
       "productionChanged": false,
-      "f160State": "PRESENT_AUTHORIZATION_V3_FROZEN_NOT_INVOKED"
+      "f160State": "ABSENT_AFTER_V4_QUARANTINED_CLOSURE_INCOMPLETE"
+    },
+    "f160PartialRetirement20261102": {
+      "state": "QUARANTINED",
+      "releaseId": "immutable-f1602787-vps-20261026T174702Z",
+      "intentSha256": "d04d661a8f22202ced02176391cda34b1136f1b00fe3fdcafc1152d08185c796",
+      "authorizationV4Sha256": "ada9e96f3eb20c6c08fb943bc0898cf2dff9058b5a146c4cea42e6a4edf5bc04",
+      "receiptSha256": "36d0d69fbb22a920fcbd7e6c38bceae0ab0532368943e174c537900cf9aeb26b",
+      "commandLogSha256": "905737bfb83042f6e0d98c37a4576adb5819e9cd45ebe074ba5ea1b0568648d2",
+      "reviewSha256": "610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690",
+      "failurePredicate": "artifact_missing:/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z/frontend-runtime/.next/cache",
+      "commandsAttempted": 1,
+      "commandsCompleted": 1,
+      "removedPaths": [
+        "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z"
+      ],
+      "releaseAbsent": true,
+      "cacheAbsentWithParent": true,
+      "canonicalClosure": "DENY_RELEASE_RECONCILIATION_CLOSURE_INCOMPLETE",
+      "automaticRetry": false,
+      "repeatForbidden": true,
+      "netRecoveredBytes": 988590080,
+      "finalAvailableBytes": 10737483776,
+      "netRecoveredInodes": 34360,
+      "productionChanged": false
     },
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",

@@ -584,7 +584,15 @@ journal `525ab03b5b414a90bc6e8703597f1c7d7953cbfa192a9e17cd00225dfeba975c`
 e review `11a301e4b266994eac124e54eadd0ae5178002a4e1f5d50f59672b948e4ffb52`.
 O ganho líquido medido foi `988.528.640 bytes`; a capacidade passou para
 `9.756.708.864 bytes`. Produção, PM2, dump e grafos permaneceram inalterados.
-f160 permanece presente e sua autorização v3 está congelada e não consumida.
+f160 foi executada posteriormente por autorização v4. O único comando removeu a
+release, mas o cache `WITH_PARENT_RELEASE_ONLY` desapareceu com o pai e não entrou
+em `removedPaths`; receipt `36d0d69fbb22a920fcbd7e6c38bceae0ab0532368943e174c537900cf9aeb26b`
+ficou `QUARANTINED`, journal
+`905737bfb83042f6e0d98c37a4576adb5819e9cd45ebe074ba5ea1b0568648d2`
+e review `610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690`.
+O consumidor canônico nega a closure como incompleta. Release e cache estão
+ausentes; repetir o comando é proibido. A janela recuperou `988.590.080 bytes`
+líquidos e terminou com `10.737.483.776 bytes` disponíveis, sem mudança operacional.
 
 A primeira materialização operacional foi interrompida antes de qualquer escrita:
 a ativação frontend `aa9527cc` usa o formato frontend-only do control plane

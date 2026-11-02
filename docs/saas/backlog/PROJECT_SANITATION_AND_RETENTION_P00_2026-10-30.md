@@ -757,6 +757,25 @@ frontend `aa9527cc`, worker `e2e7`, PM2, dump, grafo sucessor e lock canônico
 permaneceram inalterados. Esta retirada é terminal e irrepetível: não repetir
 reconciliação, `prepare`, autorização ou `execute` para d436.
 
-`f160` permanece fisicamente presente. Sua autorização v3 não foi invocada e
-continua congelada; qualquer continuação exige preflight fresco restrito a f160,
-sem reapresentar o lote d436.
+#### Execução f160 v4 — efeito concluído, closure incompleta em 02/11/2026
+
+A autorização v3 permaneceu congelada e byte-exata. A autorização v4
+`ada9e96f3eb20c6c08fb943bc0898cf2dff9058b5a146c4cea42e6a4edf5bc04`
+foi consumida uma única vez. O único comando removeu com sucesso
+`immutable-f1602787-vps-20261026T174702Z`; `ATTEMPT`, `RESULT exitCode=0` e
+`VERIFIED absent=true` estão registrados no journal
+`905737bfb83042f6e0d98c37a4576adb5819e9cd45ebe074ba5ea1b0568648d2`.
+
+O executor negou na inspeção posterior porque o artefato subordinado
+`frontend-runtime/.next/cache`, classificado `WITH_PARENT_RELEASE_ONLY`, ficou
+fora de `removedPaths` depois de desaparecer junto com o pai. O receipt
+`36d0d69fbb22a920fcbd7e6c38bceae0ab0532368943e174c537900cf9aeb26b`
+é `QUARANTINED`, com review
+`610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690`.
+O consumidor canônico retornou `release_reconciliation_closure_incomplete`.
+
+A release e o cache estão ausentes, mas isso não autoriza marcar f160 como
+`SANITIZED` nem repetir o comando. O ganho líquido observado na janela foi
+`988.590.080 bytes`, de `9.748.893.696` para `10.737.483.776 bytes`, e `34.360`
+inodes. Produção, PM2, dump, grafos e locks permaneceram inalterados. Qualquer
+fechamento futuro deve reconciliar o receipt parcial existente, sem replay.
