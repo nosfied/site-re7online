@@ -779,3 +779,24 @@ A release e o cache estão ausentes, mas isso não autoriza marcar f160 como
 `988.590.080 bytes`, de `9.748.893.696` para `10.737.483.776 bytes`, e `34.360`
 inodes. Produção, PM2, dump, grafos e locks permaneceram inalterados. Qualquer
 fechamento futuro deve reconciliar o receipt parcial existente, sem replay.
+
+#### Reconciliação subordinada f160 — correção local em revisão
+
+O delta local não reclassifica ausência genérica. Ele admite somente o cache
+literal já emitido no contrato f160, com `retirableOn=WITH_PARENT_RELEASE_ONLY`,
+confinado sob a única `RELEASE_RUNTIME` do mesmo release/target. O pai precisa
+estar em `completed` por prova canônica do journal e receipt parciais; pai e cache
+precisam continuar ausentes. Ausência isolada, vínculo divergente, caminho fora do
+pai ou política diferente negam.
+
+A regressão usa o produtor legado real da fixture f160. A primeira execução faz
+um único comando, preserva `attemptedCommands=1`, `completedCommands=1` e falha
+no cache subordinado ausente. O `prepare` sucessor registra o cache em
+`subordinateAbsences`, produz arquivo de comandos vazio e a execução sucessora
+faz zero comandos destrutivos. O receipt sucessor mantém `removedPaths` somente
+com a release-pai e registra a ausência subordinada em campo separado; a cadeia
+completa é aceita por `_canonical_retirement_closure()`. Receipt, journal,
+autorização consumida e review parcial originais permanecem byte-exatos.
+
+Estado: `IMPLEMENTED_AND_TESTED_NOT_EXECUTED`. Não há autorização produtiva e a
+retirada original continua terminal e proibida de replay.

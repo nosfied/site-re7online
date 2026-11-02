@@ -594,6 +594,18 @@ O consumidor canônico nega a closure como incompleta. Release e cache estão
 ausentes; repetir o comando é proibido. A janela recuperou `988.590.080 bytes`
 líquidos e terminou com `10.737.483.776 bytes` disponíveis, sem mudança operacional.
 
+Correção local em revisão: o fluxo sucessor de reconciliação agora distingue o
+único comando comprovado (`RELEASE_RUNTIME`) da ausência subordinada do cache
+f160. A prova exige a classe literal `EPHEMERAL_RUNTIME_CACHE`, política
+`WITH_PARENT_RELEASE_ONLY`, confinamento abaixo da release, o trio canônico
+`ATTEMPT`/`RESULT=0`/`VERIFIED absent=true` do pai e ausência simultânea dos dois
+caminhos. O intent sucessor registra `subordinateAbsences` separadamente e sela
+zero comandos; seu receipt conserva `completedCommands=1`, `removedPaths` apenas
+com o pai e `attemptedCommands=0` na fase sucessora. A fixture materializada
+atravessou partial receipt → prepare sucessor → execute sem efeitos → closure
+canônica. Isso está apenas implementado e ensaiado localmente: não altera o
+receipt, journal, autorização ou review produtivos e não autoriza nova janela.
+
 A primeira materialização operacional foi interrompida antes de qualquer escrita:
 a ativação frontend `aa9527cc` usa o formato frontend-only do control plane
 `9441de5a569219d38303c711d82c45870e8755cc`, não o journal fixed-current. A

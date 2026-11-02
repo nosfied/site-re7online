@@ -1365,7 +1365,19 @@
       "netRecoveredBytes": 988590080,
       "finalAvailableBytes": 10737483776,
       "netRecoveredInodes": 34360,
-      "productionChanged": false
+      "productionChanged": false,
+      "localSuccessorReconciliationPatch": {
+        "state": "IMPLEMENTED_AND_TESTED_NOT_EXECUTED",
+        "scope": "F160_WITH_PARENT_RELEASE_ONLY",
+        "newDestructiveCommands": 0,
+        "completedCommandsPreserved": 1,
+        "removedPathsPreserved": [
+          "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z"
+        ],
+        "subordinateAbsence": "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z/frontend-runtime/.next/cache",
+        "originalArtifactsRewritten": false,
+        "productionAuthorizationGranted": false
+      }
     },
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
