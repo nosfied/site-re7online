@@ -62,6 +62,7 @@ PROCESS_NAMES = {
     "worker": "re7-whatsapp-web-worker",
 }
 LOCK = Path("/opt/re7online/backups/converta-persistent/deploy.lock")
+FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
 EXTERNAL_LOCK_ENV = "RE7_DEPLOYMENT_LOCK_HELD"
 EXTERNAL_LOCK_FD = 9
 PM2_CANDIDATES = (
@@ -1334,16 +1335,64 @@ class Driver:
 
     def _acquire_lock(self, journal: dict[str, Any]) -> None:
         self.lock.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         try:
             fd = os.open(self.lock, flags, 0o600)
         except FileExistsError:
             self._adopt_empty_lock(journal)
         else:
-            with os.fdopen(fd, "w") as stream:
-                stream.write(hashlib.sha256(json.dumps(journal["binding"], sort_keys=True).encode()).hexdigest() + "\n")
-                stream.flush(); os.fsync(stream.fileno())
-        journal["lockDigest"] = digest(self.lock)
+            try:
+                opened = os.fstat(fd)
+                if (not stat.S_ISREG(opened.st_mode) or opened.st_uid != os.geteuid() or
+                        opened.st_gid != os.getegid() or stat.S_IMODE(opened.st_mode) != 0o600 or
+                        opened.st_nlink != 1 or opened.st_size != 0):
+                    deny("global_lock_changed")
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._bind_lock_fd(journal, fd, opened, adopted_existing=False)
+            finally:
+                os.close(fd)
+
+    @staticmethod
+    def _lock_value(journal: dict[str, Any]) -> bytes:
+        binding = hashlib.sha256(json.dumps(
+            journal["binding"], sort_keys=True).encode()).hexdigest().encode()
+        return FIXED_CURRENT_LOCK_PREFIX + binding + b"\n"
+
+    def _bind_lock_fd(self, journal: dict[str, Any], fd: int, opened: os.stat_result,
+                      *, adopted_existing: bool) -> None:
+        """Persist journal ownership before publishing the bound lock bytes."""
+        value = self._lock_value(journal)
+        expected_digest = hashlib.sha256(value).hexdigest()
+        journal["lockDigest"] = expected_digest
+        journal["lockTransition"] = {
+            "schemaVersion": 1,
+            "state": "PENDING",
+            "adoptedExisting": adopted_existing,
+            "device": opened.st_dev,
+            "inode": opened.st_ino,
+            "contentSha256": expected_digest,
+            "zeroOperationalEffects": True,
+        }
+        self._journal_write(journal, "ACTIVATING")
+        if os.pwrite(fd, value, 0) != len(value):
+            deny("global_lock_short_write")
+        os.ftruncate(fd, len(value))
+        os.fsync(fd)
+        self._failpoint("after_lock_binding_fsync")
+        after_fd = os.fstat(fd)
+        after_path = self.lock.lstat()
+        if (self.lock.is_symlink() or
+                (after_fd.st_dev, after_fd.st_ino) != (opened.st_dev, opened.st_ino) or
+                (after_path.st_dev, after_path.st_ino) != (opened.st_dev, opened.st_ino) or
+                after_fd.st_size != len(value) or os.pread(fd, len(value) + 1, 0) != value):
+            deny("global_lock_changed")
+        journal["lockTransition"]["state"] = "BOUND"
+        self._journal_write(journal, "ACTIVATING")
+        directory_fd = os.open(self.lock.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
 
     def _adopt_empty_lock(self, journal: dict[str, Any]) -> None:
         """Bind a canonical empty retirement sentinel without replacing its inode."""
@@ -1379,22 +1428,7 @@ class Driver:
                      current.st_nlink, current.st_size) != expected or
                     os.pread(fd, 1, 0) != b""):
                 deny("global_lock_changed")
-            value = (hashlib.sha256(json.dumps(
-                journal["binding"], sort_keys=True).encode()).hexdigest() + "\n").encode()
-            if os.pwrite(fd, value, 0) != len(value):
-                deny("global_lock_short_write")
-            os.ftruncate(fd, len(value))
-            os.fsync(fd)
-            self._failpoint("after_empty_lock_adopted")
-            after = self.lock.lstat()
-            if ((after.st_dev, after.st_ino) != (opened.st_dev, opened.st_ino) or
-                    after.st_size != len(value)):
-                deny("global_lock_changed")
-            directory_fd = os.open(self.lock.parent, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+            self._bind_lock_fd(journal, fd, opened, adopted_existing=True)
         finally:
             os.close(fd)
 
@@ -1469,6 +1503,71 @@ class Driver:
             deny("global_lock_identity")
         self.lock.unlink()
 
+    def _rollback_lock_transition(self, journal: dict[str, Any]) -> None:
+        """Canonically close a lock transition that preceded all operational effects."""
+        transition = journal.get("lockTransition")
+        if (not isinstance(transition, dict) or transition.get("schemaVersion") != 1 or
+                transition.get("state") not in {"PENDING", "BOUND"} or
+                journal.get("previous") is not None or journal.get("activationAttempted") or
+                journal.get("activationProgress") or journal.get("saveCount") != 0):
+            deny("lock_transition_recovery_state")
+        expected_identity = (transition.get("device"), transition.get("inode"))
+        expected_value = self._lock_value(journal)
+        expected_digest = hashlib.sha256(expected_value).hexdigest()
+        if (journal.get("lockDigest") != expected_digest or
+                transition.get("contentSha256") != expected_digest):
+            deny("lock_transition_recovery_binding")
+        progress = journal.setdefault("rollback", {
+            "restoredComponents": [], "lockReleaseStarted": False,
+            "zeroOperationalEffects": True,
+        })
+        self._journal_write(journal, "ROLLING_BACK")
+        try:
+            before = self.lock.lstat()
+            if (self.lock.is_symlink() or not stat.S_ISREG(before.st_mode) or
+                    (before.st_dev, before.st_ino) != expected_identity):
+                deny("global_lock_recovery_identity")
+            fd = os.open(self.lock, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | os.O_CLOEXEC)
+            try:
+                opened = os.fstat(fd)
+                if (opened.st_dev, opened.st_ino) != expected_identity:
+                    deny("global_lock_recovery_identity")
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    deny("global_lock_recovery_busy")
+                content = os.pread(fd, len(expected_value) + 1, 0)
+                if content not in {b"", expected_value}:
+                    deny("global_lock_recovery_content")
+                if content == b"" and transition.get("state") != "PENDING":
+                    deny("global_lock_recovery_content")
+                progress["lockReleaseStarted"] = True
+                self._journal_write(journal, "ROLLING_BACK")
+                if transition.get("adoptedExisting") is True:
+                    os.ftruncate(fd, 0)
+                    os.fsync(fd)
+                    progress["result"] = "EMPTY_SENTINEL_RESTORED"
+                elif transition.get("adoptedExisting") is False:
+                    current = self.lock.lstat()
+                    if (current.st_dev, current.st_ino) != expected_identity:
+                        deny("global_lock_recovery_identity")
+                    self.lock.unlink()
+                    progress["result"] = "CREATED_LOCK_REMOVED"
+                else:
+                    deny("lock_transition_recovery_state")
+                directory_fd = os.open(self.lock.parent, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            finally:
+                os.close(fd)
+            transition["state"] = "ROLLED_BACK"
+            self._journal_write(journal, "ROLLED_BACK")
+        except Exception as error:
+            self._record_failure(journal, error, "rollback")
+            raise
+
     def _ensure_lock(self, journal: dict[str, Any]) -> None:
         if self._external_lock_active():
             self._authenticate_external_lock()
@@ -1482,7 +1581,7 @@ class Driver:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(self.lock, flags, 0o600)
         with os.fdopen(fd, "w") as stream:
-            stream.write(hashlib.sha256(json.dumps(journal["binding"], sort_keys=True).encode()).hexdigest() + "\n")
+            stream.write(self._lock_value(journal).decode())
             stream.flush(); os.fsync(stream.fileno())
         if digest(self.lock) != journal.get("lockDigest"): deny("global_lock_recovery_identity")
 
@@ -1600,7 +1699,7 @@ class Driver:
             os.chmod(rollback_dump, 0o600)
             with rollback_dump.open("rb") as stream: os.fsync(stream.fileno())
         except Exception:
-            self._release_lock(journal)
+            self._rollback_lock_transition(journal)
             raise
         journal["previous"] = previous
         journal["rollbackDumpSha256"] = digest(rollback_dump)
@@ -1701,6 +1800,12 @@ class Driver:
             deny("rollback_failed_state_owner")
         if journal.get("saveCount") != 0:
             deny("rollback_after_save")
+        if (journal.get("previous") is None and
+                isinstance(journal.get("lockTransition"), dict) and
+                journal["lockTransition"].get("state") in {"PENDING", "BOUND"}):
+            self._control_head(); self._authenticated_runtime_manifest()
+            self._rollback_lock_transition(journal)
+            return
         current_dump = private_file_identity(self.dump)
         previous_dump = journal.get("previous", {}).get("dump", {})
         if current_dump.get("sha256") != previous_dump.get("sha256"):
