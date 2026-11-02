@@ -685,6 +685,13 @@ controles rastreados permanecem fora dos efeitos. A raiz inteira de
 `deploy-control`, outro worktree, descendente livre ou quinto caminho são
 negados pelo schema, pelo manifesto e pelo observador privilegiado.
 
+O materializador comprovado mantém `worker-package-audit` como perfil padrão,
+byte-semanticamente inalterado, e admite `ef7db111-deploy-control` somente por
+seleção literal. Esse perfil fixa os quatro candidatos, o manifesto e a prova do
+instalador `install-capacity-proc-observer-ef7.py`; caminho ou perfil arbitrário
+nega. A prova vincula instalador, helper `root:root 0500`, sudoers preservado e
+identidade física, sem leitura direta do helper por `deploy`.
+
 O manifesto fixa caminho, identidade da raiz, bytes físicos, commit, gitdir,
 digest do arquivo `.git`, conjunto preservado e a proveniência rastreada de cada
 árvore. O consumidor exige HEAD byte-exato, worktree registrado, estado Git
@@ -702,6 +709,15 @@ device diferente, tipo inseguro, drift ou material privado (`.env`, chaves,
 dumps, DB, sessões, `.data`, runtime-data ou tenant-data) negam. Nomes de módulos
 como `openai/resources/uploads`, `db` ou `media` não são privados por nome
 isolado; a negativa depende do predicado fechado acima.
+
+A regressão materializada produz request schema 3 fora do checkout e atravessa o
+`audit_request()` real; somente a fronteira sudo do observador `/proc` é
+substituída. A cardinalidade histórica declarada (34.298 efeitos literais) foi
+ensaiada em fechamento completo e parcial: o parcial fechou `FAILED_RECONCILED`
+com 2 tentativas/1 efeito; o completo fechou `COMPLETED_RECONCILED` com 34.298.
+Picos medidos ficaram abaixo de 512 MiB tanto no executor quanto na reconciliação
+do supervisor, e journal/receipt ficaram dentro dos limites autenticados de
+64/16 MiB. Isso é ensaio local, não qualificação ou autorização produtiva.
 
 Os efeitos são somente `unlink --` literal por folha e `rmdir --` literal em
 pós-ordem. `audit`, `prepare` e `execute` reabrem o manifesto, Git, identidades,

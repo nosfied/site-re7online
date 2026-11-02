@@ -41,6 +41,14 @@ worktree. O lifecycle é comprovado por plano, intenção, autorização, journa
 receipt do control plane existente. Ausência desses artefatos mantém o lote não
 executado; a mera presença do manifesto não significa `SANITIZED`.
 
+O contrato operacional reutiliza o materializador vigente com dois perfis
+fechados. A ausência de opção preserva `worker-package-audit`; somente
+`--profile ef7db111-deploy-control` seleciona os quatro outputs e a prova do
+instalador/helper correspondente. O percurso schema 3 e a reconciliação terminal
+com a cardinalidade prevista foram ensaiados localmente, incluindo falha parcial
+sem replay; instalação, auditoria e retirada produtivas continuam pendentes de
+atos próprios.
+
 ## Contrato obrigatório por geração (implementado)
 
 Cada execução de `scripts/converta-release.py build` publica, desde `BUILDING` e
