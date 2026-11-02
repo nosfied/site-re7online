@@ -1146,6 +1146,11 @@ arquivos emitidos por seu produtor: executor, `selection-intent.private.json`,
 reescreve evidência legada. O predecessor declarado precisa ser o rollback imediato
 do frontend no grafo rico, e a seleção precisa permanecer ativa. Evidência ausente,
 misturada entre transações, antiga ou divergente mantém a proteção.
+O consumidor da projeção aceita o receipt histórico sem `kind`, o receipt nominal
+`FIXED_CURRENT` e o conjunto fechado `FRONTEND_ONLY_V1`. Neste último, ele reabre
+executor, intenções, estado anterior, aceite, receipt e estado terminal, deriva
+novamente seleção e predecessor e nega binding ausente, cruzado ou adulterado antes
+de aceitar `protectedGraphPaths`.
 
 Uma release que contenha descendente `PRIVATE_DATA_NEVER_RETIRE` ou o overlay
 literal `api-runtime/.data` permanece `ACTIVE_DEPENDENCY`, mesmo fora das listas

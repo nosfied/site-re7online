@@ -588,9 +588,12 @@ estado anterior `f1340234a0207e36a3f5205b098b37fa8eb4c2f25046b7f8a4a57a5008ad44c
 aceite `c90b66aefb98dc842e2a2f4f6929de8744cc4e3f2a1e422be70eb2db3f20a694`,
 receipt final `c80e37abc9448ed1edf78eec40f420cb1ac595c0ee470964bed84fe139e74a23` e
 estado terminal `9c86b6ebfa6308ee4ea00ef3bbc412c70b60513239cf7dc2cc3a02fc79cb2989`.
-O leitor fechado desse formato foi preparado e ensaiado localmente; ainda depende de
-revisão, integração e nova autorização antes de qualquer operação. O pacote v2
-anterior permanece não consumível e não deve ser reapresentado.
+O leitor fechado desse formato e o consumidor independente da projeção foram
+preparados e ensaiados localmente. O consumidor preserva receipts legados, aceita
+explicitamente `FIXED_CURRENT` e reabre todos os bindings de `FRONTEND_ONLY_V1`
+antes de derivar as proteções. Ambos ainda dependem de revisão e integração antes
+de qualquer operação. O pacote v2 anterior permanece não consumível e não deve ser
+reapresentado.
 
 A única instrução executável vigente é o [runbook canônico](DEPLOY_RUNBOOK.md).
 O modelo é build once / promote the same artifact, com release imutável, seleção

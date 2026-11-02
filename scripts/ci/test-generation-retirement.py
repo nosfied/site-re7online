@@ -1591,11 +1591,21 @@ class GenerationRetirementTest(unittest.TestCase):
             materialized.mkdir(mode=0o700)
             copied_tool = materialized / "generation-retirement.py"
             copied_dependency = materialized / "preparation_artifact_lifecycle.py"
+            copied_consumer = materialized / "capacity-recovery.py"
             shutil.copyfile(TOOL, copied_tool)
             shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py",
                             copied_dependency)
+            shutil.copyfile(ROOT / "scripts/capacity-recovery.py", copied_consumer)
             copied_tool.chmod(0o500); copied_dependency.chmod(0o600)
+            copied_consumer.chmod(0o600)
             self.assertEqual(sha(copied_tool), sha(TOOL))
+            self.assertEqual(sha(copied_consumer), sha(ROOT / "scripts/capacity-recovery.py"))
+            consumer_spec = importlib.util.spec_from_file_location(
+                "materialized_capacity_recovery", copied_consumer)
+            self.assertIsNotNone(consumer_spec)
+            self.assertIsNotNone(consumer_spec.loader)
+            consumer = importlib.util.module_from_spec(consumer_spec)
+            consumer_spec.loader.exec_module(consumer)
             producer_operational = json.loads(fixture.operational.read_text())
             producer_operational["deploymentState"] = {"state": "SUPERSEDED"}
             private_json(fixture.operational, producer_operational)
@@ -1761,6 +1771,68 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(
                 accepted_receipt["activationEvidence"]["frontend"]["immediateRollback"],
                 immediate_frontend)
+
+            accepted_projection = fixture.evidence_root / "accepted-projection.json"
+            live_pm2 = fixture.evidence_root / "live-pm2"
+            live_pm2.write_text("#!/bin/sh\nprintf '[]\\n'\n")
+            live_pm2.chmod(0o500)
+            live_dump = fixture.evidence_root / "live-dump.json"
+            private_json(live_dump, [])
+            live_transactions = fixture.evidence_root / "live-transactions"
+            live_transactions.mkdir(mode=0o700)
+
+            def capture_projection(projection_path: Path):
+                pm2_projection = consumer._pm2_projection([])
+                capacity_operational = {"schemaVersion": 2,
+                    "currentPaths": [], "pm2LivePaths": [], "pm2DumpPaths": [],
+                    "openTransactionPaths": [], "protectedGraphPaths": [],
+                    "deploymentLock": str(fixture.deploy_lock),
+                    "writerLock": str(fixture.writer_lock),
+                    "liveObservations": {"currentLinks": [],
+                        "pm2": {"path": str(live_pm2), "sha256": sha(live_pm2),
+                            "fingerprintSha256": consumer.digest_bytes(
+                                consumer.canonical(pm2_projection))},
+                        "dump": {"path": str(live_dump), "sha256": sha(live_dump)},
+                        "releaseGraph": {"path": str(projection_path),
+                                         "sha256": sha(projection_path)},
+                        "transactionsRoot": {"path": str(live_transactions),
+                            "ownerUid": os.geteuid(), "groupGid": os.getegid(),
+                            "allowedModes": ["0700"]}}}
+                return consumer.capture_live_operational(capacity_operational)
+
+            captured, _ = capture_projection(accepted_projection)
+            self.assertIn(str(fixture.releases_root / active_frontend),
+                          captured["protectedGraphPaths"])
+            self.assertIn(str(fixture.releases_root / immediate_frontend),
+                          captured["protectedGraphPaths"])
+
+            def denied_projection(name: str, mutate):
+                receipt_value = json.loads(
+                    (fixture.evidence_root / "accepted-receipt.json").read_text())
+                mutate(receipt_value)
+                receipt_variant = fixture.evidence_root / f"{name}-consumer-receipt.json"
+                private_json(receipt_variant, receipt_value)
+                projection_value = json.loads(accepted_projection.read_text())
+                projection_value["reconciliationReceipt"] = {
+                    "path": str(receipt_variant), "sha256": sha(receipt_variant)}
+                projection_variant = fixture.evidence_root / f"{name}-consumer-projection.json"
+                private_json(projection_variant, projection_value)
+                with self.assertRaises(consumer.Denied):
+                    capture_projection(projection_variant)
+
+            denied_projection("missing-frontend-binding", lambda value:
+                value["activationEvidence"]["frontend"].pop("technicalAcceptance"))
+            denied_projection("crossed-frontend-binding", lambda value:
+                value["activationEvidence"]["frontend"].update({
+                    "technicalAcceptance":
+                        value["activationEvidence"]["frontend"]["selectionIntent"]}))
+            acceptance_raw = acceptance.read_bytes()
+            acceptance.write_bytes(acceptance_raw + b" ")
+            acceptance.chmod(0o600)
+            with self.assertRaises(consumer.Denied):
+                capture_projection(accepted_projection)
+            acceptance.write_bytes(acceptance_raw)
+            acceptance.chmod(0o600)
 
             operational = json.loads(fixture.operational.read_text())
             successor_value = json.loads(successor.read_text())
