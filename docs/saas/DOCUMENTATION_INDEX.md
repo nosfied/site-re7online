@@ -37,7 +37,8 @@
   proposto; não autoriza limpeza.
 - [Política canônica de recuperação mínima de capacidade](CAPACITY_RECOVERY_POLICY.md)
   — `audit`, `prepare` e `execute` contidos e fail-closed; inclui archives fechados,
-  checkpoint 3/3 terminal e consolidação das falhas/regressões de 01/11.
+  checkpoint 3/3 terminal, audit ef7 DENY sem efeitos e consolidação das
+  falhas/regressões de 01/11.
 - [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
   — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
   homologação funcional Meta permanece pendente.

@@ -49,6 +49,16 @@ com a cardinalidade prevista foram ensaiados localmente, incluindo falha parcial
 sem replay; instalação, auditoria e retirada produtivas continuam pendentes de
 atos próprios.
 
+O audit produtivo ef7 de 01/11/2026 encerrou essa qualificação 4/4 como DENY, sem
+efeitos. `node_modules` da raiz e `apps/whatsapp-agent/dist` produziram relações
+válidas, totalizando 602.820.608 bytes; seus digests permanecem prova reutilizável,
+mas não autorização. `apps/whatsapp-agent/node_modules` contém quatro folhas
+Prisma em `0775`; `.next` contém 1.119 folhas em `0664`. Todas são graváveis pelo
+grupo e portanto incompatíveis com o contrato vigente. Os 346.320.896 bytes desses
+dois caminhos permanecem `NOT_QUALIFIED`; não normalizar modos, não relaxar o gate
+e não repetir a custódia terminal. A enumeração completa e seu SHA estão no
+[registro da política](CAPACITY_RECOVERY_POLICY.md#audit-produtivo-ef7-terminal--01112026).
+
 Worker conserva seu par histórico de instalação/helper. Ef7 possui par separado
 e só pode substituir a identidade worker previamente autenticada na allowlist
 fechada; helper desconhecido, par cruzado ou sudoers divergente nega antes de
