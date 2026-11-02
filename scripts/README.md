@@ -237,8 +237,8 @@ Estados REFUSED/SUPERSEDED exigem disposição explícita; não são sucesso de 
 ```bash
 sha256sum -c scripts/operational_preparers_v3.sha256
 python3 -B -m unittest discover -s scripts -p test_operational_preparers_v3.py
-python3 -B scripts/operational_preparers_v3.py --adapter api --input /custodia/privada/api-adapter-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/futuras-geracoes --local-only
-python3 -B scripts/operational_preparers_v3.py --adapter frontend --input /custodia/privada/frontend-adapter-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/futuras-geracoes --local-only
+python3 -B scripts/deploy-preparation-admission.py --run-preparation --materialized-root /custodia/admitida --admission-report /custodia/admitida/admission-report.private.json --admission-report-sha256 SHA_REVISADO --adapter api --producer-input /custodia/privada/api-adapter-input.private.json --producer-input-sha256 SHA_REVISADO --output /custodia/privada/futuras-geracoes
+python3 -B scripts/deploy-preparation-admission.py --run-preparation --materialized-root /custodia/admitida --admission-report /custodia/admitida/admission-report.private.json --admission-report-sha256 SHA_REVISADO --adapter frontend --producer-input /custodia/privada/frontend-adapter-input.private.json --producer-input-sha256 SHA_REVISADO --output /custodia/privada/futuras-geracoes
 python3 -B scripts/operational_preparers_v3.py --adapter auth --input /custodia/privada/auth-closure-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/auth-closure-novo.private.json --local-only
 python3 -B scripts/operational_preparers_v3.py --adapter database --input /custodia/privada/db-closure-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/db-closure-novo.private.json --local-only
 ```
@@ -248,6 +248,17 @@ janela produtiva. Não existe input produtivo novo selado por esta tarefa. `--ou
 é pai privado700 para staging ou arquivo novo em pai700 para encerramento. Recusa antes de copiar registra REFUSED em sidecar próprio no pai; seu nome
 impede reutilizar a geração negada. Recusa/parcial: conservar stdout e diretório/intent; não repetir nem modificar input para obter PASS.
 Não criar inputs por edição de baselines históricas para fazer capturas coincidir.
+
+Pelo procedimento canônico, API/frontend devem passar por
+`deploy-preparation-admission.py --run-preparation`. A ação reabre o report da
+admissão, o contrato e o input, autentica o caminho fixo e o SHA do produtor
+materializado e o executa pelo mesmo FD aberto com `O_NOFOLLOW`. Assim, `OPEN` e
+orçamento são persistidos antes do primeiro `copy`/`tar`. O entrypoint do produtor
+ainda aceita tecnicamente uma chamada direta; ela não é a rota canônica e não prova
+adoção pelos fluxos produtivos. O encerramento continua exclusivamente em
+`generation-retirement.py review-preparation`: `SANITIZED` exige ausência dos
+artefatos; resíduo ou interrupção permanece `RETENTION_DEBT`. Não há limpeza
+automática nem fallback para o checkout.
 
 Input adicional ao coordenador anterior:
 

@@ -554,17 +554,21 @@ a preparação nem a retirada da ef3a.
 
 ## Rota operacional
 
-### Lifecycle preventivo de preparações volumosas — versionado, não instalado
+### Lifecycle preventivo de preparações volumosas — rota canônica integrada, não instalada
 
 A admissão schema 2, o adapter `operational_preparers_v3.py` e o review terminal
 de `generation-retirement.py` agora compartilham o contrato fechado
 `preparationArtifacts`. A transição ensaiada é admissão → `OPEN` antes da cópia →
 `SANITIZED` ou `RETENTION_DEBT`; reuso é verificado antes de nova alocação e
 interrupção preserva dívida nominal. A custódia inclui as dependências executáveis
-pinadas e o teste chama o entrypoint copiado fora do checkout. A cobertura é somente
-do adapter versionado e de sua `reservationRoot`, não de produtores históricos ou
-do filesystem inteiro. A implementação não foi instalada nem executada na VPS e não
-altera o déficit histórico de 817.209.344 bytes.
+pinadas e o teste chama o entrypoint copiado fora do checkout. Pelo procedimento
+canônico, API/frontend devem usar `deploy-preparation-admission.py
+--run-preparation`, que autentica custódia, report, contrato e input e executa o
+mesmo FD do produtor materializado. O produtor ainda aceita tecnicamente chamada
+direta; isso não constitui adoção comprovada nos fluxos produtivos. A cobertura
+permanece limitada à `reservationRoot`, não a produtores históricos ou ao
+filesystem inteiro. A implementação não foi instalada nem executada na VPS e não
+altera recuperações ou déficits históricos.
 
 ### Reconciliação dos papéis de releases — versionada, não operacional
 

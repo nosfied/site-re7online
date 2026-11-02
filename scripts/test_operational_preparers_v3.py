@@ -233,7 +233,12 @@ class AdapterTests(unittest.TestCase):
         admitted = self.base / 'admitted'
         controls = {}
         for role in ('generation-retirement', 'converta-release', 'root-policy'):
-            source = self.base / (role + '.source'); source.write_text(role); source.chmod(0o644)
+            source = self.base / (role + '.source')
+            if role == 'generation-retirement':
+                source.write_bytes((HERE / 'generation-retirement.py').read_bytes())
+            else:
+                source.write_text(role)
+            source.chmod(0o644)
             raw = source.read_bytes(); controls[role] = (source, raw, hashlib.sha256(raw).hexdigest())
         producer_inputs = []
         for role, relative in admission.PREPARATION_PRODUCER_ROLES.items():
@@ -271,19 +276,61 @@ class AdapterTests(unittest.TestCase):
         input_path = self.base / 'copied-entrypoint-input.private.json'
         input_path.write_text(json.dumps(value)); input_path.chmod(0o600)
         copied = admitted / 'preparation-producer-root/scripts/operational_preparers_v3.py'
+        admission_report = admitted / 'admission-report.private.json'
         result = __import__('subprocess').run([
-            __import__('sys').executable, '-B', str(copied), '--adapter', 'api',
-            '--input', str(input_path), '--input-sha256', hashlib.sha256(input_path.read_bytes()).hexdigest(),
-            '--output', str(self.parent), '--local-only'], capture_output=True, text=True,
+            __import__('sys').executable, '-B', str(HERE / 'deploy-preparation-admission.py'),
+            '--run-preparation', '--materialized-root', str(admitted),
+            '--admission-report', str(admission_report),
+            '--admission-report-sha256', hashlib.sha256(admission_report.read_bytes()).hexdigest(),
+            '--adapter', 'api', '--producer-input', str(input_path),
+            '--producer-input-sha256', hashlib.sha256(input_path.read_bytes()).hexdigest(),
+            '--output', str(self.parent)], capture_output=True, text=True,
             env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         lifecycle = self.parent / generation / 'preparation-artifacts.lifecycle.private.json'
         self.assertEqual(json.loads(lifecycle.read_text())['state'], 'OPEN')
         (self.parent / generation / 'package.bin').unlink()
-        closed = m.preparation_lifecycle.close_lifecycle(
-            lifecycle, hashlib.sha256(lifecycle.read_bytes()).hexdigest(), 'SANITIZED',
-            'c' * 64, 'owner', 'downstream success')
-        self.assertEqual(closed['state'], 'SANITIZED')
+        evidence = self.base / 'terminal-evidence.private.json'
+        evidence.write_text('{}\n'); evidence.chmod(0o600)
+        retirement = admitted / 'generation-retirement.py'
+        reviewed = __import__('subprocess').run([
+            '/usr/bin/python3', '-I', '-B', '-E', '-s', str(retirement),
+            'review-preparation', '--preparation-lifecycle', str(lifecycle),
+            '--preparation-lifecycle-sha256', hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+            '--evidence', str(evidence),
+            '--evidence-sha256', hashlib.sha256(evidence.read_bytes()).hexdigest(),
+            '--state', 'SANITIZED', '--reviewer', 'fixture-owner',
+            '--reason', 'synthetic terminal closure'], capture_output=True, text=True,
+            env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+        self.assertEqual(reviewed.returncode, 0, reviewed.stdout + reviewed.stderr)
+        self.assertEqual(json.loads(lifecycle.read_text())['state'], 'SANITIZED')
+        drifted = json.loads(input_path.read_text())
+        drifted['preparationArtifactContract']['sha256'] = '0' * 64
+        input_path.write_text(json.dumps(drifted)); input_path.chmod(0o600)
+        denied = __import__('subprocess').run([
+            __import__('sys').executable, '-B', str(HERE / 'deploy-preparation-admission.py'),
+            '--run-preparation', '--materialized-root', str(admitted),
+            '--admission-report', str(admission_report),
+            '--admission-report-sha256', hashlib.sha256(admission_report.read_bytes()).hexdigest(),
+            '--adapter', 'api', '--producer-input', str(input_path),
+            '--producer-input-sha256', hashlib.sha256(input_path.read_bytes()).hexdigest(),
+            '--output', str(self.parent)], capture_output=True, text=True,
+            env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+        self.assertEqual(denied.returncode, 2)
+        self.assertIn('preparation_run_contract_binding', denied.stdout)
+        input_path.write_text(json.dumps(value)); input_path.chmod(0o600)
+        copied.write_bytes(copied.read_bytes() + b'\n# drift\n'); copied.chmod(0o600)
+        producer_drift = __import__('subprocess').run([
+            __import__('sys').executable, '-B', str(HERE / 'deploy-preparation-admission.py'),
+            '--run-preparation', '--materialized-root', str(admitted),
+            '--admission-report', str(admission_report),
+            '--admission-report-sha256', hashlib.sha256(admission_report.read_bytes()).hexdigest(),
+            '--adapter', 'api', '--producer-input', str(input_path),
+            '--producer-input-sha256', hashlib.sha256(input_path.read_bytes()).hexdigest(),
+            '--output', str(self.parent)], capture_output=True, text=True,
+            env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+        self.assertEqual(producer_drift.returncode, 2)
+        self.assertIn('preparation_run_producer_readback', producer_drift.stdout)
         dependency = admitted / 'preparation-producer-root/scripts/operational-retention-report.py'
         dependency.write_bytes(dependency.read_bytes() + b'\n# drift\n')
         denied = __import__('subprocess').run([__import__('sys').executable, '-B', str(copied), '--help'],
