@@ -2550,16 +2550,32 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
             MODULE.capture_live_operational(operational)
 
     def test_versioned_release_projection_authenticates_rich_graph_provenance(self):
-        rich_keys = {"activeReleases": ["immutable-abc"], "rollbackReleases": [],
+        release_id = self.release.name
+        rich_keys = {"activeReleases": [release_id], "rollbackReleases": [],
                      "transitiveReturnReleases": [], "candidateReleases": [],
-                     "installedVerifiedReleases": ["immutable-abc"],
+                     "installedVerifiedReleases": [release_id],
                      "supersededCandidates": []}
         source = self.base / "source-rich-graph.private.json"
         successor = self.base / "successor-rich-graph.private.json"
         private_json(source, rich_keys); private_json(successor, rich_keys)
+        reconciliation_operational = self.base / "reconciliation-operational.private.json"
+        private_json(reconciliation_operational, {"currentPaths": [], "pm2LivePaths": [],
+            "pm2DumpPaths": [], "dependencies": []})
+        receipt = self.base / "reconciliation-receipt.private.json"
+        private_json(receipt, {"schemaVersion": 2, "state": "RECONCILED_NO_EFFECT",
+            "reconciliationId": "fixture", "requestSha256": "a" * 64,
+            "releaseRoot": str(self.release.parent),
+            "sourceGraph": {"path": str(source), "sha256": sha(source)},
+            "operationalState": {"path": str(reconciliation_operational),
+                                 "sha256": sha(reconciliation_operational)},
+            "successorGraph": {"path": str(successor), "sha256": sha(successor)},
+            "privateDataParents": [], "immediateRollbackEvidence": [], "results": [],
+            "originalsModified": False, "destructiveCommands": 0,
+            "freshRecaptureRequiredBeforeRetirement": True})
         private_json(self.release_graph, {"schemaVersion": 2,
             "sourceGraph": {"path": str(source), "sha256": sha(source)},
             "successorGraph": {"path": str(successor), "sha256": sha(successor)},
+            "reconciliationReceipt": {"path": str(receipt), "sha256": sha(receipt)},
             "protectedGraphPaths": [str(self.release)],
             "inventoryPaths": [str(self.release)]})
         self.write_operational()
@@ -2567,6 +2583,18 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
         captured, evidence = MODULE.capture_live_operational(operational)
         self.assertIn(str(self.release), captured["protectedGraphPaths"])
         self.assertEqual(evidence["releaseGraphSha256"], sha(self.release_graph))
+
+        omitted = json.loads(self.release_graph.read_text())
+        omitted["protectedGraphPaths"] = []
+        private_json(self.release_graph, omitted)
+        self.write_operational()
+        omitted_operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE"):
+            MODULE.capture_live_operational(omitted_operational)
+        omitted["protectedGraphPaths"] = [str(self.release)]
+        private_json(self.release_graph, omitted)
+        self.write_operational()
+        operational = MODULE.validate_operational(self.operational.read_bytes())
 
         successor_value = json.loads(successor.read_text())
         successor_value["activeReleases"] = []

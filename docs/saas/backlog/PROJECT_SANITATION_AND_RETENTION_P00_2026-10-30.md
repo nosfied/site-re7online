@@ -665,9 +665,13 @@ privado descendente. O delta local corrige ambos os pontos: promoção por compo
 e proteção fail-closed do diretório-pai de `PRIVATE_DATA_NEVER_RETIRE`.
 
 A reconciliação proposta não reescreve journals nem elimina arestas por idade. Um
-request fechado enumera cada geração e autentica contrato, lifecycle, journal,
-review e receipt; a saída é um grafo sucessor, uma projeção schema 2 e receipt sem
-efeito. `708f`, `d436` e `f160` ficam condicionalmente elegíveis somente após suas
+request fechado enumera cada geração e autentica contrato, lifecycle, cadeia de
+journals, review e receipt. O journal incompleto de `708f` exige sucessor terminal
+compatível; `d436`/`f160` preservam o journal JSONL e o receipt legado. A saída é
+um grafo sucessor, uma projeção schema 2 e receipt sem efeito; o consumidor deriva
+novamente a projeção e nega omissões. Rollback imediato é provado por componente
+no runtime manifest e no journal e não pode ser fechado. `708f`, `d436` e `f160`
+ficam condicionalmente elegíveis somente após suas
 provas e recaptura; `0fdec` e `a959` permanecem protegidas pelos overlays. Ativos e
 rollbacks imediatos permanecem protegidos. Os 2.965.995.520 bytes são potencial
 calculado, não ganho qualificado, não medição fresca e não autorização de retirada.

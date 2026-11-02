@@ -1546,7 +1546,7 @@ class GenerationRetirementTest(unittest.TestCase):
     def test_release_graph_reconciliation_is_non_destructive_and_drives_prepare(self):
         fixture = Fixture(active=False, rollback=True, candidate=False,
                           installed=True, deployed=False,
-                          release_id="immutable-708f-fixture")
+                          release_id="immutable-708f018c-vps-20261027T152109Z")
         try:
             control = fixture.root / "materialized-control"
             control.mkdir(mode=0o700)
@@ -1556,8 +1556,9 @@ class GenerationRetirementTest(unittest.TestCase):
             shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", copied_dependency)
             copied_tool.chmod(0o500); copied_dependency.chmod(0o600)
 
-            ids = ["immutable-708f-fixture", "immutable-d436-fixture",
-                   "immutable-f160-fixture", "immutable-0fdec-fixture",
+            ids = ["immutable-708f018c-vps-20261027T152109Z",
+                   "immutable-d436239e-vps-20261026T131821Z",
+                   "immutable-f1602787-vps-20261026T174702Z", "immutable-0fdec-fixture",
                    "immutable-a959-fixture"]
             unreconciled = "immutable-unreconciled-dependency"
             roles = {
@@ -1605,6 +1606,7 @@ class GenerationRetirementTest(unittest.TestCase):
                             "classification": "PRIVATE_DATA_NEVER_RETIRE",
                             "state": "ACTIVE_DEPENDENCY",
                             "retirableOn": "NEVER_AUTOMATIC"}})
+                contract_target = json.loads(contract_path.read_text())["targetCommit"]
                 lifecycle_path = fixture.evidence_root / f"{release_id}.lifecycle.json"
                 if release_id == ids[0]:
                     lifecycle_path = fixture.lifecycle
@@ -1612,18 +1614,72 @@ class GenerationRetirementTest(unittest.TestCase):
                     private_json(lifecycle_path, {"schemaVersion": 1,
                         "generationId": release_id, "targetCommit": "b" * 40,
                         "state": "COMPLETE"})
+                legacy = release_id in {ids[1], ids[2]}
+                journal_path = fixture.evidence_root / f"{release_id}.journal.jsonl"
+                if legacy:
+                    journal_path.write_bytes(b"".join(MODULE.canonical(event) for event in (
+                        {"event": "ATTEMPT", "kind": "rm", "ordinal": 1,
+                         "path": str(release_path.parent / "derived"), "result": "PENDING"},
+                        {"event": "RESULT", "kind": "rm", "ordinal": 1,
+                         "path": str(release_path.parent / "derived"), "exitCode": 0,
+                         "result": "COMMAND_EXITED_ZERO",
+                         "inspectionPath": str(fixture.evidence_root / "inspection.json"),
+                         "inspectionSha256": "a" * 64,
+                         "worktreeRegistration": "NOT_APPLICABLE"},
+                        {"event": "VERIFIED", "kind": "rm", "ordinal": 1,
+                         "path": str(release_path.parent / "derived"), "result": "PASS"},
+                    )))
+                    journal_path.chmod(0o600)
+                    journal_chain = [{"kind": "LEGACY_RETENTION_JOURNAL",
+                                      "path": str(journal_path), "sha256": sha(journal_path)}]
+                else:
+                    private_json(journal_path, {"schemaVersion": 1,
+                        "state": ("DEPLOYED_RETENTION_INCOMPLETE"
+                                  if release_id == ids[0] else "DEPLOYED_SANITIZED"),
+                        "releaseId": release_id, "targetCommit": contract_target,
+                        "contractSha256": sha(contract_path),
+                        "format": ("fixed-current-transaction" if release_id == ids[0]
+                                   else "generation-retirement")})
+                    journal_chain = [{"kind": "DEPLOYMENT_JOURNAL",
+                                      "path": str(journal_path), "sha256": sha(journal_path)}]
+                final_journal_sha = sha(journal_path)
+                if release_id == ids[0]:
+                    successor_journal = fixture.evidence_root / f"{release_id}.retirement.json"
+                    private_json(successor_journal, {"schemaVersion": 1,
+                        "state": "DEPLOYED_SANITIZED", "releaseId": release_id,
+                        "targetCommit": contract_target, "contractSha256": sha(contract_path),
+                        "predecessorJournalSha256": sha(journal_path),
+                        "format": "autonomous-retirement-v2"})
+                    final_journal_sha = sha(successor_journal)
+                    journal_chain.append({"kind": "RETIREMENT_JOURNAL",
+                        "path": str(successor_journal), "sha256": final_journal_sha})
                 receipt_path = fixture.evidence_root / f"{release_id}.receipt.json"
-                private_json(receipt_path, {"schemaVersion": 1, "state": "COMPLETED",
-                                            "releaseId": release_id,
-                                            "contractSha256": sha(contract_path)})
-                journal_path = fixture.evidence_root / f"{release_id}.journal.json"
-                private_json(journal_path, {"schemaVersion": 1,
-                                            "state": "DEPLOYED_SANITIZED",
-                                            "releaseId": release_id})
+                if legacy:
+                    private_json(receipt_path, {"schemaVersion": 1,
+                        "state": "LEGACY_CONTRACT_MATERIALIZED",
+                        "sourceState": "LEGACY_V1_PRESERVE_NO_CONTRACT",
+                        "releaseId": release_id, "targetCommit": contract_target,
+                        "contractSha256": sha(contract_path),
+                        "priorRetentionJournalSha256": final_journal_sha,
+                        "authorizationGranted": False, "executionPermitted": False})
+                else:
+                    private_json(receipt_path, {"schemaVersion": 1,
+                        "state": ("DEPLOYED_SANITIZED" if release_id == ids[0]
+                                  else "COMPLETED"),
+                        "releaseId": release_id, "contractSha256": sha(contract_path),
+                        "lifecycleSha256": sha(lifecycle_path),
+                        "journalSha256": final_journal_sha})
+                review_evidence = fixture.evidence_root / f"{release_id}.intent.json"
+                private_json(review_evidence, {"schemaVersion": 3,
+                    "generationId": release_id, "releaseId": release_id,
+                    "contractSha256": sha(contract_path),
+                    "lifecycleSha256": sha(lifecycle_path),
+                    "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+                    "authorizationGranted": False})
                 review_path = fixture.evidence_root / f"{release_id}.review.json"
                 private_json(review_path, {"schemaVersion": 2, "generationId": release_id,
                     "lifecycleSha256": sha(lifecycle_path), "state": "SANITIZED",
-                    "evidenceSha256": sha(contract_path), "reviewer": "fixture",
+                    "evidenceSha256": sha(review_evidence), "reviewer": "fixture",
                     "reason": "terminal proof"})
                 role = ("rollbackReleases" if release_id in {ids[0], ids[3]}
                         else "transitiveReturnReleases")
@@ -1633,12 +1689,13 @@ class GenerationRetirementTest(unittest.TestCase):
                                  else "CLOSE_OPERATIONAL_DEPENDENCY"),
                     "contract": {"path": str(contract_path), "sha256": sha(contract_path)},
                     "lifecycle": {"path": str(lifecycle_path), "sha256": sha(lifecycle_path)},
-                    "journal": {"path": str(journal_path), "sha256": sha(journal_path)},
+                    "journalChain": journal_chain,
                     "review": {"path": str(review_path), "sha256": sha(review_path)},
                     "closureEvidence": [
-                        {"kind": "REVIEW_EVIDENCE", "path": str(contract_path),
-                         "sha256": sha(contract_path)},
-                        {"kind": "RETIREMENT_RECEIPT", "path": str(receipt_path),
+                        {"kind": "REVIEW_EVIDENCE", "path": str(review_evidence),
+                         "sha256": sha(review_evidence)},
+                        {"kind": ("LEGACY_JOINT_RECEIPT" if legacy
+                                  else "RETIREMENT_RECEIPT"), "path": str(receipt_path),
                          "sha256": sha(receipt_path)},
                     ]})
                 originals[str(contract_path)] = sha(contract_path)
@@ -1650,19 +1707,40 @@ class GenerationRetirementTest(unittest.TestCase):
                 "dependencies": [str(fixture.releases_root / unreconciled)],
                 "observations": {"releaseGraph": {"path": str(fixture.graph),
                                                     "sha256": sha(fixture.graph)}}})
+            rollback_manifest = fixture.evidence_root / "runtime-manifest.json"
+            private_json(rollback_manifest, {"schemaVersion": 1,
+                "rollbackReleases": {
+                    "api": {"releaseId": "immutable-immediate-rollback"},
+                    "frontend": {"releaseId": "immutable-immediate-rollback"}}})
+            rollback_journal = fixture.evidence_root / "transaction-journal.json"
+            private_json(rollback_journal, {"schemaVersion": 1, "state": "DEPLOYED",
+                "previous": {"releases": {"api": "immutable-immediate-rollback",
+                                            "frontend": "immutable-immediate-rollback"}}})
+            immediate = [{"component": component,
+                "releaseId": "immutable-immediate-rollback",
+                "runtimeManifest": {"path": str(rollback_manifest),
+                                    "sha256": sha(rollback_manifest)},
+                "transactionJournal": {"path": str(rollback_journal),
+                                       "sha256": sha(rollback_journal)}}
+                         for component in ("api", "frontend")]
             request_path = fixture.evidence_root / "reconcile-request.json"
-            private_json(request_path, {"schemaVersion": 1,
+            private_json(request_path, {"schemaVersion": 2,
                 "reconciliationId": "fixture-five-release-reconciliation",
                 "releaseRoot": str(fixture.releases_root),
                 "sourceGraph": {"path": str(fixture.graph), "sha256": sha(fixture.graph)},
                 "operationalState": {"path": str(operational_path),
                                      "sha256": sha(operational_path)},
+                "immediateRollbackEvidence": immediate,
                 "entries": entries})
-            for path in (fixture.graph, operational_path, request_path):
+            for path in (fixture.graph, operational_path, rollback_manifest,
+                         rollback_journal, request_path):
                 originals[str(path)] = sha(path)
             for entry in entries:
-                for label in ("contract", "lifecycle", "journal", "review"):
+                for label in ("contract", "lifecycle", "review"):
                     path = Path(entry[label]["path"])
+                    originals[str(path)] = sha(path)
+                for journal in entry["journalChain"]:
+                    path = Path(journal["path"])
                     originals[str(path)] = sha(path)
                 for evidence in entry["closureEvidence"]:
                     path = Path(evidence["path"])
@@ -1697,6 +1775,44 @@ class GenerationRetirementTest(unittest.TestCase):
                           projected["protectedGraphPaths"])
             self.assertTrue(all(sha(Path(path)) == digest for path, digest in originals.items()))
             self.assertEqual(json.loads(receipt.read_text())["destructiveCommands"], 0)
+
+            blocked_manifest = fixture.evidence_root / "blocked-runtime-manifest.json"
+            private_json(blocked_manifest, {"schemaVersion": 1,
+                "rollbackReleases": {"api": {"releaseId": ids[0]}}})
+            blocked_journal = fixture.evidence_root / "blocked-transaction-journal.json"
+            private_json(blocked_journal, {"schemaVersion": 1, "state": "DEPLOYED",
+                "previous": {"releases": {"api": ids[0]}}})
+            blocked_request = json.loads(request_path.read_text())
+            blocked_request["immediateRollbackEvidence"] = [{"component": "api",
+                "releaseId": ids[0],
+                "runtimeManifest": {"path": str(blocked_manifest),
+                                    "sha256": sha(blocked_manifest)},
+                "transactionJournal": {"path": str(blocked_journal),
+                                       "sha256": sha(blocked_journal)}}]
+            blocked_request_path = fixture.evidence_root / "blocked-rollback-request.json"
+            private_json(blocked_request_path, blocked_request)
+            blocked = invoke_tool(copied_tool, "reconcile-release-graph",
+                "--request", str(blocked_request_path),
+                "--request-sha256", sha(blocked_request_path),
+                "--graph-output", str(fixture.evidence_root / "blocked-successor.json"),
+                "--projection-output", str(fixture.evidence_root / "blocked-projection.json"),
+                "--receipt-output", str(fixture.evidence_root / "blocked-receipt.json"))
+            self.assertEqual(blocked.returncode, 2)
+            self.assertIn("release_reconciliation_immediate_rollback_close", blocked.stderr)
+
+            crossed_request = json.loads(request_path.read_text())
+            crossed_receipt = crossed_request["entries"][1]["closureEvidence"][-1]
+            crossed_request["entries"][2]["closureEvidence"] = [crossed_receipt]
+            crossed_request_path = fixture.evidence_root / "crossed-evidence-request.json"
+            private_json(crossed_request_path, crossed_request)
+            crossed = invoke_tool(copied_tool, "reconcile-release-graph",
+                "--request", str(crossed_request_path),
+                "--request-sha256", sha(crossed_request_path),
+                "--graph-output", str(fixture.evidence_root / "crossed-successor.json"),
+                "--projection-output", str(fixture.evidence_root / "crossed-projection.json"),
+                "--receipt-output", str(fixture.evidence_root / "crossed-receipt.json"))
+            self.assertEqual(crossed.returncode, 2)
+            self.assertIn("release_reconciliation_review_evidence", crossed.stderr)
 
             operational = json.loads(fixture.operational.read_text())
             for key in MODULE.RICH_GRAPH_KEYS:
@@ -1735,12 +1851,12 @@ class GenerationRetirementTest(unittest.TestCase):
             review_value["reason"] = "terminal proof"
             private_json(drifted_review, review_value)
 
-            journal_path = Path(entries[2]["journal"]["path"])
+            journal_path = Path(entries[0]["journalChain"][-1]["path"])
             journal_value = json.loads(journal_path.read_text())
             journal_value["state"] = "DEPLOYED_RETENTION_INCOMPLETE"
             private_json(journal_path, journal_value)
             open_request = json.loads(request_path.read_text())
-            open_request["entries"][2]["journal"]["sha256"] = sha(journal_path)
+            open_request["entries"][0]["journalChain"][-1]["sha256"] = sha(journal_path)
             open_request_path = fixture.evidence_root / "open-dependency-request.json"
             private_json(open_request_path, open_request)
             open_denied = invoke_tool(copied_tool, "reconcile-release-graph",

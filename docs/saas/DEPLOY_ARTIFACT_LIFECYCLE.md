@@ -1109,13 +1109,20 @@ OPERACIONAL.**
 `installedVerifiedReleases` é inventário histórico, não proteção operacional por
 si só. O comando fechado `generation-retirement.py reconcile-release-graph`
 autentica o grafo rico anterior e, para cada geração explicitamente enumerada,
-contrato, lifecycle, journal terminal, review e receipts. Ele publica, sem alterar
+contrato, lifecycle, cadeia de journals, review e receipts. Journal original
+incompleto só é aceito quando uma evidência posterior terminal aponta para seu
+SHA e mantém release, target e contrato; os bytes originais não são reescritos.
+Ele publica, sem alterar
 os originais, um grafo rico sucessor, uma projeção plana schema 2 e um receipt
-`RECONCILED_NO_EFFECT`. A projeção vincula caminho e SHA tanto do grafo rico de
-origem quanto do sucessor e separa `inventoryPaths` de `protectedGraphPaths`.
+`RECONCILED_NO_EFFECT`. A projeção vincula caminho e SHA do grafo rico de origem,
+do sucessor e do receipt. O consumidor reabre a fotografia vinculada, deriva
+novamente `inventoryPaths` e `protectedGraphPaths` e exige igualdade exata.
 
 Uma aresta só deixa `rollbackReleases` ou `transitiveReturnReleases` quando o
 fechamento autenticado está completo e a recaptura não encontra referência viva.
+O rollback imediato por componente é provado pelo runtime manifest e pelo
+`previous.releases` do journal da transação e não pode ser fechado, mesmo ausente
+de PM2/current.
 Omissão, binding divergente ou estado aberto preservam a aresta. Releases ativas,
 rollback imediato, candidatas e dependências transitivas não reconciliadas
 continuam protegidas.
@@ -1131,7 +1138,8 @@ Os produtores de papéis passam a promover somente os componentes selecionados:
 API-only não retira o frontend anterior de `activeReleases`, e frontend-only não
 retira a API anterior. Rollbacks acumulados não desaparecem por omissão; somente
 uma reconciliação autenticada os fecha. O ensaio materializa o executor e sua
-dependência fora do checkout, percorre reconciliação → projeção → `prepare`, torna
+dependência fora do checkout, reproduz formatos sanitizados do fixed-current
+`708f` e dos contratos legados `d436`/`f160`, percorre reconciliação → projeção → `prepare`, torna
 `708f`, `d436` e `f160` condicionalmente elegíveis e mantém `0fdec`/`a959`, ativos
 e retornos imediatos protegidos. O potencial de 2.965.995.520 bytes permanece
 estimativa, não capacidade recuperada nem autorização operacional.
