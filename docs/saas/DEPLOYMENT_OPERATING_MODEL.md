@@ -18,12 +18,11 @@ Preparações e executores anteriores são evidência e não autorizam repetiç�
   de ativação permanece separada; não se pede novamente autorização para o local
   de build já decidido. O produtor
   canônico é `scripts/converta-release.py`; ativação nunca constrói artefatos.
-- A recuperação `P00_TENANT_ISOLATION_RECOVERY` pode usar documento privado para dispensar somente
-  o piso estático de 12 GiB. A autorização é fechada por target, release e hash do
-  capacity contract, expira em no máximo seis horas e permanece evidência da geração.
-  Ela não dispensa orçamento real, coexistência, verificação independente, evidência
-  de falha, reserva, inodes, checkpoints, lifecycle ou retenção, nem autoriza build
-  ou ativação por si só.
+- A admissão é derivada do contrato: todos os custos, reserva e uma margem igual ao
+  envelope de evidência de falha. Não há piso estático independente. Documentos
+  históricos `P00_TENANT_ISOLATION_RECOVERY` permanecem evidência autenticável da
+  geração, mas não dispensam o gate derivado, inodes, checkpoints, lifecycle ou
+  retenção, nem autorizam build ou ativação.
 - API e frontend são artefatos completos, versionados e validados por índice,
   manifesto, extração independente e SHA-256.
 - Releases são imutáveis e residem em `/opt/re7online/releases/<release-id>`.

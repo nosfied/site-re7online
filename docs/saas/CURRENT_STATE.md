@@ -313,9 +313,22 @@ DB-first tenant-scoped depois dos backfills e gates selecionados de Tendência,
 Justa e CRA. O fechamento está concluído e não deve ser reaberto. Contrato detalhado em
 [WhatsApp Meta tenant runtime DB-first](WHATSAPP_META_TENANT_RUNTIME.md).
 
-O control plane admite autorização P00 privada e temporária que dispensa
-exclusivamente o piso estático de 12 GiB, sem relaxar capacity contract, reserva,
-inodes ou checkpoints. Ela não autoriza build, deploy ou ativação por si só.
+O produtor versionado em revisão substitui o piso estático por admissão derivada
+do contrato, preservando todos os custos, 4 GiB de reserva e margem igual ao
+envelope de evidência de falha. Overrides P00 históricos continuam evidência, mas
+não dispensam esse gate. A alteração ainda não foi usada em build/deploy produtivo.
+
+## Campanha integral — orçamento 911a9708 qualificado localmente
+
+O merge `911a970838233ae92e00a45ef371f619511d8602` contém a correção API/frontend
+do corte em 25 destinatários; o rascunho produtivo permanece intocado. Contratos e
+checkpoints preservados de três builds comparáveis sustentam o perfil de
+9.395.240.960 bytes mais margem derivada de 268.435.456 bytes, total
+9.663.676.416 bytes e 800.000 inodes. A observação de 02/11 registrou
+10.731.368.448 bytes disponíveis, portanto o target passa a fórmula revisada de
+bytes com 1.067.692.032 bytes de margem; o saldo de inodes permanece gate de
+recaptura da janela. Isso não autoriza build: admissão produtiva, CI da política e
+revisão operacional continuam pendentes.
 
 ## Histórico superado — API 0fdec / frontend b96
 

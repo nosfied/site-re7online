@@ -172,10 +172,6 @@ class ReleaseProducerTest(unittest.TestCase):
         cls.capacity = capacity_contract(
             cls.base / "capacity.private.json", cls.base, cls.target, cls.release_id
         )
-        # Synthetic tests must not depend on transient hosted-runner capacity.
-        # The production value is restored and proved explicitly below.
-        cls.production_minimum_build_free_bytes = MODULE.MINIMUM_BUILD_FREE_BYTES
-        MODULE.MINIMUM_BUILD_FREE_BYTES = 1
         command = [sys.executable, str(PRODUCER), "build", "--repo", str(cls.repo),
                    "--target", cls.target, "--release-id", cls.release_id,
                    "--components", COMPONENTS, "--output", str(cls.output_a),
@@ -183,9 +179,6 @@ class ReleaseProducerTest(unittest.TestCase):
                    "--source-date-epoch", EPOCH,
                    "--capacity-contract", str(cls.capacity),
                    "--root-policy", str(cls.root_policy), "--root-policy-sha256", cls.root_policy_sha]
-        # The production 12 GiB floor is proved independently below with a
-        # controlled statvfs result. Building this tiny synthetic fixture must
-        # not depend on the transient free space of a shared CI runner.
         args = MODULE.parser().parse_args(command[2:])
         with patch.dict(os.environ, cls.env, clear=True):
             args.handler(args)
@@ -203,7 +196,6 @@ class ReleaseProducerTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        MODULE.MINIMUM_BUILD_FREE_BYTES = cls.production_minimum_build_free_bytes
         cls.temp.cleanup()
 
     def copy_release(self, name: str) -> Path:
@@ -821,23 +813,41 @@ class ReleaseProducerTest(unittest.TestCase):
             )
         self.assertIn("capacity_contract_value:operationalReserveBytes", str(caught.exception))
 
-    def test_capacity_contract_requires_twelve_gib_free(self) -> None:
-        release_id = "immutable-capacity-floor"
+    def test_capacity_contract_uses_contract_derived_observation_margin(self) -> None:
+        release_id = "immutable-capacity-derived"
         capacity = capacity_contract(
-            self.base / "capacity-floor.private.json", self.base, self.target, release_id
+            self.base / "capacity-derived.private.json", self.base, self.target, release_id
         )
         from types import SimpleNamespace
-        floor = self.production_minimum_build_free_bytes
-        self.assertEqual(12 * 1024 * 1024 * 1024, floor)
-        usage = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
-        with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
-                patch.object(MODULE.os, "statvfs", return_value=usage):
-            with self.assertRaisesRegex(MODULE.Denied, "minimum_build_free_bytes"):
+        contract = json.loads(capacity.read_text())
+        contracted = sum(contract[field] for field in MODULE.CAPACITY_BYTE_FIELDS)
+        margin = contract["failureEvidenceBytes"]
+        usage = SimpleNamespace(
+            f_bavail=contracted + margin - 1, f_frsize=1, f_favail=1_000_000
+        )
+        with patch.object(MODULE.os, "statvfs", return_value=usage):
+            with self.assertRaisesRegex(MODULE.Denied, "capacity_bytes"):
                 MODULE.read_capacity_contract(
                     capacity, self.repo, self.base, self.target, release_id
                 )
 
-    def test_p00_override_waives_only_static_floor(self) -> None:
+        below_historical_floor = SimpleNamespace(
+            f_bavail=contracted + margin, f_frsize=1, f_favail=1_000_000
+        )
+        with patch.object(MODULE.os, "statvfs", return_value=below_historical_floor):
+            accepted = MODULE.read_capacity_contract(
+                capacity, self.repo, self.base, self.target, release_id
+            )
+        self.assertEqual(accepted["contractRequiredBytes"], contracted)
+        self.assertEqual(accepted["admissionMarginBytes"], margin)
+        self.assertEqual(accepted["requiredBytes"], contracted + margin)
+        self.assertEqual(accepted["admissionMarginSource"], "failureEvidenceBytes")
+        self.assertEqual(
+            accepted["admissionFormula"],
+            "sum(capacityByteFields)+failureEvidenceBytes",
+        )
+
+    def test_p00_override_is_historical_evidence_and_never_waives_derived_gate(self) -> None:
         from types import SimpleNamespace
         release_id = "immutable-p00-capacity-floor"
         capacity = capacity_contract(
@@ -849,17 +859,17 @@ class ReleaseProducerTest(unittest.TestCase):
             self.target, release_id, issued=current - dt.timedelta(minutes=5),
             expires=current + dt.timedelta(hours=1),
         )
-        floor = self.production_minimum_build_free_bytes
+        floor = 12 * 1024 * 1024 * 1024
         sufficient = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
-        with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
-                patch.object(MODULE.os, "statvfs", return_value=sufficient):
+        with patch.object(MODULE.os, "statvfs", return_value=sufficient):
             result = MODULE.read_capacity_contract(
                 capacity, self.repo, self.base, self.target, release_id,
                 override, override_sha, current,
             )
         self.assertEqual(result["availableBytes"], floor - 1)
-        self.assertEqual(result["p00StaticFloorOverride"]["waivesOnly"],
+        self.assertEqual(result["p00StaticFloorOverride"]["historicalWaiver"],
                          "MINIMUM_BUILD_FREE_BYTES")
+        self.assertFalse(result["p00StaticFloorOverride"]["effectiveAdmissionWaiver"])
         self.assertEqual(result["p00StaticFloorOverride"]["sha256"], override_sha)
 
         below_budget = SimpleNamespace(f_bavail=1, f_frsize=1, f_favail=1_000_000)
@@ -870,8 +880,7 @@ class ReleaseProducerTest(unittest.TestCase):
                 override, override_sha, current,
             )
         low_inodes = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1)
-        with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
-                patch.object(MODULE.os, "statvfs", return_value=low_inodes), \
+        with patch.object(MODULE.os, "statvfs", return_value=low_inodes), \
                 self.assertRaisesRegex(MODULE.Denied, "capacity_inodes"):
             MODULE.read_capacity_contract(
                 capacity, self.repo, self.base, self.target, release_id,
@@ -890,7 +899,7 @@ class ReleaseProducerTest(unittest.TestCase):
             self.base / "p00-invalid-capacity.private.json", self.base, self.target, release_id
         )
         current = dt.datetime(2026, 10, 28, 12, tzinfo=dt.timezone.utc)
-        floor = self.production_minimum_build_free_bytes
+        floor = 12 * 1024 * 1024 * 1024
         usage = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
 
         def denied(name: str, mutate, predicate: str, *, expected_sha: str | None = None,
@@ -910,8 +919,7 @@ class ReleaseProducerTest(unittest.TestCase):
                 target = path.with_suffix(".target")
                 path.rename(target)
                 path.symlink_to(target)
-            with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
-                    patch.object(MODULE.os, "statvfs", return_value=usage), \
+            with patch.object(MODULE.os, "statvfs", return_value=usage), \
                     self.assertRaisesRegex(MODULE.Denied, predicate):
                 MODULE.read_capacity_contract(
                     capacity, self.repo, self.base, self.target, release_id,
@@ -955,11 +963,10 @@ class ReleaseProducerTest(unittest.TestCase):
             "--root-policy", str(self.root_policy),
             "--root-policy-sha256", self.root_policy_sha,
         ])
-        floor = self.production_minimum_build_free_bytes
+        floor = 12 * 1024 * 1024 * 1024
         usage = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
         try:
             with patch.dict(os.environ, self.env, clear=True), \
-                    patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
                     patch.object(MODULE.os, "statvfs", return_value=usage):
                 args.handler(args)
             lifecycle = json.loads((output / "generation-lifecycle.private.json").read_text())
@@ -996,6 +1003,7 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual(lifecycle["state"], "FAILED")
         self.assertEqual(lifecycle["failureClass"], "Denied")
         self.assertEqual(lifecycle["classification"], "PENDING")
+        self.assertEqual(lifecycle["dispositionState"], "RETENTION_DEBT")
 
     def test_pending_generation_blocks_before_output_or_command(self) -> None:
         parent = self.outputs / "generation-pending"
@@ -1123,17 +1131,19 @@ class ReleaseProducerTest(unittest.TestCase):
                     return original_run(*args, **kwargs)
                 commands.append(kwargs["stage"])
                 return ""
-            def checkpoint(_capacity, phase, _remaining=()):
-                if phase == "after_root_npm_ci":
+            def checkpoint(_capacity, phase, _remaining=(), _overrides=None):
+                if phase == "before_api_npm_ci":
                     raise MODULE.Denied("capacity_checkpoint:after_root_npm_ci")
-                return {"phase": phase}
+                return {"phase": phase, "requiredBytes": 1, "requiredInodes": 1}
             with patch.object(MODULE, "toolchain", return_value={}), \
                  patch.object(MODULE, "run", side_effect=run), \
                  patch.object(MODULE, "capacity_checkpoint", side_effect=checkpoint):
                 with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint"):
                     MODULE.build(args)
             self.assertEqual(commands, ["root_npm_ci"])
-            self.assertEqual(json.loads((output / "generation-lifecycle.private.json").read_text())["state"], "FAILED")
+            lifecycle = json.loads((output / "generation-lifecycle.private.json").read_text())
+            self.assertEqual(lifecycle["state"], "FAILED")
+            self.assertEqual(lifecycle["dispositionState"], "RETENTION_DEBT")
         finally:
             shutil.rmtree(parent)
 
@@ -1142,13 +1152,147 @@ class ReleaseProducerTest(unittest.TestCase):
         capacity = {"filesystemPath": str(self.base), "device": self.base.stat().st_dev,
                     "budgets": {"operationalReserveBytes": 100, "failureEvidenceBytes": 50,
                                 "operationalReserveInodes": 10, "runtimePayloadBytes": 500}}
-        with patch.object(MODULE.os, "statvfs", return_value=SimpleNamespace(f_bavail=200, f_frsize=1, f_favail=20)):
+        capacity.update(admissionMarginBytes=50, requiredInodes=20)
+        with patch.object(MODULE.os, "statvfs", return_value=SimpleNamespace(f_bavail=250, f_frsize=1, f_favail=20)):
             MODULE.capacity_checkpoint(capacity, "between_commands")
             with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint:before_copy"):
                 MODULE.capacity_checkpoint(capacity, "before_copy", ("runtimePayloadBytes",))
         with patch.object(MODULE.os, "statvfs", return_value=SimpleNamespace(f_bavail=1000, f_frsize=1, f_favail=9)):
             with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint:inodes"):
                 MODULE.capacity_checkpoint(capacity, "inodes")
+
+    def test_capacity_checkpoint_detects_concurrent_consumption_before_next_phase(self) -> None:
+        from types import SimpleNamespace
+        capacity = {
+            "filesystemPath": str(self.base),
+            "device": self.base.stat().st_dev,
+            "budgets": {
+                "operationalReserveBytes": 100,
+                "failureEvidenceBytes": 50,
+                "operationalReserveInodes": 10,
+            },
+            "admissionMarginBytes": 50,
+            "requiredInodes": 20,
+        }
+        observations = [
+            SimpleNamespace(f_bavail=250, f_frsize=1, f_favail=30),
+            SimpleNamespace(f_bavail=199, f_frsize=1, f_favail=30),
+        ]
+        with patch.object(MODULE.os, "statvfs", side_effect=observations):
+            MODULE.capacity_checkpoint(capacity, "after_phase_a")
+            with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint:before_phase_b"):
+                MODULE.capacity_checkpoint(capacity, "before_phase_b")
+
+    def test_capacity_monitor_records_temporary_growth_between_checkpoints(self) -> None:
+        from types import SimpleNamespace
+        capacity = {"filesystemPath": str(self.base), "device": self.base.stat().st_dev}
+        monitor = MODULE.CapacityPhaseMonitor(
+            capacity, "package", required_bytes=700, required_inodes=50, interval=60
+        )
+        samples = [
+            SimpleNamespace(f_bavail=1000, f_frsize=1, f_favail=100),
+            SimpleNamespace(f_bavail=650, f_frsize=1, f_favail=90),
+            SimpleNamespace(f_bavail=900, f_frsize=1, f_favail=95),
+            SimpleNamespace(f_bavail=900, f_frsize=1, f_favail=95),
+        ]
+        with patch.object(MODULE.os, "statvfs", side_effect=samples):
+            monitor._sample()
+            monitor._sample()
+            monitor._sample()
+            result = monitor.finish()
+        self.assertEqual(result["minAvailableBytesObserved"], 650)
+        self.assertEqual(result["minAvailableInodesObserved"], 90)
+        self.assertTrue(result["observedBelowRequired"])
+        self.assertEqual(result["proofLimit"],
+                         "SAMPLED_MINIMUM_NOT_CONTINUOUS_PEAK_GUARANTEE")
+
+    def test_capacity_monitor_records_collection_gap(self) -> None:
+        capacity = {"filesystemPath": str(self.base), "device": self.base.stat().st_dev}
+        monitor = MODULE.CapacityPhaseMonitor(
+            capacity, "frontend_build", required_bytes=1, required_inodes=1, interval=60
+        )
+        with patch.object(MODULE.os, "statvfs", side_effect=OSError("fixture gap")):
+            monitor._sample()
+            result = monitor.finish()
+        self.assertEqual(result["sampleCount"], 0)
+        self.assertEqual(result["observationGaps"], 2)
+        self.assertIsNone(result["minAvailableBytesObserved"])
+
+    def test_interruption_preserves_residue_and_closes_retention_debt(self) -> None:
+        parent = self.outputs / "interrupted-phase"
+        parent.mkdir()
+        residue = parent / "next" / "partial.fixture"
+        try:
+            capacity = capacity_contract(parent / "capacity.json", parent, self.target,
+                                         "interrupted")
+            output = parent / "next"
+            args = MODULE.parser().parse_args([
+                "build", "--repo", str(self.repo), "--target", self.target,
+                "--release-id", "interrupted", "--components", COMPONENTS,
+                "--output", str(output), "--source-date-epoch", EPOCH,
+                "--installed-releases-root", str(self.releases),
+                "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
+            ])
+            original_run = MODULE.run
+            def interrupted_run(*arguments, **kwargs):
+                if kwargs.get("stage") == "root_npm_ci":
+                    residue.write_text("partial\n")
+                    raise KeyboardInterrupt()
+                return original_run(*arguments, **kwargs)
+            with patch.object(MODULE, "toolchain", return_value={}), \
+                 patch.object(MODULE, "run", side_effect=interrupted_run):
+                with self.assertRaises(KeyboardInterrupt):
+                    MODULE.build(args)
+            lifecycle = json.loads((output / "generation-lifecycle.private.json").read_text())
+            self.assertEqual(lifecycle["state"], "FAILED")
+            self.assertEqual(lifecycle["dispositionState"], "RETENTION_DEBT")
+            self.assertEqual(lifecycle["failureClass"], "KeyboardInterrupt")
+            self.assertEqual(len(lifecycle["capacityObservations"]), 1)
+            self.assertEqual(lifecycle["capacityObservations"][0]["phase"], "root_npm_ci")
+            self.assertTrue(residue.is_file())
+        finally:
+            shutil.rmtree(parent, ignore_errors=True)
+
+    def test_911a_reviewed_budget_passes_contract_derived_admission(self) -> None:
+        target = "911a970838233ae92e00a45ef371f619511d8602"
+        release_id = "immutable-911a9708-budget-qualification"
+        budgets = {
+            "buildWorkspaceGrowthBytes": 1610612736,
+            "runtimePayloadBytes": 1342177280,
+            "packageTemporaryBytes": 536870912,
+            "independentVerificationBytes": 1342177280,
+            "failureEvidenceBytes": 268435456,
+            "operationalReserveBytes": 4294967296,
+        }
+        contracted = sum(budgets.values())
+        margin = budgets[MODULE.CAPACITY_OBSERVATION_MARGIN_SOURCE]
+        self.assertEqual(contracted, 9395240960)
+        self.assertEqual(contracted + margin, 9663676416)
+        self.assertGreaterEqual(10731368448, contracted + margin)
+        contract_path = self.base / "capacity-911a.private.json"
+        write(contract_path, json.dumps({
+            "schemaVersion": 1,
+            "contractId": "capacity-911a-reviewed",
+            "capturedAtUtc": "2026-11-02T00:00:00Z",
+            "targetCommit": target,
+            "releaseId": release_id,
+            "filesystemPath": str(self.base.resolve()),
+            **budgets,
+            "peakInodes": 400000,
+            "operationalReserveInodes": 400000,
+        }, sort_keys=True) + "\n", 0o600)
+        from types import SimpleNamespace
+        observation = SimpleNamespace(
+            f_bavail=10731368448, f_frsize=1, f_favail=800000
+        )
+        with patch.object(MODULE.os, "statvfs", return_value=observation):
+            qualified = MODULE.read_capacity_contract(
+                contract_path, self.repo, self.base, target, release_id
+            )
+        self.assertEqual(qualified["requiredBytes"], 9663676416)
+        self.assertEqual(qualified["availableBytes"], 10731368448)
+        self.assertEqual(qualified["requiredInodes"], 800000)
 
     def test_package_inventory_excludes_source_worker_and_sensitive_files(self) -> None:
         with tarfile.open(self.package, "r:xz") as archive:

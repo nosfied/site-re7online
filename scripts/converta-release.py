@@ -20,6 +20,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
+import time
 from typing import Any, Iterable
 
 
@@ -52,7 +54,8 @@ CAPACITY_BYTE_FIELDS = {
     "independentVerificationBytes", "failureEvidenceBytes", "operationalReserveBytes",
 }
 CAPACITY_INODE_FIELDS = {"peakInodes", "operationalReserveInodes"}
-MINIMUM_BUILD_FREE_BYTES = 12 * 1024 * 1024 * 1024
+CAPACITY_OBSERVATION_MARGIN_SOURCE = "failureEvidenceBytes"
+CAPACITY_SAMPLE_INTERVAL_SECONDS = 0.25
 P00_STATIC_FLOOR_OVERRIDE_REASON = "P00_TENANT_ISOLATION_RECOVERY"
 P00_STATIC_FLOOR_OVERRIDE_MAX_LIFETIME = dt.timedelta(hours=6)
 P00_STATIC_FLOOR_OVERRIDE_FIELDS = {
@@ -163,12 +166,17 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
     usage = os.statvfs(filesystem)
     free_bytes = usage.f_bavail * usage.f_frsize
     free_inodes = usage.f_favail
-    required_bytes = sum(contract[field] for field in CAPACITY_BYTE_FIELDS)
+    contract_required_bytes = sum(contract[field] for field in CAPACITY_BYTE_FIELDS)
+    # Checkpoints are samples, not proof that a short-lived allocation was seen.
+    # Keep one additional, contract-sized failure-evidence envelope available so
+    # an unobserved excursion cannot consume the bytes needed to durably close the
+    # lifecycle.  This is derived from the reviewed contract, not a host-wide
+    # numeric floor.
+    admission_margin_bytes = contract[CAPACITY_OBSERVATION_MARGIN_SOURCE]
+    required_bytes = contract_required_bytes + admission_margin_bytes
     required_inodes = sum(contract[field] for field in CAPACITY_INODE_FIELDS)
     if free_bytes < required_bytes:
         deny(f"capacity_bytes:available={free_bytes}:required={required_bytes}")
-    if free_bytes < MINIMUM_BUILD_FREE_BYTES and override is None:
-        deny(f"minimum_build_free_bytes:available={free_bytes}:required={MINIMUM_BUILD_FREE_BYTES}")
     if free_inodes < required_inodes:
         deny(f"capacity_inodes:available={free_inodes}:required={required_inodes}")
     result = {
@@ -180,9 +188,13 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
         "availableBytes": free_bytes,
         "availableInodes": free_inodes,
         "requiredBytes": required_bytes,
+        "contractRequiredBytes": contract_required_bytes,
         "requiredInodes": required_inodes,
         "operationalReserveBytes": contract["operationalReserveBytes"],
         "operationalReserveInodes": contract["operationalReserveInodes"],
+        "admissionMarginBytes": admission_margin_bytes,
+        "admissionMarginSource": CAPACITY_OBSERVATION_MARGIN_SOURCE,
+        "admissionFormula": "sum(capacityByteFields)+failureEvidenceBytes",
     }
     if override is not None:
         result["p00StaticFloorOverride"] = override
@@ -254,7 +266,8 @@ def read_p00_static_floor_override(path: Path, expected_sha256: str, target: str
         "responsible": responsible,
         "issuedAtUtc": override["issuedAtUtc"],
         "expiresAtUtc": override["expiresAtUtc"],
-        "waivesOnly": "MINIMUM_BUILD_FREE_BYTES",
+        "historicalWaiver": "MINIMUM_BUILD_FREE_BYTES",
+        "effectiveAdmissionWaiver": False,
     }
 
 
@@ -467,19 +480,107 @@ def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
 
 
 def capacity_checkpoint(capacity: dict[str, Any], phase: str,
-                        remaining: Iterable[str] = ()) -> dict[str, Any]:
+                        remaining: Iterable[str] = (),
+                        remaining_overrides: dict[str, int] | None = None) -> dict[str, Any]:
     filesystem = Path(capacity["filesystemPath"])
     if filesystem.stat().st_dev != capacity["device"]:
         deny(f"capacity_filesystem_changed:{phase}")
     usage = os.statvfs(filesystem)
     free_bytes, free_inodes = usage.f_bavail * usage.f_frsize, usage.f_favail
     budget = capacity["budgets"]
-    required_bytes = budget["operationalReserveBytes"] + budget["failureEvidenceBytes"]
-    required_bytes += sum(budget[field] for field in remaining)
-    if free_bytes < required_bytes or free_inodes < budget["operationalReserveInodes"]:
-        deny(f"capacity_checkpoint:{phase}:bytes={free_bytes}:required={required_bytes}:inodes={free_inodes}")
+    remaining_overrides = remaining_overrides or {}
+    if not set(remaining_overrides).issubset(set(remaining)):
+        deny(f"capacity_checkpoint_override:{phase}")
+    required_bytes = (budget["operationalReserveBytes"] + budget["failureEvidenceBytes"] +
+                      capacity["admissionMarginBytes"])
+    required_bytes += sum(remaining_overrides.get(field, budget[field]) for field in remaining)
+    required_inodes = capacity["requiredInodes"]
+    if free_bytes < required_bytes or free_inodes < required_inodes:
+        deny(f"capacity_checkpoint:{phase}:bytes={free_bytes}:required={required_bytes}:"
+             f"inodes={free_inodes}:requiredInodes={required_inodes}")
     return {"phase": phase, "availableBytes": free_bytes, "availableInodes": free_inodes,
-            "requiredBytes": required_bytes}
+            "requiredBytes": required_bytes, "requiredInodes": required_inodes,
+            "remainingBudgets": {
+                field: remaining_overrides.get(field, budget[field]) for field in remaining
+            }}
+
+
+class CapacityPhaseMonitor:
+    """Bounded summary telemetry; sampling is an observed minimum, never a peak proof."""
+
+    def __init__(self, capacity: dict[str, Any], phase: str,
+                 required_bytes: int, required_inodes: int,
+                 interval: float = CAPACITY_SAMPLE_INTERVAL_SECONDS) -> None:
+        self.filesystem = Path(capacity["filesystemPath"])
+        self.device = capacity["device"]
+        self.phase = phase
+        self.required_bytes = required_bytes
+        self.required_inodes = required_inodes
+        self.interval = interval
+        self.started_ns = time.monotonic_ns()
+        self.finished_ns = self.started_ns
+        self.samples = 0
+        self.gaps = 0
+        self.min_bytes: int | None = None
+        self.min_inodes: int | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def _sample(self) -> None:
+        try:
+            if self.filesystem.stat().st_dev != self.device:
+                self.gaps += 1
+                return
+            usage = os.statvfs(self.filesystem)
+            available_bytes = usage.f_bavail * usage.f_frsize
+            available_inodes = usage.f_favail
+        except OSError:
+            self.gaps += 1
+            return
+        self.samples += 1
+        self.min_bytes = (available_bytes if self.min_bytes is None
+                          else min(self.min_bytes, available_bytes))
+        self.min_inodes = (available_inodes if self.min_inodes is None
+                           else min(self.min_inodes, available_inodes))
+
+    def _poll(self) -> None:
+        while not self._stop.wait(self.interval):
+            self._sample()
+
+    def start(self) -> None:
+        self._sample()
+        self._thread = threading.Thread(
+            target=self._poll, name=f"capacity-{self.phase}", daemon=True
+        )
+        self._thread.start()
+
+    def finish(self) -> dict[str, Any]:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=max(1.0, self.interval * 4))
+            if self._thread.is_alive():
+                self.gaps += 1
+        self._sample()
+        self.finished_ns = time.monotonic_ns()
+        observed_below = (
+            self.min_bytes is not None and self.min_inodes is not None and
+            (self.min_bytes < self.required_bytes or self.min_inodes < self.required_inodes)
+        )
+        return {
+            "phase": self.phase,
+            "startedMonotonicNs": self.started_ns,
+            "finishedMonotonicNs": self.finished_ns,
+            "durationMonotonicNs": self.finished_ns - self.started_ns,
+            "sampleIntervalMilliseconds": int(self.interval * 1000),
+            "sampleCount": self.samples,
+            "observationGaps": self.gaps,
+            "minAvailableBytesObserved": self.min_bytes,
+            "minAvailableInodesObserved": self.min_inodes,
+            "requiredBytes": self.required_bytes,
+            "requiredInodes": self.required_inodes,
+            "observedBelowRequired": observed_below,
+            "proofLimit": "SAMPLED_MINIMUM_NOT_CONTINUOUS_PEAK_GUARANTEE",
+        }
 
 
 def allocated_bytes(path: Path) -> int:
@@ -1335,10 +1436,12 @@ def build_in_generation_window(args: argparse.Namespace,
         "state": "BUILDING",
         "capacity": capacity,
         "capacityCheckpoints": [],
+        "capacityObservations": [],
         "previousGenerationReviews": previous_reviews,
         "releaseRoot": str(args.output / args.release_id),
         "package": str(args.output / f"{args.release_id}.tar.xz"),
         "classification": "PENDING",
+        "dispositionState": "OPEN",
         "replacement": None,
         "artifactContract": str(artifact_contract_path),
     }
@@ -1350,39 +1453,99 @@ def build_in_generation_window(args: argparse.Namespace,
     env = build_environment()
     env.update(SOURCE_DATE_EPOCH=str(args.source_date_epoch), TZ="UTC", LANG="C.UTF-8",
                LC_ALL="C.UTF-8", CI="1", NEXT_TELEMETRY_DISABLED="1")
-    def checkpoint(phase: str, remaining: Iterable[str] = ()) -> None:
-        lifecycle["capacityCheckpoints"].append(capacity_checkpoint(capacity, phase, remaining))
+    workspace_baseline_bytes = allocated_bytes(repo)
+
+    def remaining_workspace_bytes() -> int:
+        growth = max(0, allocated_bytes(repo) - workspace_baseline_bytes)
+        return max(0, capacity["budgets"]["buildWorkspaceGrowthBytes"] - growth)
+
+    def checkpoint(phase: str, remaining: Iterable[str] = ()) -> dict[str, Any]:
+        remaining = tuple(remaining)
+        overrides = ({"buildWorkspaceGrowthBytes": remaining_workspace_bytes()}
+                     if "buildWorkspaceGrowthBytes" in remaining else None)
+        observed = capacity_checkpoint(capacity, phase, remaining, overrides)
+        lifecycle["capacityCheckpoints"].append(observed)
         write_lifecycle(lifecycle_path, lifecycle)
+        return observed
+
+    def monitored_phase(phase: str, action, before_remaining: Iterable[str],
+                        after_remaining: Iterable[str]):
+        before = checkpoint(f"before_{phase}", before_remaining)
+        monitor = CapacityPhaseMonitor(
+            capacity, phase, before["requiredBytes"], before["requiredInodes"]
+        )
+        monitor.start()
+        try:
+            result = action()
+        finally:
+            observation = monitor.finish()
+            lifecycle["capacityObservations"].append(observation)
+            write_lifecycle(lifecycle_path, lifecycle)
+        if observation["observationGaps"] or not observation["sampleCount"]:
+            deny(f"capacity_telemetry_incomplete:{phase}")
+        if observation["observedBelowRequired"]:
+            deny(f"capacity_observed_below_required:{phase}:"
+                 f"bytes={observation['minAvailableBytesObserved']}:"
+                 f"required={observation['requiredBytes']}:"
+                 f"inodes={observation['minAvailableInodesObserved']}:"
+                 f"requiredInodes={observation['requiredInodes']}")
+        checkpoint(f"after_{phase}", after_remaining)
+        return result
 
     staging_artifact = None
     try:
-        checkpoint("before_toolchain")
+        workspace_and_payload = (
+            "buildWorkspaceGrowthBytes", "runtimePayloadBytes",
+            "packageTemporaryBytes", "independentVerificationBytes",
+        )
+        checkpoint("before_toolchain", workspace_and_payload)
         tools = toolchain(repo, env, args.output)
-        run(["npm", "ci"], repo, env, failure_root=args.output, stage="root_npm_ci")
-        checkpoint("after_root_npm_ci")
+        checkpoint("after_toolchain", workspace_and_payload)
+        monitored_phase(
+            "root_npm_ci",
+            lambda: run(["npm", "ci"], repo, env, failure_root=args.output,
+                        stage="root_npm_ci"),
+            workspace_and_payload, workspace_and_payload,
+        )
         api_source = repo / "apps/whatsapp-agent"
-        run(["npm", "ci", "--include=dev"], api_source, env,
-            failure_root=args.output, stage="api_npm_ci")
-        checkpoint("after_api_npm_ci")
-        run(["npm", "run", "db:generate"], api_source, env,
-            failure_root=args.output, stage="prisma_generate")
-        checkpoint("after_prisma_generate")
-        run(["npm", "run", "build"], api_source, env,
-            failure_root=args.output, stage="api_build")
-        checkpoint("after_api_build")
-        run(["npm", "run", "build"], repo, env,
-            failure_root=args.output, stage="frontend_build")
-        checkpoint("after_frontend_build")
+        monitored_phase(
+            "api_npm_ci",
+            lambda: run(["npm", "ci", "--include=dev"], api_source, env,
+                        failure_root=args.output, stage="api_npm_ci"),
+            workspace_and_payload, workspace_and_payload,
+        )
+        monitored_phase(
+            "prisma_generate",
+            lambda: run(["npm", "run", "db:generate"], api_source, env,
+                        failure_root=args.output, stage="prisma_generate"),
+            workspace_and_payload, workspace_and_payload,
+        )
+        monitored_phase(
+            "api_build",
+            lambda: run(["npm", "run", "build"], api_source, env,
+                        failure_root=args.output, stage="api_build"),
+            workspace_and_payload, workspace_and_payload,
+        )
+        monitored_phase(
+            "frontend_build",
+            lambda: run(["npm", "run", "build"], repo, env,
+                        failure_root=args.output, stage="frontend_build"),
+            workspace_and_payload, workspace_and_payload,
+        )
 
-        checkpoint("before_runtime_copy", ("runtimePayloadBytes", "packageTemporaryBytes", "independentVerificationBytes"))
         release_root = args.output / args.release_id
-        release_root.mkdir(mode=0o755)
-        copy_allowlist(api_source, release_root / "api-runtime",
-                       ("dist", "node_modules", "package.json", "package-lock.json"))
-        copy_allowlist(repo, release_root / "frontend-runtime",
-                       (".next", "node_modules", "public", "package.json", "package-lock.json",
-                        "next.config.js", "next.config.mjs", "next.config.ts"))
-        checkpoint("after_runtime_copy", ("packageTemporaryBytes", "independentVerificationBytes"))
+        def copy_runtime() -> None:
+            release_root.mkdir(mode=0o755)
+            copy_allowlist(api_source, release_root / "api-runtime",
+                           ("dist", "node_modules", "package.json", "package-lock.json"))
+            copy_allowlist(repo, release_root / "frontend-runtime",
+                           (".next", "node_modules", "public", "package.json", "package-lock.json",
+                            "next.config.js", "next.config.mjs", "next.config.ts"))
+        monitored_phase(
+            "runtime_copy", copy_runtime,
+            ("runtimePayloadBytes", "packageTemporaryBytes", "independentVerificationBytes"),
+            ("packageTemporaryBytes", "independentVerificationBytes"),
+        )
         ensure_clean_repo(repo, args.target)
         normalize_tree(release_root, args.source_date_epoch)
         entries, _ = scan_runtime(release_root)
@@ -1414,27 +1577,39 @@ def build_in_generation_window(args: argparse.Namespace,
         normalize_tree(release_root, args.source_date_epoch)
         verified = verify_root(release_root, args.target, args.release_id)
         package = args.output / f"{args.release_id}.tar.xz"
-        checkpoint("before_package", ("packageTemporaryBytes", "independentVerificationBytes"))
-        package_identity = write_package(release_root, package, args.source_date_epoch)
-        checkpoint("before_independent_extraction", ("independentVerificationBytes",))
-        temporary = Path(tempfile.mkdtemp(prefix=f".{args.release_id}.verify-", dir=args.output.parent))
-        try:
-            extracted = safe_extract(package, temporary, args.release_id)
-            extracted_verified = verify_root(extracted, args.target, args.release_id)
-            if extracted_verified != verified or canonical_json(scan_runtime(extracted)) != canonical_json(scan_runtime(release_root)):
-                deny("independent_extraction_mismatch")
-            staging_artifact = artifact_entry(
-                temporary, args.release_id, args.target, "directory", "DERIVED_STAGING",
-                "INDEPENDENT_VERIFICATION_COMPLETE", ["verification_in_progress"],
-                {"packageSha256": package_identity["packageSha256"]}, "RETIREMENT_READY",
-            )
-        finally:
-            shutil.rmtree(temporary)
+        package_identity = monitored_phase(
+            "package",
+            lambda: write_package(release_root, package, args.source_date_epoch),
+            ("packageTemporaryBytes", "independentVerificationBytes"),
+            ("independentVerificationBytes",),
+        )
+        def independent_extraction() -> dict[str, Any]:
+            temporary = Path(tempfile.mkdtemp(
+                prefix=f".{args.release_id}.verify-", dir=args.output.parent
+            ))
+            try:
+                extracted = safe_extract(package, temporary, args.release_id)
+                extracted_verified = verify_root(extracted, args.target, args.release_id)
+                if (extracted_verified != verified or
+                        canonical_json(scan_runtime(extracted)) !=
+                        canonical_json(scan_runtime(release_root))):
+                    deny("independent_extraction_mismatch")
+                return artifact_entry(
+                    temporary, args.release_id, args.target, "directory", "DERIVED_STAGING",
+                    "INDEPENDENT_VERIFICATION_COMPLETE", ["verification_in_progress"],
+                    {"packageSha256": package_identity["packageSha256"]}, "RETIREMENT_READY",
+                )
+            finally:
+                shutil.rmtree(temporary)
+        staging_artifact = monitored_phase(
+            "independent_extraction", independent_extraction,
+            ("independentVerificationBytes",), (),
+        )
         staging_artifact["state"] = "SANITIZED"
         staging_artifact["removedAtProducerCompletion"] = True
-        checkpoint("after_independent_extraction")
     except BaseException as error:
         lifecycle.update(state="FAILED", classification="PENDING",
+                         dispositionState="RETENTION_DEBT",
                          failureClass=type(error).__name__)
         write_lifecycle(lifecycle_path, lifecycle)
         write_lifecycle(
@@ -1445,6 +1620,7 @@ def build_in_generation_window(args: argparse.Namespace,
     lifecycle.update(
         state="COMPLETE",
         classification="PENDING",
+        dispositionState="OPEN",
         packageSha256=package_identity["packageSha256"],
         manifestSha256=verified["manifestSha256"],
         indexSha256=verified["indexSha256"],
