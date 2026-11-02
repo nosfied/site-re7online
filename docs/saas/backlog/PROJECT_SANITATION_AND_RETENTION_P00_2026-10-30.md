@@ -686,3 +686,23 @@ count, health local/público passou e os locks permaneceram livres. Esta
 custódia é terminal e não autoriza replay. O item continua
 `NOT_QUALIFIED`, agora pelo predicado nominal acima; o suporte técnico ensaiado
 não substitui a identidade física exigida pelo manifesto.
+
+#### Reconciliação dirigida da identidade dos diretórios
+
+As enumerações históricas autenticavam a raiz, os três ancestrais, o manifesto
+de arquivos e a relação de links, mas não continham identidade de cada diretório
+interno. Uma enumeração dirigida de metadados, sem seguir links ou abrir
+payloads, examinou 1.024 diretórios. A raiz permanece `deploy:deploy 0700`,
+device/inode `64769:3161329`. Todos os 1.023 descendentes são
+`deploy:deploy 0775`, no device `64769`; o owner é aceito, mas o bit de escrita
+do grupo viola literalmente `stat.S_IMODE(mode) & 0o022 == 0` em
+`_authenticate_disposition_tree()`.
+
+A relação completa de caminhos e identidades foi preservada em
+`p00-capacity-worker-package-audit-784b7da4c826-v5/directory-identity-diagnostic.private.tsv`,
+modo `0600`, SHA-256
+`7bbb3de300d01a6eb2f048d592cd50ee55c47a8a83aafe829aad1cbfeb00d7f7`.
+Ela contém 1.023 registros e 316.038 bytes. Não houve `chmod`, `chown`, mudança
+de gate ou novo audit. Decisão: `NOT_QUALIFIED / KEEP_PRESERVED`; a identidade
+histórica real é incompatível com a política vigente e não pode ser normalizada
+para fabricar elegibilidade.

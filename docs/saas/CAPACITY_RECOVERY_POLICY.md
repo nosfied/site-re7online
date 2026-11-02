@@ -799,3 +799,12 @@ consequentemente, `MINIMUM_RECOVERY_NOT_MET`. Exit code `2`, plano
 terminal `fbae5eb81a62d03edbed26e4868511b3397e8b92d90a648977527fb4519a5a84`.
 O scope terminou confirmado, sem OOM, timeout, sinal ou efeito. Não repetir essa
 operação nem avançar para `prepare`/`execute` com seu plano negado.
+
+A reconciliação posterior de metadados localizou o impedimento exato sem novo
+audit: a raiz candidata é `deploy:deploy 0700`, enquanto todos os 1.023
+diretórios descendentes são `deploy:deploy 0775`. O owner satisfaz
+`_identity_owner_allowed()`, mas cada descendente falha no gate invariável
+`mode & 0o022`. A lista literal completa está selada na custódia v5 sob SHA-256
+`7bbb3de300d01a6eb2f048d592cd50ee55c47a8a83aafe829aad1cbfeb00d7f7`.
+Não corrigir permissões nem flexibilizar o gate para tornar material histórico
+elegível; o candidato permanece preservado e não qualificado.
