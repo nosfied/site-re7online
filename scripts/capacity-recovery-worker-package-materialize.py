@@ -26,9 +26,14 @@ POLICY = CUSTODY / "deploy-artifact-roots.json"
 MANIFEST = ROOT / "config/capacity-recovery/worker-package-audit-disposition.v1.json"
 EF7_MANIFEST = ROOT / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json"
 HELPER = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
-HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
-INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab099247395276ad04db"
-EF7_INSTALLER_SHA256 = "d243b43528759f5966e586a202f4cb264a014e32d0bb82b88742794096be48e9"
+WORKER_HELPER_SHA256 = "a7f1a0680d19561086923b77162ab3710fbd2c890ccf823aa517d42ccea9a1c2"
+WORKER_INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab099247395276ad04db"
+EF7_HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
+EF7_INSTALLER_SHA256 = "757dc2f20e649a985d36fa5a82b32e2273efeb9ffea9cd62f45757dcf8073785"
+# Compatibility names retain the proven worker profile for callers/tests that
+# invoke helper_binding() without an explicit profile contract.
+HELPER_SHA256 = WORKER_HELPER_SHA256
+INSTALLER_SHA256 = WORKER_INSTALLER_SHA256
 SUDOERS_SHA256 = "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"
 HELPER_PROOF = CUSTODY / "helper-installation-proof.private.json"
 CANDIDATE = Path("/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit")
@@ -52,15 +57,15 @@ EF7_MINIMUM_RECOVERY_BYTES = 949141504
 def profile_contract(profile: str) -> dict[str, Any]:
     if profile == WORKER_PROFILE:
         return {"manifest": MANIFEST, "minimumRecoveryBytes": MINIMUM_RECOVERY_BYTES,
-                "installerSha256": INSTALLER_SHA256,
-                "helperSha256": HELPER_SHA256,
+                "installerSha256": WORKER_INSTALLER_SHA256,
+                "helperSha256": WORKER_HELPER_SHA256,
                 "candidates": [{"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
                                 "path": str(CANDIDATE)}]}
     if profile == EF7_PROFILE:
         return {"manifest": EF7_MANIFEST,
                 "minimumRecoveryBytes": EF7_MINIMUM_RECOVERY_BYTES,
                 "installerSha256": EF7_INSTALLER_SHA256,
-                "helperSha256": HELPER_SHA256,
+                "helperSha256": EF7_HELPER_SHA256,
                 "candidates": [{"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE",
                                 "path": str(path)} for path in EF7_CANDIDATES]}
     raise RuntimeError("PROFILE_DENY")

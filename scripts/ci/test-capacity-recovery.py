@@ -1224,7 +1224,8 @@ class CapacityRecoveryTests(unittest.TestCase):
         with mock.patch.multiple(materializer, CUSTODY=external, ROOT=control, PM2=pm2,
                 PM2_SHA256=sha(pm2), NODE=node, NODE_SHA256=sha(node), DUMP=dump,
                 GRAPH=graph, POLICY=policy, MANIFEST=manifest, HELPER=helper,
-                HELPER_SHA256=sha(helper), HELPER_PROOF=proof, CANDIDATE=fixture["root"],
+                HELPER_SHA256=sha(helper), WORKER_HELPER_SHA256=sha(helper),
+                HELPER_PROOF=proof, CANDIDATE=fixture["root"],
                 CURRENT=current, TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
                 WRITER_LOCK=writer_lock, MINIMUM_RECOVERY_BYTES=1,
                 authenticated_consumer=load_configured_consumer,
@@ -1348,7 +1349,7 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(ef7["minimumRecoveryBytes"],
                          materializer.EF7_MINIMUM_RECOVERY_BYTES)
         self.assertEqual(ef7["installerSha256"], materializer.EF7_INSTALLER_SHA256)
-        self.assertEqual(ef7["helperSha256"], materializer.HELPER_SHA256)
+        self.assertEqual(ef7["helperSha256"], materializer.EF7_HELPER_SHA256)
         self.assertEqual(ef7["candidates"], [
             {"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE", "path": str(path)}
             for path in materializer.EF7_CANDIDATES])
@@ -1363,9 +1364,76 @@ class CapacityRecoveryTests(unittest.TestCase):
         installer = importlib.util.module_from_spec(installer_spec)
         assert installer_spec.loader is not None
         installer_spec.loader.exec_module(installer)
-        self.assertEqual(installer.SOURCE_SHA256, materializer.HELPER_SHA256)
+        self.assertEqual(installer.SOURCE_SHA256, materializer.EF7_HELPER_SHA256)
+        self.assertEqual(installer.PREVIOUS_HELPERS, ({
+            "path": str(materializer.HELPER),
+            "sha256": materializer.WORKER_HELPER_SHA256,
+            "device": 64769, "inode": 800988, "uid": 0, "gid": 0,
+            "mode": "0500",
+        },))
         self.assertEqual(installer.SUDOERS_SHA256, materializer.SUDOERS_SHA256)
         self.assertEqual(installer.TARGET, materializer.HELPER)
+
+    def test_worker_and_ef7_helper_proofs_are_not_interchangeable(self):
+        source = Path(__file__).resolve().parents[1] / (
+            "capacity-recovery-worker-package-materialize.py")
+        spec = importlib.util.spec_from_file_location("profile_proof_materializer", source)
+        materializer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(materializer)
+        helper = self.base / "closed-helper"; helper.write_bytes(b"root-owned-unreadable-fixture")
+        helper.chmod(0o500); info = helper.lstat()
+        proof = self.base / "helper-proof.private.json"
+        def write_proof(installer_sha, helper_sha):
+            private_json(proof, {"schemaVersion": 1,
+                "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+                "installerSha256": installer_sha,
+                "sudoersSha256": materializer.SUDOERS_SHA256,
+                "helper": {"path": str(helper), "sha256": helper_sha,
+                    "identity": {"device": info.st_dev, "inode": info.st_ino,
+                        "uid": info.st_uid, "gid": info.st_gid, "mode": "0500"}}})
+        write_proof(materializer.WORKER_INSTALLER_SHA256,
+                    materializer.WORKER_HELPER_SHA256)
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_PROOF=proof):
+            binding, _ = materializer.helper_binding(
+                materializer.WORKER_INSTALLER_SHA256,
+                materializer.WORKER_HELPER_SHA256)
+            self.assertEqual(binding, {"path": str(helper),
+                "sha256": materializer.WORKER_HELPER_SHA256})
+            with self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+                materializer.helper_binding(materializer.EF7_INSTALLER_SHA256,
+                                            materializer.EF7_HELPER_SHA256)
+        proof.unlink(); write_proof(materializer.EF7_INSTALLER_SHA256,
+                                    materializer.EF7_HELPER_SHA256)
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_PROOF=proof):
+            binding, _ = materializer.helper_binding(
+                materializer.EF7_INSTALLER_SHA256, materializer.EF7_HELPER_SHA256)
+            self.assertEqual(binding, {"path": str(helper),
+                "sha256": materializer.EF7_HELPER_SHA256})
+            with self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+                materializer.helper_binding(materializer.WORKER_INSTALLER_SHA256,
+                                            materializer.WORKER_HELPER_SHA256)
+
+    def test_ef7_installer_denies_unknown_existing_helper_before_replacement(self):
+        installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-ef7.py")
+        spec = importlib.util.spec_from_file_location("closed_ef7_installer", installer_path)
+        installer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(installer)
+        root_info = SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o600,
+            st_uid=0, st_gid=0, st_size=1, st_mtime_ns=1, st_ctime_ns=1, st_nlink=1)
+        sudoers_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 3,
+            "st_mode": stat.S_IFREG | 0o440})
+        unknown_info = SimpleNamespace(**{**root_info.__dict__, "st_dev": 64769,
+            "st_ino": 999999, "st_mode": stat.S_IFREG | 0o500})
+        with mock.patch.object(installer.os, "geteuid", return_value=0), \
+                mock.patch.object(installer.os, "getegid", return_value=0), \
+                mock.patch.object(installer, "stable_regular", side_effect=[
+                    (b"source", root_info), (b"sudoers", sudoers_info),
+                    (b"unknown helper", unknown_info)]), \
+                mock.patch.object(installer.os, "open") as opened, \
+                self.assertRaisesRegex(RuntimeError, "PREVIOUS_HELPER_NOT_ALLOWED"):
+            installer.install()
+        opened.assert_not_called()
 
     def test_ef7_materializer_schema3_to_real_audit_outside_checkout(self):
         fixture = self.ef7_fixture("ef7-materializer-e2e")
@@ -1440,7 +1508,8 @@ class CapacityRecoveryTests(unittest.TestCase):
                 GRAPH=graph, POLICY=policy, EF7_MANIFEST=manifest,
                 EF7_MINIMUM_RECOVERY_BYTES=1,
                 EF7_CANDIDATES=tuple(fixture["candidates"]), HELPER=helper,
-                HELPER_SHA256=sha(helper), HELPER_PROOF=proof, CURRENT=current,
+                HELPER_SHA256=sha(helper), EF7_HELPER_SHA256=sha(helper),
+                HELPER_PROOF=proof, CURRENT=current,
                 TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
                 WRITER_LOCK=writer_lock, authenticated_consumer=load_configured_consumer):
             materialized = materializer.materialize(materializer.EF7_PROFILE)

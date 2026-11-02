@@ -49,6 +49,11 @@ com a cardinalidade prevista foram ensaiados localmente, incluindo falha parcial
 sem replay; instalação, auditoria e retirada produtivas continuam pendentes de
 atos próprios.
 
+Worker conserva seu par histórico de instalação/helper. Ef7 possui par separado
+e só pode substituir a identidade worker previamente autenticada na allowlist
+fechada; helper desconhecido, par cruzado ou sudoers divergente nega antes de
+qualquer substituição. Essa transição não muda candidatos, efeitos ou lifecycle.
+
 ## Contrato obrigatório por geração (implementado)
 
 Cada execução de `scripts/converta-release.py build` publica, desde `BUILDING` e

@@ -692,6 +692,15 @@ instalador `install-capacity-proc-observer-ef7.py`; caminho ou perfil arbitrári
 nega. A prova vincula instalador, helper `root:root 0500`, sudoers preservado e
 identidade física, sem leitura direta do helper por `deploy`.
 
+Os bindings de instalação não são intercambiáveis. O perfil worker preserva o
+par comprovado instalador `7b92d8b9…`/helper `a7f1a068…`; ef7 exige o par
+instalador `757dc2f2…`/helper `89650e62…`. Antes de substituir o helper, o
+instalador ef7 autentica o helper worker previamente instalado pela allowlist
+fechada de caminho, SHA, device/inode, UID/GID e modo registrada pela instalação
+anterior. Helper ausente ou desconhecido nega antes da criação do temporário; o
+sudoers `a1928823…` permanece byte-exato. Misturar prova ou helper entre perfis
+também nega antes da fotografia/request.
+
 O manifesto fixa caminho, identidade da raiz, bytes físicos, commit, gitdir,
 digest do arquivo `.git`, conjunto preservado e a proveniência rastreada de cada
 árvore. O consumidor exige HEAD byte-exato, worktree registrado, estado Git
