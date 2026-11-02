@@ -55,8 +55,11 @@ MEMORY_STAT_FIELDS = {
     "active_anon", "inactive_anon", "active_file", "inactive_file",
     "workingset_refault_anon", "workingset_refault_file",
 }
-EXECUTION_JOURNAL_MAX_BYTES = 1024 * 1024
-EXECUTION_RECEIPT_MAX_BYTES = 64 * 1024
+# The closed ef7 deploy-control disposition contains about 34k literal effects.
+# Keep evidence bounded while allowing the canonical journal and receipt to be
+# authenticated after a terminal or interrupted execution.
+EXECUTION_JOURNAL_MAX_BYTES = 64 * 1024 * 1024
+EXECUTION_RECEIPT_MAX_BYTES = 16 * 1024 * 1024
 
 
 class AuditPostLaunchError(RuntimeError):

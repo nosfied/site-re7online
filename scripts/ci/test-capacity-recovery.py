@@ -1224,7 +1224,8 @@ class CapacityRecoveryTests(unittest.TestCase):
         with mock.patch.multiple(materializer, CUSTODY=external, ROOT=control, PM2=pm2,
                 PM2_SHA256=sha(pm2), NODE=node, NODE_SHA256=sha(node), DUMP=dump,
                 GRAPH=graph, POLICY=policy, MANIFEST=manifest, HELPER=helper,
-                HELPER_SHA256=sha(helper), HELPER_PROOF=proof, CANDIDATE=fixture["root"],
+                HELPER_SHA256=sha(helper), WORKER_HELPER_SHA256=sha(helper),
+                HELPER_PROOF=proof, CANDIDATE=fixture["root"],
                 CURRENT=current, TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
                 WRITER_LOCK=writer_lock, MINIMUM_RECOVERY_BYTES=1,
                 authenticated_consumer=load_configured_consumer,
@@ -1327,6 +1328,226 @@ class CapacityRecoveryTests(unittest.TestCase):
         with mock.patch.multiple(materializer, HELPER=helper, HELPER_SHA256=sha(helper)), \
                 self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_IDENTITY"):
             materializer.helper_binding()
+
+    def test_materializer_profiles_preserve_worker_and_close_ef7_scope(self):
+        source = Path(__file__).resolve().parents[1] / (
+            "capacity-recovery-worker-package-materialize.py")
+        spec = importlib.util.spec_from_file_location("closed_profile_materializer", source)
+        materializer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(materializer)
+        worker = materializer.profile_contract(materializer.WORKER_PROFILE)
+        self.assertEqual(worker, {
+            "manifest": materializer.MANIFEST,
+            "minimumRecoveryBytes": materializer.MINIMUM_RECOVERY_BYTES,
+            "installerSha256": materializer.INSTALLER_SHA256,
+            "helperSha256": materializer.HELPER_SHA256,
+            "candidates": [{"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+                            "path": str(materializer.CANDIDATE)}],
+        })
+        ef7 = materializer.profile_contract(materializer.EF7_PROFILE)
+        self.assertEqual(ef7["manifest"], materializer.EF7_MANIFEST)
+        self.assertEqual(ef7["minimumRecoveryBytes"],
+                         materializer.EF7_MINIMUM_RECOVERY_BYTES)
+        self.assertEqual(ef7["installerSha256"], materializer.EF7_INSTALLER_SHA256)
+        self.assertEqual(ef7["helperSha256"], materializer.EF7_HELPER_SHA256)
+        self.assertEqual(ef7["candidates"], [
+            {"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE", "path": str(path)}
+            for path in materializer.EF7_CANDIDATES])
+        with self.assertRaisesRegex(RuntimeError, "PROFILE_DENY"):
+            materializer.profile_contract("/opt/re7online/deploy-control")
+
+        installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-ef7.py")
+        self.assertEqual(sha(installer_path), materializer.EF7_INSTALLER_SHA256)
+        installer_spec = importlib.util.spec_from_file_location(
+            "ef7_closed_helper_installer", installer_path)
+        installer = importlib.util.module_from_spec(installer_spec)
+        assert installer_spec.loader is not None
+        installer_spec.loader.exec_module(installer)
+        self.assertEqual(installer.SOURCE_SHA256, materializer.EF7_HELPER_SHA256)
+        self.assertEqual(installer.PREVIOUS_HELPERS, ({
+            "path": str(materializer.HELPER),
+            "sha256": materializer.WORKER_HELPER_SHA256,
+            "device": 64769, "inode": 800988, "uid": 0, "gid": 0,
+            "mode": "0500",
+        },))
+        self.assertEqual(installer.SUDOERS_SHA256, materializer.SUDOERS_SHA256)
+        self.assertEqual(installer.TARGET, materializer.HELPER)
+
+    def test_worker_and_ef7_helper_proofs_are_not_interchangeable(self):
+        source = Path(__file__).resolve().parents[1] / (
+            "capacity-recovery-worker-package-materialize.py")
+        spec = importlib.util.spec_from_file_location("profile_proof_materializer", source)
+        materializer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(materializer)
+        helper = self.base / "closed-helper"; helper.write_bytes(b"root-owned-unreadable-fixture")
+        helper.chmod(0o500); info = helper.lstat()
+        proof = self.base / "helper-proof.private.json"
+        def write_proof(installer_sha, helper_sha):
+            private_json(proof, {"schemaVersion": 1,
+                "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+                "installerSha256": installer_sha,
+                "sudoersSha256": materializer.SUDOERS_SHA256,
+                "helper": {"path": str(helper), "sha256": helper_sha,
+                    "identity": {"device": info.st_dev, "inode": info.st_ino,
+                        "uid": info.st_uid, "gid": info.st_gid, "mode": "0500"}}})
+        write_proof(materializer.WORKER_INSTALLER_SHA256,
+                    materializer.WORKER_HELPER_SHA256)
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_PROOF=proof):
+            binding, _ = materializer.helper_binding(
+                materializer.WORKER_INSTALLER_SHA256,
+                materializer.WORKER_HELPER_SHA256)
+            self.assertEqual(binding, {"path": str(helper),
+                "sha256": materializer.WORKER_HELPER_SHA256})
+            with self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+                materializer.helper_binding(materializer.EF7_INSTALLER_SHA256,
+                                            materializer.EF7_HELPER_SHA256)
+        proof.unlink(); write_proof(materializer.EF7_INSTALLER_SHA256,
+                                    materializer.EF7_HELPER_SHA256)
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_PROOF=proof):
+            binding, _ = materializer.helper_binding(
+                materializer.EF7_INSTALLER_SHA256, materializer.EF7_HELPER_SHA256)
+            self.assertEqual(binding, {"path": str(helper),
+                "sha256": materializer.EF7_HELPER_SHA256})
+            with self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+                materializer.helper_binding(materializer.WORKER_INSTALLER_SHA256,
+                                            materializer.WORKER_HELPER_SHA256)
+
+    def test_ef7_installer_denies_unknown_existing_helper_before_replacement(self):
+        installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-ef7.py")
+        spec = importlib.util.spec_from_file_location("closed_ef7_installer", installer_path)
+        installer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(installer)
+        root_info = SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o600,
+            st_uid=0, st_gid=0, st_size=1, st_mtime_ns=1, st_ctime_ns=1, st_nlink=1)
+        sudoers_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 3,
+            "st_mode": stat.S_IFREG | 0o440})
+        unknown_info = SimpleNamespace(**{**root_info.__dict__, "st_dev": 64769,
+            "st_ino": 999999, "st_mode": stat.S_IFREG | 0o500})
+        with mock.patch.object(installer.os, "geteuid", return_value=0), \
+                mock.patch.object(installer.os, "getegid", return_value=0), \
+                mock.patch.object(installer, "stable_regular", side_effect=[
+                    (b"source", root_info), (b"sudoers", sudoers_info),
+                    (b"unknown helper", unknown_info)]), \
+                mock.patch.object(installer.os, "open") as opened, \
+                self.assertRaisesRegex(RuntimeError, "PREVIOUS_HELPER_NOT_ALLOWED"):
+            installer.install()
+        opened.assert_not_called()
+
+    def test_ef7_materializer_schema3_to_real_audit_outside_checkout(self):
+        fixture = self.ef7_fixture("ef7-materializer-e2e")
+        custody = fixture["base"] / "custody"
+        control = custody / "control"
+        scripts = control / "scripts"
+        config = control / "config/capacity-recovery"
+        scripts.mkdir(parents=True); config.mkdir(parents=True)
+        source = Path(__file__).resolve().parents[1]
+        materializer_path = scripts / "capacity-recovery-worker-package-materialize.py"
+        consumer_path = scripts / "capacity-recovery.py"
+        shutil.copy2(source / materializer_path.name, materializer_path)
+        shutil.copy2(source / consumer_path.name, consumer_path); consumer_path.chmod(0o644)
+        manifest = config / "ef7db111-deploy-control-disposition.v1.json"
+        shutil.copy2(fixture["manifest"], manifest); manifest.chmod(0o600)
+        materializer_spec = importlib.util.spec_from_file_location(
+            "ef7_external_materializer", materializer_path)
+        materializer = importlib.util.module_from_spec(materializer_spec)
+        assert materializer_spec.loader is not None
+        materializer_spec.loader.exec_module(materializer)
+
+        def configured_consumer():
+            spec = importlib.util.spec_from_file_location("ef7_external_consumer", consumer_path)
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None; spec.loader.exec_module(module)
+            for key, value in fixture["patches"].items(): setattr(module, key, value)
+            module.ROOT = control
+            module.DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH = manifest
+            module.DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256 = sha(manifest)
+            module.PROC_OBSERVER_PATH = helper
+            return module
+
+        node = custody / "node"; node.write_text("#!/bin/sh\necho v20.20.0\n"); node.chmod(0o755)
+        rows = [{"name": "api", "pid": 7, "pm2_env": {"status": "online",
+                 "restart_time": 1, "pm_cwd": "/release", "pm_exec_path": "/release/app.js"}}]
+        pm2 = custody / "pm2"; pm2.write_text(
+            "#!/usr/bin/python3\nimport json\nprint(json.dumps(" + repr(rows) + "))\n"); pm2.chmod(0o700)
+        dump = custody / "dump.json"; private_json(dump, [])
+        graph = custody / "release-graph.private.json"
+        private_json(graph, {"schemaVersion": 1, "protectedGraphPaths": []})
+        policy = custody / "deploy-artifact-roots.json"; shutil.copy2(self.policy, policy); policy.chmod(0o600)
+        helper = custody / "helper"; helper.write_bytes(b"helper"); helper.chmod(0o500)
+        helper_info = helper.lstat()
+        proof = custody / "helper-installation-proof.private.json"
+        private_json(proof, {"schemaVersion": 1,
+            "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+            "installerSha256": materializer.EF7_INSTALLER_SHA256,
+            "sudoersSha256": materializer.SUDOERS_SHA256,
+            "helper": {"path": str(helper), "sha256": sha(helper),
+                "identity": {"device": helper_info.st_dev, "inode": helper_info.st_ino,
+                    "uid": helper_info.st_uid, "gid": helper_info.st_gid, "mode": "0500"}}})
+        current = custody / "current"; current.mkdir()
+        for component in ("api", "frontend"):
+            target = custody / component; target.mkdir(); (current / component).symlink_to(target)
+        transactions = custody / "transactions"; transactions.mkdir(mode=0o700)
+        deployment_lock = custody / "deploy.lock"; deployment_lock.write_bytes(b"")
+        writer_lock = custody / "writer.lock"; writer_lock.write_bytes(b"")
+
+        load_consumer = materializer.authenticated_consumer
+        def load_configured_consumer():
+            module = load_consumer()
+            for key, value in fixture["patches"].items(): setattr(module, key, value)
+            module.ROOT = control
+            module.DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH = manifest
+            module.DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256 = sha(manifest)
+            module.PROC_OBSERVER_PATH = helper
+            return module
+
+        with mock.patch.multiple(materializer, CUSTODY=custody, ROOT=control,
+                CONSUMER=consumer_path, CONSUMER_SHA256=sha(consumer_path), PM2=pm2,
+                PM2_SHA256=sha(pm2), NODE=node, NODE_SHA256=sha(node), DUMP=dump,
+                GRAPH=graph, POLICY=policy, EF7_MANIFEST=manifest,
+                EF7_MINIMUM_RECOVERY_BYTES=1,
+                EF7_CANDIDATES=tuple(fixture["candidates"]), HELPER=helper,
+                HELPER_SHA256=sha(helper), EF7_HELPER_SHA256=sha(helper),
+                HELPER_PROOF=proof, CURRENT=current,
+                TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
+                WRITER_LOCK=writer_lock, authenticated_consumer=load_configured_consumer):
+            materialized = materializer.materialize(materializer.EF7_PROFILE)
+        request_path = custody / "audit-request.private.json"
+        request = json.loads(request_path.read_text())
+        self.assertEqual(request["schemaVersion"], 3)
+        self.assertTrue(request["incrementalBatch"])
+        self.assertEqual([item["path"] for item in request["candidates"]],
+                         [str(path) for path in fixture["candidates"]])
+        self.assertEqual(materialized["requestSha256"], sha(request_path))
+        readback = json.loads((custody / "binding-readback.private.json").read_text())
+        self.assertEqual(readback["requestSha256"], sha(request_path))
+        self.assertEqual(readback["manifestSha256"], sha(manifest))
+        supervisor_args = SimpleNamespace(
+            action="audit", request=request_path, request_sha256=sha(request_path),
+            plan_output=custody / "plan.private.json",
+            telemetry_output=custody / "executor-telemetry.private.jsonl",
+            containment_output=custody / "containment.private.json",
+            memory_max_bytes=512 * 1024 * 1024, timeout_seconds=1800)
+        SUPERVISOR.validate_audit_limits(supervisor_args)
+        supervisor_argv = SUPERVISOR.systemd_scope_argv(
+            supervisor_args, "re7-capacity-audit-ef7-fixture.scope")
+        self.assertIn(str(request_path), supervisor_argv)
+        self.assertIn(sha(request_path), supervisor_argv)
+        self.assertIn("--property=MemoryMax=536870912", supervisor_argv)
+        self.assertIn("--property=MemorySwapMax=0", supervisor_argv)
+        self.assertIn("--property=RuntimeMaxSec=1800s", supervisor_argv)
+        consumer = configured_consumer()
+        plan = custody / "plan.private.json"
+        with mock.patch.object(consumer, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(consumer, "deploy_group_principals", return_value=["deploy"]), \
+                mock.patch.object(consumer, "_privileged_proc_targets",
+                                  return_value=(scan(), {"mechanism": "synthetic-privileged-boundary"})):
+            value = consumer.audit_request(request_path, sha(request_path), plan)
+        self.assertEqual(value["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS",
+                         value["errors"])
+        self.assertEqual(len(value["candidates"]), 4)
+        self.assertEqual(value["errors"], [])
 
     def test_manifest_disposition_tree_link_set_target_type_and_escape_deny(self):
         for mutation, predicate in (
@@ -3228,6 +3449,422 @@ print(m._authenticate_disposition_archive(p,entry,{'versionedEnvExample':{'sha25
             preexec_fn=limit_memory, timeout=30, check=False)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(completed.stdout.strip(), "1")
+
+    def ef7_fixture(self, name="ef7"):
+        base = self.base / name
+        repository = base / "repository"
+        worktree = base / "ef7db111-prep"
+        repository.mkdir(parents=True)
+        subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "user.name", "Fixture"], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "user.email", "fixture@example.invalid"], check=True)
+        tracked = {
+            ".gitignore": "/node_modules/\n/.next/\n/apps/whatsapp-agent/node_modules/\napps/whatsapp-agent/dist/\n",
+            "package.json": "{}\n", "package-lock.json": "{}\n",
+            "src/app.ts": "export {}\n", "public/index.txt": "public\n",
+            "docs/readme.md": "docs\n", "scripts/check.py": "pass\n",
+            "apps/whatsapp-agent/package.json": "{}\n",
+            "apps/whatsapp-agent/package-lock.json": "{}\n",
+            "apps/whatsapp-agent/src/index.ts": "export {}\n",
+            "apps/whatsapp-agent/prisma/schema.prisma": "generator client {}\n",
+            "apps/whatsapp-web-worker/src/index.ts": "export {}\n",
+        }
+        for relative, content in tracked.items():
+            target = repository / relative; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "commit", "-qm", "fixture"], check=True)
+        commit = subprocess.check_output(
+            ["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "worktree", "add", "-q",
+                        "--detach", str(worktree), commit], check=True)
+        worktree.chmod(0o775)
+        candidates = [
+            worktree / "node_modules",
+            worktree / "apps/whatsapp-agent/node_modules",
+            worktree / ".next",
+            worktree / "apps/whatsapp-agent/dist",
+        ]
+        for path in candidates: path.mkdir(parents=True, mode=0o755); path.chmod(0o755)
+        (candidates[0] / "pkg").mkdir(); (candidates[0] / "pkg/index.js").write_text("package\n")
+        (candidates[0] / ".bin").mkdir(); (candidates[0] / ".bin/tool").symlink_to("../pkg/index.js")
+        library = candidates[1] / "openai/resources/uploads"; library.mkdir(parents=True)
+        (library / "index.js").write_text("library code\n")
+        hardlinks = candidates[1] / "pkg"; hardlinks.mkdir()
+        (hardlinks / "a.js").write_text("shared\n"); os.link(hardlinks / "a.js", hardlinks / "b.js")
+        (candidates[2] / "cache").mkdir(); (candidates[2] / "cache/build.bin").write_bytes(b"build")
+        (candidates[3] / "db").mkdir(); (candidates[3] / "db/persist.js").write_text("compiled code\n")
+        for root, dirs, files in os.walk(worktree):
+            root_path = Path(root)
+            if root_path == worktree: continue
+            root_path.chmod(0o755)
+            for filename in files:
+                target = root_path / filename
+                if not target.is_symlink(): target.chmod(0o644)
+        git_file = worktree / ".git"
+        git_dir = Path(git_file.read_text().strip().removeprefix("gitdir: "))
+        control = base / "control"; manifest = control / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json"
+        manifest.parent.mkdir(parents=True)
+        preserved = ["package.json", "package-lock.json", "src", "public", "docs", "scripts",
+                     "apps/whatsapp-agent/package.json", "apps/whatsapp-agent/package-lock.json",
+                     "apps/whatsapp-agent/src", "apps/whatsapp-agent/prisma",
+                     "apps/whatsapp-web-worker"]
+        derivations = [
+            ["package.json", "package-lock.json"],
+            ["apps/whatsapp-agent/package.json", "apps/whatsapp-agent/package-lock.json",
+             "apps/whatsapp-agent/prisma"],
+            ["package.json", "package-lock.json", "src", "public"],
+            ["apps/whatsapp-agent/package.json", "apps/whatsapp-agent/package-lock.json",
+             "apps/whatsapp-agent/src", "apps/whatsapp-agent/prisma"],
+        ]
+        entries = []
+        for path, derivation in zip(candidates, derivations):
+            info = path.lstat()
+            entries.append({"path": str(path), "relativePath": path.relative_to(worktree).as_posix(),
+                "kind": "DEPENDENCY_TREE" if path.name == "node_modules" else "COMPILED_TREE",
+                "physicalBytes": MODULE.physical_usage([path])[str(path)]["allocatedBytes"],
+                "identity": MODULE._directory_identity(info),
+                "derivationTrackedPaths": derivation})
+        private_json(manifest, {"schemaVersion": 1,
+            "kind": "CLOSED_DEPLOY_CONTROL_DERIVED_DISPOSITION",
+            "dispositionId": "fixture-ef7-v1",
+            "worktree": {"root": str(worktree), "commit": commit, "gitDir": str(git_dir),
+                "gitFileSha256": sha(git_file), "identity": MODULE._directory_identity(worktree.lstat()),
+                "preservedTrackedPaths": preserved}, "entries": entries})
+        binding = {"path": str(manifest), "sha256": sha(manifest)}
+        requested = [{"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE", "path": str(path),
+                      "dispositionManifest": binding} for path in candidates]
+        patches = dict(ROOT=control, DEPLOY_CONTROL_ROOT=worktree,
+            DEPLOY_CONTROL_GITDIR=git_dir, DEPLOY_CONTROL_PATHS=tuple(candidates),
+            DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH=manifest,
+            DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256=sha(manifest),
+            DEPLOY_CONTROL_DISPOSITION_ID="fixture-ef7-v1")
+        return {"base": base, "repository": repository, "worktree": worktree,
+                "gitDir": git_dir, "commit": commit, "candidates": candidates,
+                "manifest": manifest, "requested": requested, "patches": patches,
+                "preserved": preserved}
+
+    def ef7_cardinality_fixture(self, name="ef7-cardinality"):
+        fixture = self.ef7_fixture(name)
+        target_counts = (
+            (2326, 21808, 31), (710, 6934, 10),
+            (284, 1650, 0), (58, 483, 0),
+        )
+        def counts(root):
+            directories = regular = links = 0
+            for current, names, leaves in os.walk(root, followlinks=False):
+                directories += len(names)
+                for leaf in leaves:
+                    info = (Path(current) / leaf).lstat()
+                    if stat.S_ISLNK(info.st_mode): links += 1
+                    elif stat.S_ISREG(info.st_mode): regular += 1
+            return directories, regular, links
+        for candidate, expected in zip(fixture["candidates"], target_counts):
+            directories, regular, links = counts(candidate)
+            for index in range(expected[0] - directories):
+                path = candidate / f"cardinality-directory-{index:05d}"
+                path.mkdir(mode=0o755)
+            for index in range(expected[1] - regular):
+                path = candidate / f"cardinality-file-{index:05d}-representative-name.js"
+                path.write_bytes(b""); path.chmod(0o644)
+            target = next(path for path in candidate.rglob("*") if path.is_file())
+            for index in range(expected[2] - links):
+                link = candidate / f"cardinality-link-{index:03d}"
+                link.symlink_to(os.path.relpath(target, link.parent))
+            self.assertEqual(counts(candidate), expected)
+        value = json.loads(fixture["manifest"].read_text())
+        for entry, candidate in zip(value["entries"], fixture["candidates"]):
+            entry["physicalBytes"] = MODULE.physical_usage([candidate])[str(candidate)][
+                "allocatedBytes"]
+        fixture["manifest"].write_bytes(MODULE.canonical(value)); fixture["manifest"].chmod(0o600)
+        binding = {"path": str(fixture["manifest"]), "sha256": sha(fixture["manifest"])}
+        fixture["requested"] = [
+            {"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE", "path": str(path),
+             "dispositionManifest": binding} for path in fixture["candidates"]]
+        fixture["patches"]["DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256"] = binding["sha256"]
+        fixture["expectedEffects"] = sum(sum(item) for item in target_counts) + 4
+        return fixture
+
+    def test_ef7_materialized_consumer_complete_lifecycle_preserves_worktree(self):
+        fixture = self.ef7_fixture("ef7-materialized")
+        external = fixture["base"] / "custody/control"
+        (external / "scripts").mkdir(parents=True)
+        (external / "config/capacity-recovery").mkdir(parents=True)
+        shutil.copy2(TOOL, external / "scripts/capacity-recovery.py")
+        shutil.copy2(fixture["manifest"],
+                     external / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json")
+        spec = importlib.util.spec_from_file_location(
+            "ef7_materialized_consumer", external / "scripts/capacity-recovery.py")
+        consumer = importlib.util.module_from_spec(spec); assert spec.loader is not None
+        spec.loader.exec_module(consumer)
+        manifest = external / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json"
+        patches = {**fixture["patches"], "ROOT": external,
+            "DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH": manifest,
+            "DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256": sha(manifest)}
+        binding = {"path": str(manifest), "sha256": sha(manifest)}
+        candidates = [{**item, "dispositionManifest": binding} for item in fixture["requested"]]
+        custody = external.parent
+        request = custody / "audit.private.json"
+        plan = custody / "plan.private.json"
+        intent = custody / "intent.private.json"
+        commands = custody / "commands.private.txt"
+        seal = custody / "seal.private.json"
+        private_json(request, self.request_value(candidates))
+        with mock.patch.multiple(consumer, **patches), \
+                mock.patch.object(consumer, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(consumer, "deploy_group_principals", return_value=["deploy"]), \
+                mock.patch.object(consumer, "_proc_targets", return_value=scan()):
+            plan_value = consumer.audit_request(request, sha(request), plan)
+            self.assertEqual(plan_value["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+            consumer.prepare_plan(plan, sha(plan), intent, commands, seal)
+            sealed = json.loads(intent.read_text())
+            authorization = fixture["base"] / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION", "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(intent), "commandsSha256": sealed["commandsSha256"],
+                "paths": [item["path"] for item in sealed["candidates"]]})
+            receipt = fixture["base"] / "receipts/once"; receipt.parent.mkdir(mode=0o700)
+            result = consumer.execute_intent(intent, sha(intent), authorization,
+                                             sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertTrue(fixture["worktree"].is_dir())
+        self.assertEqual(subprocess.check_output(
+            ["/usr/bin/git", "-C", str(fixture["worktree"]), "rev-parse", "HEAD"],
+            text=True).strip(), fixture["commit"])
+        for relative in fixture["preserved"]:
+            self.assertTrue((fixture["worktree"] / relative).exists())
+        self.assertTrue(all(not path.exists() for path in fixture["candidates"]))
+        self.assertTrue(all(str(fixture["worktree"]) != line.strip()
+                            for line in commands.read_text().splitlines()))
+
+    def test_ef7_exact_scope_references_drift_and_protected_material_deny(self):
+        for source in ("cwd", "fd/9", "maps"):
+            fixture = self.ef7_fixture("ef7-ref-" + source.replace("/", "-"))
+            with self.subTest(source=source), mock.patch.multiple(MODULE, **fixture["patches"]), \
+                    mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                    mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                    self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_PROCESS_REFERENCE"):
+                MODULE.authenticate_deploy_control(
+                    fixture["requested"][0], json.loads(self.operational.read_text()),
+                    scan(targets=[(77, 101, source, str(fixture["candidates"][0] / "pkg"))]))
+        fixture = self.ef7_fixture("ef7-protected")
+        (fixture["candidates"][0] / ".env").write_text("forbidden")
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_PROTECTED_MATERIAL"):
+            MODULE.authenticate_deploy_control(
+                fixture["requested"][0], json.loads(self.operational.read_text()), scan())
+
+    def test_ef7_symlink_external_hardlink_and_paths_outside_closed_set_deny(self):
+        fixture = self.ef7_fixture("ef7-unsafe")
+        outside = fixture["base"] / "outside.bin"; outside.write_bytes(b"shared"); outside.chmod(0o644)
+        os.link(outside, fixture["candidates"][0] / "external-hardlink")
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_TREE_EXTERNAL_HARDLINK"):
+            MODULE.authenticate_deploy_control(
+                fixture["requested"][0], json.loads(self.operational.read_text()), scan())
+        outside.unlink(); (fixture["candidates"][0] / "external-hardlink").unlink()
+        (fixture["candidates"][0] / "escape").symlink_to("../../outside")
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_TREE_SYMLINK_ESCAPE"):
+            MODULE.authenticate_deploy_control(
+                fixture["requested"][0], json.loads(self.operational.read_text()), scan())
+        root_candidate = {**fixture["requested"][0], "path": str(fixture["worktree"])}
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_EXACT_BATCH"):
+            MODULE.validate_audit_request(self.request_value([root_candidate]))
+
+    def test_ef7_partial_execution_is_terminal_without_replay(self):
+        fixture = self.ef7_fixture("ef7-partial")
+        request = fixture["base"] / "request.private.json"
+        plan = fixture["base"] / "plan.private.json"
+        intent_path = fixture["base"] / "intent.private.json"
+        commands = fixture["base"] / "commands.private.txt"
+        seal = fixture["base"] / "seal.private.json"
+        private_json(request, self.request_value(fixture["requested"]))
+        patches = fixture["patches"]
+        with mock.patch.multiple(MODULE, **patches), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.process_patch():
+            MODULE.audit_request(request, sha(request), plan)
+            MODULE.prepare_plan(plan, sha(plan), intent_path, commands, seal)
+        intent = json.loads(intent_path.read_text())
+        authorization = fixture["base"] / "authorization.private.json"
+        private_json(authorization, {"schemaVersion": 1,
+            "kind": "CAPACITY_RECOVERY_AUTHORIZATION", "authorization": "AUTHORIZE_ONCE",
+            "intentSha256": sha(intent_path), "commandsSha256": intent["commandsSha256"],
+            "paths": [item["path"] for item in intent["candidates"]]})
+        receipt = fixture["base"] / "receipts/partial"; receipt.parent.mkdir(mode=0o700)
+        real_run = subprocess.run; effects = []
+        def interrupt_after_one(argv, **kwargs):
+            if argv[0] == "/usr/bin/git" or argv[-1] == "jlist":
+                return real_run(argv, **kwargs)
+            effects.append(list(argv))
+            if len(effects) == 1:
+                return real_run(argv, **kwargs)
+            return SimpleNamespace(returncode=9)
+        with mock.patch.multiple(MODULE, **patches), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.process_patch(), mock.patch.object(MODULE.subprocess, "run", side_effect=interrupt_after_one), \
+                self.assertRaises(SystemExit):
+            MODULE.execute_intent(intent_path, sha(intent_path), authorization,
+                                  sha(authorization), receipt)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual((result["attemptedCommands"], result["completedCommands"]), (2, 1))
+        first = Path(effects[0][-1]); self.assertFalse(first.exists())
+        with self.assertRaisesRegex(MODULE.Denied, "RECEIPT_ROOT_EXISTS"):
+            MODULE.execute_intent(intent_path, sha(intent_path), authorization,
+                                  sha(authorization), receipt)
+
+    def test_ef7_production_cardinality_reconciles_complete_and_partial_bounded(self):
+        measurements = []
+        for suffix, partial in (("partial", True), ("complete", False)):
+            fixture = self.ef7_cardinality_fixture("ef7-cardinality-" + suffix)
+            request = fixture["base"] / "request.private.json"
+            plan = fixture["base"] / "plan.private.json"
+            intent_path = fixture["base"] / "intent.private.json"
+            commands = fixture["base"] / "commands.private.txt"
+            seal = fixture["base"] / "seal.private.json"
+            private_json(request, self.request_value(fixture["requested"]))
+            with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                    mock.patch.object(MODULE, "deploy_identity",
+                                      return_value=(os.geteuid(), os.getegid())), \
+                    mock.patch.object(MODULE, "deploy_group_principals",
+                                      return_value=["deploy"]), self.process_patch():
+                MODULE.audit_request(request, sha(request), plan)
+                MODULE.prepare_plan(plan, sha(plan), intent_path, commands, seal)
+            intent = json.loads(intent_path.read_text())
+            self.assertEqual(len(intent["commands"]), fixture["expectedEffects"])
+            authorization = fixture["base"] / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION", "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(intent_path), "commandsSha256": intent["commandsSha256"],
+                "paths": [item["path"] for item in intent["candidates"]]})
+            receipt = fixture["base"] / "receipts" / suffix
+            receipt.parent.mkdir(mode=0o700)
+            pid = os.fork()
+            if pid == 0:
+                code = 0
+                try:
+                    with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                            mock.patch.object(MODULE, "deploy_identity",
+                                              return_value=(os.geteuid(), os.getegid())), \
+                            mock.patch.object(MODULE, "deploy_group_principals",
+                                              return_value=["deploy"]), self.process_patch():
+                        if partial:
+                            real_run = subprocess.run; effect_count = [0]
+                            def fail_second_effect(argv, **kwargs):
+                                if argv[0] == "/usr/bin/git" or argv[-1] == "jlist":
+                                    return real_run(argv, **kwargs)
+                                effect_count[0] += 1
+                                if effect_count[0] == 1:
+                                    return real_run(argv, **kwargs)
+                                return SimpleNamespace(returncode=9)
+                            with mock.patch.object(MODULE.subprocess, "run",
+                                                   side_effect=fail_second_effect):
+                                MODULE.execute_intent(
+                                    intent_path, sha(intent_path), authorization,
+                                    sha(authorization), receipt)
+                        else:
+                            MODULE.execute_intent(intent_path, sha(intent_path), authorization,
+                                                  sha(authorization), receipt)
+                except SystemExit:
+                    code = 0 if partial else 1
+                except BaseException:
+                    code = 1
+                os._exit(code)
+            _pid, status, executor_usage = os.wait4(pid, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+            supervisor_result = fixture["base"] / f"supervisor-{suffix}.json"
+            pid = os.fork()
+            if pid == 0:
+                evidence = SUPERVISOR.execution_effect_evidence(
+                    receipt, intent_path, sha(intent_path), sha(authorization))
+                supervisor_result.write_text(json.dumps(evidence, sort_keys=True))
+                supervisor_result.chmod(0o600)
+                os._exit(0)
+            _pid, status, supervisor_usage = os.wait4(pid, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+            evidence = json.loads(supervisor_result.read_text())
+            expected_state = "FAILED_RECONCILED" if partial else "COMPLETED_RECONCILED"
+            self.assertEqual(evidence["state"], expected_state)
+            if partial:
+                self.assertEqual((evidence["attemptedCommands"],
+                                  evidence["completedCommands"]), (2, 1))
+            else:
+                self.assertEqual(evidence["attemptedCommands"], fixture["expectedEffects"])
+                self.assertEqual(evidence["completedCommands"], fixture["expectedEffects"])
+                self.assertTrue(all(not path.exists() for path in fixture["candidates"]))
+            journal = receipt / "command-journal.private.jsonl"
+            receipt_file = receipt / "execution-receipt.private.json"
+            evidence_logical = sum(path.stat().st_size for path in receipt.iterdir()
+                                   if path.is_file())
+            evidence_physical = sum(path.stat().st_blocks * 512 for path in receipt.iterdir()
+                                    if path.is_file())
+            self.assertLessEqual(journal.stat().st_size,
+                                 SUPERVISOR.EXECUTION_JOURNAL_MAX_BYTES)
+            self.assertLessEqual(receipt_file.stat().st_size,
+                                 SUPERVISOR.EXECUTION_RECEIPT_MAX_BYTES)
+            executor_peak = executor_usage.ru_maxrss * 1024
+            supervisor_peak = supervisor_usage.ru_maxrss * 1024
+            self.assertLess(executor_peak, 512 * 1024 * 1024)
+            self.assertLess(supervisor_peak, 512 * 1024 * 1024)
+            measurements.append({"state": expected_state,
+                "effects": fixture["expectedEffects"],
+                "journalBytes": journal.stat().st_size,
+                "receiptBytes": receipt_file.stat().st_size,
+                "evidenceLogicalBytes": evidence_logical,
+                "evidencePhysicalBytes": evidence_physical,
+                "executorPeakBytes": executor_peak,
+                "supervisorPeakBytes": supervisor_peak})
+        print("EF7_CARDINALITY_MEASUREMENTS=" + json.dumps(measurements, sort_keys=True))
+
+    def test_ef7_prepare_denies_tree_drift_after_audit(self):
+        fixture = self.ef7_fixture("ef7-drift")
+        request = fixture["base"] / "request.private.json"
+        plan = fixture["base"] / "plan.private.json"
+        private_json(request, self.request_value(fixture["requested"]))
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.process_patch():
+            MODULE.audit_request(request, sha(request), plan)
+            changed = fixture["candidates"][3] / "drift.js"
+            changed.write_text("late drift\n"); changed.chmod(0o644)
+            with self.assertRaises(SystemExit):
+                MODULE.prepare_plan(
+                    plan, sha(plan), fixture["base"] / "intent.private.json",
+                    fixture["base"] / "commands.private.txt",
+                    fixture["base"] / "seal.private.json")
+
+    def test_ef7_production_manifest_is_exact_and_closed(self):
+        manifest = Path(__file__).resolve().parents[2] / (
+            "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json")
+        self.assertEqual(sha(manifest),
+                         "5d08f0a07e0c6eab2638772f0d6bd65f65fb0df2f965e644ae4d1374131143c0")
+        value = json.loads(manifest.read_text())
+        self.assertEqual(value["dispositionId"],
+                         "p00-ef7db111-deploy-control-derived-v1")
+        self.assertEqual(value["worktree"]["root"],
+                         "/opt/re7online/deploy-control/ef7db111-prep")
+        self.assertEqual(value["worktree"]["commit"],
+                         "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece")
+        self.assertEqual(
+            {entry["path"]: entry["physicalBytes"] for entry in value["entries"]}, {
+                "/opt/re7online/deploy-control/ef7db111-prep/node_modules": 593416192,
+                "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules": 316493824,
+                "/opt/re7online/deploy-control/ef7db111-prep/.next": 29827072,
+                "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist": 9404416,
+            })
+        self.assertEqual(sum(item["physicalBytes"] for item in value["entries"]),
+                         949141504)
 
 
 if __name__ == "__main__":

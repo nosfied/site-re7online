@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Closed materializer for the worker-package-audit capacity audit."""
+"""Closed materializer for versioned capacity-recovery audit profiles."""
 from __future__ import annotations
 
 import hashlib
@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CUSTODY = ROOT.parent
 CONSUMER = ROOT / "scripts/capacity-recovery.py"
-CONSUMER_SHA256 = "cc86a211150ea4ec07d9aa84ec50d0f826295d117b08af16082e156decaa3cfd"
+CONSUMER_SHA256 = "ee0a592651039e7fa6f9e3db8848c3e5b78b8549291d005dec5972a961550305"
 PM2 = Path("/opt/re7online/backups/converta-persistent/preparations/p00-capacity-recovery-canonical-23315c43-20261030T030504Z/pm2-private/bin/pm2")
 PM2_SHA256 = "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d"
 NODE = Path("/usr/bin/node")
@@ -24,18 +24,51 @@ DUMP = Path("/home/deploy/.pm2/dump.pm2")
 GRAPH = CUSTODY / "release-graph.private.json"
 POLICY = CUSTODY / "deploy-artifact-roots.json"
 MANIFEST = ROOT / "config/capacity-recovery/worker-package-audit-disposition.v1.json"
+EF7_MANIFEST = ROOT / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json"
 HELPER = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
-HELPER_SHA256 = "a7f1a0680d19561086923b77162ab3710fbd2c890ccf823aa517d42ccea9a1c2"
-INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab099247395276ad04db"
+WORKER_HELPER_SHA256 = "a7f1a0680d19561086923b77162ab3710fbd2c890ccf823aa517d42ccea9a1c2"
+WORKER_INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab099247395276ad04db"
+EF7_HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
+EF7_INSTALLER_SHA256 = "757dc2f20e649a985d36fa5a82b32e2273efeb9ffea9cd62f45757dcf8073785"
+# Compatibility names retain the proven worker profile for callers/tests that
+# invoke helper_binding() without an explicit profile contract.
+HELPER_SHA256 = WORKER_HELPER_SHA256
+INSTALLER_SHA256 = WORKER_INSTALLER_SHA256
 SUDOERS_SHA256 = "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"
 HELPER_PROOF = CUSTODY / "helper-installation-proof.private.json"
 CANDIDATE = Path("/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit")
+EF7_CANDIDATES = (
+    Path("/opt/re7online/deploy-control/ef7db111-prep/node_modules"),
+    Path("/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules"),
+    Path("/opt/re7online/deploy-control/ef7db111-prep/.next"),
+    Path("/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist"),
+)
 CURRENT = Path("/opt/re7online/current")
 TRANSACTIONS = Path("/opt/re7online/backups/converta-persistent/deploy-transactions")
 DEPLOYMENT_LOCK = Path("/opt/re7online/backups/converta-persistent/.deployment-window.lock")
 WRITER_LOCK = Path("/opt/re7online/build-output/.generation-build.lock")
 MINIMUM_RECOVERY_BYTES = 365674496
 TARGET_AVAILABLE_BYTES = 9663676416
+WORKER_PROFILE = "worker-package-audit"
+EF7_PROFILE = "ef7db111-deploy-control"
+EF7_MINIMUM_RECOVERY_BYTES = 949141504
+
+
+def profile_contract(profile: str) -> dict[str, Any]:
+    if profile == WORKER_PROFILE:
+        return {"manifest": MANIFEST, "minimumRecoveryBytes": MINIMUM_RECOVERY_BYTES,
+                "installerSha256": WORKER_INSTALLER_SHA256,
+                "helperSha256": WORKER_HELPER_SHA256,
+                "candidates": [{"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+                                "path": str(CANDIDATE)}]}
+    if profile == EF7_PROFILE:
+        return {"manifest": EF7_MANIFEST,
+                "minimumRecoveryBytes": EF7_MINIMUM_RECOVERY_BYTES,
+                "installerSha256": EF7_INSTALLER_SHA256,
+                "helperSha256": EF7_HELPER_SHA256,
+                "candidates": [{"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE",
+                                "path": str(path)} for path in EF7_CANDIDATES]}
+    raise RuntimeError("PROFILE_DENY")
 
 
 def digest(raw: bytes) -> str:
@@ -123,7 +156,10 @@ def confirm_open_identity(fd: int, path: Path, expected: tuple[int, ...]) -> Non
         raise RuntimeError("IDENTITY:" + str(path))
 
 
-def helper_binding() -> tuple[dict[str, str], str]:
+def helper_binding(installer_sha256: str | None = None,
+                   helper_sha256: str | None = None) -> tuple[dict[str, str], str]:
+    installer_sha256 = installer_sha256 or INSTALLER_SHA256
+    helper_sha256 = helper_sha256 or HELPER_SHA256
     raw, _ = read_stable(HELPER_PROOF, modes={0o600})
     proof = json.loads(raw)
     required = {"schemaVersion", "kind", "installerSha256", "helper", "sudoersSha256"}
@@ -131,17 +167,17 @@ def helper_binding() -> tuple[dict[str, str], str]:
         raise RuntimeError("HELPER_PROOF_SCHEMA")
     helper = proof.get("helper")
     if (proof.get("kind") != "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF" or
-            proof.get("installerSha256") != INSTALLER_SHA256 or
+            proof.get("installerSha256") != installer_sha256 or
             proof.get("sudoersSha256") != SUDOERS_SHA256 or
             not isinstance(helper, dict) or set(helper) != {"path", "sha256", "identity"} or
-            helper.get("path") != str(HELPER) or helper.get("sha256") != HELPER_SHA256):
+            helper.get("path") != str(HELPER) or helper.get("sha256") != helper_sha256):
         raise RuntimeError("HELPER_PROOF_BINDING")
     info = HELPER.lstat()
     actual = {"device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
               "gid": info.st_gid, "mode": f"{stat.S_IMODE(info.st_mode):04o}"}
     if HELPER.is_symlink() or not stat.S_ISREG(info.st_mode) or helper["identity"] != actual:
         raise RuntimeError("HELPER_PROOF_IDENTITY")
-    return {"path": str(HELPER), "sha256": HELPER_SHA256}, digest(raw)
+    return {"path": str(HELPER), "sha256": helper_sha256}, digest(raw)
 
 
 def final_readback(consumer: Any, request_path: Path, request_expected: str,
@@ -163,13 +199,15 @@ def final_readback(consumer: Any, request_path: Path, request_expected: str,
             "manifestSha256": manifest_sha}
 
 
-def materialize() -> dict[str, str]:
+def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
     for name in ("operational-state.schema2.private.json", "audit-request.private.json",
                  "binding-readback.private.json", "node-proof.private.json"):
         if (CUSTODY / name).exists() or (CUSTODY / name).is_symlink():
             raise RuntimeError("OUTPUT_EXISTS:" + name)
+    contract = profile_contract(profile)
     consumer = authenticated_consumer()
-    helper, helper_proof_sha = helper_binding()
+    helper, helper_proof_sha = helper_binding(
+        contract["installerSha256"], contract["helperSha256"])
     node_raw, node_info = read_stable(NODE, NODE_SHA256, {0o755})
     del node_raw
     version = subprocess.run([str(NODE), "--version"], stdout=subprocess.PIPE,
@@ -189,7 +227,8 @@ def materialize() -> dict[str, str]:
     dump_raw, _ = read_stable(DUMP, modes={0o600, 0o644})
     graph_raw, _ = read_stable(GRAPH, modes={0o600})
     policy_raw, _ = read_stable(POLICY, modes={0o600})
-    manifest_raw, _ = read_stable(MANIFEST, modes={0o600})
+    manifest_path = contract["manifest"]
+    manifest_raw, _ = read_stable(manifest_path, modes={0o600, 0o644})
     links = []
     for component in ("api", "frontend"):
         link = CURRENT / component
@@ -216,15 +255,15 @@ def materialize() -> dict[str, str]:
     operational_sha = write_exclusive(
         CUSTODY / "operational-state.schema2.private.json", consumer.canonical(operational))
     request = {"schemaVersion": 3, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",
-        "minimumRecoveryBytes": MINIMUM_RECOVERY_BYTES,
+        "minimumRecoveryBytes": contract["minimumRecoveryBytes"],
         "targetAvailableBytes": TARGET_AVAILABLE_BYTES,
         "incrementalBatch": True, "rootPolicy": {"path": str(POLICY),
         "sha256": digest(policy_raw)}, "operationalState": {
         "path": str(CUSTODY / "operational-state.schema2.private.json"),
         "sha256": operational_sha}, "procObserver": helper,
-        "candidates": [{"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
-            "path": str(CANDIDATE), "dispositionManifest": {"path": str(MANIFEST),
-            "sha256": digest(manifest_raw)}}]}
+        "candidates": [{**candidate, "dispositionManifest": {
+            "path": str(manifest_path), "sha256": digest(manifest_raw)}}
+            for candidate in contract["candidates"]]}
     request_path = CUSTODY / "audit-request.private.json"
     provisional_request_sha = write_exclusive(request_path, consumer.canonical(request))
     checked = final_readback(consumer, request_path, provisional_request_sha, helper)
@@ -244,5 +283,10 @@ def materialize() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    if len(os.sys.argv) != 1: raise SystemExit("DENY|ARGUMENTS")
-    print(json.dumps(materialize(), sort_keys=True))
+    if len(os.sys.argv) == 1:
+        selected_profile = WORKER_PROFILE
+    elif os.sys.argv[1:] == ["--profile", EF7_PROFILE]:
+        selected_profile = EF7_PROFILE
+    else:
+        raise SystemExit("DENY|ARGUMENTS")
+    print(json.dumps(materialize(selected_profile), sort_keys=True))

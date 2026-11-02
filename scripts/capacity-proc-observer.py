@@ -51,6 +51,12 @@ MANIFEST_DISPOSITION_PATHS = {
     "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-css-supervision-20261007T224500Z/frontend-fa60-css-corrected.tar.gz",
     "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
 }
+DEPLOY_CONTROL_DERIVED_PATHS = {
+    "/opt/re7online/deploy-control/ef7db111-prep/node_modules",
+    "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules",
+    "/opt/re7online/deploy-control/ef7db111-prep/.next",
+    "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist",
+}
 PF_KTHREAD = 0x00200000
 
 
@@ -135,6 +141,8 @@ def canonical_candidate(value: Any) -> str:
     if candidate == NPM_CACHE:
         return candidate
     if candidate in MANIFEST_DISPOSITION_PATHS:
+        return candidate
+    if candidate in DEPLOY_CONTROL_DERIVED_PATHS:
         return candidate
     path = Path(candidate)
     try:

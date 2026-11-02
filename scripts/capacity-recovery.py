@@ -48,6 +48,7 @@ CLASSES = {
     "NPM_CACHE_MAINTENANCE", "DERIVED_OUTPUT_RUNTIME",
     "CLOSED_PREPARATION_DERIVED_ARCHIVE",
     "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+    "CLOSED_DEPLOY_CONTROL_DERIVED_TREE",
 }
 DISPOSITION_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/closed-preparation-manifest-disposition.v1.json")
@@ -57,6 +58,20 @@ WORKER_PACKAGE_AUDIT_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/worker-package-audit-disposition.v1.json")
 WORKER_PACKAGE_AUDIT_MANIFEST_SHA256 = "40727a3c5f6c685ffa0169366310b6f4d92a203ade522835da0c83fbb3868c76"
 WORKER_PACKAGE_AUDIT_DISPOSITION_ID = "p00-worker-package-audit-afbb7455-v1"
+DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH = (
+    ROOT / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json")
+DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256 = "5d08f0a07e0c6eab2638772f0d6bd65f65fb0df2f965e644ae4d1374131143c0"
+DEPLOY_CONTROL_DISPOSITION_ID = "p00-ef7db111-deploy-control-derived-v1"
+DEPLOY_CONTROL_ROOT = Path("/opt/re7online/deploy-control/ef7db111-prep")
+DEPLOY_CONTROL_GITDIR = Path(
+    "/opt/re7online/site-re7online/.git/worktrees/ef7db111-prep")
+DEPLOY_CONTROL_PATHS = (
+    DEPLOY_CONTROL_ROOT / "node_modules",
+    DEPLOY_CONTROL_ROOT / "apps/whatsapp-agent/node_modules",
+    DEPLOY_CONTROL_ROOT / ".next",
+    DEPLOY_CONTROL_ROOT / "apps/whatsapp-agent/dist",
+)
+GIT = Path("/usr/bin/git")
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
     "rootPolicy", "operationalState", "candidates",
@@ -78,6 +93,7 @@ OUTPUT_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {
 }
 PREPARATION_ARCHIVE_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {"sha256", "proof"}
 MANIFEST_DISPOSITION_CANDIDATE_KEYS = COMMON_CANDIDATE_KEYS | {"dispositionManifest"}
+DEPLOY_CONTROL_CANDIDATE_KEYS = MANIFEST_DISPOSITION_CANDIDATE_KEYS
 DERIVED_ARCHIVE_PROOF_KEYS = {"kind", "record", "recordEntry"}
 DUPLICATE_ARCHIVE_PROOF_KEYS = {"kind", "authoritativeCopy"}
 OPERATIONAL_KEYS = {
@@ -2664,6 +2680,326 @@ def authenticate_manifest_disposition(candidate: dict[str, Any], operational: di
             "processScan": process_summary}
 
 
+def _deploy_control_manifest(binding: Any, *,
+                             sealed_binding: dict[str, Any] | None = None
+                             ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+        deny("DEPLOY_CONTROL_MANIFEST_BINDING")
+    path = normalized_absolute(binding.get("path"), "DEPLOY_CONTROL_MANIFEST_PATH")
+    expected = ({"path": str(DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH),
+                 "sha256": DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256}
+                if sealed_binding is None else sealed_binding)
+    if (not isinstance(expected, dict) or set(expected) != {"path", "sha256"} or
+            binding != expected):
+        deny("DEPLOY_CONTROL_MANIFEST_FIXED_BINDING")
+    relative = Path("config/capacity-recovery/") / DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH.name
+    if tuple(path.parts[-len(relative.parts):]) != relative.parts:
+        deny("DEPLOY_CONTROL_MANIFEST_FIXED_BINDING")
+    if sealed_binding is not None and path != DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH:
+        try:
+            path.parents[len(relative.parts) - 1].relative_to(PREPARATIONS_ROOT)
+        except ValueError:
+            deny("DEPLOY_CONTROL_MANIFEST_FIXED_BINDING")
+    raw, _ = stable_regular(path, DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256,
+                            private=False, allowed_modes={0o600, 0o640, 0o644})
+    value = object_json(raw, "DEPLOY_CONTROL_MANIFEST_JSON")
+    if (set(value) != {"schemaVersion", "kind", "dispositionId", "worktree", "entries"} or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != "CLOSED_DEPLOY_CONTROL_DERIVED_DISPOSITION" or
+            value.get("dispositionId") != DEPLOY_CONTROL_DISPOSITION_ID or
+            not isinstance(value.get("entries"), list) or len(value["entries"]) != 4):
+        deny("DEPLOY_CONTROL_MANIFEST_SCHEMA")
+    worktree = value.get("worktree")
+    worktree_keys = {"root", "commit", "gitDir", "gitFileSha256", "identity",
+                     "preservedTrackedPaths"}
+    if (not isinstance(worktree, dict) or set(worktree) != worktree_keys or
+            normalized_absolute(worktree.get("root"), "DEPLOY_CONTROL_ROOT") !=
+            DEPLOY_CONTROL_ROOT or
+            not re.fullmatch(r"[0-9a-f]{40}", str(worktree.get("commit", ""))) or
+            not valid_sha(worktree.get("gitFileSha256")) or
+            not isinstance(worktree.get("preservedTrackedPaths"), list) or
+            not worktree["preservedTrackedPaths"] or
+            len(set(worktree["preservedTrackedPaths"])) !=
+            len(worktree["preservedTrackedPaths"])):
+        deny("DEPLOY_CONTROL_WORKTREE_SCHEMA")
+    _validate_directory_identity(worktree.get("identity"),
+                                 "DEPLOY_CONTROL_WORKTREE_IDENTITY")
+    git_dir = normalized_absolute(worktree.get("gitDir"), "DEPLOY_CONTROL_GITDIR")
+    if git_dir != DEPLOY_CONTROL_GITDIR:
+        deny("DEPLOY_CONTROL_GITDIR")
+    for relative_path in worktree["preservedTrackedPaths"]:
+        if (not isinstance(relative_path, str) or not relative_path or
+                PurePosixPath(relative_path).is_absolute() or
+                any(part in {"", ".", ".."} for part in PurePosixPath(relative_path).parts)):
+            deny("DEPLOY_CONTROL_PRESERVED_PATH")
+    entries: dict[str, dict[str, Any]] = {}
+    expected_paths = {str(path) for path in DEPLOY_CONTROL_PATHS}
+    entry_keys = {"path", "relativePath", "kind", "physicalBytes", "identity",
+                  "derivationTrackedPaths"}
+    for entry in value["entries"]:
+        if (not isinstance(entry, dict) or set(entry) != entry_keys or
+                entry.get("kind") not in {"DEPENDENCY_TREE", "COMPILED_TREE"} or
+                not isinstance(entry.get("physicalBytes"), int) or
+                entry["physicalBytes"] <= 0):
+            deny("DEPLOY_CONTROL_ENTRY_SCHEMA")
+        path = normalized_absolute(entry.get("path"), "DEPLOY_CONTROL_ENTRY_PATH")
+        if str(path) not in expected_paths or str(path) in entries:
+            deny("DEPLOY_CONTROL_ENTRY_SCOPE")
+        relative_path = PurePosixPath(str(entry.get("relativePath", "")))
+        if (relative_path.is_absolute() or relative_path.as_posix() !=
+                path.relative_to(DEPLOY_CONTROL_ROOT).as_posix()):
+            deny("DEPLOY_CONTROL_ENTRY_SCOPE")
+        _validate_directory_identity(entry.get("identity"),
+                                     "DEPLOY_CONTROL_ENTRY_IDENTITY")
+        derivation = entry.get("derivationTrackedPaths")
+        if (not isinstance(derivation, list) or not derivation or
+                any(item not in worktree["preservedTrackedPaths"] for item in derivation)):
+            deny("DEPLOY_CONTROL_DERIVATION_SCHEMA")
+        entries[str(path)] = entry
+    if set(entries) != expected_paths:
+        deny("DEPLOY_CONTROL_EXACT_BATCH")
+    return value, entries
+
+
+def _git_run(worktree: Path, arguments: list[str]) -> str:
+    environment = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+                   "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+                   "GIT_OPTIONAL_LOCKS": "0"}
+    try:
+        result = subprocess.run([str(GIT), "-C", str(worktree), *arguments],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, timeout=30, check=False, env=environment)
+    except (OSError, subprocess.TimeoutExpired):
+        deny("DEPLOY_CONTROL_GIT_EXECUTION")
+    if result.returncode != 0 or result.stderr:
+        deny("DEPLOY_CONTROL_GIT_EXECUTION")
+    return result.stdout
+
+
+def _deploy_control_worktree(manifest: dict[str, Any]) -> dict[str, Any]:
+    worktree = manifest["worktree"]
+    root = Path(worktree["root"])
+    root_info = physical_directory(root, "DEPLOY_CONTROL_WORKTREE_ROOT")
+    root_identity = _directory_identity(root_info)
+    if (root_identity != worktree["identity"] or
+            (root_info.st_uid, root_info.st_gid, stat.S_IMODE(root_info.st_mode)) !=
+            (*deploy_identity(), 0o775) or deploy_group_principals() != ["deploy"]):
+        deny("DEPLOY_CONTROL_WORKTREE_IDENTITY")
+    git_file = root / ".git"
+    git_raw, git_identity = stable_regular(
+        git_file, worktree["gitFileSha256"], private=False,
+        allowed_modes={0o600, 0o640, 0o644, 0o664},
+        allowed_owner_pairs={deploy_identity()})
+    expected_git_file = f"gitdir: {worktree['gitDir']}\n".encode()
+    if git_raw != expected_git_file:
+        deny("DEPLOY_CONTROL_GITDIR")
+    git_dir = physical_directory(Path(worktree["gitDir"]), "DEPLOY_CONTROL_GITDIR")
+    git_dir_mode = stat.S_IMODE(git_dir.st_mode)
+    if ((git_dir.st_uid, git_dir.st_gid) != deploy_identity() or
+            git_dir_mode not in {0o755, 0o775} or
+            git_dir_mode & 0o002 or
+            (git_dir_mode == 0o775 and deploy_group_principals() != ["deploy"])):
+        deny("DEPLOY_CONTROL_GITDIR")
+    if _git_run(root, ["rev-parse", "HEAD"]).strip() != worktree["commit"]:
+        deny("DEPLOY_CONTROL_COMMIT")
+    if _git_run(root, ["status", "--porcelain=v1", "--untracked-files=all"]):
+        deny("DEPLOY_CONTROL_TRACKED_OR_UNTRACKED_DRIFT")
+    registration = _git_run(root, ["worktree", "list", "--porcelain"])
+    expected_registration = f"worktree {root}\nHEAD {worktree['commit']}\n"
+    blocks = [block + "\n" for block in registration.strip().split("\n\n")]
+    if not any(block.startswith(expected_registration) for block in blocks):
+        deny("DEPLOY_CONTROL_WORKTREE_REGISTRATION")
+    for relative in worktree["preservedTrackedPaths"]:
+        if not (root / relative).exists():
+            deny("DEPLOY_CONTROL_PRESERVED_PATH")
+        _git_run(root, ["ls-files", "--error-unmatch", "--", relative])
+    for entry in manifest["entries"]:
+        relative = entry["relativePath"]
+        if not _git_run(root, ["check-ignore", "--", relative]).strip():
+            deny("DEPLOY_CONTROL_CANDIDATE_NOT_IGNORED")
+    return {"root": str(root), "commit": worktree["commit"],
+            "identity": root_identity, "gitFile": git_identity,
+            "gitDir": worktree["gitDir"],
+            "preservedTrackedPaths": worktree["preservedTrackedPaths"]}
+
+
+def _deploy_control_protected(relative: str) -> None:
+    parts = tuple(part.lower() for part in PurePosixPath(relative).parts)
+    name = parts[-1] if parts else ""
+    if (any(part in {".data", "tenant-data", "tenant-scoped", "runtime-data"}
+            for part in parts) or name == ".env" or name.startswith(".env.") or
+            any(name.endswith(suffix) for suffix in
+                (".pem", ".key", ".p12", ".pfx", ".sqlite", ".sqlite3", ".db",
+                 ".dump", ".session")) or
+            name in {"credentials.json", "secrets.json"}):
+        deny("DEPLOY_CONTROL_PROTECTED_MATERIAL")
+
+
+def _deploy_control_inode_counts() -> dict[tuple[int, int], int]:
+    counts: dict[tuple[int, int], int] = {}
+    for root in DEPLOY_CONTROL_PATHS:
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            try:
+                info = current.lstat()
+            except OSError:
+                deny("DEPLOY_CONTROL_TREE_READ")
+            if stat.S_ISREG(info.st_mode):
+                key = (info.st_dev, info.st_ino)
+                counts[key] = counts.get(key, 0) + 1
+            elif stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+                try:
+                    with os.scandir(current) as children:
+                        stack.extend(Path(child.path) for child in children)
+                except OSError:
+                    deny("DEPLOY_CONTROL_TREE_READ")
+    return counts
+
+
+def _stable_deploy_control_file(path: Path, root_device: int) -> tuple[dict[str, Any], str]:
+    try:
+        before = path.lstat()
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            opened = os.fstat(fd)
+            digest = hashlib.sha256()
+            while chunk := os.read(fd, 1024 * 1024):
+                digest.update(chunk)
+            after = os.fstat(fd)
+        finally:
+            os.close(fd)
+        current = path.lstat()
+    except OSError:
+        deny("DEPLOY_CONTROL_TREE_READ")
+    identities = {(item.st_dev, item.st_ino, item.st_mode, item.st_uid, item.st_gid,
+                   item.st_size, item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
+                  for item in (before, opened, after, current)}
+    if (len(identities) != 1 or not stat.S_ISREG(opened.st_mode) or
+            opened.st_dev != root_device or
+            (opened.st_uid, opened.st_gid) != deploy_identity() or
+            stat.S_IMODE(opened.st_mode) & 0o022):
+        deny("DEPLOY_CONTROL_TREE_IDENTITY")
+    return stat_identity(opened, include_nlink=True), digest.hexdigest()
+
+
+def _stable_deploy_control_symlink(path: Path, root: Path,
+                                   root_device: int) -> tuple[dict[str, Any], str]:
+    try:
+        before = path.lstat(); target = os.readlink(path); after = path.lstat()
+    except OSError:
+        deny("DEPLOY_CONTROL_TREE_SYMLINK")
+    if ((before.st_dev, before.st_ino, before.st_mode, before.st_size,
+         before.st_mtime_ns, before.st_ctime_ns) !=
+            (after.st_dev, after.st_ino, after.st_mode, after.st_size,
+             after.st_mtime_ns, after.st_ctime_ns) or
+            not stat.S_ISLNK(before.st_mode) or before.st_dev != root_device or
+            (before.st_uid, before.st_gid) != deploy_identity()):
+        deny("DEPLOY_CONTROL_TREE_SYMLINK")
+    if not target or Path(target).is_absolute() or any(ord(char) < 32 for char in target):
+        deny("DEPLOY_CONTROL_TREE_SYMLINK")
+    resolved = Path(os.path.normpath(str(path.parent / target)))
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        deny("DEPLOY_CONTROL_TREE_SYMLINK_ESCAPE")
+    return stat_identity(before, include_nlink=True), target
+
+
+def _authenticate_deploy_control_tree(path: Path, entry: dict[str, Any],
+                                      inode_counts: dict[tuple[int, int], int]
+                                      ) -> dict[str, Any]:
+    root_info = physical_directory(path, "DEPLOY_CONTROL_TREE_ROOT")
+    root_identity = _directory_identity(root_info)
+    if (root_identity != entry["identity"] or root_info.st_dev !=
+            DEPLOY_CONTROL_ROOT.lstat().st_dev or
+            (root_info.st_uid, root_info.st_gid) != deploy_identity() or
+            stat.S_IMODE(root_info.st_mode) & 0o022):
+        deny("DEPLOY_CONTROL_TREE_IDENTITY")
+    relation = FramedRelationDigest()
+    directories: list[str] = []
+    leaves: list[str] = []
+    stack = [path]
+    regular_count = 0; symlink_count = 0
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as opened:
+                children = sorted(opened, key=lambda item: item.name)
+        except OSError:
+            deny("DEPLOY_CONTROL_TREE_READ")
+        for child in children:
+            child_path = Path(child.path)
+            try:
+                info = child_path.lstat()
+            except OSError:
+                deny("DEPLOY_CONTROL_TREE_READ")
+            relative = child_path.relative_to(path).as_posix()
+            _deploy_control_protected(relative)
+            if stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+                if (info.st_dev != root_info.st_dev or
+                        (info.st_uid, info.st_gid) != deploy_identity() or
+                        stat.S_IMODE(info.st_mode) & 0o022):
+                    deny("DEPLOY_CONTROL_TREE_IDENTITY")
+                directories.append(relative); stack.append(child_path)
+                relation.add({"type": "directory", "path": relative,
+                              "identity": stat_identity(info, include_nlink=True)})
+            elif stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+                identity, file_sha = _stable_deploy_control_file(child_path,
+                                                                  root_info.st_dev)
+                key = (identity["device"], identity["inode"])
+                if identity["nlink"] != inode_counts.get(key):
+                    deny("DEPLOY_CONTROL_TREE_EXTERNAL_HARDLINK")
+                leaves.append(relative); regular_count += 1
+                relation.add({"type": "file", "path": relative,
+                              "sha256": file_sha, "identity": identity})
+            elif stat.S_ISLNK(info.st_mode):
+                identity, target = _stable_deploy_control_symlink(
+                    child_path, path, root_info.st_dev)
+                leaves.append(relative); symlink_count += 1
+                relation.add({"type": "symlink", "path": relative,
+                              "target": target, "identity": identity})
+            else:
+                deny("DEPLOY_CONTROL_TREE_UNSAFE_LEAF")
+    effects = [[*LITERAL_UNLINK, str(path / relative)]
+               for relative in sorted(leaves, reverse=True)]
+    effects.extend([*LITERAL_RMDIR, str(path / relative)]
+                   for relative in sorted(
+                       directories,
+                       key=lambda value: (-len(PurePosixPath(value).parts), value)))
+    effects.append([*LITERAL_RMDIR, str(path)])
+    return {"regularLeafCount": regular_count, "symlinkCount": symlink_count,
+            "directoryCount": len(directories) + 1,
+            "relationSha256": relation.hexdigest(), "effects": effects}
+
+
+def authenticate_deploy_control(candidate: dict[str, Any], operational: dict[str, Any],
+                                process_data: ProcessScan, *,
+                                sealed_manifest_binding: dict[str, Any] | None = None
+                                ) -> dict[str, Any]:
+    if set(candidate) != DEPLOY_CONTROL_CANDIDATE_KEYS:
+        deny("DEPLOY_CONTROL_CANDIDATE_SCHEMA")
+    manifest_binding = candidate.get("dispositionManifest")
+    manifest, entries = _deploy_control_manifest(
+        manifest_binding, sealed_binding=sealed_manifest_binding)
+    path = normalized_absolute(candidate.get("path"), "DEPLOY_CONTROL_CANDIDATE_PATH")
+    entry = entries.get(str(path))
+    if entry is None:
+        deny("DEPLOY_CONTROL_CANDIDATE_NOT_DECLARED")
+    worktree = _deploy_control_worktree(manifest)
+    process_summary = _disposition_reference_checks(path, operational, process_data)
+    detail = _authenticate_deploy_control_tree(path, entry,
+                                               _deploy_control_inode_counts())
+    usage = physical_usage([path])[str(path)]
+    if usage["allocatedBytes"] != entry["physicalBytes"]:
+        deny("DEPLOY_CONTROL_PHYSICAL_BYTES_DIVERGED")
+    return {"class": candidate["class"], "path": str(path),
+            "dispositionId": manifest["dispositionId"],
+            "dispositionManifest": manifest_binding, "entry": entry,
+            "identity": stat_identity(path.lstat(), include_nlink=True),
+            "detail": detail, "worktree": worktree, "processScan": process_summary}
+
+
 def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict[str, Any],
                        process_data: ProcessScan, *,
                        sealed_manifest_binding: dict[str, Any] | None = None,
@@ -2676,6 +3012,10 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
         return authenticate_output(candidate, policy, operational, process_data)
     if candidate["class"] == "CLOSED_PREPARATION_DERIVED_ARCHIVE":
         return authenticate_preparation_archive(candidate, operational, process_data)
+    if candidate["class"] == "CLOSED_DEPLOY_CONTROL_DERIVED_TREE":
+        return authenticate_deploy_control(
+            candidate, operational, process_data,
+            sealed_manifest_binding=sealed_manifest_binding)
     return authenticate_manifest_disposition(
         candidate, operational, process_data,
         sealed_manifest_binding=sealed_manifest_binding)
@@ -2683,7 +3023,9 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
 
 def removal_command(observation: dict[str, Any]) -> list[str]:
     effects = observation.get("detail", {}).get("effects")
-    if observation.get("class") == "CLOSED_PREPARATION_MANIFEST_DISPOSITION":
+    if observation.get("class") in {
+            "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+            "CLOSED_DEPLOY_CONTROL_DERIVED_TREE"}:
         if not isinstance(effects, list) or not effects:
             deny("DISPOSITION_EFFECTS_SCHEMA")
         if len(effects) != 1:
@@ -2697,7 +3039,9 @@ def removal_command(observation: dict[str, Any]) -> list[str]:
 def removal_commands(observations: Iterable[dict[str, Any]]) -> list[list[str]]:
     commands: list[list[str]] = []
     for observation in observations:
-        if observation.get("class") == "CLOSED_PREPARATION_MANIFEST_DISPOSITION":
+        if observation.get("class") in {
+                "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+                "CLOSED_DEPLOY_CONTROL_DERIVED_TREE"}:
             effects = observation.get("detail", {}).get("effects")
             if not isinstance(effects, list) or not effects:
                 deny("DISPOSITION_EFFECTS_SCHEMA")
@@ -2736,6 +3080,20 @@ def validate_audit_request(value: dict[str, Any]) -> None:
                 any(item.get("dispositionManifest") != dispositions[0].get("dispositionManifest")
                     for item in dispositions)):
             deny("DISPOSITION_EXACT_BATCH")
+    deploy_control = [item for item in value["candidates"] if isinstance(item, dict) and
+                      item.get("class") == "CLOSED_DEPLOY_CONTROL_DERIVED_TREE"]
+    if deploy_control:
+        if len(deploy_control) != len(value["candidates"]):
+            deny("DEPLOY_CONTROL_MIXED_BATCH")
+        _manifest, entries = _deploy_control_manifest(
+            deploy_control[0].get("dispositionManifest"))
+        requested = [item.get("path") for item in deploy_control]
+        if (len(requested) != len(entries) or len(set(requested)) != len(entries) or
+                set(requested) != set(entries) or
+                any(item.get("dispositionManifest") !=
+                    deploy_control[0].get("dispositionManifest")
+                    for item in deploy_control)):
+            deny("DEPLOY_CONTROL_EXACT_BATCH")
 
 
 def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[str, Any]:
@@ -2883,31 +3241,39 @@ def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
             source = item["source"]
             prior = item["observation"]
             sealed_manifest_binding = (prior.get("dispositionManifest")
-                                       if source.get("class") ==
-                                       "CLOSED_PREPARATION_MANIFEST_DISPOSITION" else None)
+                                       if source.get("class") in {
+                                           "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+                                           "CLOSED_DEPLOY_CONTROL_DERIVED_TREE"}
+                                       else None)
             if sealed_manifest_binding is not None:
                 if plan_path is None:
                     deny("DISPOSITION_MANIFEST_FIXED_BINDING")
-                manifest_specs = (
-                    (DISPOSITION_MANIFEST_PATH, DISPOSITION_MANIFEST_SHA256),
-                    (WORKER_PACKAGE_AUDIT_MANIFEST_PATH,
-                     WORKER_PACKAGE_AUDIT_MANIFEST_SHA256),
-                )
+                if source.get("class") == "CLOSED_DEPLOY_CONTROL_DERIVED_TREE":
+                    manifest_specs = ((DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH,
+                                       DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256),)
+                    fixed_predicate = "DEPLOY_CONTROL_MANIFEST_FIXED_BINDING"
+                else:
+                    manifest_specs = (
+                        (DISPOSITION_MANIFEST_PATH, DISPOSITION_MANIFEST_SHA256),
+                        (WORKER_PACKAGE_AUDIT_MANIFEST_PATH,
+                         WORKER_PACKAGE_AUDIT_MANIFEST_SHA256),
+                    )
+                    fixed_predicate = "DISPOSITION_MANIFEST_FIXED_BINDING"
                 manifest_spec = next(
                     ((path, digest) for path, digest in manifest_specs
                      if digest == sealed_manifest_binding.get("sha256")), None)
                 if manifest_spec is None:
-                    deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+                    deny(fixed_predicate)
                 try:
                     manifest_relative = manifest_spec[0].relative_to(ROOT)
                 except ValueError:
-                    deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+                    deny(fixed_predicate)
                 expected_manifest_binding = {
                     "path": str(plan_path.parent / "control" / manifest_relative),
                     "sha256": manifest_spec[1],
                 }
                 if sealed_manifest_binding != expected_manifest_binding:
-                    deny("DISPOSITION_MANIFEST_FIXED_BINDING")
+                    deny(fixed_predicate)
             observed = validate_candidate(
                 source, policy, operational, process_data,
                 sealed_manifest_binding=sealed_manifest_binding)

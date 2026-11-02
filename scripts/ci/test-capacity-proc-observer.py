@@ -244,6 +244,7 @@ class ProcObserverTests(unittest.TestCase):
                     hybrid_capture + "/window/worker-minimal-b9-v3.tar.gz",
                     hybrid_absent + "/window/worker-minimal-b9-v3.tar.gz"]
         accepted.extend(sorted(OBSERVER.MANIFEST_DISPOSITION_PATHS))
+        accepted.extend(sorted(OBSERVER.DEPLOY_CONTROL_DERIVED_PATHS))
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
         worker_package_audit = (
             "/opt/re7online/backups/converta-persistent/preparations/"
@@ -261,6 +262,12 @@ class ProcObserverTests(unittest.TestCase):
         exact = next(iter(OBSERVER.MANIFEST_DISPOSITION_PATHS))
         with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
             OBSERVER.validate_request(request([exact + ".extra"]))
+        deploy_control_root = "/opt/re7online/deploy-control/ef7db111-prep"
+        with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+            OBSERVER.validate_request(request([deploy_control_root]))
+        with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+            OBSERVER.validate_request(request([
+                deploy_control_root + "/apps/whatsapp-agent/dist-extra"]))
 
     def test_failure_detail_limit_is_explicit_and_never_implies_completeness(self):
         failures = []; truncated = [0]

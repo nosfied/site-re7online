@@ -33,6 +33,27 @@ Worktrees, staging, releases, preparações, transações, evidências e logs s�
 retiráveis quando uma classe versionada futura autenticar seu fechamento. A lista
 de política não transforma esses caminhos em candidatos implícitos.
 
+Exceção histórica fechada: `CLOSED_DEPLOY_CONTROL_DERIVED_TREE` descreve apenas
+os quatro outputs ignorados de `ef7db111-prep` fixados no manifesto versionado.
+Ela preserva a raiz do worktree, registro Git, commit, fontes e controles, e
+produz efeitos literais por folha/diretório — nunca `rm -r` nem remoção do
+worktree. O lifecycle é comprovado por plano, intenção, autorização, journal e
+receipt do control plane existente. Ausência desses artefatos mantém o lote não
+executado; a mera presença do manifesto não significa `SANITIZED`.
+
+O contrato operacional reutiliza o materializador vigente com dois perfis
+fechados. A ausência de opção preserva `worker-package-audit`; somente
+`--profile ef7db111-deploy-control` seleciona os quatro outputs e a prova do
+instalador/helper correspondente. O percurso schema 3 e a reconciliação terminal
+com a cardinalidade prevista foram ensaiados localmente, incluindo falha parcial
+sem replay; instalação, auditoria e retirada produtivas continuam pendentes de
+atos próprios.
+
+Worker conserva seu par histórico de instalação/helper. Ef7 possui par separado
+e só pode substituir a identidade worker previamente autenticada na allowlist
+fechada; helper desconhecido, par cruzado ou sudoers divergente nega antes de
+qualquer substituição. Essa transição não muda candidatos, efeitos ou lifecycle.
+
 ## Contrato obrigatório por geração (implementado)
 
 Cada execução de `scripts/converta-release.py build` publica, desde `BUILDING` e

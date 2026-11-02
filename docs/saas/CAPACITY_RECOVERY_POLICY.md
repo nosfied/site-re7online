@@ -674,6 +674,83 @@ Um plano `P00_CAPACITY_RECOVERY_AUDIT_DENY` é gravado integralmente, mas a
 invocação termina com exit code não zero. A existência do plano negado não é
 sucesso do processo.
 
+### `CLOSED_DEPLOY_CONTROL_DERIVED_TREE`
+
+Esta classe é uma disposição legada fechada para **quatro e somente quatro**
+árvores ignoradas do worktree histórico `ef7db111-prep`: os dois
+`node_modules`, `.next` e `apps/whatsapp-agent/dist` enumerados no manifesto
+`ef7db111-deploy-control-disposition.v1.json`. A raiz do worktree, `.git`, o
+registro administrativo do worktree, commit, lockfiles, fontes, documentação e
+controles rastreados permanecem fora dos efeitos. A raiz inteira de
+`deploy-control`, outro worktree, descendente livre ou quinto caminho são
+negados pelo schema, pelo manifesto e pelo observador privilegiado.
+
+O materializador comprovado mantém `worker-package-audit` como perfil padrão,
+byte-semanticamente inalterado, e admite `ef7db111-deploy-control` somente por
+seleção literal. Esse perfil fixa os quatro candidatos, o manifesto e a prova do
+instalador `install-capacity-proc-observer-ef7.py`; caminho ou perfil arbitrário
+nega. A prova vincula instalador, helper `root:root 0500`, sudoers preservado e
+identidade física, sem leitura direta do helper por `deploy`.
+
+Os bindings de instalação não são intercambiáveis. O perfil worker preserva o
+par comprovado instalador `7b92d8b9…`/helper `a7f1a068…`; ef7 exige o par
+instalador `757dc2f2…`/helper `89650e62…`. Antes de substituir o helper, o
+instalador ef7 autentica o helper worker previamente instalado pela allowlist
+fechada de caminho, SHA, device/inode, UID/GID e modo registrada pela instalação
+anterior. Helper ausente ou desconhecido nega antes da criação do temporário; o
+sudoers `a1928823…` permanece byte-exato. Misturar prova ou helper entre perfis
+também nega antes da fotografia/request.
+
+O manifesto fixa caminho, identidade da raiz, bytes físicos, commit, gitdir,
+digest do arquivo `.git`, conjunto preservado e a proveniência rastreada de cada
+árvore. O consumidor exige HEAD byte-exato, worktree registrado, estado Git
+limpo inclusive para não rastreados, candidato ignorado e todas as fontes
+preservadas presentes. O modo histórico `0775` da raiz e do gitdir só é aceito
+para `deploy:deploy` quando o grupo `deploy` contém exclusivamente `deploy`;
+outros ancestrais e todas as árvores candidatas continuam sem escrita por grupo
+ou outros.
+
+Cada folha é enumerada sem seguir links. Arquivos são lidos por FD com
+`O_NOFOLLOW`, hash incremental e identidade antes/depois. Symlinks precisam ser
+relativos e confinados à própria árvore. Hardlinks são admitidos somente quando
+todos os links do inode estão dentro dos quatro candidatos; link externo,
+device diferente, tipo inseguro, drift ou material privado (`.env`, chaves,
+dumps, DB, sessões, `.data`, runtime-data ou tenant-data) negam. Nomes de módulos
+como `openai/resources/uploads`, `db` ou `media` não são privados por nome
+isolado; a negativa depende do predicado fechado acima.
+
+A regressão materializada produz request schema 3 fora do checkout e atravessa o
+`audit_request()` real; somente a fronteira sudo do observador `/proc` é
+substituída. A cardinalidade histórica declarada (34.298 efeitos literais) foi
+ensaiada em fechamento completo e parcial: o parcial fechou `FAILED_RECONCILED`
+com 2 tentativas/1 efeito; o completo fechou `COMPLETED_RECONCILED` com 34.298.
+Picos medidos ficaram abaixo de 512 MiB tanto no executor quanto na reconciliação
+do supervisor, e journal/receipt ficaram dentro dos limites autenticados de
+64/16 MiB. Isso é ensaio local, não qualificação ou autorização produtiva.
+
+Os efeitos são somente `unlink --` literal por folha e `rmdir --` literal em
+pós-ordem. `audit`, `prepare` e `execute` reabrem o manifesto, Git, identidades,
+conteúdo e referências; `execute` faz a recaptura final sob os locks antes do
+primeiro `ATTEMPT`. Journal e receipt existentes continuam sendo a única prova
+de efeito. Interrupção fecha resultado parcial verificável e nunca repete efeito
+automaticamente. O aumento limitado dos tetos de journal/receipt do supervisor
+acomoda a cardinalidade aproximada de 34 mil efeitos; não amplia candidatos nem
+o orçamento de custódia.
+
+A regressão materializa consumidor e manifesto fora do checkout, atravessa
+`audit → prepare → execute` com fixture Git representativa, preserva fonte e
+controles e cobre CWD, FD, maps, drift, symlink, hardlink externo, material
+protegido e interrupção parcial. Isto qualifica o código para revisão; não é
+auditoria produtiva, autorização ou retirada.
+
+O inventário preservado pelo PR documental #313 sustenta raízes, bytes,
+cardinalidade (2.326/21.808/31, 710/6.934/10, 284/1.650/0 e 58/483/0) e ausência
+nominal de payload privado. Ele não contém a relação completa de destinos dos 41
+symlinks nem prova individual de owner/modo/nlink de todas as folhas. Portanto
+esses predicados permanecem verificações obrigatórias da futura fase `audit` e
+podem negar o lote; a implementação não converte a classificação documental em
+elegibilidade presumida.
+
 ## Fontes de verdade preservadas
 
 Sempre preservar:
