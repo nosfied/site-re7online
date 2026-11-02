@@ -679,6 +679,54 @@ calculado, não ganho qualificado, não medição fresca e não autorização de
 Estado desta entrada: código/regressões/documentação em checkout isolado; nenhuma
 publicação de grafo, migração de overlay ou operação na VPS.
 
+#### Reconciliação operacional v4 — negativa terminal em 02/11/2026
+
+A custódia privada
+`p00-release-graph-reconciliation-99c1ef24-v4` autenticou o merge
+`99c1ef24bd4d6fe7043d60ad378aca0ba59ce03f`, selou o request
+`307391aa1c38d8529efaf98b5184e5f89b5ee4b645a29cef027cc707befab127`
+e executou uma única reconciliação não destrutiva. O consumidor negou antes de
+publicar grafo, projeção ou receipt com
+`release_reconciliation_dependency_still_open`.
+
+A causa nominal é a presença física de
+`immutable-708f018c-vps-20261027T152109Z/api-runtime/.data`, observada como
+diretório `0755`, device/inode `64769:2699461`. Mesmo sem artefato
+`PRIVATE_DATA_NEVER_RETIRE` enumerado no contrato antigo, o consumidor protege
+fail-closed o diretório-pai quando o overlay canônico existe. Portanto `708f`
+permanece papel protetor e sai do escopo de fechamento. `0fdec` e `a959`
+continuam preservadas pelos vínculos privados já autenticados.
+
+A estimativa anterior de `2.965.995.520 bytes` para três releases não é mais
+potencial elegível. Pelos tamanhos físicos já registrados, o potencial restante
+de `d436` e `f160` é `1.977.225.216 bytes`. A sucessora pode avaliar exclusivamente `d436` e `f160`,
+sem autorização de retirada e somente após validar integralmente closures,
+contratos, lifecycle, reviews, seleção ativa, rollbacks imediatos, referências
+vivas e classificação privada. A v4 é terminal e não pode ser reapresentada.
+
+A primeira materialização sucessora, v5, parou no preflight antes de selar o
+request porque o estado operacional não carregava `canonicalRoots`, exigido
+pela autenticação dos receipts legados. A v6 vinculou as raízes diretamente aos
+estados históricos autenticados de `d436/f160`, validou integralmente as duas
+closures e publicou uma reconciliação sem efeitos. Request
+`bb96c4cd33766ab283cd430afa37542e5f5ed243ead00be0b8618e410de4e930`,
+grafo sucessor `4c110fb56afd97a9414a458aaa2c0e2a1bbada7aaf3369585e3f0e4cf1331425`,
+projeção `a4d317e838e1333c0064bc5b41edc3e58c816705397b427f8e106b9dd613c4b3`
+e receipt `d3d90d2a2577a93a3e3ff8e94428169dc8a64bb557d97d9851446c32c8ce2865`.
+Somente `d436/f160` deixaram os papéis históricos; `708f`, `0fdec`, `a959`,
+ativos, rollbacks imediatos e dependências restantes permaneceram protegidos.
+O consumidor integrado aceitou a projeção. O grafo produtivo não foi
+substituído; o resultado continua sem autorização de retirada.
+
+A montagem dos prepares sucessores foi versionada em
+`generation-retirement-prepare-materialize.py`. Além do readback criptográfico,
+ela reabre o request v6 original e todos os seus bindings antes do manifesto
+final, exige que receipt, projeção e grafo sucessor concordem e vincula cada
+fotografia/contrato exclusivamente à geração reconciliada correspondente. A
+regressão usa o produtor real da reconciliação, atravessa o consumidor da
+projeção e os dois entrypoints reais de `prepare`; grafo operacional diferente,
+geração omitida e drift de contrato ou fotografia permanecem negativas.
+
 Próximo ato: usar o inventário existente para fechar impedimentos concretos e
 dimensionar o ganho possível, juntamente com a proposta preventiva em
 [DEPLOY_ARTIFACT_LIFECYCLE](../DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026).
