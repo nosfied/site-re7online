@@ -58,6 +58,16 @@ frontend-only, preserva como não terminais os layouts legados com referências 
 nega qualquer diretório sem classificação fechada.
 Consulte [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md).
 
+A fase `audit` produtiva do perfil fechado `ef7db111-deploy-control` também está
+encerrada. O plano `d9aadc3614bd1ef592f55db4ad113b677d83fe3a472d8bb88bb271703b7a3d31`
+terminou DENY, exit 2, com zero efeitos: duas árvores somaram 602.820.608 bytes
+qualificados e duas negaram identidade interna porque continham arquivos
+graváveis pelo grupo. A enumeração dirigida registrou quatro folhas Prisma em
+`0775` e 1.119 folhas `.next` em `0664`, sem outro tipo de incompatibilidade.
+Custódia, plano e diagnóstico são terminais; não repetir audit, não normalizar
+permissões e não tratar os dois candidatos qualificados como autorização. Detalhes
+e hashes estão na [política](CAPACITY_RECOVERY_POLICY.md#audit-produtivo-ef7-terminal--01112026).
+
 A tentativa de 01/11 do lote fechado de três archives terminou por sinal antes de
 plano ou efeito. A correção de cardinalidade foi integrada pelo merge
 `b66fc5fd0178b4dcd87e5aa4618d3a955efaa204`; não foi executada em produção.

@@ -246,6 +246,64 @@
       "repeatPermitted": false,
       "additionalDeletionAuthorized": false
     },
+    "capacityRecoveryEf7DeployControlAudit": {
+      "state": "P00_CAPACITY_RECOVERY_AUDIT_DENY",
+      "reportedDate": "2026-11-01",
+      "controlPlaneMerge": "6c50844a054f1b82d182bf9216a8f2ae83945d42",
+      "custody": "p00-capacity-ef7db111-audit-6c50844a-v1",
+      "requestSha256": "5d7c271084087bf0d2aa9d13711e01d40f89869147ae31136adbd2e36782769e",
+      "planSha256": "d9aadc3614bd1ef592f55db4ad113b677d83fe3a472d8bb88bb271703b7a3d31",
+      "terminalSha256": "a51d28ad517897d7eaff3c1f327b15dd03916fe815db0125c444c8cb0a08e227",
+      "exitCode": 2,
+      "qualifiedBytes": 602820608,
+      "qualifiedInodes": 24706,
+      "minimumRecoveryBytes": 949141504,
+      "minimumRecoverySatisfied": false,
+      "effectsExecuted": 0,
+      "prepareExecuted": false,
+      "executeExecuted": false,
+      "repeatPermitted": false,
+      "qualifiedEvidence": [
+        {
+          "path": "/opt/re7online/deploy-control/ef7db111-prep/node_modules",
+          "allocatedBytes": 593416192,
+          "inodes": 24165,
+          "relationSha256": "613695a708e0c4b12abb9f15ac6223545fb4a100e708257225fe8a590528ecc3"
+        },
+        {
+          "path": "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist",
+          "allocatedBytes": 9404416,
+          "inodes": 541,
+          "relationSha256": "b7a474e0aa15ddff135e2bf331faefaf803202abeb675c43997dbbbc9f2b0567"
+        }
+      ],
+      "deniedCandidates": [
+        {
+          "path": "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules",
+          "predicate": "DEPLOY_CONTROL_TREE_IDENTITY",
+          "subpredicate": "GROUP_OR_OTHER_WRITABLE",
+          "incompatibleObjects": 4,
+          "observedMode": "0775",
+          "allocatedBytesPreserved": 316493824
+        },
+        {
+          "path": "/opt/re7online/deploy-control/ef7db111-prep/.next",
+          "predicate": "DEPLOY_CONTROL_TREE_IDENTITY",
+          "subpredicate": "GROUP_OR_OTHER_WRITABLE",
+          "incompatibleObjects": 1119,
+          "observedMode": "0664",
+          "allocatedBytesPreserved": 29827072
+        }
+      ],
+      "identityDiagnostic": {
+        "custody": "p00-capacity-ef7db111-identity-diagnostic-6c50844a-v1",
+        "path": "identity-metadata.private.json",
+        "sha256": "1c60affa2b2cf8468619a6c5419f022d4ea7f97411b27610a0210a1921da85b5",
+        "payloadRead": false,
+        "symlinksFollowed": false,
+        "permissionsChanged": false
+      }
+    },
     "authorityRootMemberGuard": {
       "state": "INTEGRATED_PRODUCTION_AUDIT_REACHED_PRE_BINDING_ONLY",
       "defectReproduced": true,

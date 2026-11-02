@@ -737,6 +737,47 @@ automaticamente. O aumento limitado dos tetos de journal/receipt do supervisor
 acomoda a cardinalidade aproximada de 34 mil efeitos; não amplia candidatos nem
 o orçamento de custódia.
 
+#### Audit produtivo ef7 terminal — 01/11/2026
+
+A única fase `audit` do perfil `ef7db111-deploy-control`, merge
+`6c50844a054f1b82d182bf9216a8f2ae83945d42`, terminou
+`P00_CAPACITY_RECOVERY_AUDIT_DENY`, exit code 2, sem `prepare`, autorização,
+efeito ou retirada. A custódia
+`p00-capacity-ef7db111-audit-6c50844a-v1` é terminal e não pode ser reutilizada.
+O plano DENY `d9aadc3614bd1ef592f55db4ad113b677d83fe3a472d8bb88bb271703b7a3d31`
+qualificou somente:
+
+- `node_modules` da raiz: 593.416.192 bytes, 24.165 inodes, relação
+  `613695a708e0c4b12abb9f15ac6223545fb4a100e708257225fe8a590528ecc3`;
+- `apps/whatsapp-agent/dist`: 9.404.416 bytes, 541 inodes, relação
+  `b7a474e0aa15ddff135e2bf331faefaf803202abeb675c43997dbbbc9f2b0567`.
+
+Essas observações e digests permanecem evidência; não constituem lote ou
+autorização. Uso futuro exige contrato apropriado e recaptura integral. Os
+602.820.608 bytes ficaram abaixo do mínimo fechado de 949.141.504 bytes.
+
+Os outros dois candidatos negaram por `DEPLOY_CONTROL_TREE_IDENTITY`. Uma única
+passagem posterior de `lstat/readlink`, sem seguir links ou ler payloads, provou
+que ambas as raízes ainda coincidem byte-estruturalmente com o manifesto. A lista
+completa está na custódia privada distinta
+`p00-capacity-ef7db111-identity-diagnostic-6c50844a-v1`, arquivo
+`identity-metadata.private.json`, SHA-256
+`1c60affa2b2cf8468619a6c5419f022d4ea7f97411b27610a0210a1921da85b5`.
+Ela registra todos os 1.123 objetos incompatíveis:
+
+- quatro arquivos regulares Prisma `deploy:deploy 0775`, `nlink=1`, no
+  `apps/whatsapp-agent/node_modules`;
+- 1.119 arquivos regulares `deploy:deploy 0664`, `nlink=1`, em `.next`.
+
+O único subpredicado observado foi escrita por grupo/outros. Não houve, nessa
+passagem, owner/device divergente, hardlink externo, symlink inseguro, tipo
+especial ou drift. Nenhum `chmod`, `chown` ou relaxamento foi aplicado. Até
+existir decisão separada, os dois caminhos permanecem `NOT_QUALIFIED`; corrigir
+modos do acervo histórico seria mutação, enquanto admitir esses modos exigiria
+novo contrato fechado, regressões e outra leitura integral. O custo evitado é a
+requalificação de 346.320.896 bytes físicos e 9.588 objetos; por isso este
+diagnóstico não recomenda implementação nem nova janela.
+
 A regressão materializa consumidor e manifesto fora do checkout, atravessa
 `audit → prepare → execute` com fixture Git representativa, preserva fonte e
 controles e cobre CWD, FD, maps, drift, symlink, hardlink externo, material
