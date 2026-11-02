@@ -440,6 +440,105 @@ class DeployFixture(unittest.TestCase):
 
 
 class DriverTests(DeployFixture):
+    def test_existing_empty_free_lock_is_adopted_and_terminally_released(self) -> None:
+        self.lock.write_bytes(b"")
+        self.lock.chmod(0o600)
+        original = self.lock.stat()
+        self.driver.preflight()
+        self.driver.activate()
+        adopted = self.lock.stat()
+        self.assertEqual((adopted.st_dev, adopted.st_ino),
+                         (original.st_dev, original.st_ino))
+        expected = (hashlib.sha256(json.dumps(
+            self.driver._journal_read()["binding"], sort_keys=True).encode()).hexdigest() + "\n")
+        self.assertEqual(self.lock.read_text(), expected)
+        self.assertEqual(self.driver._journal_read()["lockDigest"], sha(self.lock))
+        self.acceptance()
+        self.driver.finalize()
+        self.assertEqual(self.driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+        self.assertFalse(self.lock.exists())
+
+    def test_existing_empty_occupied_lock_denies_before_operational_effects(self) -> None:
+        self.lock.write_bytes(b"")
+        self.lock.chmod(0o600)
+        fd = os.open(self.lock, os.O_RDWR | os.O_NOFOLLOW)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            self.driver.preflight()
+            with self.assertRaisesRegex(deploy.Denied, "global_lock_active"):
+                self.driver.activate()
+        finally:
+            os.close(fd)
+        self.assertEqual(self.lock.read_bytes(), b"")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_existing_empty_lock_inode_replacement_denies_before_operational_effects(self) -> None:
+        self.lock.write_bytes(b"")
+        self.lock.chmod(0o600)
+        self.driver.preflight()
+        replacement = self.base / "replacement.lock"
+        replacement.write_bytes(b"")
+        replacement.chmod(0o600)
+
+        def replace_after_observation(name: str) -> None:
+            if name == "existing_empty_lock_observed":
+                os.replace(replacement, self.lock)
+
+        with patch.object(self.driver, "_failpoint", side_effect=replace_after_observation):
+            with self.assertRaisesRegex(deploy.Denied, "global_lock_changed"):
+                self.driver.activate()
+        self.assertEqual(self.lock.read_bytes(), b"")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_existing_lock_with_unexpected_content_denies_before_operational_effects(self) -> None:
+        self.lock.write_text("unexpected\n")
+        self.lock.chmod(0o600)
+        original = self.lock.read_bytes()
+        self.driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "global_lock_active"):
+            self.driver.activate()
+        self.assertEqual(self.lock.read_bytes(), original)
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_adopted_lock_excludes_second_driver_acquisition_during_acceptance_window(self) -> None:
+        self.lock.write_bytes(b"")
+        self.lock.chmod(0o600)
+        self.driver.preflight()
+        self.driver.activate()
+        restarts = [event for event in self.host.events if event.startswith("PM2:")]
+        second_inputs = dataclasses.replace(
+            self.inputs, transaction_root=self.base / "second-transaction")
+        second = FixtureDriver(
+            second_inputs, host=self.host, repo=ROOT, releases=self.releases,
+            stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2,
+            clock=lambda: 1234567890.0,
+        )
+        second.failpoints = set()
+        with self.assertRaisesRegex(deploy.Denied, "global_lock_active"):
+            second._acquire_lock({"binding": second.inputs.binding()})
+        self.assertEqual([event for event in self.host.events if event.startswith("PM2:")],
+                         restarts)
+        self.assertEqual(self.driver._journal_read()["state"], "AWAITING_ACCEPTANCE")
+
+    def test_failure_after_adoption_preserves_bound_lock_and_blocks_reactivation(self) -> None:
+        self.lock.write_bytes(b"")
+        self.lock.chmod(0o600)
+        original = self.lock.stat()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_empty_lock_adopted")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_empty_lock_adopted"):
+            self.driver.activate()
+        current = self.lock.stat()
+        self.assertEqual((current.st_dev, current.st_ino),
+                         (original.st_dev, original.st_ino))
+        expected = (hashlib.sha256(json.dumps(
+            self.driver._journal_read()["binding"], sort_keys=True).encode()).hexdigest() + "\n")
+        self.assertEqual(self.lock.read_text(), expected)
+        self.assertEqual(self.driver._journal_read()["state"], "PREFLIGHT_PASS")
+        with self.assertRaisesRegex(deploy.Denied, "global_lock_active"):
+            self.driver.activate()
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
     def test_api_only_passes_and_preserves_frontend_and_worker(self) -> None:
         driver = self.api_only()
         frontend_before = driver._process_snapshot(

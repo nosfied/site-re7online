@@ -1338,11 +1338,65 @@ class Driver:
         try:
             fd = os.open(self.lock, flags, 0o600)
         except FileExistsError:
-            deny("global_lock_active")
-        with os.fdopen(fd, "w") as stream:
-            stream.write(hashlib.sha256(json.dumps(journal["binding"], sort_keys=True).encode()).hexdigest() + "\n")
-            stream.flush(); os.fsync(stream.fileno())
+            self._adopt_empty_lock(journal)
+        else:
+            with os.fdopen(fd, "w") as stream:
+                stream.write(hashlib.sha256(json.dumps(journal["binding"], sort_keys=True).encode()).hexdigest() + "\n")
+                stream.flush(); os.fsync(stream.fileno())
         journal["lockDigest"] = digest(self.lock)
+
+    def _adopt_empty_lock(self, journal: dict[str, Any]) -> None:
+        """Bind a canonical empty retirement sentinel without replacing its inode."""
+        try:
+            before = self.lock.lstat()
+        except OSError:
+            deny("global_lock_changed")
+        expected = (os.geteuid(), os.getegid(), 0o600, 1, 0)
+        observed = (before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode),
+                    before.st_nlink, before.st_size)
+        if (self.lock.is_symlink() or not stat.S_ISREG(before.st_mode) or
+                observed != expected):
+            deny("global_lock_active")
+        self._failpoint("existing_empty_lock_observed")
+        try:
+            fd = os.open(self.lock, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | os.O_CLOEXEC)
+        except OSError:
+            deny("global_lock_changed")
+        try:
+            opened = os.fstat(fd)
+            if ((before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino) or
+                    (opened.st_uid, opened.st_gid, stat.S_IMODE(opened.st_mode),
+                     opened.st_nlink, opened.st_size) != expected):
+                deny("global_lock_changed")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                deny("global_lock_active")
+            current = self.lock.lstat()
+            if (self.lock.is_symlink() or
+                    (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino) or
+                    (current.st_uid, current.st_gid, stat.S_IMODE(current.st_mode),
+                     current.st_nlink, current.st_size) != expected or
+                    os.pread(fd, 1, 0) != b""):
+                deny("global_lock_changed")
+            value = (hashlib.sha256(json.dumps(
+                journal["binding"], sort_keys=True).encode()).hexdigest() + "\n").encode()
+            if os.pwrite(fd, value, 0) != len(value):
+                deny("global_lock_short_write")
+            os.ftruncate(fd, len(value))
+            os.fsync(fd)
+            self._failpoint("after_empty_lock_adopted")
+            after = self.lock.lstat()
+            if ((after.st_dev, after.st_ino) != (opened.st_dev, opened.st_ino) or
+                    after.st_size != len(value)):
+                deny("global_lock_changed")
+            directory_fd = os.open(self.lock.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        finally:
+            os.close(fd)
 
     def _external_lock_active(self) -> bool:
         value = os.environ.get(EXTERNAL_LOCK_ENV)
