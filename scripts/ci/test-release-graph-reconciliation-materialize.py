@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE_COMMIT = "bcbe5c5617ee1e6ff7cd9b49e03bc4da9610fb9a"
+SOURCE_COMMIT = "0014d89b493fcb62ec614f03ee0dfb27285ea4d6"
 SOURCE = ROOT / "scripts/release-graph-reconciliation-materialize.py"
 SPEC = importlib.util.spec_from_file_location("reconciliation_materializer", SOURCE)
 MODULE = importlib.util.module_from_spec(SPEC)
