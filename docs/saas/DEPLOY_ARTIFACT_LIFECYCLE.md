@@ -397,14 +397,13 @@ parcelas, de forma conservadora. Repositório, saída e `filesystemPath` precisa
 estar no mesmo device. Reserva insuficiente resulta em `capacity_bytes` ou
 `capacity_inodes` antes da criação da saída e antes do primeiro `npm`.
 
-Somente a recuperação nominal `P00_TENANT_ISOLATION_RECOVERY` admite dispensar o
-piso estático de 12 GiB. O produtor exige `--p00-static-floor-override` e seu
-SHA-256 externo. O JSON privado `0600` tem schema fechado com `schemaVersion`,
-`targetCommit`, `releaseId`, `capacityContractSha256`, `reason`, `responsible`,
-`issuedAtUtc` e `expiresAtUtc`; a vigência máxima é seis horas. Symlink, campo
-extra, modo inseguro, hash/binding divergente ou expiração negam. O documento vira
-`EVIDENCE_PRESERVE` e integra o lifecycle. A exceção não muda `requiredBytes`,
-inodes ou checkpoints e não autoriza build ou ativação.
+O gate soma todos os campos de bytes e acrescenta margem igual a
+`failureEvidenceBytes`, preservando separadamente a reserva operacional. Não há
+piso estático independente. O documento histórico
+`P00_TENANT_ISOLATION_RECOVERY` continua com schema/bindings/expiração autenticados
+e vira `EVIDENCE_PRESERVE` quando fornecido, mas possui
+`effectiveAdmissionWaiver=false`: não muda bytes, margem, inodes ou checkpoints e
+não autoriza build ou ativação.
 
 Exemplo estrutural, com valores a serem medidos e revisados para cada geração:
 
@@ -430,7 +429,12 @@ Exemplo estrutural, com valores a serem medidos e revisados para cada geração:
 Os valores mínimos do exemplo mostram apenas tipos e não constituem orçamento
 produtivo. Todos os orçamentos precisam ser positivos, medidos e revisados.
 
-Depois que a reserva passa, o produtor mantém
+Depois que a admissão passa, o produtor revalida antes de cada fase volumosa e
+resume no lifecycle o menor saldo/inodes amostrados, duração e lacunas. A amostra
+não prova o pico contínuo. O monitor subtrai do threshold somente o orçamento da
+fase ativa e protege reserva, evidência, margem e fases futuras; o pico restante de
+inodes é recalculado por identidades físicas. Coleta incompleta ou mínimo observado
+abaixo desse saldo protegido fecha `FAILED/RETENTION_DEBT` sem remover resíduos. O produtor mantém
 `generation-lifecycle.private.json`, modo `0600`, fora do pacote. O estado é
 `BUILDING`, `FAILED` ou `COMPLETE`; conclusão e falha ficam com classificação
 `PENDING` até a revisão pós-janela. O registro contém somente identidades, caminhos,

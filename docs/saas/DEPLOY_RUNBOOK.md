@@ -56,12 +56,11 @@ Negativa de schema exige correção e regressão; fotografia vencida exige leitu
 
 ### Gate de dívida e encerramento da geração
 
-Antes de criar a saída, o produtor exige pelo menos 12 GiB livres, todos os
-lifecycles anteriores terminais e reviews sem dívida. Excepcionalmente, documento
-privado P00, fechado, temporário e ligado a target/release/hash do capacity contract
-pode dispensar somente esse piso; orçamento real, pico, verificação, evidência,
-reserva, inodes e checkpoints continuam obrigatórios. Ele não autoriza build nem
-ativação. Candidata pendente, dívida ou review v1 `PRESERVE` continuam bloqueando.
+Antes da saída, o produtor exige o orçamento contratual completo mais margem igual
+a `failureEvidenceBytes`, além de lifecycles terminais e reviews sem dívida. O P00
+histórico permanece evidência, mas não dispensa esse gate, inodes ou checkpoints e
+não autoriza build/ativação. Candidata pendente, dívida ou review v1 `PRESERVE`
+continuam bloqueando.
 
 Antes mesmo do lock de build, a política versionada autenticada deve provar
 `--repo` dentro de `build-worktrees`, `--output` estritamente dentro de
@@ -187,10 +186,8 @@ python3 scripts/converta-release.py verify \
 `failure-evidence.private`; seu conteúdo não vai para stdout ou Git. Rebuild cria
 nova release. Retry reutiliza o mesmo pacote autenticado.
 
-O produtor nega antes do primeiro `npm` quando a soma do crescimento do worktree,
-payload, temporários de pacote, extração de verificação, evidência e reserva excede
-bytes ou inodes disponíveis. Ao fim, revisar `generation-lifecycle.private.json` e
-classificar imediatamente a geração; `PENDING` não autoriza outra cópia nem retirada.
+O produtor nega antes do primeiro `npm` quando worktree, payload, pacote, verificação,
+evidência, reserva e margem derivada (`failureEvidenceBytes`) excedem bytes/inodes; não há piso independente. Revalida fases e registra mínimo/inodes/duração/lacunas; amostra não garante pico. Durante a fase, o threshold exclui somente sua parcela ativa e preserva reserva/evidência/margem/fases futuras; consumo autorizado não é dupla contagem. Falha fecha `FAILED/RETENTION_DEBT` e preserva resíduos; `PENDING` proíbe cópia/retirada/retry, e P00 não dispensa a admissão derivada.
 
 O produtor exclui uploads/dados operacionais da aplicação, mas preserva dependências
 sob `node_modules`, inclusive diretórios internos chamados `uploads`. O índice fechado

@@ -59,7 +59,7 @@
       "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime"
     }
   },
-  "canonicalVerifierSha256": "f2ced13c608c3a08787ccc940f6c8aad241426e5478e8c64b1bd577203f49825",
+  "canonicalVerifierSha256": "da62e006cb92d3409cb042971611fcd1849a193fd7fda1645972ebce9f634973",
   "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
   "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json"
 }
