@@ -1614,7 +1614,8 @@ class GenerationRetirementTest(unittest.TestCase):
                         "state": "COMPLETE"})
                 receipt_path = fixture.evidence_root / f"{release_id}.receipt.json"
                 private_json(receipt_path, {"schemaVersion": 1, "state": "COMPLETED",
-                                            "releaseId": release_id})
+                                            "releaseId": release_id,
+                                            "contractSha256": sha(contract_path)})
                 journal_path = fixture.evidence_root / f"{release_id}.journal.json"
                 private_json(journal_path, {"schemaVersion": 1,
                                             "state": "DEPLOYED_SANITIZED",

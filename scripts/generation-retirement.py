@@ -2778,6 +2778,7 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
             deny("release_reconciliation_evidence_schema")
         evidence_hashes = set()
         receipt_seen = False
+        receipt_links_release = False
         normalized_evidence = []
         for item in evidence:
             if (not isinstance(item, dict) or set(item) != {"kind", "path", "sha256"} or
@@ -2792,9 +2793,14 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
                 if state not in {"SANITIZED", "DEPLOYED_SANITIZED", "COMPLETED",
                                   "LEGACY_CONTRACT_MATERIALIZED"}:
                     deny("release_reconciliation_receipt_state")
+                if (sha256 == review.get("evidenceSha256") or
+                        (value.get("releaseId") == release and
+                         value.get("contractSha256") == contract_sha)):
+                    receipt_links_release = True
             evidence_hashes.add(sha256)
             normalized_evidence.append({"kind": item["kind"], "path": str(path), "sha256": sha256})
-        if not receipt_seen or review.get("evidenceSha256") not in evidence_hashes:
+        if (not receipt_seen or not receipt_links_release or
+                review.get("evidenceSha256") not in evidence_hashes):
             deny("release_reconciliation_review_evidence")
         release_artifacts = [item for item in contract["artifacts"]
                              if item.get("class") == "RELEASE_RUNTIME" and
