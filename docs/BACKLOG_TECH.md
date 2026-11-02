@@ -1369,6 +1369,38 @@ O onboarding interno foi implementado, porém ainda não validado com novo tenan
 
 ### Campaign CRM audience split into numbered drafts - 2026-09-25
 
+**Correção da seleção estática integral — 02/11/2026: LOCAL VALIDATED / NOT
+DEPLOYED / RASCUNHO EXISTENTE PRESERVADO.** A leitura produtiva, sem mutação,
+confirmou que `Campanha teste nov.01` pertence a `demo-converta`, está em
+`draft` e foi persistida com `totalRecipients=25`, seed
+`selectionMode=STATIC_RECIPIENTS`, 25 `leadIds`, `recipientCount=25`, zero
+Outbound e zero envio. O detalhe limita sua amostra visual a 200, mas isso não
+explica o caso: a própria campanha e o seed foram gravados com 25, portanto o
+corte ocorreu na criação a partir da página visual `limit=25`. O rascunho não
+foi alterado, recriado, agendado ou enviado; eventual reparo continua sendo uma
+ação separada.
+
+O delta local faz a criação estática comum reutilizar a resolução integral e a
+assinatura tenant-scoped já usadas pelo split. A grade continua paginada, mas
+não fornece mais os IDs que definem o universo persistido. Até 1.000 elegíveis,
+o backend reabre os filtros, revalida opt-out/exclusões/identidade/deduplicação,
+confere a assinatura e cria um único rascunho; mudança de filtros ou audiência
+nega com `audience_changed`. O filtro por existência de conversa é resolvido
+integralmente pelo mesmo read model da prévia, tanto para `true` quanto para
+`false`; ele não precisa ser removido para criar o rascunho. A última resolução
+de elegibilidade, imediatamente anterior à primeira escrita, também precisa
+produzir a assinatura autenticada: opt-out ou outra mudança nesse intervalo
+nega antes de campanha e seed. Acima de 1.000, o comportamento existente é
+preservado: a UI prepara a divisão explícita em rascunhos de no máximo 1.000,
+sem envio automático. Template, mídia, variáveis e destino continuam passando
+pelos contratos atuais. Regressão integrada em PostgreSQL isolado percorreu
+prévia/página 2 (`limit=25`) → resolução integral de 930 elegíveis → criação →
+seed/detalhe, com cinco opt-outs, outro tenant, filtro alterado, mais de 25
+contatos nos dois valores de `hasConversation` e opt-out inserido entre
+validação e persistência; a mudança negou com zero campanha/seed; 1/1 PASS.
+Contrato de UI 39/39 PASS e backend typecheck PASS. Nenhum schema/migration,
+build produtivo, deploy, provider ou envio foi executado.
+
 Status: LOCAL PARTIAL IMPLEMENTATION / FOCUSED TEST VALIDATED / NOT DEPLOYED /
 OWNER UI PENDING / NOT CRA-READY FOR COMPLETE BATCH OPERATION. New local
 campaign draft split flow keeps the existing 1,000-recipient campaign draft

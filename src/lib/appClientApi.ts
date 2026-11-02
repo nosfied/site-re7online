@@ -5238,6 +5238,12 @@ export async function createAppCampaignDraft(
       version: 1;
       crmBusinessStatusId: string;
     } | null;
+    staticAudienceSelection?: {
+      version: 1;
+      mode: "STATIC_FILTER";
+      filters: AppCampaignAudiencePreviewFilter;
+      audienceSignature: string;
+    } | null;
     templateVariableMappings?: Array<{
       position: string;
       source: "contact.displayName" | "lead.companyName" | "lead.city" | "fixed" | "";
