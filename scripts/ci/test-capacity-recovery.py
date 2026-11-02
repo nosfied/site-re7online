@@ -3229,6 +3229,278 @@ print(m._authenticate_disposition_archive(p,entry,{'versionedEnvExample':{'sha25
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(completed.stdout.strip(), "1")
 
+    def ef7_fixture(self, name="ef7"):
+        base = self.base / name
+        repository = base / "repository"
+        worktree = base / "ef7db111-prep"
+        repository.mkdir(parents=True)
+        subprocess.run(["/usr/bin/git", "init", "-q", str(repository)], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "user.name", "Fixture"], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "config", "user.email", "fixture@example.invalid"], check=True)
+        tracked = {
+            ".gitignore": "/node_modules/\n/.next/\n/apps/whatsapp-agent/node_modules/\napps/whatsapp-agent/dist/\n",
+            "package.json": "{}\n", "package-lock.json": "{}\n",
+            "src/app.ts": "export {}\n", "public/index.txt": "public\n",
+            "docs/readme.md": "docs\n", "scripts/check.py": "pass\n",
+            "apps/whatsapp-agent/package.json": "{}\n",
+            "apps/whatsapp-agent/package-lock.json": "{}\n",
+            "apps/whatsapp-agent/src/index.ts": "export {}\n",
+            "apps/whatsapp-agent/prisma/schema.prisma": "generator client {}\n",
+            "apps/whatsapp-web-worker/src/index.ts": "export {}\n",
+        }
+        for relative, content in tracked.items():
+            target = repository / relative; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "commit", "-qm", "fixture"], check=True)
+        commit = subprocess.check_output(
+            ["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+        subprocess.run(["/usr/bin/git", "-C", str(repository), "worktree", "add", "-q",
+                        "--detach", str(worktree), commit], check=True)
+        worktree.chmod(0o775)
+        candidates = [
+            worktree / "node_modules",
+            worktree / "apps/whatsapp-agent/node_modules",
+            worktree / ".next",
+            worktree / "apps/whatsapp-agent/dist",
+        ]
+        for path in candidates: path.mkdir(parents=True, mode=0o755); path.chmod(0o755)
+        (candidates[0] / "pkg").mkdir(); (candidates[0] / "pkg/index.js").write_text("package\n")
+        (candidates[0] / ".bin").mkdir(); (candidates[0] / ".bin/tool").symlink_to("../pkg/index.js")
+        library = candidates[1] / "openai/resources/uploads"; library.mkdir(parents=True)
+        (library / "index.js").write_text("library code\n")
+        hardlinks = candidates[1] / "pkg"; hardlinks.mkdir()
+        (hardlinks / "a.js").write_text("shared\n"); os.link(hardlinks / "a.js", hardlinks / "b.js")
+        (candidates[2] / "cache").mkdir(); (candidates[2] / "cache/build.bin").write_bytes(b"build")
+        (candidates[3] / "db").mkdir(); (candidates[3] / "db/persist.js").write_text("compiled code\n")
+        for root, dirs, files in os.walk(worktree):
+            root_path = Path(root)
+            if root_path == worktree: continue
+            root_path.chmod(0o755)
+            for filename in files:
+                target = root_path / filename
+                if not target.is_symlink(): target.chmod(0o644)
+        git_file = worktree / ".git"
+        git_dir = Path(git_file.read_text().strip().removeprefix("gitdir: "))
+        control = base / "control"; manifest = control / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json"
+        manifest.parent.mkdir(parents=True)
+        preserved = ["package.json", "package-lock.json", "src", "public", "docs", "scripts",
+                     "apps/whatsapp-agent/package.json", "apps/whatsapp-agent/package-lock.json",
+                     "apps/whatsapp-agent/src", "apps/whatsapp-agent/prisma",
+                     "apps/whatsapp-web-worker"]
+        derivations = [
+            ["package.json", "package-lock.json"],
+            ["apps/whatsapp-agent/package.json", "apps/whatsapp-agent/package-lock.json",
+             "apps/whatsapp-agent/prisma"],
+            ["package.json", "package-lock.json", "src", "public"],
+            ["apps/whatsapp-agent/package.json", "apps/whatsapp-agent/package-lock.json",
+             "apps/whatsapp-agent/src", "apps/whatsapp-agent/prisma"],
+        ]
+        entries = []
+        for path, derivation in zip(candidates, derivations):
+            info = path.lstat()
+            entries.append({"path": str(path), "relativePath": path.relative_to(worktree).as_posix(),
+                "kind": "DEPENDENCY_TREE" if path.name == "node_modules" else "COMPILED_TREE",
+                "physicalBytes": MODULE.physical_usage([path])[str(path)]["allocatedBytes"],
+                "identity": MODULE._directory_identity(info),
+                "derivationTrackedPaths": derivation})
+        private_json(manifest, {"schemaVersion": 1,
+            "kind": "CLOSED_DEPLOY_CONTROL_DERIVED_DISPOSITION",
+            "dispositionId": "fixture-ef7-v1",
+            "worktree": {"root": str(worktree), "commit": commit, "gitDir": str(git_dir),
+                "gitFileSha256": sha(git_file), "identity": MODULE._directory_identity(worktree.lstat()),
+                "preservedTrackedPaths": preserved}, "entries": entries})
+        binding = {"path": str(manifest), "sha256": sha(manifest)}
+        requested = [{"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE", "path": str(path),
+                      "dispositionManifest": binding} for path in candidates]
+        patches = dict(ROOT=control, DEPLOY_CONTROL_ROOT=worktree,
+            DEPLOY_CONTROL_GITDIR=git_dir, DEPLOY_CONTROL_PATHS=tuple(candidates),
+            DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH=manifest,
+            DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256=sha(manifest),
+            DEPLOY_CONTROL_DISPOSITION_ID="fixture-ef7-v1")
+        return {"base": base, "repository": repository, "worktree": worktree,
+                "gitDir": git_dir, "commit": commit, "candidates": candidates,
+                "manifest": manifest, "requested": requested, "patches": patches,
+                "preserved": preserved}
+
+    def test_ef7_materialized_consumer_complete_lifecycle_preserves_worktree(self):
+        fixture = self.ef7_fixture("ef7-materialized")
+        external = fixture["base"] / "custody/control"
+        (external / "scripts").mkdir(parents=True)
+        (external / "config/capacity-recovery").mkdir(parents=True)
+        shutil.copy2(TOOL, external / "scripts/capacity-recovery.py")
+        shutil.copy2(fixture["manifest"],
+                     external / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json")
+        spec = importlib.util.spec_from_file_location(
+            "ef7_materialized_consumer", external / "scripts/capacity-recovery.py")
+        consumer = importlib.util.module_from_spec(spec); assert spec.loader is not None
+        spec.loader.exec_module(consumer)
+        manifest = external / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json"
+        patches = {**fixture["patches"], "ROOT": external,
+            "DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH": manifest,
+            "DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256": sha(manifest)}
+        binding = {"path": str(manifest), "sha256": sha(manifest)}
+        candidates = [{**item, "dispositionManifest": binding} for item in fixture["requested"]]
+        custody = external.parent
+        request = custody / "audit.private.json"
+        plan = custody / "plan.private.json"
+        intent = custody / "intent.private.json"
+        commands = custody / "commands.private.txt"
+        seal = custody / "seal.private.json"
+        private_json(request, self.request_value(candidates))
+        with mock.patch.multiple(consumer, **patches), \
+                mock.patch.object(consumer, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(consumer, "deploy_group_principals", return_value=["deploy"]), \
+                mock.patch.object(consumer, "_proc_targets", return_value=scan()):
+            plan_value = consumer.audit_request(request, sha(request), plan)
+            self.assertEqual(plan_value["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+            consumer.prepare_plan(plan, sha(plan), intent, commands, seal)
+            sealed = json.loads(intent.read_text())
+            authorization = fixture["base"] / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION", "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(intent), "commandsSha256": sealed["commandsSha256"],
+                "paths": [item["path"] for item in sealed["candidates"]]})
+            receipt = fixture["base"] / "receipts/once"; receipt.parent.mkdir(mode=0o700)
+            result = consumer.execute_intent(intent, sha(intent), authorization,
+                                             sha(authorization), receipt)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertTrue(fixture["worktree"].is_dir())
+        self.assertEqual(subprocess.check_output(
+            ["/usr/bin/git", "-C", str(fixture["worktree"]), "rev-parse", "HEAD"],
+            text=True).strip(), fixture["commit"])
+        for relative in fixture["preserved"]:
+            self.assertTrue((fixture["worktree"] / relative).exists())
+        self.assertTrue(all(not path.exists() for path in fixture["candidates"]))
+        self.assertTrue(all(str(fixture["worktree"]) != line.strip()
+                            for line in commands.read_text().splitlines()))
+
+    def test_ef7_exact_scope_references_drift_and_protected_material_deny(self):
+        for source in ("cwd", "fd/9", "maps"):
+            fixture = self.ef7_fixture("ef7-ref-" + source.replace("/", "-"))
+            with self.subTest(source=source), mock.patch.multiple(MODULE, **fixture["patches"]), \
+                    mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                    mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                    self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_PROCESS_REFERENCE"):
+                MODULE.authenticate_deploy_control(
+                    fixture["requested"][0], json.loads(self.operational.read_text()),
+                    scan(targets=[(77, 101, source, str(fixture["candidates"][0] / "pkg"))]))
+        fixture = self.ef7_fixture("ef7-protected")
+        (fixture["candidates"][0] / ".env").write_text("forbidden")
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_PROTECTED_MATERIAL"):
+            MODULE.authenticate_deploy_control(
+                fixture["requested"][0], json.loads(self.operational.read_text()), scan())
+
+    def test_ef7_symlink_external_hardlink_and_paths_outside_closed_set_deny(self):
+        fixture = self.ef7_fixture("ef7-unsafe")
+        outside = fixture["base"] / "outside.bin"; outside.write_bytes(b"shared"); outside.chmod(0o644)
+        os.link(outside, fixture["candidates"][0] / "external-hardlink")
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_TREE_EXTERNAL_HARDLINK"):
+            MODULE.authenticate_deploy_control(
+                fixture["requested"][0], json.loads(self.operational.read_text()), scan())
+        outside.unlink(); (fixture["candidates"][0] / "external-hardlink").unlink()
+        (fixture["candidates"][0] / "escape").symlink_to("../../outside")
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_TREE_SYMLINK_ESCAPE"):
+            MODULE.authenticate_deploy_control(
+                fixture["requested"][0], json.loads(self.operational.read_text()), scan())
+        root_candidate = {**fixture["requested"][0], "path": str(fixture["worktree"])}
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                self.assertRaisesRegex(MODULE.Denied, "DEPLOY_CONTROL_EXACT_BATCH"):
+            MODULE.validate_audit_request(self.request_value([root_candidate]))
+
+    def test_ef7_partial_execution_is_terminal_without_replay(self):
+        fixture = self.ef7_fixture("ef7-partial")
+        request = fixture["base"] / "request.private.json"
+        plan = fixture["base"] / "plan.private.json"
+        intent_path = fixture["base"] / "intent.private.json"
+        commands = fixture["base"] / "commands.private.txt"
+        seal = fixture["base"] / "seal.private.json"
+        private_json(request, self.request_value(fixture["requested"]))
+        patches = fixture["patches"]
+        with mock.patch.multiple(MODULE, **patches), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.process_patch():
+            MODULE.audit_request(request, sha(request), plan)
+            MODULE.prepare_plan(plan, sha(plan), intent_path, commands, seal)
+        intent = json.loads(intent_path.read_text())
+        authorization = fixture["base"] / "authorization.private.json"
+        private_json(authorization, {"schemaVersion": 1,
+            "kind": "CAPACITY_RECOVERY_AUTHORIZATION", "authorization": "AUTHORIZE_ONCE",
+            "intentSha256": sha(intent_path), "commandsSha256": intent["commandsSha256"],
+            "paths": [item["path"] for item in intent["candidates"]]})
+        receipt = fixture["base"] / "receipts/partial"; receipt.parent.mkdir(mode=0o700)
+        real_run = subprocess.run; effects = []
+        def interrupt_after_one(argv, **kwargs):
+            if argv[0] == "/usr/bin/git" or argv[-1] == "jlist":
+                return real_run(argv, **kwargs)
+            effects.append(list(argv))
+            if len(effects) == 1:
+                return real_run(argv, **kwargs)
+            return SimpleNamespace(returncode=9)
+        with mock.patch.multiple(MODULE, **patches), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.process_patch(), mock.patch.object(MODULE.subprocess, "run", side_effect=interrupt_after_one), \
+                self.assertRaises(SystemExit):
+            MODULE.execute_intent(intent_path, sha(intent_path), authorization,
+                                  sha(authorization), receipt)
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual((result["attemptedCommands"], result["completedCommands"]), (2, 1))
+        first = Path(effects[0][-1]); self.assertFalse(first.exists())
+        with self.assertRaisesRegex(MODULE.Denied, "RECEIPT_ROOT_EXISTS"):
+            MODULE.execute_intent(intent_path, sha(intent_path), authorization,
+                                  sha(authorization), receipt)
+
+    def test_ef7_prepare_denies_tree_drift_after_audit(self):
+        fixture = self.ef7_fixture("ef7-drift")
+        request = fixture["base"] / "request.private.json"
+        plan = fixture["base"] / "plan.private.json"
+        private_json(request, self.request_value(fixture["requested"]))
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                mock.patch.object(MODULE, "deploy_identity", return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "deploy_group_principals", return_value=["deploy"]), \
+                self.process_patch():
+            MODULE.audit_request(request, sha(request), plan)
+            changed = fixture["candidates"][3] / "drift.js"
+            changed.write_text("late drift\n"); changed.chmod(0o644)
+            with self.assertRaises(SystemExit):
+                MODULE.prepare_plan(
+                    plan, sha(plan), fixture["base"] / "intent.private.json",
+                    fixture["base"] / "commands.private.txt",
+                    fixture["base"] / "seal.private.json")
+
+    def test_ef7_production_manifest_is_exact_and_closed(self):
+        manifest = Path(__file__).resolve().parents[2] / (
+            "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json")
+        self.assertEqual(sha(manifest),
+                         "5d08f0a07e0c6eab2638772f0d6bd65f65fb0df2f965e644ae4d1374131143c0")
+        value = json.loads(manifest.read_text())
+        self.assertEqual(value["dispositionId"],
+                         "p00-ef7db111-deploy-control-derived-v1")
+        self.assertEqual(value["worktree"]["root"],
+                         "/opt/re7online/deploy-control/ef7db111-prep")
+        self.assertEqual(value["worktree"]["commit"],
+                         "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece")
+        self.assertEqual(
+            {entry["path"]: entry["physicalBytes"] for entry in value["entries"]}, {
+                "/opt/re7online/deploy-control/ef7db111-prep/node_modules": 593416192,
+                "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules": 316493824,
+                "/opt/re7online/deploy-control/ef7db111-prep/.next": 29827072,
+                "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist": 9404416,
+            })
+        self.assertEqual(sum(item["physicalBytes"] for item in value["entries"]),
+                         949141504)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

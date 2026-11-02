@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CUSTODY = ROOT.parent
 CONSUMER = ROOT / "scripts/capacity-recovery.py"
-CONSUMER_SHA256 = "cc86a211150ea4ec07d9aa84ec50d0f826295d117b08af16082e156decaa3cfd"
+CONSUMER_SHA256 = "ee0a592651039e7fa6f9e3db8848c3e5b78b8549291d005dec5972a961550305"
 PM2 = Path("/opt/re7online/backups/converta-persistent/preparations/p00-capacity-recovery-canonical-23315c43-20261030T030504Z/pm2-private/bin/pm2")
 PM2_SHA256 = "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d"
 NODE = Path("/usr/bin/node")
@@ -25,7 +25,7 @@ GRAPH = CUSTODY / "release-graph.private.json"
 POLICY = CUSTODY / "deploy-artifact-roots.json"
 MANIFEST = ROOT / "config/capacity-recovery/worker-package-audit-disposition.v1.json"
 HELPER = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
-HELPER_SHA256 = "a7f1a0680d19561086923b77162ab3710fbd2c890ccf823aa517d42ccea9a1c2"
+HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
 INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab099247395276ad04db"
 SUDOERS_SHA256 = "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"
 HELPER_PROOF = CUSTODY / "helper-installation-proof.private.json"

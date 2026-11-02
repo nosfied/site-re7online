@@ -674,6 +674,58 @@ Um plano `P00_CAPACITY_RECOVERY_AUDIT_DENY` é gravado integralmente, mas a
 invocação termina com exit code não zero. A existência do plano negado não é
 sucesso do processo.
 
+### `CLOSED_DEPLOY_CONTROL_DERIVED_TREE`
+
+Esta classe é uma disposição legada fechada para **quatro e somente quatro**
+árvores ignoradas do worktree histórico `ef7db111-prep`: os dois
+`node_modules`, `.next` e `apps/whatsapp-agent/dist` enumerados no manifesto
+`ef7db111-deploy-control-disposition.v1.json`. A raiz do worktree, `.git`, o
+registro administrativo do worktree, commit, lockfiles, fontes, documentação e
+controles rastreados permanecem fora dos efeitos. A raiz inteira de
+`deploy-control`, outro worktree, descendente livre ou quinto caminho são
+negados pelo schema, pelo manifesto e pelo observador privilegiado.
+
+O manifesto fixa caminho, identidade da raiz, bytes físicos, commit, gitdir,
+digest do arquivo `.git`, conjunto preservado e a proveniência rastreada de cada
+árvore. O consumidor exige HEAD byte-exato, worktree registrado, estado Git
+limpo inclusive para não rastreados, candidato ignorado e todas as fontes
+preservadas presentes. O modo histórico `0775` da raiz e do gitdir só é aceito
+para `deploy:deploy` quando o grupo `deploy` contém exclusivamente `deploy`;
+outros ancestrais e todas as árvores candidatas continuam sem escrita por grupo
+ou outros.
+
+Cada folha é enumerada sem seguir links. Arquivos são lidos por FD com
+`O_NOFOLLOW`, hash incremental e identidade antes/depois. Symlinks precisam ser
+relativos e confinados à própria árvore. Hardlinks são admitidos somente quando
+todos os links do inode estão dentro dos quatro candidatos; link externo,
+device diferente, tipo inseguro, drift ou material privado (`.env`, chaves,
+dumps, DB, sessões, `.data`, runtime-data ou tenant-data) negam. Nomes de módulos
+como `openai/resources/uploads`, `db` ou `media` não são privados por nome
+isolado; a negativa depende do predicado fechado acima.
+
+Os efeitos são somente `unlink --` literal por folha e `rmdir --` literal em
+pós-ordem. `audit`, `prepare` e `execute` reabrem o manifesto, Git, identidades,
+conteúdo e referências; `execute` faz a recaptura final sob os locks antes do
+primeiro `ATTEMPT`. Journal e receipt existentes continuam sendo a única prova
+de efeito. Interrupção fecha resultado parcial verificável e nunca repete efeito
+automaticamente. O aumento limitado dos tetos de journal/receipt do supervisor
+acomoda a cardinalidade aproximada de 34 mil efeitos; não amplia candidatos nem
+o orçamento de custódia.
+
+A regressão materializa consumidor e manifesto fora do checkout, atravessa
+`audit → prepare → execute` com fixture Git representativa, preserva fonte e
+controles e cobre CWD, FD, maps, drift, symlink, hardlink externo, material
+protegido e interrupção parcial. Isto qualifica o código para revisão; não é
+auditoria produtiva, autorização ou retirada.
+
+O inventário preservado pelo PR documental #313 sustenta raízes, bytes,
+cardinalidade (2.326/21.808/31, 710/6.934/10, 284/1.650/0 e 58/483/0) e ausência
+nominal de payload privado. Ele não contém a relação completa de destinos dos 41
+symlinks nem prova individual de owner/modo/nlink de todas as folhas. Portanto
+esses predicados permanecem verificações obrigatórias da futura fase `audit` e
+podem negar o lote; a implementação não converte a classificação documental em
+elegibilidade presumida.
+
 ## Fontes de verdade preservadas
 
 Sempre preservar:
