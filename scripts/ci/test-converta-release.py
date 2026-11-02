@@ -1131,10 +1131,13 @@ class ReleaseProducerTest(unittest.TestCase):
                     return original_run(*args, **kwargs)
                 commands.append(kwargs["stage"])
                 return ""
-            def checkpoint(_capacity, phase, _remaining=(), _overrides=None):
+            def checkpoint(_capacity, phase, _remaining=(), _overrides=None,
+                           _remaining_peak_inodes=None):
                 if phase == "before_api_npm_ci":
                     raise MODULE.Denied("capacity_checkpoint:after_root_npm_ci")
-                return {"phase": phase, "requiredBytes": 1, "requiredInodes": 1}
+                return {"phase": phase, "requiredBytes": 1, "requiredInodes": 1,
+                        "remainingPeakInodes": 0,
+                        "remainingBudgets": {field: 0 for field in _remaining}}
             with patch.object(MODULE, "toolchain", return_value={}), \
                  patch.object(MODULE, "run", side_effect=run), \
                  patch.object(MODULE, "capacity_checkpoint", side_effect=checkpoint):
@@ -1151,7 +1154,8 @@ class ReleaseProducerTest(unittest.TestCase):
         from types import SimpleNamespace
         capacity = {"filesystemPath": str(self.base), "device": self.base.stat().st_dev,
                     "budgets": {"operationalReserveBytes": 100, "failureEvidenceBytes": 50,
-                                "operationalReserveInodes": 10, "runtimePayloadBytes": 500}}
+                                "operationalReserveInodes": 10, "peakInodes": 10,
+                                "runtimePayloadBytes": 500}}
         capacity.update(admissionMarginBytes=50, requiredInodes=20)
         with patch.object(MODULE.os, "statvfs", return_value=SimpleNamespace(f_bavail=250, f_frsize=1, f_favail=20)):
             MODULE.capacity_checkpoint(capacity, "between_commands")
@@ -1160,6 +1164,61 @@ class ReleaseProducerTest(unittest.TestCase):
         with patch.object(MODULE.os, "statvfs", return_value=SimpleNamespace(f_bavail=1000, f_frsize=1, f_favail=9)):
             with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint:inodes"):
                 MODULE.capacity_checkpoint(capacity, "inodes")
+
+    def test_phase_monitor_invasion_preserves_residue_as_retention_debt(self) -> None:
+        parent = self.outputs / "capacity-monitor-invasion"
+        parent.mkdir()
+        output = parent / "next"
+        residue = output / "authorized-workspace-residue.fixture"
+        try:
+            capacity = capacity_contract(
+                parent / "capacity.json", parent, self.target, "monitor-invasion"
+            )
+            args = MODULE.parser().parse_args([
+                "build", "--repo", str(self.repo), "--target", self.target,
+                "--release-id", "monitor-invasion", "--components", COMPONENTS,
+                "--output", str(output), "--source-date-epoch", EPOCH,
+                "--installed-releases-root", str(self.releases),
+                "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
+            ])
+            commands = []
+            original_run = MODULE.run
+            def run(*arguments, **kwargs):
+                if "stage" not in kwargs:
+                    return original_run(*arguments, **kwargs)
+                commands.append(kwargs["stage"])
+                residue.write_text("preserved\n")
+                return ""
+            def checkpoint(_capacity, phase, remaining=(), _overrides=None,
+                           _remaining_peak_inodes=None):
+                return {"phase": phase, "requiredBytes": 800, "requiredInodes": 50,
+                        "remainingPeakInodes": 20,
+                        "remainingBudgets": {field: 300 for field in remaining}}
+            class InvadedMonitor:
+                def __init__(self, *_args, **_kwargs): pass
+                def start(self): pass
+                def finish(self):
+                    return {"phase": "root_npm_ci", "sampleCount": 2,
+                            "observationGaps": 0, "observedBelowProtected": True,
+                            "minAvailableBytesObserved": 499,
+                            "protectedBytesDuringPhase": 500,
+                            "minAvailableInodesObserved": 29,
+                            "protectedInodesDuringPhase": 30}
+            with patch.object(MODULE, "toolchain", return_value={}), \
+                 patch.object(MODULE, "run", side_effect=run), \
+                 patch.object(MODULE, "capacity_checkpoint", side_effect=checkpoint), \
+                 patch.object(MODULE, "CapacityPhaseMonitor", InvadedMonitor):
+                with self.assertRaisesRegex(
+                        MODULE.Denied, "capacity_observed_below_protected:root_npm_ci"):
+                    MODULE.build(args)
+            self.assertEqual(commands, ["root_npm_ci"])
+            lifecycle = json.loads((output / "generation-lifecycle.private.json").read_text())
+            self.assertEqual(lifecycle["state"], "FAILED")
+            self.assertEqual(lifecycle["dispositionState"], "RETENTION_DEBT")
+            self.assertTrue(residue.is_file())
+        finally:
+            shutil.rmtree(parent, ignore_errors=True)
 
     def test_capacity_checkpoint_detects_concurrent_consumption_before_next_phase(self) -> None:
         from types import SimpleNamespace
@@ -1170,6 +1229,7 @@ class ReleaseProducerTest(unittest.TestCase):
                 "operationalReserveBytes": 100,
                 "failureEvidenceBytes": 50,
                 "operationalReserveInodes": 10,
+                "peakInodes": 10,
             },
             "admissionMarginBytes": 50,
             "requiredInodes": 20,
@@ -1183,33 +1243,58 @@ class ReleaseProducerTest(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint:before_phase_b"):
                 MODULE.capacity_checkpoint(capacity, "before_phase_b")
 
-    def test_capacity_monitor_records_temporary_growth_between_checkpoints(self) -> None:
+    def test_capacity_monitor_allows_active_budget_and_denies_protected_balance_loss(self) -> None:
         from types import SimpleNamespace
         capacity = {"filesystemPath": str(self.base), "device": self.base.stat().st_dev}
         monitor = MODULE.CapacityPhaseMonitor(
-            capacity, "package", required_bytes=700, required_inodes=50, interval=60
+            capacity, "workspace", admission_required_bytes=9663676416,
+            admission_required_inodes=800000, active_budget_bytes=1610612736,
+            active_budget_inodes=400000, interval=60
         )
         samples = [
-            SimpleNamespace(f_bavail=1000, f_frsize=1, f_favail=100),
-            SimpleNamespace(f_bavail=650, f_frsize=1, f_favail=90),
-            SimpleNamespace(f_bavail=900, f_frsize=1, f_favail=95),
-            SimpleNamespace(f_bavail=900, f_frsize=1, f_favail=95),
+            SimpleNamespace(f_bavail=10731368448, f_frsize=1, f_favail=900000),
+            SimpleNamespace(f_bavail=9120755712, f_frsize=1, f_favail=500000),
+            SimpleNamespace(f_bavail=9120755712, f_frsize=1, f_favail=500000),
+            SimpleNamespace(f_bavail=9120755712, f_frsize=1, f_favail=500000),
         ]
         with patch.object(MODULE.os, "statvfs", side_effect=samples):
             monitor._sample()
             monitor._sample()
             monitor._sample()
             result = monitor.finish()
-        self.assertEqual(result["minAvailableBytesObserved"], 650)
-        self.assertEqual(result["minAvailableInodesObserved"], 90)
-        self.assertTrue(result["observedBelowRequired"])
+        self.assertEqual(result["minAvailableBytesObserved"], 9120755712)
+        self.assertEqual(result["minAvailableInodesObserved"], 500000)
+        self.assertFalse(result["observedBelowProtected"])
+        self.assertEqual(result["admissionRequiredBytesBeforePhase"], 9663676416)
+        self.assertEqual(result["activePhaseBudgetBytes"], 1610612736)
+        self.assertEqual(result["protectedBytesDuringPhase"], 8053063680)
         self.assertEqual(result["proofLimit"],
                          "SAMPLED_MINIMUM_NOT_CONTINUOUS_PEAK_GUARANTEE")
+
+        invaded = MODULE.CapacityPhaseMonitor(
+            capacity, "workspace", admission_required_bytes=9663676416,
+            admission_required_inodes=800000, active_budget_bytes=1610612736,
+            active_budget_inodes=400000, interval=60
+        )
+        invaded_samples = [
+            SimpleNamespace(f_bavail=9663676416, f_frsize=1, f_favail=800000),
+            SimpleNamespace(f_bavail=8053063679, f_frsize=1, f_favail=399999),
+            SimpleNamespace(f_bavail=8053063679, f_frsize=1, f_favail=399999),
+        ]
+        with patch.object(MODULE.os, "statvfs", side_effect=invaded_samples):
+            invaded._sample()
+            invaded._sample()
+            invaded_result = invaded.finish()
+        self.assertTrue(invaded_result["observedBelowProtected"])
+        self.assertEqual(invaded_result["minAvailableBytesObserved"], 8053063679)
+        self.assertEqual(invaded_result["minAvailableInodesObserved"], 399999)
 
     def test_capacity_monitor_records_collection_gap(self) -> None:
         capacity = {"filesystemPath": str(self.base), "device": self.base.stat().st_dev}
         monitor = MODULE.CapacityPhaseMonitor(
-            capacity, "frontend_build", required_bytes=1, required_inodes=1, interval=60
+            capacity, "frontend_build", admission_required_bytes=1,
+            admission_required_inodes=1, active_budget_bytes=0,
+            active_budget_inodes=0, interval=60
         )
         with patch.object(MODULE.os, "statvfs", side_effect=OSError("fixture gap")):
             monitor._sample()

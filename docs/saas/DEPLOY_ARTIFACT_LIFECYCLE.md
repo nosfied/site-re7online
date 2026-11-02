@@ -431,8 +431,10 @@ produtivo. Todos os orçamentos precisam ser positivos, medidos e revisados.
 
 Depois que a admissão passa, o produtor revalida antes de cada fase volumosa e
 resume no lifecycle o menor saldo/inodes amostrados, duração e lacunas. A amostra
-não prova o pico contínuo; coleta incompleta ou mínimo observado abaixo do gate
-fecha `FAILED/RETENTION_DEBT` sem remover resíduos. O produtor mantém
+não prova o pico contínuo. O monitor subtrai do threshold somente o orçamento da
+fase ativa e protege reserva, evidência, margem e fases futuras; o pico restante de
+inodes é recalculado por identidades físicas. Coleta incompleta ou mínimo observado
+abaixo desse saldo protegido fecha `FAILED/RETENTION_DEBT` sem remover resíduos. O produtor mantém
 `generation-lifecycle.private.json`, modo `0600`, fora do pacote. O estado é
 `BUILDING`, `FAILED` ou `COMPLETE`; conclusão e falha ficam com classificação
 `PENDING` até a revisão pós-janela. O registro contém somente identidades, caminhos,

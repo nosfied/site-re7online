@@ -72,7 +72,11 @@ negam antes da próxima alocação.
 
 Durante cada fase volumosa, uma telemetria limitada registra somente resumo:
 menor espaço/inodes observados, duração monotônica, contagem/intervalo de amostras
-e lacunas. Um mínimo amostrado abaixo do requerido ou coleta incompleta fecha a
+e lacunas. A admissão anterior à fase inclui sua parcela; durante a fase, o saldo
+protegido subtrai exatamente a parcela ativa e mantém reserva, evidência, margem e
+custos futuros. Para inodes, a admissão usa o pico restante e o monitor preserva a
+reserva enquanto esse pico é consumido. Assim, consumo autorizado não é contado
+duas vezes; extrapolação ou consumo concorrente que invada a proteção fecha a
 geração como `FAILED`/`RETENTION_DEBT`. A telemetria não registra payload e não é
 quota: `minAvailable*Observed` é pico **observado**, não garantia de capturar todo
 temporário entre amostras.

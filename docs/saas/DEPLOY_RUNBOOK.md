@@ -187,9 +187,7 @@ python3 scripts/converta-release.py verify \
 nova release. Retry reutiliza o mesmo pacote autenticado.
 
 O produtor nega antes do primeiro `npm` quando worktree, payload, pacote, verificação,
-evidência, reserva e margem derivada (`failureEvidenceBytes`) excedem bytes/inodes; não
-há piso independente. Revalida fases e registra mínimo/inodes/duração/lacunas; amostra
-não garante pico. Falha fecha `FAILED/RETENTION_DEBT` e preserva resíduos; `PENDING` proíbe cópia/retirada/retry, e P00 não dispensa a admissão derivada.
+evidência, reserva e margem derivada (`failureEvidenceBytes`) excedem bytes/inodes; não há piso independente. Revalida fases e registra mínimo/inodes/duração/lacunas; amostra não garante pico. Durante a fase, o threshold exclui somente sua parcela ativa e preserva reserva/evidência/margem/fases futuras; consumo autorizado não é dupla contagem. Falha fecha `FAILED/RETENTION_DEBT` e preserva resíduos; `PENDING` proíbe cópia/retirada/retry, e P00 não dispensa a admissão derivada.
 
 O produtor exclui uploads/dados operacionais da aplicação, mas preserva dependências
 sob `node_modules`, inclusive diretórios internos chamados `uploads`. O índice fechado

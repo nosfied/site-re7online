@@ -481,7 +481,8 @@ def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
 
 def capacity_checkpoint(capacity: dict[str, Any], phase: str,
                         remaining: Iterable[str] = (),
-                        remaining_overrides: dict[str, int] | None = None) -> dict[str, Any]:
+                        remaining_overrides: dict[str, int] | None = None,
+                        remaining_peak_inodes: int | None = None) -> dict[str, Any]:
     filesystem = Path(capacity["filesystemPath"])
     if filesystem.stat().st_dev != capacity["device"]:
         deny(f"capacity_filesystem_changed:{phase}")
@@ -494,12 +495,18 @@ def capacity_checkpoint(capacity: dict[str, Any], phase: str,
     required_bytes = (budget["operationalReserveBytes"] + budget["failureEvidenceBytes"] +
                       capacity["admissionMarginBytes"])
     required_bytes += sum(remaining_overrides.get(field, budget[field]) for field in remaining)
-    required_inodes = capacity["requiredInodes"]
+    if remaining_peak_inodes is None:
+        remaining_peak_inodes = budget["peakInodes"]
+    if (not isinstance(remaining_peak_inodes, int) or isinstance(remaining_peak_inodes, bool) or
+            remaining_peak_inodes < 0 or remaining_peak_inodes > budget["peakInodes"]):
+        deny(f"capacity_checkpoint_inode_override:{phase}")
+    required_inodes = budget["operationalReserveInodes"] + remaining_peak_inodes
     if free_bytes < required_bytes or free_inodes < required_inodes:
         deny(f"capacity_checkpoint:{phase}:bytes={free_bytes}:required={required_bytes}:"
              f"inodes={free_inodes}:requiredInodes={required_inodes}")
     return {"phase": phase, "availableBytes": free_bytes, "availableInodes": free_inodes,
             "requiredBytes": required_bytes, "requiredInodes": required_inodes,
+            "remainingPeakInodes": remaining_peak_inodes,
             "remainingBudgets": {
                 field: remaining_overrides.get(field, budget[field]) for field in remaining
             }}
@@ -509,13 +516,21 @@ class CapacityPhaseMonitor:
     """Bounded summary telemetry; sampling is an observed minimum, never a peak proof."""
 
     def __init__(self, capacity: dict[str, Any], phase: str,
-                 required_bytes: int, required_inodes: int,
+                 admission_required_bytes: int, admission_required_inodes: int,
+                 active_budget_bytes: int, active_budget_inodes: int,
                  interval: float = CAPACITY_SAMPLE_INTERVAL_SECONDS) -> None:
         self.filesystem = Path(capacity["filesystemPath"])
         self.device = capacity["device"]
         self.phase = phase
-        self.required_bytes = required_bytes
-        self.required_inodes = required_inodes
+        self.admission_required_bytes = admission_required_bytes
+        self.admission_required_inodes = admission_required_inodes
+        self.active_budget_bytes = active_budget_bytes
+        self.active_budget_inodes = active_budget_inodes
+        self.protected_bytes = admission_required_bytes - active_budget_bytes
+        self.protected_inodes = admission_required_inodes - active_budget_inodes
+        if (self.protected_bytes < 0 or self.protected_inodes < 0 or
+                active_budget_bytes < 0 or active_budget_inodes < 0):
+            deny(f"capacity_phase_budget:{phase}")
         self.interval = interval
         self.started_ns = time.monotonic_ns()
         self.finished_ns = self.started_ns
@@ -564,7 +579,8 @@ class CapacityPhaseMonitor:
         self.finished_ns = time.monotonic_ns()
         observed_below = (
             self.min_bytes is not None and self.min_inodes is not None and
-            (self.min_bytes < self.required_bytes or self.min_inodes < self.required_inodes)
+            (self.min_bytes < self.protected_bytes or
+             self.min_inodes < self.protected_inodes)
         )
         return {
             "phase": self.phase,
@@ -576,9 +592,13 @@ class CapacityPhaseMonitor:
             "observationGaps": self.gaps,
             "minAvailableBytesObserved": self.min_bytes,
             "minAvailableInodesObserved": self.min_inodes,
-            "requiredBytes": self.required_bytes,
-            "requiredInodes": self.required_inodes,
-            "observedBelowRequired": observed_below,
+            "admissionRequiredBytesBeforePhase": self.admission_required_bytes,
+            "admissionRequiredInodesBeforePhase": self.admission_required_inodes,
+            "activePhaseBudgetBytes": self.active_budget_bytes,
+            "activePhaseBudgetInodes": self.active_budget_inodes,
+            "protectedBytesDuringPhase": self.protected_bytes,
+            "protectedInodesDuringPhase": self.protected_inodes,
+            "observedBelowProtected": observed_below,
             "proofLimit": "SAMPLED_MINIMUM_NOT_CONTINUOUS_PEAK_GUARANTEE",
         }
 
@@ -588,6 +608,17 @@ def allocated_bytes(path: Path) -> int:
     for item in [path, *path.rglob("*")]:
         total += item.lstat().st_blocks * 512
     return total
+
+
+def allocated_inode_identities(*paths: Path) -> set[tuple[int, int]]:
+    identities: set[tuple[int, int]] = set()
+    for path in paths:
+        if not path.exists() or path.is_symlink():
+            continue
+        for item in [path, *path.rglob("*")]:
+            info = item.lstat()
+            identities.add((info.st_dev, info.st_ino))
+    return identities
 
 
 def write_lifecycle(path: Path, value: dict[str, Any]) -> None:
@@ -1454,25 +1485,37 @@ def build_in_generation_window(args: argparse.Namespace,
     env.update(SOURCE_DATE_EPOCH=str(args.source_date_epoch), TZ="UTC", LANG="C.UTF-8",
                LC_ALL="C.UTF-8", CI="1", NEXT_TELEMETRY_DISABLED="1")
     workspace_baseline_bytes = allocated_bytes(repo)
+    allocation_inode_baseline = allocated_inode_identities(repo, args.output)
 
     def remaining_workspace_bytes() -> int:
         growth = max(0, allocated_bytes(repo) - workspace_baseline_bytes)
         return max(0, capacity["budgets"]["buildWorkspaceGrowthBytes"] - growth)
 
+    def remaining_peak_inodes() -> int:
+        current = allocated_inode_identities(repo, args.output)
+        growth = len(current - allocation_inode_baseline)
+        return max(0, capacity["budgets"]["peakInodes"] - growth)
+
     def checkpoint(phase: str, remaining: Iterable[str] = ()) -> dict[str, Any]:
         remaining = tuple(remaining)
         overrides = ({"buildWorkspaceGrowthBytes": remaining_workspace_bytes()}
                      if "buildWorkspaceGrowthBytes" in remaining else None)
-        observed = capacity_checkpoint(capacity, phase, remaining, overrides)
+        observed = capacity_checkpoint(
+            capacity, phase, remaining, overrides, remaining_peak_inodes()
+        )
         lifecycle["capacityCheckpoints"].append(observed)
         write_lifecycle(lifecycle_path, lifecycle)
         return observed
 
     def monitored_phase(phase: str, action, before_remaining: Iterable[str],
-                        after_remaining: Iterable[str]):
+                        after_remaining: Iterable[str], active_budget: str):
         before = checkpoint(f"before_{phase}", before_remaining)
+        if active_budget not in before["remainingBudgets"]:
+            deny(f"capacity_phase_budget:{phase}")
         monitor = CapacityPhaseMonitor(
-            capacity, phase, before["requiredBytes"], before["requiredInodes"]
+            capacity, phase,
+            before["requiredBytes"], before["requiredInodes"],
+            before["remainingBudgets"][active_budget], before["remainingPeakInodes"],
         )
         monitor.start()
         try:
@@ -1483,12 +1526,12 @@ def build_in_generation_window(args: argparse.Namespace,
             write_lifecycle(lifecycle_path, lifecycle)
         if observation["observationGaps"] or not observation["sampleCount"]:
             deny(f"capacity_telemetry_incomplete:{phase}")
-        if observation["observedBelowRequired"]:
-            deny(f"capacity_observed_below_required:{phase}:"
+        if observation["observedBelowProtected"]:
+            deny(f"capacity_observed_below_protected:{phase}:"
                  f"bytes={observation['minAvailableBytesObserved']}:"
-                 f"required={observation['requiredBytes']}:"
+                 f"protected={observation['protectedBytesDuringPhase']}:"
                  f"inodes={observation['minAvailableInodesObserved']}:"
-                 f"requiredInodes={observation['requiredInodes']}")
+                 f"protectedInodes={observation['protectedInodesDuringPhase']}")
         checkpoint(f"after_{phase}", after_remaining)
         return result
 
@@ -1505,32 +1548,32 @@ def build_in_generation_window(args: argparse.Namespace,
             "root_npm_ci",
             lambda: run(["npm", "ci"], repo, env, failure_root=args.output,
                         stage="root_npm_ci"),
-            workspace_and_payload, workspace_and_payload,
+            workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
         )
         api_source = repo / "apps/whatsapp-agent"
         monitored_phase(
             "api_npm_ci",
             lambda: run(["npm", "ci", "--include=dev"], api_source, env,
                         failure_root=args.output, stage="api_npm_ci"),
-            workspace_and_payload, workspace_and_payload,
+            workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
         )
         monitored_phase(
             "prisma_generate",
             lambda: run(["npm", "run", "db:generate"], api_source, env,
                         failure_root=args.output, stage="prisma_generate"),
-            workspace_and_payload, workspace_and_payload,
+            workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
         )
         monitored_phase(
             "api_build",
             lambda: run(["npm", "run", "build"], api_source, env,
                         failure_root=args.output, stage="api_build"),
-            workspace_and_payload, workspace_and_payload,
+            workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
         )
         monitored_phase(
             "frontend_build",
             lambda: run(["npm", "run", "build"], repo, env,
                         failure_root=args.output, stage="frontend_build"),
-            workspace_and_payload, workspace_and_payload,
+            workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
         )
 
         release_root = args.output / args.release_id
@@ -1545,6 +1588,7 @@ def build_in_generation_window(args: argparse.Namespace,
             "runtime_copy", copy_runtime,
             ("runtimePayloadBytes", "packageTemporaryBytes", "independentVerificationBytes"),
             ("packageTemporaryBytes", "independentVerificationBytes"),
+            "runtimePayloadBytes",
         )
         ensure_clean_repo(repo, args.target)
         normalize_tree(release_root, args.source_date_epoch)
@@ -1582,6 +1626,7 @@ def build_in_generation_window(args: argparse.Namespace,
             lambda: write_package(release_root, package, args.source_date_epoch),
             ("packageTemporaryBytes", "independentVerificationBytes"),
             ("independentVerificationBytes",),
+            "packageTemporaryBytes",
         )
         def independent_extraction() -> dict[str, Any]:
             temporary = Path(tempfile.mkdtemp(
@@ -1604,6 +1649,7 @@ def build_in_generation_window(args: argparse.Namespace,
         staging_artifact = monitored_phase(
             "independent_extraction", independent_extraction,
             ("independentVerificationBytes",), (),
+            "independentVerificationBytes",
         )
         staging_artifact["state"] = "SANITIZED"
         staging_artifact["removedAtProducerCompletion"] = True

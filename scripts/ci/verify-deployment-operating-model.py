@@ -92,7 +92,7 @@ for forbidden in ('pm2_mutate(pm2, ["delete"', 'pm2_mutate(pm2, ["start"',
 for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH',
                '"schemaVersion": 1', 'RELEASE VERIFIED',
                'generation-artifacts.private.json', 'CAPACITY_OBSERVATION_MARGIN_SOURCE',
-               'CapacityPhaseMonitor', 'observedBelowRequired',
+               'CapacityPhaseMonitor', 'observedBelowProtected',
                'repo_outside_canonical_build_worktrees',
                '--p00-static-floor-override', 'P00_TENANT_ISOLATION_RECOVERY'):
     require(marker in producer, f"external release producer marker {marker}")
