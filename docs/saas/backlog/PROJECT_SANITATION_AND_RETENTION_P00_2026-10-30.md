@@ -718,6 +718,15 @@ ativos, rollbacks imediatos e dependências restantes permaneceram protegidos.
 O consumidor integrado aceitou a projeção. O grafo produtivo não foi
 substituído; o resultado continua sem autorização de retirada.
 
+A montagem dos prepares sucessores foi versionada em
+`generation-retirement-prepare-materialize.py`. Além do readback criptográfico,
+ela reabre o request v6 original e todos os seus bindings antes do manifesto
+final, exige que receipt, projeção e grafo sucessor concordem e vincula cada
+fotografia/contrato exclusivamente à geração reconciliada correspondente. A
+regressão usa o produtor real da reconciliação, atravessa o consumidor da
+projeção e os dois entrypoints reais de `prepare`; grafo operacional diferente,
+geração omitida e drift de contrato ou fotografia permanecem negativas.
+
 Próximo ato: usar o inventário existente para fechar impedimentos concretos e
 dimensionar o ganho possível, juntamente com a proposta preventiva em
 [DEPLOY_ARTIFACT_LIFECYCLE](../DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026).

@@ -44,6 +44,10 @@ GENERATION_KEYS = {
     "name", "releaseId", "targetCommit", "contract", "lifecycle",
     "operationalState", "review", "reviewer", "reason",
 }
+RICH_GRAPH_KEYS = {
+    "activeReleases", "rollbackReleases", "transitiveReturnReleases",
+    "candidateReleases", "installedVerifiedReleases", "supersededCandidates",
+}
 
 
 def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
@@ -63,7 +67,8 @@ def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
     if not lock.is_absolute() or lock != Path(os.path.normpath(str(lock))):
         deny("PREPARE_DEPLOYMENT_LOCK")
     source = value.get("sourceReconciliation")
-    if not isinstance(source, dict) or set(source) != {"successorGraph", "projection", "receipt"}:
+    if not isinstance(source, dict) or set(source) != {
+            "request", "successorGraph", "projection", "receipt"}:
         deny("PREPARE_RECONCILIATION_BINDINGS")
     generations = value.get("generations")
     if not isinstance(generations, list) or len(generations) != 2:
@@ -87,11 +92,98 @@ def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
     return value
 
 
+def _bound_json(binding: Any, predicate: str) -> dict[str, Any]:
+    if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+            not isinstance(binding.get("path"), str)):
+        deny(predicate)
+    require_sha256(binding.get("sha256"), predicate)
+    path = Path(binding["path"])
+    SUPPORT_MODULE.regular_identity(path, predicate)
+    if sha256_file(path) != binding["sha256"]:
+        deny(predicate)
+    try:
+        value = json.loads(path.read_bytes())
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny(predicate)
+    if not isinstance(value, dict):
+        deny(predicate)
+    return value
+
+
+def _validate_reconciliation_bundle(request: dict[str, Any]) -> None:
+    source = request["sourceReconciliation"]
+    original = _bound_json(source["request"], "PREPARE_RECONCILIATION_REQUEST")
+    successor = _bound_json(source["successorGraph"], "PREPARE_SUCCESSOR_GRAPH")
+    projection = _bound_json(source["projection"], "PREPARE_PROJECTION")
+    receipt = _bound_json(source["receipt"], "PREPARE_RECONCILIATION_RECEIPT")
+    request_binding_readback(original)
+
+    expected_projection = {"schemaVersion", "sourceGraph", "successorGraph",
+                           "reconciliationReceipt", "protectedGraphPaths", "inventoryPaths"}
+    if (set(successor) != RICH_GRAPH_KEYS or
+            any(not isinstance(successor.get(key), list) for key in RICH_GRAPH_KEYS)):
+        deny("PREPARE_SUCCESSOR_GRAPH")
+    if (set(projection) != expected_projection or projection.get("schemaVersion") != 2 or
+            projection.get("successorGraph") != source["successorGraph"] or
+            projection.get("reconciliationReceipt") != source["receipt"]):
+        deny("PREPARE_PROJECTION_DIVERGENCE")
+    if (receipt.get("schemaVersion") != 2 or
+            receipt.get("state") != "RECONCILED_NO_EFFECT" or
+            receipt.get("requestSha256") != source["request"]["sha256"] or
+            receipt.get("successorGraph") != source["successorGraph"] or
+            receipt.get("sourceGraph") != projection.get("sourceGraph") or
+            receipt.get("operationalState") != original.get("operationalState") or
+            receipt.get("reconciliationId") != original.get("reconciliationId") or
+            receipt.get("releaseRoot") != original.get("releaseRoot") or
+            receipt.get("originalsModified") is not False or
+            receipt.get("destructiveCommands") != 0):
+        deny("PREPARE_RECONCILIATION_RECEIPT_DIVERGENCE")
+    if original.get("sourceGraph") != projection.get("sourceGraph"):
+        deny("PREPARE_RECONCILIATION_REQUEST_DIVERGENCE")
+    if (not isinstance(original.get("entries"), list) or
+            not isinstance(receipt.get("results"), list)):
+        deny("PREPARE_RECONCILIATION_GENERATIONS")
+
+    generation_by_release = {item["releaseId"]: item for item in request["generations"]}
+    entry_by_release = {item.get("releaseId"): item for item in original["entries"]
+                        if isinstance(item, dict) and isinstance(item.get("releaseId"), str)}
+    result_by_release = {item.get("releaseId"): item for item in receipt["results"]
+                         if isinstance(item, dict) and isinstance(item.get("releaseId"), str)}
+    expected_releases = set(generation_by_release)
+    if (set(entry_by_release) != expected_releases or set(result_by_release) != expected_releases or
+            len(entry_by_release) != len(original["entries"]) or
+            len(result_by_release) != len(receipt["results"])):
+        deny("PREPARE_RECONCILIATION_GENERATIONS")
+
+    for release, generation in generation_by_release.items():
+        entry = entry_by_release[release]
+        result = result_by_release[release]
+        contract = _bound_json(generation["contract"], "PREPARE_CONTRACT_BINDING")
+        operational = _bound_json(generation["operationalState"],
+                                  "PREPARE_OPERATIONAL_BINDING")
+        if (entry.get("contract") != generation["contract"] or
+                entry.get("lifecycle") != generation["lifecycle"] or
+                entry.get("review") != generation["review"] or
+                result.get("contract") != generation["contract"] or
+                result.get("lifecycleSha256") != generation["lifecycle"]["sha256"] or
+                result.get("reviewSha256") != generation["review"]["sha256"] or
+                result.get("result") != "HISTORICAL_EVIDENCE_ONLY" or
+                contract.get("releaseId") != release or
+                contract.get("targetCommit") != generation["targetCommit"] or
+                operational.get("releaseId") != release or
+                operational.get("targetCommit") != generation["targetCommit"] or
+                operational.get("observations", {}).get("releaseGraph") !=
+                source["successorGraph"] or
+                any(operational.get(key) != successor.get(key) for key in RICH_GRAPH_KEYS)):
+            deny("PREPARE_RECONCILIATION_GENERATION_DIVERGENCE")
+
+
 def materialize(control_root: Path, custody: Path, source_commit: str,
                 request_path: Path, request_sha256: str) -> dict[str, Any]:
     if not GIT_SHA1.fullmatch(source_commit):
         deny("CONTROL_SOURCE_COMMIT_FORMAT")
     request = _closed_request(request_path, request_sha256)
+    _validate_reconciliation_bundle(request)
     if custody.exists() or custody.is_symlink():
         deny("PREPARE_CUSTODY_EXISTS")
     custody.mkdir(mode=0o700, parents=False)
@@ -140,6 +232,10 @@ def materialize(control_root: Path, custody: Path, source_commit: str,
                       "targetCommit": item["targetCommit"], "argv": argv,
                       "priorReview": file_binding(preserved_review),
                       "intentOutput": str(intent), "commandsOutput": str(commands)})
+    reopened_request = _closed_request(request_path, request_sha256)
+    if reopened_request != request:
+        deny("PREPARE_REQUEST_DRIFT")
+    _validate_reconciliation_bundle(reopened_request)
     result = {"schemaVersion": 1, "state": "READY_FOR_RETIREMENT_PREPARE",
               "sourceCommit": source_commit,
               "request": {"path": str(request_path), "sha256": request_sha256},
