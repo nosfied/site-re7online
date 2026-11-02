@@ -1732,6 +1732,25 @@ class GenerationRetirementTest(unittest.TestCase):
                 "--receipt-output", str(fixture.evidence_root / "denied-receipt.json"))
             self.assertEqual(denied.returncode, 2)
             self.assertIn("private_hash", denied.stderr)
+            review_value["reason"] = "terminal proof"
+            private_json(drifted_review, review_value)
+
+            journal_path = Path(entries[2]["journal"]["path"])
+            journal_value = json.loads(journal_path.read_text())
+            journal_value["state"] = "DEPLOYED_RETENTION_INCOMPLETE"
+            private_json(journal_path, journal_value)
+            open_request = json.loads(request_path.read_text())
+            open_request["entries"][2]["journal"]["sha256"] = sha(journal_path)
+            open_request_path = fixture.evidence_root / "open-dependency-request.json"
+            private_json(open_request_path, open_request)
+            open_denied = invoke_tool(copied_tool, "reconcile-release-graph",
+                "--request", str(open_request_path),
+                "--request-sha256", sha(open_request_path),
+                "--graph-output", str(fixture.evidence_root / "open-successor.json"),
+                "--projection-output", str(fixture.evidence_root / "open-projection.json"),
+                "--receipt-output", str(fixture.evidence_root / "open-receipt.json"))
+            self.assertEqual(open_denied.returncode, 2)
+            self.assertIn("release_reconciliation_journal_open", open_denied.stderr)
         finally:
             fixture.close()
 
