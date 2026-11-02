@@ -1420,6 +1420,161 @@ def _classify_transaction(child: Path) -> tuple[list[str], dict[str, Any]]:
     deny("LIVE_TRANSACTION_LAYOUT_UNKNOWN")
 
 
+def _reconciliation_receipt_file(value: Any, label: str,
+                                 *, parse_json: bool = True) -> tuple[Path, str, Any]:
+    if (not isinstance(value, dict) or set(value) != {"path", "sha256"} or
+            not isinstance(value.get("path"), str) or
+            not SHA256.fullmatch(str(value.get("sha256", "")))):
+        deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+    path = Path(value["path"])
+    raw, _ = stable_regular(path, value["sha256"], allowed_modes={0o600, 0o644})
+    parsed = object_json(raw, label) if parse_json else raw
+    return path, value["sha256"], parsed
+
+
+def _fixed_current_receipt_activation(
+        evidence: Any, component: str,
+        source: dict[str, list[str]]) -> tuple[str, str]:
+    legacy = {"runtimeManifest", "transactionJournal",
+              "selectedRelease", "immediateRollback"}
+    versioned = legacy | {"kind"}
+    if (not isinstance(evidence, dict) or set(evidence) not in (legacy, versioned) or
+            (set(evidence) == versioned and evidence.get("kind") != "FIXED_CURRENT")):
+        deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+    _, manifest_sha, manifest = _reconciliation_receipt_file(
+        evidence["runtimeManifest"], "LIVE_RELEASE_GRAPH_ROLLBACK_MANIFEST")
+    _, _, journal = _reconciliation_receipt_file(
+        evidence["transactionJournal"], "LIVE_RELEASE_GRAPH_ROLLBACK_JOURNAL")
+    binding = journal.get("binding")
+    components = journal.get("components",
+                             binding.get("components") if isinstance(binding, dict) else None)
+    rollback = manifest.get("rollbackReleases")
+    previous = journal.get("previous", {}).get("releases")
+    selections = journal.get("preflight", {}).get("selections")
+    candidate = binding.get("release") if isinstance(binding, dict) else None
+    if (not isinstance(binding, dict) or
+            binding.get("runtimeManifestSha256") != manifest_sha or
+            not isinstance(components, list) or component not in components or
+            any(item not in {"api", "frontend"} for item in components) or
+            not isinstance(rollback, dict) or not isinstance(previous, dict) or
+            not isinstance(selections, dict) or set(selections) != {"api", "frontend"} or
+            not isinstance(candidate, str) or candidate not in source["activeReleases"]):
+        deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+    selection = selections.get(component)
+    selected = selection.get("releaseId") if isinstance(selection, dict) else None
+    if (not isinstance(selected, str) or
+            selected not in source["installedVerifiedReleases"]):
+        deny("LIVE_RELEASE_GRAPH_COMPONENT_COVERAGE")
+    definition = rollback.get(component)
+    if (not isinstance(definition, dict) or definition.get("releaseId") != selected or
+            previous.get(component) != selected or
+            evidence["selectedRelease"] != candidate or
+            evidence["immediateRollback"] != selected):
+        deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+    return candidate, selected
+
+
+def _frontend_only_receipt_activation(
+        evidence: Any, source: dict[str, list[str]],
+        release_root: Path) -> tuple[str, str]:
+    expected = {"kind", "executor", "selectionIntent", "activationIntent",
+                "awaitingAcceptanceState", "technicalAcceptance",
+                "finalizationReceipt", "finalWindowState",
+                "selectedRelease", "immediateRollback"}
+    if (not isinstance(evidence, dict) or set(evidence) != expected or
+            evidence.get("kind") != "FRONTEND_ONLY_V1"):
+        deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+    values: dict[str, Any] = {}
+    bindings: dict[str, tuple[Path, str]] = {}
+    for key in expected - {"kind", "executor", "selectedRelease", "immediateRollback"}:
+        path, sha256, value = _reconciliation_receipt_file(
+            evidence[key], f"LIVE_RELEASE_GRAPH_FRONTEND_{key.upper()}")
+        bindings[key] = (path, sha256)
+        values[key] = value
+    executor_path, _, _ = _reconciliation_receipt_file(
+        evidence["executor"], "LIVE_RELEASE_GRAPH_FRONTEND_EXECUTOR", parse_json=False)
+
+    selection = values["selectionIntent"]
+    activation = values["activationIntent"]
+    awaiting = values["awaitingAcceptanceState"]
+    acceptance = values["technicalAcceptance"]
+    finalization = values["finalizationReceipt"]
+    final_window = values["finalWindowState"]
+    selected = activation.get("release")
+    rollback = activation.get("rollbackRelease")
+    target_commit = activation.get("target")
+    transaction_root = Path(str(activation.get("transactionRoot", "")))
+    selected_runtime = Path(str(selection.get("target", "")))
+    rollback_runtime = Path(str(selection.get("expectedCurrent", "")))
+    if (not isinstance(selected, str) or selected not in source["activeReleases"] or
+            not isinstance(rollback, str) or rollback not in source["rollbackReleases"] or
+            selected not in source["installedVerifiedReleases"] or
+            rollback not in source["installedVerifiedReleases"] or
+            evidence["selectedRelease"] != selected or
+            evidence["immediateRollback"] != rollback or
+            not isinstance(target_commit, str) or not target_commit or
+            not transaction_root.is_absolute() or
+            selection != {"frontend": "candidate",
+                          "expectedCurrent": str(rollback_runtime),
+                          "target": str(selected_runtime)} or
+            selected_runtime != release_root / selected / "frontend-runtime" or
+            rollback_runtime != release_root / rollback / "frontend-runtime"):
+        deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+    transaction_paths = [bindings[key][0] for key in
+                         ("selectionIntent", "awaitingAcceptanceState",
+                          "technicalAcceptance", "finalizationReceipt", "finalWindowState")]
+    activation_path = bindings["activationIntent"][0]
+    if (any(path.parent != transaction_root for path in transaction_paths) or
+            activation_path.parent != executor_path.parent or
+            activation_path.name != "activation-intent.private.json" or
+            bindings["finalWindowState"][0].name != "window-state.private.json" or
+            bindings["selectionIntent"][0].name != "selection-intent.private.json" or
+            bindings["technicalAcceptance"][0].name !=
+            "technical-acceptance.private.json" or
+            bindings["finalizationReceipt"][0].name !=
+            "frontend-finalization-receipt.private.json" or
+            bindings["awaitingAcceptanceState"][0].name !=
+            f"window-state.private.json.previous.{bindings['awaitingAcceptanceState'][1]}"):
+        deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+    if (activation.get("schemaVersion") != 1 or
+            activation.get("state") != "SEALED_AWAITING_EXPLICIT_ACTIVATION_AUTHORIZATION" or
+            activation.get("activationExecuted") is not False or
+            activation.get("authorizationReady") is not True or
+            activation.get("automaticRetry") is not False or
+            activation.get("deployedMarkerBeforeAcceptance") is not False or
+            activation.get("saveCountBeforeAcceptance") != 0 or
+            activation.get("retirementReceiptAbsent") is not True or
+            activation.get("executorSha256") != evidence["executor"]["sha256"]):
+        deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+    if (awaiting.get("state") != "AWAITING_ACCEPTANCE" or
+            awaiting.get("release") != selected or awaiting.get("target") != target_commit or
+            awaiting.get("buildId") != activation.get("buildId") or
+            awaiting.get("saveCount") != 0 or awaiting.get("acceptance") is not False or
+            awaiting.get("deployedMarker") is not False):
+        deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+    if (acceptance != {"accepted": True,
+                       "acceptedAt": acceptance.get("acceptedAt"),
+                       "decision": "TECHNICAL_ACCEPTANCE_PASS",
+                       "ownerDecision": "TECHNICAL_ACCEPTANCE_GRANTED",
+                       "release": selected, "schemaVersion": 1,
+                       "scope": "frontend-only technical acceptance",
+                       "source": "owner_confirmation_in_active_window",
+                       "target": target_commit} or
+            not isinstance(acceptance.get("acceptedAt"), str) or
+            not acceptance["acceptedAt"]):
+        deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+    final_common = {"state": "DEPLOYED_SANITIZED", "saveCount": 1,
+                    "dumpSha256": finalization.get("dumpSha256"),
+                    "retirementReceiptSha256": finalization.get("retirementReceiptSha256"),
+                    "restartCountDuringFinalize": 0}
+    if (finalization != final_common or
+            not SHA256.fullmatch(str(finalization.get("dumpSha256", ""))) or
+            not SHA256.fullmatch(str(finalization.get("retirementReceiptSha256", ""))) or
+            final_window != {**final_common, "acceptance": True, "deployedMarker": True}):
+        deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+    return selected, rollback
+
+
 def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recapture mutable operational references while both canonical locks are held."""
     observations = operational["liveObservations"]
@@ -1601,57 +1756,17 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
         immediate = {}
         for component in ("api", "frontend"):
             evidence = activation_evidence.get(component)
-            if (not isinstance(evidence, dict) or
-                    set(evidence) != {"runtimeManifest", "transactionJournal",
-                                     "selectedRelease", "immediateRollback"}):
-                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
-            manifest_binding = evidence["runtimeManifest"]
-            journal_binding = evidence["transactionJournal"]
-            if (not isinstance(manifest_binding, dict) or
-                    set(manifest_binding) != {"path", "sha256"} or
-                    not isinstance(journal_binding, dict) or
-                    set(journal_binding) != {"path", "sha256"}):
-                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
-            manifest_raw, _ = stable_regular(Path(manifest_binding["path"]),
-                                             manifest_binding["sha256"],
-                                             allowed_modes={0o600, 0o644})
-            journal_raw, _ = stable_regular(Path(journal_binding["path"]),
-                                            journal_binding["sha256"],
-                                            allowed_modes={0o600, 0o644})
-            manifest = object_json(manifest_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_MANIFEST")
-            journal = object_json(journal_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_JOURNAL")
-            binding = journal.get("binding")
-            components = journal.get("components",
-                                     binding.get("components") if isinstance(binding, dict) else None)
-            rollback = manifest.get("rollbackReleases")
-            previous = journal.get("previous", {}).get("releases")
-            selections = journal.get("preflight", {}).get("selections")
-            candidate = binding.get("release") if isinstance(binding, dict) else None
-            if (not isinstance(binding, dict) or
-                    binding.get("runtimeManifestSha256") != manifest_binding["sha256"] or
-                    not isinstance(components, list) or component not in components or
-                    any(item not in {"api", "frontend"} for item in components) or
-                    not isinstance(rollback, dict) or not isinstance(previous, dict) or
-                    not isinstance(selections, dict) or set(selections) != {"api", "frontend"} or
-                    not isinstance(candidate, str) or
-                    candidate not in rich_values["sourceGraph"]["activeReleases"]):
-                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
-            selection = selections.get(component)
-            selected = selection.get("releaseId") if isinstance(selection, dict) else None
-            if (not isinstance(selected, str) or
-                    selected not in rich_values["sourceGraph"]["installedVerifiedReleases"]):
-                deny("LIVE_RELEASE_GRAPH_COMPONENT_COVERAGE")
-            definition = rollback.get(component)
-            if (not isinstance(definition, dict) or definition.get("releaseId") != selected or
-                    previous.get(component) != selected):
-                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+            if (component == "frontend" and isinstance(evidence, dict) and
+                    evidence.get("kind") == "FRONTEND_ONLY_V1"):
+                candidate, selected = _frontend_only_receipt_activation(
+                    evidence, rich_values["sourceGraph"], release_root)
+            else:
+                candidate, selected = _fixed_current_receipt_activation(
+                    evidence, component, rich_values["sourceGraph"])
             immediate[component] = selected
             selected_now[component] = candidate
             if candidate not in rich_values["sourceGraph"]["activeReleases"]:
                 deny("LIVE_RELEASE_GRAPH_ACTIVE_SELECTION")
-            if (evidence["selectedRelease"] != candidate or
-                    evidence["immediateRollback"] != selected):
-                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
         if set(selected_now) != {"api", "frontend"} or set(immediate) != {"api", "frontend"}:
             deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
         immediate_rollbacks = set(immediate.values())

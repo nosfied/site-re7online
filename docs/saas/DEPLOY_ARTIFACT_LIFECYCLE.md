@@ -1137,6 +1137,21 @@ Omissão, binding divergente ou estado aberto preservam a aresta. Releases ativa
 rollback imediato, candidatas e dependências transitivas não reconciliadas
 continuam protegidas.
 
+O leitor de ativação distingue os produtores reais. Fixed-current autentica runtime
+manifest e `transaction.v1.private.json`. Frontend-only v1 autentica diretamente os
+arquivos emitidos por seu produtor: executor, `selection-intent.private.json`,
+`activation-intent.private.json`, cópia hash-bound do estado
+`AWAITING_ACCEPTANCE`, aceite técnico, receipt de finalização e
+`window-state.private.json` terminal. O vínculo é derivado somente em memória; não
+reescreve evidência legada. O predecessor declarado precisa ser o rollback imediato
+do frontend no grafo rico, e a seleção precisa permanecer ativa. Evidência ausente,
+misturada entre transações, antiga ou divergente mantém a proteção.
+O consumidor da projeção aceita o receipt histórico sem `kind`, o receipt nominal
+`FIXED_CURRENT` e o conjunto fechado `FRONTEND_ONLY_V1`. Neste último, ele reabre
+executor, intenções, estado anterior, aceite, receipt e estado terminal, deriva
+novamente seleção e predecessor e nega binding ausente, cruzado ou adulterado antes
+de aceitar `protectedGraphPaths`.
+
 Uma release que contenha descendente `PRIVATE_DATA_NEVER_RETIRE` ou o overlay
 literal `api-runtime/.data` permanece `ACTIVE_DEPENDENCY`, mesmo fora das listas
 operacionais. A presença ambígua também protege. Essa regra é aplicada na

@@ -2707,55 +2707,169 @@ def _release_is_live(release: str, installed: Path, operational: dict[str, Any])
     return False
 
 
-def _activation_selection(value: Any, source: dict[str, list[str]]) -> tuple[dict[str, str], dict[str, Any]]:
+def _fixed_current_activation_evidence(
+        evidence: Any, component: str,
+        source: dict[str, list[str]]) -> tuple[str, str, dict[str, Any]]:
+    if (not isinstance(evidence, dict) or
+            set(evidence) != {"runtimeManifest", "transactionJournal"}):
+        deny("release_reconciliation_activation_schema")
+    manifest_path, manifest_sha, manifest_raw = _closed_file_binding(
+        evidence["runtimeManifest"], f"activation:{component}:manifest")
+    journal_path, journal_sha, journal_raw = _closed_file_binding(
+        evidence["transactionJournal"], f"activation:{component}:journal")
+    manifest = object_json(manifest_raw, f"activation:{component}:manifest")
+    journal = object_json(journal_raw, f"activation:{component}:journal")
+    binding = journal.get("binding")
+    components = journal.get("components",
+                             binding.get("components") if isinstance(binding, dict) else None)
+    candidate = binding.get("release") if isinstance(binding, dict) else None
+    rollback = manifest.get("rollbackReleases")
+    previous = journal.get("previous", {}).get("releases")
+    selections = journal.get("preflight", {}).get("selections")
+    if (not isinstance(binding, dict) or
+            binding.get("runtimeManifestSha256") != manifest_sha or
+            not isinstance(components, list) or component not in components or
+            any(item not in {"api", "frontend"} for item in components) or
+            len(components) != len(set(components)) or
+            not isinstance(candidate, str) or candidate not in source["activeReleases"] or
+            not isinstance(rollback, dict) or not isinstance(previous, dict) or
+            not isinstance(selections, dict) or set(selections) != {"api", "frontend"}):
+        deny("release_reconciliation_activation_identity")
+    selected = selections.get(component)
+    release = selected.get("releaseId") if isinstance(selected, dict) else None
+    if not isinstance(release, str) or release not in source["installedVerifiedReleases"]:
+        deny("release_reconciliation_component_coverage")
+    definition = rollback.get(component)
+    if (not isinstance(definition, dict) or definition.get("releaseId") != release or
+            previous.get(component) != release):
+        deny("release_reconciliation_immediate_rollback_identity")
+    return candidate, release, {
+        "kind": "FIXED_CURRENT",
+        "runtimeManifest": {"path": str(manifest_path), "sha256": manifest_sha},
+        "transactionJournal": {"path": str(journal_path), "sha256": journal_sha},
+        "selectedRelease": candidate, "immediateRollback": release}
+
+
+def _frontend_only_activation_evidence(
+        evidence: Any, source: dict[str, list[str]],
+        release_root: Path) -> tuple[str, str, dict[str, Any]]:
+    expected = {"kind", "executor", "selectionIntent", "activationIntent",
+                "awaitingAcceptanceState", "technicalAcceptance",
+                "finalizationReceipt", "finalWindowState"}
+    if (not isinstance(evidence, dict) or set(evidence) != expected or
+            evidence.get("kind") != "FRONTEND_ONLY_V1"):
+        deny("release_reconciliation_frontend_activation_schema")
+    bindings: dict[str, dict[str, str]] = {}
+    values: dict[str, Any] = {}
+    for key in expected - {"kind", "executor"}:
+        path, sha256, raw = _closed_file_binding(
+            evidence[key], f"activation:frontend:{key}")
+        bindings[key] = {"path": str(path), "sha256": sha256}
+        values[key] = object_json(raw, f"activation:frontend:{key}")
+    executor_path, executor_sha, _ = _closed_file_binding(
+        evidence["executor"], "activation:frontend:executor")
+    bindings["executor"] = {"path": str(executor_path), "sha256": executor_sha}
+
+    selection = values["selectionIntent"]
+    activation = values["activationIntent"]
+    awaiting = values["awaitingAcceptanceState"]
+    acceptance = values["technicalAcceptance"]
+    finalization = values["finalizationReceipt"]
+    final_window = values["finalWindowState"]
+    selected = activation.get("release")
+    rollback = activation.get("rollbackRelease")
+    target_commit = activation.get("target")
+    transaction_root = Path(str(activation.get("transactionRoot", "")))
+    selected_runtime = Path(str(selection.get("target", "")))
+    rollback_runtime = Path(str(selection.get("expectedCurrent", "")))
+    if (not isinstance(selected, str) or selected not in source["activeReleases"] or
+            not isinstance(rollback, str) or rollback not in source["rollbackReleases"] or
+            selected not in source["installedVerifiedReleases"] or
+            rollback not in source["installedVerifiedReleases"] or
+            not isinstance(target_commit, str) or not target_commit or
+            not transaction_root.is_absolute() or
+            selection != {"frontend": "candidate",
+                          "expectedCurrent": str(rollback_runtime),
+                          "target": str(selected_runtime)} or
+            selected_runtime != release_root / selected / "frontend-runtime" or
+            rollback_runtime != release_root / rollback / "frontend-runtime"):
+        deny("release_reconciliation_frontend_selection_identity")
+    transaction_paths = [Path(bindings[key]["path"]) for key in
+                         ("selectionIntent", "awaitingAcceptanceState",
+                          "technicalAcceptance", "finalizationReceipt", "finalWindowState")]
+    activation_path = Path(bindings["activationIntent"]["path"])
+    if (any(path.parent != transaction_root for path in transaction_paths) or
+            activation_path.parent != executor_path.parent or
+            activation_path.name != "activation-intent.private.json" or
+            Path(bindings["finalWindowState"]["path"]).name != "window-state.private.json" or
+            Path(bindings["selectionIntent"]["path"]).name != "selection-intent.private.json" or
+            Path(bindings["technicalAcceptance"]["path"]).name !=
+            "technical-acceptance.private.json" or
+            Path(bindings["finalizationReceipt"]["path"]).name !=
+            "frontend-finalization-receipt.private.json" or
+            Path(bindings["awaitingAcceptanceState"]["path"]).name !=
+            f"window-state.private.json.previous.{bindings['awaitingAcceptanceState']['sha256']}"):
+        deny("release_reconciliation_frontend_transaction_identity")
+    if (activation.get("schemaVersion") != 1 or
+            activation.get("state") != "SEALED_AWAITING_EXPLICIT_ACTIVATION_AUTHORIZATION" or
+            activation.get("activationExecuted") is not False or
+            activation.get("authorizationReady") is not True or
+            activation.get("automaticRetry") is not False or
+            activation.get("deployedMarkerBeforeAcceptance") is not False or
+            activation.get("saveCountBeforeAcceptance") != 0 or
+            activation.get("retirementReceiptAbsent") is not True or
+            activation.get("executorSha256") != executor_sha):
+        deny("release_reconciliation_frontend_activation_identity")
+    if (awaiting.get("state") != "AWAITING_ACCEPTANCE" or
+            awaiting.get("release") != selected or awaiting.get("target") != target_commit or
+            awaiting.get("buildId") != activation.get("buildId") or
+            awaiting.get("saveCount") != 0 or awaiting.get("acceptance") is not False or
+            awaiting.get("deployedMarker") is not False):
+        deny("release_reconciliation_frontend_awaiting_identity")
+    if (acceptance != {"accepted": True,
+                       "acceptedAt": acceptance.get("acceptedAt"),
+                       "decision": "TECHNICAL_ACCEPTANCE_PASS",
+                       "ownerDecision": "TECHNICAL_ACCEPTANCE_GRANTED",
+                       "release": selected, "schemaVersion": 1,
+                       "scope": "frontend-only technical acceptance",
+                       "source": "owner_confirmation_in_active_window",
+                       "target": target_commit} or
+            not isinstance(acceptance.get("acceptedAt"), str) or
+            not acceptance["acceptedAt"]):
+        deny("release_reconciliation_frontend_acceptance_identity")
+    final_common = {"state": "DEPLOYED_SANITIZED", "saveCount": 1,
+                    "dumpSha256": finalization.get("dumpSha256"),
+                    "retirementReceiptSha256": finalization.get("retirementReceiptSha256"),
+                    "restartCountDuringFinalize": 0}
+    if (finalization != final_common or
+            not SHA256.fullmatch(str(finalization.get("dumpSha256", ""))) or
+            not SHA256.fullmatch(str(finalization.get("retirementReceiptSha256", ""))) or
+            final_window != {**final_common, "acceptance": True, "deployedMarker": True}):
+        deny("release_reconciliation_frontend_finalization_identity")
+    return selected, rollback, {"kind": "FRONTEND_ONLY_V1", **bindings,
+                                "selectedRelease": selected,
+                                "immediateRollback": rollback}
+
+
+def _activation_selection(value: Any, source: dict[str, list[str]],
+                          release_root: Path) -> tuple[dict[str, str], dict[str, Any]]:
     if not isinstance(value, dict) or set(value) != {"api", "frontend"}:
         deny("release_reconciliation_activation_schema")
     immediate: dict[str, str] = {}
-    selected_now: dict[str, str] = {}
     normalized: dict[str, Any] = {}
     for component in ("api", "frontend"):
         evidence = value.get(component)
-        if (not isinstance(evidence, dict) or
-                set(evidence) != {"runtimeManifest", "transactionJournal"}):
-            deny("release_reconciliation_activation_schema")
-        manifest_path, manifest_sha, manifest_raw = _closed_file_binding(
-            evidence["runtimeManifest"], f"activation:{component}:manifest")
-        journal_path, journal_sha, journal_raw = _closed_file_binding(
-            evidence["transactionJournal"], f"activation:{component}:journal")
-        manifest = object_json(manifest_raw, f"activation:{component}:manifest")
-        journal = object_json(journal_raw, f"activation:{component}:journal")
-        binding = journal.get("binding")
-        components = journal.get("components",
-                                 binding.get("components") if isinstance(binding, dict) else None)
-        candidate = binding.get("release") if isinstance(binding, dict) else None
-        rollback = manifest.get("rollbackReleases")
-        previous = journal.get("previous", {}).get("releases")
-        selections = journal.get("preflight", {}).get("selections")
-        if (not isinstance(binding, dict) or
-                binding.get("runtimeManifestSha256") != manifest_sha or
-                not isinstance(components, list) or component not in components or
-                any(item not in {"api", "frontend"} for item in components) or
-                len(components) != len(set(components)) or
-                not isinstance(candidate, str) or candidate not in source["activeReleases"] or
-                not isinstance(rollback, dict) or not isinstance(previous, dict) or
-                not isinstance(selections, dict) or set(selections) != {"api", "frontend"}):
-            deny("release_reconciliation_activation_identity")
-        selected = selections.get(component)
-        release = selected.get("releaseId") if isinstance(selected, dict) else None
-        if not isinstance(release, str) or release not in source["installedVerifiedReleases"]:
-            deny("release_reconciliation_component_coverage")
-        definition = rollback.get(component)
-        if (not isinstance(definition, dict) or definition.get("releaseId") != release or
-                previous.get(component) != release):
-            deny("release_reconciliation_immediate_rollback_identity")
-        immediate[component] = release
-        selected_now[component] = candidate
+        if (component == "frontend" and isinstance(evidence, dict) and
+                evidence.get("kind") == "FRONTEND_ONLY_V1"):
+            candidate, release, normalized_evidence = _frontend_only_activation_evidence(
+                evidence, source, release_root)
+        else:
+            candidate, release, normalized_evidence = _fixed_current_activation_evidence(
+                evidence, component, source)
         if candidate not in source["activeReleases"]:
             deny("release_reconciliation_active_selection")
-        normalized[component] = {
-            "runtimeManifest": {"path": str(manifest_path), "sha256": manifest_sha},
-            "transactionJournal": {"path": str(journal_path), "sha256": journal_sha},
-            "selectedRelease": candidate, "immediateRollback": release}
+        immediate[component] = release
+        normalized[component] = normalized_evidence
     return immediate, normalized
 
 
@@ -2918,7 +3032,7 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
             observations.get("releaseGraph") != {"path": str(source_path), "sha256": source_sha}):
         deny("release_reconciliation_source_graph_binding")
     immediate_rollbacks, activation_evidence = _activation_selection(
-        request["activationEvidence"], source)
+        request["activationEvidence"], source, release_root)
     if any(release not in source["rollbackReleases"] for release in immediate_rollbacks.values()):
         deny("release_reconciliation_immediate_rollback_role")
     successor = {key: list(value) for key, value in source.items()}
