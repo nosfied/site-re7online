@@ -577,6 +577,35 @@ imediatos e autentica a projeção schema 2 no consumidor. O potencial de
 2.965.995.520 bytes não foi recapturado nem recuperado. Nenhum grafo produtivo foi
 alterado e nenhuma retirada foi autorizada.
 
+Atualização terminal de 02/11/2026: d436 foi posteriormente fechado em
+`SANITIZED`, validado por `_canonical_retirement_closure()` e não pode ser
+reaberto. Receipt `b638b25a20823acfbc0797c0bdca037edf95e9d214578022c0c1d703c503ed5c`,
+journal `525ab03b5b414a90bc6e8703597f1c7d7953cbfa192a9e17cd00225dfeba975c`
+e review `11a301e4b266994eac124e54eadd0ae5178002a4e1f5d50f59672b948e4ffb52`.
+O ganho líquido medido foi `988.528.640 bytes`; a capacidade passou para
+`9.756.708.864 bytes`. Produção, PM2, dump e grafos permaneceram inalterados.
+f160 foi executada posteriormente por autorização v4. O único comando removeu a
+release, mas o cache `WITH_PARENT_RELEASE_ONLY` desapareceu com o pai e não entrou
+em `removedPaths`; receipt `36d0d69fbb22a920fcbd7e6c38bceae0ab0532368943e174c537900cf9aeb26b`
+ficou `QUARANTINED`, journal
+`905737bfb83042f6e0d98c37a4576adb5819e9cd45ebe074ba5ea1b0568648d2`
+e review `610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690`.
+O consumidor canônico nega a closure como incompleta. Release e cache estão
+ausentes; repetir o comando é proibido. A janela recuperou `988.590.080 bytes`
+líquidos e terminou com `10.737.483.776 bytes` disponíveis, sem mudança operacional.
+
+Correção local em revisão: o fluxo sucessor de reconciliação agora distingue o
+único comando comprovado (`RELEASE_RUNTIME`) da ausência subordinada do cache
+f160. A prova exige a classe literal `EPHEMERAL_RUNTIME_CACHE`, política
+`WITH_PARENT_RELEASE_ONLY`, confinamento abaixo da release, o trio canônico
+`ATTEMPT`/`RESULT=0`/`VERIFIED absent=true` do pai e ausência simultânea dos dois
+caminhos. O intent sucessor registra `subordinateAbsences` separadamente e sela
+zero comandos; seu receipt conserva `completedCommands=1`, `removedPaths` apenas
+com o pai e `attemptedCommands=0` na fase sucessora. A fixture materializada
+atravessou partial receipt → prepare sucessor → execute sem efeitos → closure
+canônica. Isso está apenas implementado e ensaiado localmente: não altera o
+receipt, journal, autorização ou review produtivos e não autoriza nova janela.
+
 A primeira materialização operacional foi interrompida antes de qualquer escrita:
 a ativação frontend `aa9527cc` usa o formato frontend-only do control plane
 `9441de5a569219d38303c711d82c45870e8755cc`, não o journal fixed-current. A

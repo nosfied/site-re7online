@@ -1157,12 +1157,50 @@ def _read_journal(raw: bytes) -> list[dict[str, Any]]:
     return events
 
 
+def _f160_subordinate_parent(artifact: dict[str, Any], artifacts: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the one closed parent binding for the historical f160 cache."""
+    binding = LEGACY_D436_F160_BINDINGS["immutable-f1602787-vps-20261026T174702Z"]
+    if (artifact.get("releaseId") != "immutable-f1602787-vps-20261026T174702Z" or
+            artifact.get("targetCommit") != binding["targetCommit"] or
+            artifact.get("class") != F160_CACHE_CLASS or
+            artifact.get("retirableOn") != "WITH_PARENT_RELEASE_ONLY" or
+            artifact.get("path") != binding["overlayPath"]):
+        return None
+    parents = [item for item in artifacts if
+               item.get("releaseId") == artifact.get("releaseId") and
+               item.get("targetCommit") == artifact.get("targetCommit") and
+               item.get("class") == "RELEASE_RUNTIME"]
+    if len(parents) != 1:
+        deny("reconciliation_subordinate_parent")
+    parent = parents[0]
+    child_path = Path(artifact["path"])
+    parent_path = Path(parent["path"])
+    if child_path == parent_path or parent_path not in child_path.parents:
+        deny("reconciliation_subordinate_confinement")
+    return parent
+
+
+def _reconciliation_absent_paths(value: dict[str, Any]) -> set[str]:
+    return ({item["path"] for item in value["completed"]} |
+            {item["path"] for item in value.get("subordinateAbsences", [])})
+
+
+def _receipt_subordinate_absences(value: dict[str, Any]) -> list[dict[str, str]]:
+    return [{"path": item["path"], "parentPath": item["parentPath"],
+             "retirableOn": item["retirableOn"]}
+            for item in value.get("subordinateAbsences", [])]
+
+
 def validate_reconciliation(value: Any, artifacts: Any, *, require_absent: bool) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != {"chain", "completed"}:
+    if (not isinstance(value, dict) or
+            set(value) not in ({"chain", "completed"},
+                               {"chain", "completed", "subordinateAbsences"})):
         deny("reconciliation_schema")
     chain = value.get("chain")
     completed = value.get("completed")
-    if not isinstance(chain, list) or not isinstance(completed, list):
+    subordinate = value.get("subordinateAbsences", [])
+    if (not isinstance(chain, list) or not isinstance(completed, list) or
+            not isinstance(subordinate, list)):
         deny("reconciliation_schema")
     links: list[dict[str, str]] = []
     for link in chain:
@@ -1201,7 +1239,39 @@ def validate_reconciliation(value: Any, artifacts: Any, *, require_absent: bool)
         normalized.append(item)
     if completed and not chain:
         deny("reconciliation_chain_missing")
-    return {"chain": links, "completed": normalized}
+    normalized_subordinate = []
+    subordinate_paths: set[str] = set()
+    subordinate_keys = {"ordinal", "path", "parentPath", "retirableOn", "observedIdentity",
+                        "intentSha256", "receiptSha256", "journalSha256"}
+    completed_by_path = {item["path"]: item for item in normalized}
+    artifact_list = list(artifacts)
+    for item in subordinate:
+        if not isinstance(item, dict) or set(item) != subordinate_keys:
+            deny("reconciliation_subordinate")
+        path = item.get("path")
+        artifact_entry = by_path.get(path)
+        artifact = artifact_entry[1] if artifact_entry else None
+        parent = _f160_subordinate_parent(artifact, artifact_list) if artifact else None
+        parent_completion = completed_by_path.get(item.get("parentPath"))
+        binding = {key: item.get(key) for key in
+                   ("intentSha256", "receiptSha256", "journalSha256")}
+        if (path in subordinate_paths or artifact_entry is None or parent is None or
+                item.get("ordinal") != artifact_entry[0] or
+                item.get("parentPath") != parent.get("path") or
+                item.get("retirableOn") != "WITH_PARENT_RELEASE_ONLY" or
+                item.get("observedIdentity") != artifact.get("observedIdentity") or
+                parent_completion is None or binding not in links or
+                any(parent_completion.get(key) != expected for key, expected in binding.items())):
+            deny("reconciliation_subordinate_identity")
+        if require_absent and any(Path(candidate).exists() or Path(candidate).is_symlink()
+                                  for candidate in (path, item["parentPath"])):
+            deny("reconciliation_subordinate_present")
+        subordinate_paths.add(path)
+        normalized_subordinate.append(item)
+    if subordinate and not chain:
+        deny("reconciliation_chain_missing")
+    return {"chain": links, "completed": normalized,
+            "subordinateAbsences": normalized_subordinate}
 
 
 def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, Any],
@@ -1209,7 +1279,7 @@ def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, An
     supplied = [args.prior_intent, args.prior_intent_sha256, args.prior_receipt,
                 args.prior_receipt_sha256, args.prior_journal, args.prior_journal_sha256]
     if not any(supplied):
-        return {"chain": [], "completed": []}
+        return {"chain": [], "completed": [], "subordinateAbsences": []}
     if not all(supplied):
         deny("reconciliation_binding_incomplete")
     prior_intent_raw, _ = stable_private(args.prior_intent, args.prior_intent_sha256)
@@ -1271,7 +1341,33 @@ def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, An
     if ([item["path"] for item in aggregate] != prior_receipt.get("removedPaths") or
             len(aggregate) != prior_receipt.get("completedCommands")):
         deny("reconciliation_receipt_progress")
-    return {"chain": inherited["chain"] + [link], "completed": aggregate}
+    if prior_receipt.get("subordinateAbsences", []) != _receipt_subordinate_absences(inherited):
+        deny("reconciliation_receipt_subordinate")
+    subordinate = list(inherited["subordinateAbsences"])
+    subordinate_paths = {item["path"] for item in subordinate}
+    completed_by_path = {item["path"]: item for item in aggregate}
+    for ordinal, artifact in enumerate(contract["artifacts"], 1):
+        if artifact["path"] in subordinate_paths:
+            continue
+        parent = _f160_subordinate_parent(artifact, contract["artifacts"])
+        if parent is None:
+            continue
+        parent_completion = completed_by_path.get(parent["path"])
+        if parent_completion is None:
+            continue
+        if any(Path(candidate).exists() or Path(candidate).is_symlink()
+               for candidate in (artifact["path"], parent["path"])):
+            deny("reconciliation_subordinate_present")
+        subordinate.append({
+            "ordinal": ordinal, "path": artifact["path"], "parentPath": parent["path"],
+            "retirableOn": "WITH_PARENT_RELEASE_ONLY",
+            "observedIdentity": artifact.get("observedIdentity"),
+            "intentSha256": parent_completion["intentSha256"],
+            "receiptSha256": parent_completion["receiptSha256"],
+            "journalSha256": parent_completion["journalSha256"],
+        })
+    return {"chain": inherited["chain"] + [link], "completed": aggregate,
+            "subordinateAbsences": subordinate}
 
 
 def canonical_release_verifier() -> Path:
@@ -2327,7 +2423,7 @@ def prepare(args: argparse.Namespace) -> None:
     validate_artifact_roots(contract, operational, policy)
     canonical_review_destination(args.review_output, args.contract, args.lifecycle, policy)
     reconciliation = authenticate_reconciliation(args, contract, args.root_policy_sha256)
-    reconciled_paths = {item["path"] for item in reconciliation["completed"]}
+    reconciled_paths = _reconciliation_absent_paths(reconciliation)
     legacy_migration = None
     if args.review_output.exists() or args.review_output.is_symlink():
         existing_raw, _ = stable_private(args.review_output)
@@ -2568,7 +2664,9 @@ def execute(args: argparse.Namespace) -> None:
                     not any(release in Path(item["target"]).parts
                             for item in operational["observations"]["currentLinks"])):
                 deny("fresh_deployed_release_graph")
-        reconciled_paths = {item["path"] for item in intent["reconciliation"]["completed"]}
+        reconciliation = validate_reconciliation(
+            intent["reconciliation"], intent["artifacts"], require_absent=True)
+        reconciled_paths = _reconciliation_absent_paths(reconciliation)
         for artifact in intent["artifacts"]:
             if artifact["path"] not in reconciled_paths:
                 authenticate_artifact(artifact)
@@ -2577,6 +2675,10 @@ def execute(args: argparse.Namespace) -> None:
         evidence_destination(args.receipt_root, operational)
         args.receipt_root.mkdir(mode=0o700, parents=False)
         journal = args.receipt_root / "command-results.private.jsonl"
+        # The canonical closure binds a journal even when a successor contains
+        # zero destructive commands.  Materialize the empty evidence durably;
+        # append_event() will extend this same inode for ordinary executions.
+        write_exclusive(journal, b"")
         try:
             fresh_before_attempt = capture_fresh_operational(operational)
             if fresh_before_attempt != fresh:
@@ -2614,13 +2716,16 @@ def execute(args: argparse.Namespace) -> None:
                 deny("fresh_operational_changed_during_retirement")
         except BaseException as error:
             receipt_state = "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED" else "QUARANTINED"
-            all_removed = [item["path"] for item in intent["reconciliation"]["completed"]] + removed
+            all_removed = [item["path"] for item in reconciliation["completed"]] + removed
             receipt = {"schemaVersion": 1, "state": receipt_state,
                        "failurePredicate": str(error), "attemptedCommands": attempted,
                        "completedCommands": len(all_removed), "removedPaths": all_removed,
                        "intentSha256": args.intent_sha256, "automaticRetry": False,
                        "commandLogSha256": digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b""),
                        "freshObservation": fresh}
+            subordinate_absences = _receipt_subordinate_absences(reconciliation)
+            if subordinate_absences:
+                receipt["subordinateAbsences"] = subordinate_absences
             write_exclusive(args.receipt_root / "execution-receipt.private.json", canonical(receipt))
             review = {"schemaVersion": 2, "generationId": intent["generationId"],
                       "lifecycleSha256": intent["lifecycleSha256"], "state": "QUARANTINED",
@@ -2642,7 +2747,7 @@ def execute(args: argparse.Namespace) -> None:
                          "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED"
                          else "RETENTION_INCOMPLETE")
         journal_sha = digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b"")
-        all_removed = [item["path"] for item in intent["reconciliation"]["completed"]] + removed
+        all_removed = [item["path"] for item in reconciliation["completed"]] + removed
         receipt = {"schemaVersion": 1, "state": receipt_state, "failurePredicate": None,
                    "attemptedCommands": attempted, "completedCommands": len(all_removed),
                    "removedPaths": all_removed, "intentSha256": args.intent_sha256,
@@ -2650,6 +2755,9 @@ def execute(args: argparse.Namespace) -> None:
                    "remainingDerivedPaths": remaining, "freshObservation": fresh,
                    "lock": {"canonicalHeldThroughReceiptFsync": True,
                             "writerHeldThroughReceiptFsync": True}}
+        subordinate_absences = _receipt_subordinate_absences(reconciliation)
+        if subordinate_absences:
+            receipt["subordinateAbsences"] = subordinate_absences
         receipt_raw = canonical(receipt)
         write_exclusive(args.receipt_root / "execution-receipt.private.json", receipt_raw)
         review_terminal = "SANITIZED" if not remaining else "QUARANTINED"
@@ -2931,7 +3039,9 @@ def _canonical_retirement_closure(value: Any, release: str, target: str,
                 completed_paths.append(command["path"])
         if (receipt.get("attemptedCommands") != attempts or
                 receipt.get("completedCommands") != len(completed_paths) or
-                receipt.get("removedPaths") != completed_paths):
+                receipt.get("removedPaths") != completed_paths or
+                receipt.get("subordinateAbsences", []) !=
+                _receipt_subordinate_absences(inherited)):
             deny("release_reconciliation_receipt_progress")
         previous_link = {"intentSha256": intent_sha, "receiptSha256": receipt_sha,
                          "journalSha256": journal_sha}

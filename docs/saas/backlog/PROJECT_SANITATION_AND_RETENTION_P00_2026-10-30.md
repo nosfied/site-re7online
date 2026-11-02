@@ -732,3 +732,71 @@ dimensionar o ganho possível, juntamente com a proposta preventiva em
 [DEPLOY_ARTIFACT_LIFECYCLE](../DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026).
 Nenhum novo audit, prepare, execute, mudança de permissão ou retirada é autorizado
 por esta classificação documental.
+
+#### Fechamento terminal d436 — 02/11/2026
+
+A release `immutable-d436239e-vps-20261026T131821Z` foi retirada uma única vez
+pelo `generation-retirement.py execute`, depois da reconciliação v6 sem efeitos e
+da fotografia sucessora que derivou `deploymentState=SUPERSEDED` do receipt
+`HISTORICAL_EVIDENCE_ONLY` e do grafo sucessor autenticado. A intenção permaneceu
+byte-exatamente em
+`11018393db431f1ee9ad43b329fed6bd9c3bb7cdb05d610f210319f59a068c5b`.
+
+O fechamento canônico é `SANITIZED`: receipt
+`b638b25a20823acfbc0797c0bdca037edf95e9d214578022c0c1d703c503ed5c`,
+journal `525ab03b5b414a90bc6e8703597f1c7d7953cbfa192a9e17cd00225dfeba975c`
+e review terminal
+`11a301e4b266994eac124e54eadd0ae5178002a4e1f5d50f59672b948e4ffb52`.
+O validador `_canonical_retirement_closure()` relacionou `ATTEMPT`, `RESULT` e
+`VERIFIED` pelo ordinal `5`; o evento `VERIFIED` canônico contém `absent=true` e
+não contém `path`. O único caminho aprovado está ausente.
+
+O ganho líquido medido foi `988.528.640 bytes`, de `8.768.180.224` para
+`9.756.708.864 bytes`, com `34.350` inodes líquidos recuperados. API `fa63994a`,
+frontend `aa9527cc`, worker `e2e7`, PM2, dump, grafo sucessor e lock canônico
+permaneceram inalterados. Esta retirada é terminal e irrepetível: não repetir
+reconciliação, `prepare`, autorização ou `execute` para d436.
+
+#### Execução f160 v4 — efeito concluído, closure incompleta em 02/11/2026
+
+A autorização v3 permaneceu congelada e byte-exata. A autorização v4
+`ada9e96f3eb20c6c08fb943bc0898cf2dff9058b5a146c4cea42e6a4edf5bc04`
+foi consumida uma única vez. O único comando removeu com sucesso
+`immutable-f1602787-vps-20261026T174702Z`; `ATTEMPT`, `RESULT exitCode=0` e
+`VERIFIED absent=true` estão registrados no journal
+`905737bfb83042f6e0d98c37a4576adb5819e9cd45ebe074ba5ea1b0568648d2`.
+
+O executor negou na inspeção posterior porque o artefato subordinado
+`frontend-runtime/.next/cache`, classificado `WITH_PARENT_RELEASE_ONLY`, ficou
+fora de `removedPaths` depois de desaparecer junto com o pai. O receipt
+`36d0d69fbb22a920fcbd7e6c38bceae0ab0532368943e174c537900cf9aeb26b`
+é `QUARANTINED`, com review
+`610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690`.
+O consumidor canônico retornou `release_reconciliation_closure_incomplete`.
+
+A release e o cache estão ausentes, mas isso não autoriza marcar f160 como
+`SANITIZED` nem repetir o comando. O ganho líquido observado na janela foi
+`988.590.080 bytes`, de `9.748.893.696` para `10.737.483.776 bytes`, e `34.360`
+inodes. Produção, PM2, dump, grafos e locks permaneceram inalterados. Qualquer
+fechamento futuro deve reconciliar o receipt parcial existente, sem replay.
+
+#### Reconciliação subordinada f160 — correção local em revisão
+
+O delta local não reclassifica ausência genérica. Ele admite somente o cache
+literal já emitido no contrato f160, com `retirableOn=WITH_PARENT_RELEASE_ONLY`,
+confinado sob a única `RELEASE_RUNTIME` do mesmo release/target. O pai precisa
+estar em `completed` por prova canônica do journal e receipt parciais; pai e cache
+precisam continuar ausentes. Ausência isolada, vínculo divergente, caminho fora do
+pai ou política diferente negam.
+
+A regressão usa o produtor legado real da fixture f160. A primeira execução faz
+um único comando, preserva `attemptedCommands=1`, `completedCommands=1` e falha
+no cache subordinado ausente. O `prepare` sucessor registra o cache em
+`subordinateAbsences`, produz arquivo de comandos vazio e a execução sucessora
+faz zero comandos destrutivos. O receipt sucessor mantém `removedPaths` somente
+com a release-pai e registra a ausência subordinada em campo separado; a cadeia
+completa é aceita por `_canonical_retirement_closure()`. Receipt, journal,
+autorização consumida e review parcial originais permanecem byte-exatos.
+
+Estado: `IMPLEMENTED_AND_TESTED_NOT_EXECUTED`. Não há autorização produtiva e a
+retirada original continua terminal e proibida de replay.

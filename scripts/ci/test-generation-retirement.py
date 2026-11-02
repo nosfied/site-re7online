@@ -801,6 +801,216 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_f160_parent_removal_reconciles_subordinate_cache_without_new_command(self):
+        fixture = LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")
+        try:
+            fixture.bootstrap_batch()
+            original_review_sha = sha(fixture.v1_review)
+
+            # The historical release becomes superseded, but its contract still
+            # contains the real parent/cache layout emitted for f160.
+            fixture.current.unlink()
+            os.symlink(fixture.other_release, fixture.current)
+            fixture.pm2_rows = [{"name": "current", "pid": 202, "pm2_env": {
+                "pm_cwd": str(fixture.other_release),
+                "pm_exec_path": str(fixture.other_release / "server.js"),
+                "exec_mode": "fork_mode", "instances": 1, "args": [],
+                "namespace": "default"}}]
+            fixture.pm2_state.write_text(json.dumps(fixture.pm2_rows))
+            graph = {"activeReleases": [fixture.other_release.name], "rollbackReleases": [],
+                     "transitiveReturnReleases": [], "candidateReleases": [],
+                     "installedVerifiedReleases": [fixture.other_release.name],
+                     "supersededCandidates": [fixture.release_id]}
+            private_json(fixture.graph, graph)
+            operational = json.loads(fixture.operational.read_text())
+            operational.update({**graph, "currentPaths": [str(fixture.other_release)],
+                                "pm2LivePaths": [str(fixture.other_release)],
+                                "pm2DumpPaths": [str(fixture.other_release)],
+                                "deploymentState": {"state": "SUPERSEDED"}})
+            operational["observations"]["currentLinks"] = [
+                {"path": str(fixture.current), "target": str(fixture.other_release)}]
+            operational["observations"]["pm2"]["fingerprintSha256"] = \
+                MODULE._pm2_fingerprint(fixture.pm2_rows)
+            operational["observations"]["releaseGraph"]["sha256"] = sha(fixture.graph)
+            private_json(fixture.operational, operational)
+
+            bindings = {**MODULE.LEGACY_D436_F160_BINDINGS,
+                        fixture.release_id: fixture.binding}
+            first_root = fixture.evidence / "f160-first"; first_root.mkdir(mode=0o700)
+            first_intent = first_root / "intent.private.json"
+            first_commands = first_root / "commands.private.txt"
+            fixture.prepare_batch(first_intent, first_commands, original_review_sha)
+            first_value = json.loads(first_intent.read_text())
+            self.assertEqual([item["path"] for item in first_value["commands"]],
+                             [str(fixture.installed)])
+            first_authorization = first_root / "authorization.private.json"
+            private_json(first_authorization, {
+                "schemaVersion": 1, "authorizationId": "f160-first", "decision": "AUTHORIZE_ONCE",
+                "intentSha256": sha(first_intent), "approvedPaths": [str(fixture.installed)],
+                "owner": "fixture-owner"})
+            first_receipt_root = first_root / "receipt"
+            execute_args = SimpleNamespace(
+                intent=first_intent, intent_sha256=sha(first_intent),
+                authorization=first_authorization, authorization_sha256=sha(first_authorization),
+                operational_state=fixture.operational,
+                operational_state_sha256=sha(fixture.operational),
+                root_policy=fixture.policy, root_policy_sha256=sha(fixture.policy),
+                deployment_lock=fixture.deploy_lock, deployment_lock_fd=None,
+                receipt_root=first_receipt_root, review_output=fixture.v1_review)
+            with patch.object(MODULE, "LEGACY_D436_F160_BINDINGS", bindings), \
+                    patch.object(MODULE, "LEGACY_RETENTION_BATCH", fixture.batch), \
+                    self.assertRaisesRegex(MODULE.Denied, "artifact_missing:.*\\.next/cache"):
+                MODULE.execute(execute_args)
+            first_receipt = first_receipt_root / "execution-receipt.private.json"
+            first_journal = first_receipt_root / "command-results.private.jsonl"
+            first_receipt_sha = sha(first_receipt)
+            first_journal_sha = sha(first_journal)
+            original_receipt_bytes = first_receipt.read_bytes()
+            original_journal_bytes = first_journal.read_bytes()
+            partial = json.loads(original_receipt_bytes)
+            self.assertEqual(partial["attemptedCommands"], 1)
+            self.assertEqual(partial["completedCommands"], 1)
+            self.assertEqual(partial["removedPaths"], [str(fixture.installed)])
+            self.assertNotIn("subordinateAbsences", partial)
+            self.assertFalse(fixture.installed.exists())
+            self.assertFalse(fixture.cache.exists())
+
+            successor_root = fixture.evidence / "f160-successor"; successor_root.mkdir(mode=0o700)
+            successor_intent = successor_root / "intent.private.json"
+            successor_commands = successor_root / "commands.private.txt"
+            prepare_args = SimpleNamespace(
+                contract=fixture.contract, contract_sha256=sha(fixture.contract),
+                lifecycle=fixture.lifecycle, lifecycle_sha256=sha(fixture.lifecycle),
+                operational_state=fixture.operational,
+                operational_state_sha256=sha(fixture.operational),
+                root_policy=fixture.policy, root_policy_sha256=sha(fixture.policy),
+                deployment_lock=fixture.deploy_lock, intent_output=successor_intent,
+                commands_output=successor_commands, review_output=fixture.v1_review,
+                legacy_review_sha256=None, prior_intent=first_intent,
+                prior_intent_sha256=sha(first_intent), prior_receipt=first_receipt,
+                prior_receipt_sha256=first_receipt_sha, prior_journal=first_journal,
+                prior_journal_sha256=first_journal_sha, reviewer="fixture-owner",
+                reason="reconcile f160 subordinate absence")
+            with patch.object(MODULE, "LEGACY_D436_F160_BINDINGS", bindings), \
+                    patch.object(MODULE, "LEGACY_RETENTION_BATCH", fixture.batch):
+                MODULE.prepare(prepare_args)
+            successor = json.loads(successor_intent.read_text())
+            self.assertEqual(successor["commands"], [])
+            self.assertEqual(successor_commands.read_bytes(), b"")
+            self.assertEqual([item["path"] for item in successor["reconciliation"]["completed"]],
+                             [str(fixture.installed)])
+            subordinate = successor["reconciliation"]["subordinateAbsences"]
+            self.assertEqual(len(subordinate), 1)
+            self.assertEqual(subordinate[0]["path"], str(fixture.cache))
+            self.assertEqual(subordinate[0]["parentPath"], str(fixture.installed))
+            self.assertEqual(subordinate[0]["retirableOn"], "WITH_PARENT_RELEASE_ONLY")
+
+            successor_authorization = successor_root / "authorization.private.json"
+            private_json(successor_authorization, {
+                "schemaVersion": 1, "authorizationId": "f160-reconcile", "decision": "AUTHORIZE_ONCE",
+                "intentSha256": sha(successor_intent), "approvedPaths": [], "owner": "fixture-owner"})
+            successor_receipt_root = successor_root / "receipt"
+            successor_execute = SimpleNamespace(
+                intent=successor_intent, intent_sha256=sha(successor_intent),
+                authorization=successor_authorization,
+                authorization_sha256=sha(successor_authorization),
+                operational_state=fixture.operational,
+                operational_state_sha256=sha(fixture.operational),
+                root_policy=fixture.policy, root_policy_sha256=sha(fixture.policy),
+                deployment_lock=fixture.deploy_lock, deployment_lock_fd=None,
+                receipt_root=successor_receipt_root, review_output=fixture.v1_review)
+            destructive = []
+            real_run = subprocess.run
+            def record_successor(command, **kwargs):
+                if command and command[0] in {"/usr/bin/rm", "/usr/bin/git"}:
+                    destructive.append(command)
+                return real_run(command, **kwargs)
+            with patch.object(MODULE, "LEGACY_D436_F160_BINDINGS", bindings), \
+                    patch.object(MODULE, "LEGACY_RETENTION_BATCH", fixture.batch), \
+                    patch.object(MODULE.subprocess, "run", side_effect=record_successor):
+                MODULE.execute(successor_execute)
+            self.assertEqual(destructive, [])
+            terminal = json.loads((successor_receipt_root /
+                                   "execution-receipt.private.json").read_text())
+            self.assertEqual(terminal["state"], "SANITIZED")
+            self.assertEqual(terminal["attemptedCommands"], 0)
+            self.assertEqual(terminal["completedCommands"], 1)
+            self.assertEqual(terminal["removedPaths"], [str(fixture.installed)])
+            self.assertEqual(terminal["subordinateAbsences"], [{
+                "path": str(fixture.cache), "parentPath": str(fixture.installed),
+                "retirableOn": "WITH_PARENT_RELEASE_ONLY"}])
+            self.assertEqual((successor_receipt_root /
+                              "command-results.private.jsonl").read_bytes(), b"")
+            self.assertEqual(terminal["commandLogSha256"], MODULE.digest_bytes(b""))
+            self.assertEqual(first_receipt.read_bytes(), original_receipt_bytes)
+            self.assertEqual(first_journal.read_bytes(), original_journal_bytes)
+            closure = {"kind": "CANONICAL_RETIREMENT", "chain": [
+                {"intent": {"path": str(first_intent), "sha256": sha(first_intent)},
+                 "receipt": {"path": str(first_receipt), "sha256": sha(first_receipt)},
+                 "journal": {"path": str(first_journal), "sha256": sha(first_journal)}},
+                {"intent": {"path": str(successor_intent), "sha256": sha(successor_intent)},
+                 "receipt": {"path": str(successor_receipt_root /
+                                            "execution-receipt.private.json"),
+                             "sha256": sha(successor_receipt_root /
+                                            "execution-receipt.private.json")},
+                 "journal": {"path": str(successor_receipt_root /
+                                            "command-results.private.jsonl"),
+                             "sha256": MODULE.digest_bytes(b"")}},
+            ]}
+            empty_journal = successor_receipt_root / "command-results.private.jsonl"
+            review = json.loads(fixture.v1_review.read_text())
+            with patch.object(MODULE, "LEGACY_D436_F160_BINDINGS", bindings):
+                normalized = MODULE._canonical_retirement_closure(
+                    closure, fixture.release_id, fixture.target, sha(fixture.contract),
+                    sha(fixture.lifecycle), review)
+            self.assertEqual(len(normalized["chain"]), 2)
+        finally:
+            fixture.close()
+
+    def test_f160_subordinate_absence_requires_exact_parent_proof_and_confinement(self):
+        fixture = LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")
+        try:
+            fixture.bootstrap_batch()
+            contract = json.loads(fixture.contract.read_text())
+            cache = next(item for item in contract["artifacts"]
+                         if item["class"] == MODULE.F160_CACHE_CLASS)
+            parent = next(item for item in contract["artifacts"]
+                          if item["class"] == "RELEASE_RUNTIME")
+            link = {"intentSha256": "1" * 64, "receiptSha256": "2" * 64,
+                    "journalSha256": "3" * 64}
+            subordinate = {"ordinal": contract["artifacts"].index(cache) + 1,
+                           "path": cache["path"], "parentPath": parent["path"],
+                           "retirableOn": "WITH_PARENT_RELEASE_ONLY",
+                           "observedIdentity": cache["observedIdentity"], **link}
+            # Absence alone is insufficient: no canonically completed parent.
+            with self.assertRaisesRegex(MODULE.Denied,
+                                        "reconciliation_subordinate_identity"):
+                MODULE.validate_reconciliation(
+                    {"chain": [link], "completed": [],
+                     "subordinateAbsences": [subordinate]},
+                    contract["artifacts"], require_absent=False)
+
+            escaped = dict(cache)
+            escaped["path"] = str(fixture.root / "outside-cache")
+            escaped["retirableOn"] = "WITH_PARENT_RELEASE_ONLY"
+            binding = dict(MODULE.LEGACY_D436_F160_BINDINGS[fixture.release_id])
+            binding["overlayPath"] = escaped["path"]
+            bindings = {**MODULE.LEGACY_D436_F160_BINDINGS,
+                        fixture.release_id: binding}
+            with patch.object(MODULE, "LEGACY_D436_F160_BINDINGS", bindings), \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                            "reconciliation_subordinate_confinement"):
+                MODULE._f160_subordinate_parent(escaped, [parent, escaped])
+
+            wrong_policy = dict(cache); wrong_policy["retirableOn"] = "NEVER_AUTOMATIC"
+            self.assertIsNone(MODULE._f160_subordinate_parent(
+                wrong_policy, contract["artifacts"]))
+            shutil.rmtree(fixture.cache)
+            with self.assertRaisesRegex(MODULE.Denied, "artifact_missing:"):
+                MODULE.authenticate_artifact(cache)
+        finally:
+            fixture.close()
+
         fixture = LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")
         try:
             shutil.rmtree(fixture.cache)
