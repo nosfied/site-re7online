@@ -584,27 +584,33 @@ journal `525ab03b5b414a90bc6e8703597f1c7d7953cbfa192a9e17cd00225dfeba975c`
 e review `11a301e4b266994eac124e54eadd0ae5178002a4e1f5d50f59672b948e4ffb52`.
 O ganho líquido medido foi `988.528.640 bytes`; a capacidade passou para
 `9.756.708.864 bytes`. Produção, PM2, dump e grafos permaneceram inalterados.
-f160 foi executada posteriormente por autorização v4. O único comando removeu a
-release, mas o cache `WITH_PARENT_RELEASE_ONLY` desapareceu com o pai e não entrou
-em `removedPaths`; receipt `36d0d69fbb22a920fcbd7e6c38bceae0ab0532368943e174c537900cf9aeb26b`
-ficou `QUARANTINED`, journal
-`905737bfb83042f6e0d98c37a4576adb5819e9cd45ebe074ba5ea1b0568648d2`
-e review `610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690`.
-O consumidor canônico nega a closure como incompleta. Release e cache estão
-ausentes; repetir o comando é proibido. A janela recuperou `988.590.080 bytes`
-líquidos e terminou com `10.737.483.776 bytes` disponíveis, sem mudança operacional.
+f160 foi executada posteriormente por autorização v4. O único comando histórico
+removeu a release; o cache `WITH_PARENT_RELEASE_ONLY` desapareceu com o pai e não
+entrou em `removedPaths`. O receipt parcial
+`36d0d69fbb22a920fcbd7e6c38bceae0ab0532368943e174c537900cf9aeb26b`, o journal
+`905737bfb83042f6e0d98c37a4576adb5819e9cd45ebe074ba5ea1b0568648d2`, a autorização
+consumida e a cópia da review parcial
+`610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690` permanecem
+byte-exatos.
 
-Correção local em revisão: o fluxo sucessor de reconciliação agora distingue o
-único comando comprovado (`RELEASE_RUNTIME`) da ausência subordinada do cache
-f160. A prova exige a classe literal `EPHEMERAL_RUNTIME_CACHE`, política
-`WITH_PARENT_RELEASE_ONLY`, confinamento abaixo da release, o trio canônico
-`ATTEMPT`/`RESULT=0`/`VERIFIED absent=true` do pai e ausência simultânea dos dois
-caminhos. O intent sucessor registra `subordinateAbsences` separadamente e sela
-zero comandos; seu receipt conserva `completedCommands=1`, `removedPaths` apenas
-com o pai e `attemptedCommands=0` na fase sucessora. A fixture materializada
-atravessou partial receipt → prepare sucessor → execute sem efeitos → closure
-canônica. Isso está apenas implementado e ensaiado localmente: não altera o
-receipt, journal, autorização ou review produtivos e não autoriza nova janela.
+O fechamento sucessor foi concluído sem nova retirada. Intent
+`371c585f59f550be44575bcbc3d9101d5383d491b98b41d4ba5185e152890d3a`, autorização
+de caminhos vazios `a8080e4a92cde71dd1b0bc1219ea4a4ac04ff28b5c3795198ef16955ebf7bc90`,
+receipt `cf89aee59cd499a421b71321b79619e0c9f7c57e8449db640ee67e37c566e3a8` e journal
+vazio `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` formam a
+segunda ligação da cadeia. O receipt terminal é `SANITIZED`: conserva
+`completedCommands=1` e `removedPaths` somente com a release-pai, registra o cache
+somente em `subordinateAbsences` e tem `attemptedCommands=0` nesta fase. A review
+terminal é `4663caa1a25594a5868cf4257d56a1f8a3063d179498066247ba0c9aac654816`.
+`_canonical_retirement_closure()` aceitou a cadeia; a evidência sanitizada dessa
+validação é `1739c4956d2aa1558648a7563dc176a2ca3482d526304561caa7a29c6ceb02f8`.
+
+O fechamento adicionou zero ganho de armazenamento: nenhum comando destrutivo novo
+foi emitido ou executado. O ganho líquido já medido permanece `988.590.080 bytes`
+para f160 e `1.977.118.720 bytes` no conjunto d436+f160. As duas retiradas são
+terminais e irrepetíveis. A integração preventiva do lifecycle com os produtores
+reais de preparações volumosas continua pendente; o fechamento não a declara
+instalada nem globalmente aplicada.
 
 A primeira materialização operacional foi interrompida antes de qualquer escrita:
 a ativação frontend `aa9527cc` usa o formato frontend-only do control plane

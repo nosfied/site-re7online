@@ -757,7 +757,7 @@ frontend `aa9527cc`, worker `e2e7`, PM2, dump, grafo sucessor e lock canônico
 permaneceram inalterados. Esta retirada é terminal e irrepetível: não repetir
 reconciliação, `prepare`, autorização ou `execute` para d436.
 
-#### Execução f160 v4 — efeito concluído, closure incompleta em 02/11/2026
+#### Fechamento terminal f160 — efeito histórico preservado e zero efeitos novos
 
 A autorização v3 permaneceu congelada e byte-exata. A autorização v4
 `ada9e96f3eb20c6c08fb943bc0898cf2dff9058b5a146c4cea42e6a4edf5bc04`
@@ -774,29 +774,32 @@ fora de `removedPaths` depois de desaparecer junto com o pai. O receipt
 `610d43815c145dea7c57308e8d25f07bd604b88120b45cc638288611f513e690`.
 O consumidor canônico retornou `release_reconciliation_closure_incomplete`.
 
-A release e o cache estão ausentes, mas isso não autoriza marcar f160 como
-`SANITIZED` nem repetir o comando. O ganho líquido observado na janela foi
-`988.590.080 bytes`, de `9.748.893.696` para `10.737.483.776 bytes`, e `34.360`
-inodes. Produção, PM2, dump, grafos e locks permaneceram inalterados. Qualquer
-fechamento futuro deve reconciliar o receipt parcial existente, sem replay.
-
-#### Reconciliação subordinada f160 — correção local em revisão
-
-O delta local não reclassifica ausência genérica. Ele admite somente o cache
+O fechamento sucessor não reclassifica ausência genérica. Ele admite somente o cache
 literal já emitido no contrato f160, com `retirableOn=WITH_PARENT_RELEASE_ONLY`,
 confinado sob a única `RELEASE_RUNTIME` do mesmo release/target. O pai precisa
 estar em `completed` por prova canônica do journal e receipt parciais; pai e cache
 precisam continuar ausentes. Ausência isolada, vínculo divergente, caminho fora do
 pai ou política diferente negam.
 
-A regressão usa o produtor legado real da fixture f160. A primeira execução faz
-um único comando, preserva `attemptedCommands=1`, `completedCommands=1` e falha
-no cache subordinado ausente. O `prepare` sucessor registra o cache em
-`subordinateAbsences`, produz arquivo de comandos vazio e a execução sucessora
-faz zero comandos destrutivos. O receipt sucessor mantém `removedPaths` somente
-com a release-pai e registra a ausência subordinada em campo separado; a cadeia
-completa é aceita por `_canonical_retirement_closure()`. Receipt, journal,
-autorização consumida e review parcial originais permanecem byte-exatos.
+O intent sucessor
+`371c585f59f550be44575bcbc3d9101d5383d491b98b41d4ba5185e152890d3a` selou
+`commands=[]`. A autorização
+`a8080e4a92cde71dd1b0bc1219ea4a4ac04ff28b5c3795198ef16955ebf7bc90` aprovou
+zero caminhos. A execução sucessora terminou `SANITIZED` com receipt
+`cf89aee59cd499a421b71321b79619e0c9f7c57e8449db640ee67e37c566e3a8`, journal
+vazio `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` e review
+terminal `4663caa1a25594a5868cf4257d56a1f8a3063d179498066247ba0c9aac654816`.
+`_canonical_retirement_closure()` aceitou as duas ligações; a validação sanitizada
+tem SHA-256 `1739c4956d2aa1558648a7563dc176a2ca3482d526304561caa7a29c6ceb02f8`.
 
-Estado: `IMPLEMENTED_AND_TESTED_NOT_EXECUTED`. Não há autorização produtiva e a
-retirada original continua terminal e proibida de replay.
+O receipt terminal conserva a verdade histórica: um comando concluído e
+`removedPaths` somente com a release-pai. A fase sucessora tem zero comandos
+destrutivos e registra o cache exclusivamente em `subordinateAbsences`. Receipt,
+journal, autorização consumida e cópia da review parcial originais permanecem
+byte-exatos. O fechamento recuperou zero bytes adicionais. O ganho líquido medido
+continua `988.590.080 bytes` em f160 e totaliza `1.977.118.720 bytes` com d436.
+Ambas as retiradas são terminais e proibidas de replay.
+
+O fechamento deste lote não conclui a frente preventiva. O adapter de lifecycle
+para preparações volumosas continua sem integração comprovada nos produtores reais;
+essa ligação permanece pendente para interromper novo acúmulo na origem.

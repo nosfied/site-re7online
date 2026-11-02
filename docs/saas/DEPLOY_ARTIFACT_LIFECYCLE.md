@@ -1164,10 +1164,13 @@ API-only não retira o frontend anterior de `activeReleases`, e frontend-only n�
 retira a API anterior. Rollbacks acumulados não desaparecem por omissão; somente
 uma reconciliação autenticada os fecha. O ensaio materializa o executor e sua
 dependência fora do checkout, reproduz formatos sanitizados do fixed-current
-`708f` e dos contratos legados `d436`/`f160`, percorre reconciliação → projeção → `prepare`, torna
-`708f`, `d436` e `f160` condicionalmente elegíveis e mantém `0fdec`/`a959`, ativos
-e retornos imediatos protegidos. O potencial de 2.965.995.520 bytes permanece
-estimativa, não capacidade recuperada nem autorização operacional.
+`708f` e dos contratos legados `d436`/`f160`, percorre reconciliação → projeção →
+`prepare`, torna `708f`, `d436` e `f160` condicionalmente elegíveis e mantém
+`0fdec`/`a959`, ativos e retornos imediatos protegidos. O fechamento posterior
+retirou d436 e f160 e validou ambas as cadeias canônicas. O ganho líquido medido
+foi `1.977.118.720 bytes`; a closure sucessora de f160 executou zero comandos
+destrutivos e registrou o cache subordinado somente em `subordinateAbsences`.
+Isso não altera as proteções remanescentes nem autoriza repetir qualquer retirada.
 
 
 ## Extensão preventiva versionada — preparações volumosas (01/11/2026)
