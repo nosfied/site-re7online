@@ -64,6 +64,8 @@ jobs:
         run: python3 -m unittest -v scripts/ci/test-generation-retirement.py
       - name: Validate release graph reconciliation materialization
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-release-graph-reconciliation-materialize.py
+      - name: Validate generation retirement prepare materialization
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-generation-retirement-prepare-materialize.py
       - name: Validate aggregate deploy-preparation admission
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-deploy-preparation-admission.py
       - name: Validate preparation artifact lifecycle
