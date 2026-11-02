@@ -1385,12 +1385,19 @@ assinatura tenant-scoped já usadas pelo split. A grade continua paginada, mas
 não fornece mais os IDs que definem o universo persistido. Até 1.000 elegíveis,
 o backend reabre os filtros, revalida opt-out/exclusões/identidade/deduplicação,
 confere a assinatura e cria um único rascunho; mudança de filtros ou audiência
-nega com `audience_changed`. Acima de 1.000, o comportamento existente é
+nega com `audience_changed`. O filtro por existência de conversa é resolvido
+integralmente pelo mesmo read model da prévia, tanto para `true` quanto para
+`false`; ele não precisa ser removido para criar o rascunho. A última resolução
+de elegibilidade, imediatamente anterior à primeira escrita, também precisa
+produzir a assinatura autenticada: opt-out ou outra mudança nesse intervalo
+nega antes de campanha e seed. Acima de 1.000, o comportamento existente é
 preservado: a UI prepara a divisão explícita em rascunhos de no máximo 1.000,
 sem envio automático. Template, mídia, variáveis e destino continuam passando
 pelos contratos atuais. Regressão integrada em PostgreSQL isolado percorreu
 prévia/página 2 (`limit=25`) → resolução integral de 930 elegíveis → criação →
-seed/detalhe, com cinco opt-outs, outro tenant e filtro alterado; 1/1 PASS.
+seed/detalhe, com cinco opt-outs, outro tenant, filtro alterado, mais de 25
+contatos nos dois valores de `hasConversation` e opt-out inserido entre
+validação e persistência; a mudança negou com zero campanha/seed; 1/1 PASS.
 Contrato de UI 39/39 PASS e backend typecheck PASS. Nenhum schema/migration,
 build produtivo, deploy, provider ou envio foi executado.
 

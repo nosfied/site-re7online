@@ -221,7 +221,7 @@ function applyPostFilters(
   });
 }
 
-export async function buildCampaignAudiencePreviewPayload(
+async function resolveCampaignAudiencePreviewAnalysis(
   prisma: PrismaClient,
   params: {
     clientId: string;
@@ -229,9 +229,13 @@ export async function buildCampaignAudiencePreviewPayload(
     statuses: CrmStatusConfig[];
     now?: Date;
   }
-): Promise<CampaignAudiencePreviewPayload> {
-  const page = normalizePage(params.query.page);
-  const limit = normalizeLimit(params.query.limit);
+): Promise<{
+  filters: CampaignAudiencePreviewPayload["filters"];
+  summary: CampaignAudiencePreviewPayload["summary"];
+  candidateItems: CampaignAudiencePreviewItem[];
+  eligibleItems: CampaignAudiencePreviewItem[];
+  generatedAt: string;
+}> {
   const onlyWhatsappEligible = normalizeBooleanFilter(params.query.onlyWhatsappEligible);
   const excludeOptOut = normalizeBooleanFilter(params.query.excludeOptOut);
   const crmStatus = normalizeStatus(params.query.crmStatus);
@@ -285,12 +289,9 @@ export async function buildCampaignAudiencePreviewPayload(
   const eligibleItems = filteredItems
     .filter((item) => item.eligible)
     .map((item) => ({ ...item, blockedReason: null, blockedReasonLabel: null }));
-  const pagedItems = eligibleItems.slice((page - 1) * limit, page * limit);
   const filteredTotal = eligibleItems.length;
-  const previewTotalPages = filteredTotal > 0 ? Math.ceil(filteredTotal / limit) : 0;
 
   return {
-    ok: true,
     filters: {
       q: firstPage.filters.q,
       status: firstPage.filters.status,
@@ -313,15 +314,57 @@ export async function buildCampaignAudiencePreviewPayload(
       truncated: firstPage.pagination.total > MAX_ANALYSIS_ITEMS,
       blockedByReason: [],
     },
-    items: pagedItems,
+    candidateItems: filteredItems,
+    eligibleItems,
+    generatedAt: (params.now ?? new Date()).toISOString(),
+  };
+}
+
+export async function resolveCampaignAudiencePreviewSelection(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    query: CampaignAudiencePreviewQuery;
+    statuses: CrmStatusConfig[];
+    now?: Date;
+  }
+) {
+  const analysis = await resolveCampaignAudiencePreviewAnalysis(prisma, params);
+  return {
+    filters: analysis.filters,
+    summary: analysis.summary,
+    leadIds: analysis.candidateItems.map((item) => item.leadId),
+    generatedAt: analysis.generatedAt,
+  };
+}
+
+export async function buildCampaignAudiencePreviewPayload(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    query: CampaignAudiencePreviewQuery;
+    statuses: CrmStatusConfig[];
+    now?: Date;
+  }
+): Promise<CampaignAudiencePreviewPayload> {
+  const page = normalizePage(params.query.page);
+  const limit = normalizeLimit(params.query.limit);
+  const analysis = await resolveCampaignAudiencePreviewAnalysis(prisma, params);
+  const total = analysis.eligibleItems.length;
+  const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+  return {
+    ok: true,
+    filters: analysis.filters,
+    summary: analysis.summary,
+    items: analysis.eligibleItems.slice((page - 1) * limit, page * limit),
     pagination: {
       page,
       limit,
-      total: filteredTotal,
-      totalPages: previewTotalPages,
-      hasNextPage: page < previewTotalPages,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
       hasPreviousPage: page > 1,
     },
-    generatedAt: (params.now ?? new Date()).toISOString(),
+    generatedAt: analysis.generatedAt,
   };
 }

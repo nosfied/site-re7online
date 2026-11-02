@@ -175,6 +175,7 @@ import {
 } from "../campaigns/optOutRegistry.js";
 import {
   buildCampaignAudiencePreviewPayload,
+  resolveCampaignAudiencePreviewSelection,
   type CampaignAudienceBlockedReason,
   type CampaignAudiencePreviewQuery,
 } from "../campaigns/campaignAudiencePreview.js";
@@ -16418,6 +16419,20 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         templateMedia: templateMedia.media,
       });
       if (!created.ok) {
+        if (created.reason === "audience_changed") {
+          const finalLeadIds = created.recipients.acceptedVariableValues.map((item) => item.leadId);
+          const plan = serializeCampaignAudienceSplitPlan({
+            mode: "STATIC_FILTER",
+            leadIds: finalLeadIds,
+            truncated: false,
+            sourceDescription: "filtro_estatico",
+          });
+          json(res, 409, httpError("audience_changed", "A audiência mudou. Gere uma nova prévia antes de criar o rascunho.", {
+            plan,
+            summary: created.recipients.summary,
+          }));
+          return;
+        }
         json(
           res,
           400,
@@ -38092,49 +38107,6 @@ function normalizeCampaignAudienceSplitBoolean(value: unknown) {
   return null;
 }
 
-function normalizeCampaignAudienceSplitChannel(value: unknown) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return /^[a-z0-9_-]{2,40}$/.test(normalized) ? normalized : null;
-}
-
-function normalizeCampaignAudienceSplitStatus(value: unknown) {
-  const normalized = String(value ?? "").trim().toUpperCase();
-  return /^[A-Z0-9_-]{2,80}$/.test(normalized) ? normalized : null;
-}
-
-function buildCampaignAudienceSplitLeadWhere(params: {
-  clientId: string;
-  query: CampaignAudiencePreviewQuery;
-}): Prisma.LeadWhereInput {
-  const q = normalizeCampaignAudienceSplitText(params.query.q);
-  const digits = normalizeWaIdDigits(String(q ?? ""));
-  const status = normalizeCampaignAudienceSplitStatus(params.query.crmStatus ?? params.query.status);
-  const channel = normalizeCampaignAudienceSplitChannel(params.query.channel);
-  return {
-    tenantId: params.clientId,
-    ...(status ? { status } : {}),
-    ...(channel ? { channel } : {}),
-    ...(q
-      ? {
-          OR: [
-            { name: { contains: q, mode: "insensitive" } },
-            { company: { contains: q, mode: "insensitive" } },
-            { email: { contains: q, mode: "insensitive" } },
-            { city: { contains: q, mode: "insensitive" } },
-            { service: { contains: q, mode: "insensitive" } },
-            ...(digits
-              ? [
-                  { phone: { contains: digits } },
-                  { waId: { contains: digits } },
-                  { waIdCanonical: { contains: digits } },
-                ]
-              : []),
-          ],
-        }
-      : {}),
-  };
-}
-
 function serializeCampaignAudienceSplitPlan(params: {
   mode: CampaignAudienceSplitMode;
   leadIds: string[];
@@ -38191,49 +38163,13 @@ async function resolveCampaignAudienceSplitLeadIds(
     sourceDescription = `filtro_dinamico_convertido:${status.id}`;
   }
 
-  const hasConversation = normalizeCampaignAudienceSplitBoolean(query.hasConversation);
-  if (hasConversation !== null) {
-    return {
-      ok: false,
-      error: "audience_split_filter_not_supported",
-      message: "A divisão completa ainda não suporta filtro por conversa. Remova esse filtro antes de dividir.",
-    };
-  }
-  const optOut = normalizeCampaignAudienceSplitBoolean(query.optOut);
-  if (optOut === true) {
-    const emptyPlan = serializeCampaignAudienceSplitPlan({
-      mode: params.mode,
-      leadIds: [],
-      truncated: false,
-      sourceDescription,
-    });
-    return {
-      ok: false,
-      error: "no_eligible_recipients",
-      message: "Nenhum destinatário está elegível para esta campanha.",
-      plan: emptyPlan,
-    };
-  }
-  const unsupportedPostFilters = [
-    normalizeCampaignAudienceSplitText(query.city),
-    normalizeCampaignAudienceSplitText(query.importedSource ?? query.origin),
-  ].some(Boolean);
-  if (unsupportedPostFilters) {
-    return {
-      ok: false,
-      error: "audience_split_filter_not_supported",
-      message: "A divisão completa ainda não suporta filtros de origem/cidade. Refine a audiência sem esses filtros antes de dividir.",
-    };
-  }
-
-  const leads = await prisma.lead.findMany({
-    where: buildCampaignAudienceSplitLeadWhere({ clientId: params.clientId, query }),
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
-    take: CAMPAIGN_SPLIT_MAX_ANALYZED + 1,
-    select: { id: true },
+  const selection = await resolveCampaignAudiencePreviewSelection(prisma, {
+    clientId: params.clientId,
+    query,
+    statuses: resolvedStatuses.statuses,
   });
-  const truncated = leads.length > CAMPAIGN_SPLIT_MAX_ANALYZED;
-  const uniqueLeadIds = Array.from(new Set(leads.slice(0, CAMPAIGN_SPLIT_MAX_ANALYZED).map((lead) => lead.id)));
+  const truncated = selection.summary.truncated;
+  const uniqueLeadIds = Array.from(new Set(selection.leadIds));
   const plan = serializeCampaignAudienceSplitPlan({
     mode: params.mode,
     leadIds: uniqueLeadIds,
@@ -38504,6 +38440,12 @@ async function createScopedCampaignDraft(params: {
     clientId: params.clientId,
     selectedLeadIds: params.selectedLeadIds,
   });
+  if (params.staticAudienceSelection) {
+    const finalLeadIds = recipients.acceptedVariableValues.map((item) => item.leadId);
+    if (buildCampaignAudienceSignature(finalLeadIds) !== params.staticAudienceSelection.audienceSignature) {
+      return { ok: false as const, reason: "audience_changed" as const, recipients };
+    }
+  }
   if (recipients.acceptedWaIds.length === 0) {
     return { ok: false as const, reason: "no_eligible_recipients" as const, recipients };
   }

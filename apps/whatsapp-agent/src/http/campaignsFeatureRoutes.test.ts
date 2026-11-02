@@ -12,7 +12,7 @@ import { saveWebSessionAuthState } from "../web-session/webSessionAuthStore.js";
 import { readWebSessionPrePairingOutboundState } from "../web-session/webSessionLifecycle.js";
 import { markWebSessionRuntimeState } from "../web-session/webSessionConnectionRuntime.js";
 import { createPublicApiKey } from "../publicApi/publicApiKeyService.js";
-import { getPrisma } from "../db.js";
+import { getPrisma, setPrismaForTesting } from "../db.js";
 import {
   ConversationOperationalStatus,
   HandoffStatus,
@@ -14526,6 +14526,131 @@ test("campaign audience split creates numbered static drafts without sending", a
     await prisma.outboundMessage.count({ where: { clientId: businessClientId } }),
     outboundBeforeIntegralDraft,
     "draft creation must not send messages"
+  );
+
+  const conversationFilterLabel = `${splitRunLabel} Conversa Integral`;
+  const withConversationRows = makeLeadRows(`${conversationFilterLabel} Com`, 30, 929940000);
+  const withoutConversationRows = makeLeadRows(`${conversationFilterLabel} Sem`, 30, 929950000);
+  await prisma.lead.createMany({ data: [...withConversationRows, ...withoutConversationRows] });
+  await prisma.conversation.createMany({
+    data: withConversationRows.map((lead) => ({
+      clientId: businessClientId,
+      waId: lead.waId,
+      waIdCanonical: lead.waIdCanonical,
+      channel: "whatsapp",
+      provider: "meta",
+    })),
+  });
+  for (const hasConversation of [true, false] as const) {
+    const selection = await request<{
+      ok: true;
+      plan: { totalEligible: number; audienceSignature: string };
+    }>("POST", "/app/campaigns/drafts/split-preview", businessAdmin, {
+      name: `Campanha Conversa ${hasConversation}`,
+      templateId: template.id,
+      splitMode: "STATIC_FILTER",
+      filters: { q: conversationFilterLabel, status: "RETORNO_FUTURO", hasConversation, page: 2, limit: 25 },
+      returnDestination: defaultCampaignReturnDestination(),
+      templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+    });
+    assert.equal(selection.status, 200, JSON.stringify(selection.body));
+    assert.equal(selection.body.plan.totalEligible, 30, `hasConversation=${hasConversation} must resolve beyond one visual page`);
+    const createdWithConversationFilter = await request<{
+      ok: true;
+      campaign: { id: string; totalRecipients: number };
+    }>("POST", "/app/campaigns/drafts", businessAdmin, {
+      name: `Campanha Conversa ${hasConversation}`,
+      templateId: template.id,
+      selectedLeadIds: [],
+      staticAudienceSelection: {
+        version: 1,
+        mode: "STATIC_FILTER",
+        filters: { q: conversationFilterLabel, status: "RETORNO_FUTURO", hasConversation, page: 2, limit: 25 },
+        audienceSignature: selection.body.plan.audienceSignature,
+      },
+      returnDestination: defaultCampaignReturnDestination(),
+      templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+    });
+    assert.equal(createdWithConversationFilter.status, 200, JSON.stringify(createdWithConversationFilter.body));
+    assert.equal(createdWithConversationFilter.body.campaign.totalRecipients, 30);
+  }
+
+  const eligibilityRaceLabel = `${splitRunLabel} Elegibilidade Mutavel`;
+  const eligibilityRaceRows = makeLeadRows(eligibilityRaceLabel, 30, 929960000);
+  await prisma.lead.createMany({ data: eligibilityRaceRows });
+  const eligibilityRacePreview = await request<{
+    ok: true;
+    plan: { totalEligible: number; audienceSignature: string };
+  }>("POST", "/app/campaigns/drafts/split-preview", businessAdmin, {
+    name: "Campanha Elegibilidade Mutavel",
+    templateId: template.id,
+    splitMode: "STATIC_FILTER",
+    filters: { q: eligibilityRaceLabel, status: "RETORNO_FUTURO", page: 1, limit: 25 },
+    returnDestination: defaultCampaignReturnDestination(),
+    templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+  });
+  assert.equal(eligibilityRacePreview.status, 200, JSON.stringify(eligibilityRacePreview.body));
+  assert.equal(eligibilityRacePreview.body.plan.totalEligible, 30);
+  const campaignCountBeforeEligibilityRace = await prisma.campaign.count({
+    where: { clientId: businessClientId, name: "Campanha Elegibilidade Mutavel" },
+  });
+  const seedCountBeforeEligibilityRace = await prisma.event.count({
+    where: { clientId: businessClientId, eventName: "campaign.seed.saved" },
+  });
+  let optOutReadCount = 0;
+  const racePrisma = prisma.$extends({
+    query: {
+      event: {
+        async findMany({ args, query }) {
+          const result = await query(args);
+          if (
+            optOutReadCount === 0 &&
+            JSON.stringify(args.where ?? {}).includes("contact.opt_out.recorded")
+          ) {
+            optOutReadCount += 1;
+            await recordContactOptOut({
+              clientId: businessClientId,
+              waId: eligibilityRaceRows[0].waId,
+              source: "test",
+              reason: "eligibility changed between signature validation and persistence",
+            });
+          }
+          return result;
+        },
+      },
+    },
+  });
+  setPrismaForTesting(racePrisma as unknown as typeof prisma);
+  let eligibilityChanged: TestResponse<ErrorPayload>;
+  try {
+    eligibilityChanged = await request<ErrorPayload>("POST", "/app/campaigns/drafts", businessAdmin, {
+      name: "Campanha Elegibilidade Mutavel",
+      templateId: template.id,
+      selectedLeadIds: [],
+      staticAudienceSelection: {
+        version: 1,
+        mode: "STATIC_FILTER",
+        filters: { q: eligibilityRaceLabel, status: "RETORNO_FUTURO", page: 1, limit: 25 },
+        audienceSignature: eligibilityRacePreview.body.plan.audienceSignature,
+      },
+      returnDestination: defaultCampaignReturnDestination(),
+      templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+    });
+  } finally {
+    setPrismaForTesting(prisma);
+  }
+  assert.equal(optOutReadCount, 1, "the regression must change eligibility after the validated selection");
+  assert.equal(eligibilityChanged.status, 409, JSON.stringify(eligibilityChanged.body));
+  assert.equal(getErrorCode(eligibilityChanged.body), "audience_changed");
+  assert.equal(
+    await prisma.campaign.count({ where: { clientId: businessClientId, name: "Campanha Elegibilidade Mutavel" } }),
+    campaignCountBeforeEligibilityRace,
+    "audience drift must deny before creating the campaign"
+  );
+  assert.equal(
+    await prisma.event.count({ where: { clientId: businessClientId, eventName: "campaign.seed.saved" } }),
+    seedCountBeforeEligibilityRace,
+    "audience drift must deny before creating the seed"
   );
 
   await prisma.lead.createMany({ data: makeLeadRows(splitOneThousandLabel, 1000, 930000000) });

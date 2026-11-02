@@ -1081,9 +1081,13 @@ preserved. The local correction keeps the visual page at 25 but resolves and
 signs the complete filter server-side before creating one draft up to 1,000;
 larger audiences retain the explicit numbered split flow. Filter drift denies,
 tenant scope is enforced, and current eligibility, opt-out, deduplication,
-template variables, media and return destination remain authoritative. Local
+template variables, media and return destination remain authoritative. The
+conversation-presence filter is resolved integrally for both boolean values,
+and a final signature comparison before the first write denies eligibility
+drift without creating campaign or seed. Local
 PostgreSQL regression covers 930 eligible recipients, page 2, blocked contacts,
-filter drift, cross-tenant exclusion, persisted seed and detail; no send,
+filter drift, both conversation-filter values beyond 25, an opt-out race,
+cross-tenant exclusion, persisted seed and detail; no send,
 schedule, schema, production build or deploy occurred. Repairing the preserved
 25-recipient draft is a separate, not-authorized effect.
 
