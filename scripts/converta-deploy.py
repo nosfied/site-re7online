@@ -1080,13 +1080,20 @@ class Driver:
                 candidate = row.get(field, env.get(field))
                 if isinstance(candidate, str) and candidate:
                     dump_paths.append(candidate)
+        affected = journal.get("components", list(self.inputs.components))
+        if (not isinstance(affected, list) or not affected or
+                any(component not in COMPONENTS for component in affected) or
+                len(affected) != len(set(affected))):
+            deny("generation_retirement_components")
+        previous_by_component = journal.get("previous", {}).get("releases", {})
+        if not isinstance(previous_by_component, dict):
+            deny("generation_retirement_previous_release")
         previous_releases = set()
-        for target in journal.get("previous", {}).get("symlinks", {}).values():
-            if isinstance(target, str):
-                try:
-                    previous_releases.add(Path(target).resolve(strict=True).parent.name)
-                except OSError:
-                    deny("generation_retirement_previous_release")
+        for component in affected:
+            release_id = previous_by_component.get(component)
+            if not isinstance(release_id, str) or not release_id:
+                deny("generation_retirement_previous_release")
+            previous_releases.add(release_id)
         active = set(value.get("activeReleases", [])) - previous_releases
         active.add(self.inputs.release)
         rollback = set(value.get("rollbackReleases", [])) | previous_releases

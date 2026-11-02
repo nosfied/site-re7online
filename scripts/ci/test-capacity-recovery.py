@@ -2549,6 +2549,31 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
         with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
             MODULE.capture_live_operational(operational)
 
+    def test_versioned_release_projection_authenticates_rich_graph_provenance(self):
+        rich_keys = {"activeReleases": ["immutable-abc"], "rollbackReleases": [],
+                     "transitiveReturnReleases": [], "candidateReleases": [],
+                     "installedVerifiedReleases": ["immutable-abc"],
+                     "supersededCandidates": []}
+        source = self.base / "source-rich-graph.private.json"
+        successor = self.base / "successor-rich-graph.private.json"
+        private_json(source, rich_keys); private_json(successor, rich_keys)
+        private_json(self.release_graph, {"schemaVersion": 2,
+            "sourceGraph": {"path": str(source), "sha256": sha(source)},
+            "successorGraph": {"path": str(successor), "sha256": sha(successor)},
+            "protectedGraphPaths": [str(self.release)],
+            "inventoryPaths": [str(self.release)]})
+        self.write_operational()
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        captured, evidence = MODULE.capture_live_operational(operational)
+        self.assertIn(str(self.release), captured["protectedGraphPaths"])
+        self.assertEqual(evidence["releaseGraphSha256"], sha(self.release_graph))
+
+        successor_value = json.loads(successor.read_text())
+        successor_value["activeReleases"] = []
+        private_json(successor, successor_value)
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            MODULE.capture_live_operational(operational)
+
     def test_runtime_outside_build_output_is_denied(self):
         outside = self.base / "outside"; outside.mkdir()
         with self.process_patch(), self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_OUTSIDE_ROOT"):

@@ -1480,9 +1480,45 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
     graph_raw, _ = stable_regular(Path(graph["path"]), graph["sha256"],
                                   allowed_modes={0o600, 0o644})
     graph_value = object_json(graph_raw, "LIVE_RELEASE_GRAPH_JSON")
-    if (set(graph_value) != {"schemaVersion", "protectedGraphPaths"} or
-            graph_value.get("schemaVersion") != 1 or
-            not isinstance(graph_value.get("protectedGraphPaths"), list) or
+    if graph_value.get("schemaVersion") == 1:
+        if set(graph_value) != {"schemaVersion", "protectedGraphPaths"}:
+            deny("LIVE_RELEASE_GRAPH_SCHEMA")
+    elif graph_value.get("schemaVersion") == 2:
+        expected = {"schemaVersion", "sourceGraph", "successorGraph",
+                    "protectedGraphPaths", "inventoryPaths"}
+        if set(graph_value) != expected:
+            deny("LIVE_RELEASE_GRAPH_SCHEMA")
+        for label in ("sourceGraph", "successorGraph"):
+            binding = graph_value[label]
+            if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+                    not isinstance(binding.get("path"), str) or
+                    not SHA256.fullmatch(str(binding.get("sha256", "")))):
+                deny("LIVE_RELEASE_GRAPH_PROVENANCE")
+            source_raw, _ = stable_regular(Path(binding["path"]), binding["sha256"],
+                                           allowed_modes={0o600, 0o644})
+            source_value = object_json(source_raw, "LIVE_RELEASE_GRAPH_PROVENANCE_JSON")
+            rich_keys = {"activeReleases", "rollbackReleases", "transitiveReturnReleases",
+                         "candidateReleases", "installedVerifiedReleases",
+                         "supersededCandidates"}
+            if (set(source_value) != rich_keys or
+                    any(not isinstance(source_value.get(key), list) or
+                        any(not isinstance(item, str) for item in source_value[key])
+                        for key in rich_keys)):
+                deny("LIVE_RELEASE_GRAPH_PROVENANCE_SCHEMA")
+        inventory = graph_value.get("inventoryPaths")
+        if (not isinstance(inventory, list) or
+                any(not isinstance(item, str) for item in inventory)):
+            deny("LIVE_RELEASE_GRAPH_INVENTORY")
+        normalized_inventory = [normalized_absolute(item, "LIVE_RELEASE_GRAPH_INVENTORY_PATH")
+                                for item in inventory]
+        for raw_path in graph_value.get("protectedGraphPaths", []):
+            protected = normalized_absolute(raw_path, "LIVE_RELEASE_GRAPH_PATH")
+            if not any(protected == parent or parent in protected.parents
+                       for parent in normalized_inventory):
+                deny("LIVE_RELEASE_GRAPH_PROTECTION_OUTSIDE_INVENTORY")
+    else:
+        deny("LIVE_RELEASE_GRAPH_SCHEMA")
+    if (not isinstance(graph_value.get("protectedGraphPaths"), list) or
             any(not isinstance(item, str) for item in graph_value["protectedGraphPaths"])):
         deny("LIVE_RELEASE_GRAPH_SCHEMA")
     graph_paths = [str(normalized_absolute(item, "LIVE_RELEASE_GRAPH_PATH"))

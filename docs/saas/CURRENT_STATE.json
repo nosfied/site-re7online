@@ -6,6 +6,26 @@
   "activeOperationalRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+  "releaseGraphReconciliationControlPlane": {
+    "state": "IMPLEMENTED_AND_TESTED_LOCALLY_NOT_OPERATIONAL",
+    "producerRolesAreComponentScoped": true,
+    "successorGraphIsNonDestructive": true,
+    "projectionSchemaVersion": 2,
+    "projectionSeparatesInventoryAndProtection": true,
+    "privateDataParentFailClosed": true,
+    "conditionallyEligibleReleasePrefixes": [
+      "708f",
+      "d436",
+      "f160"
+    ],
+    "privateDataProtectedReleasePrefixes": [
+      "0fdec",
+      "a959"
+    ],
+    "potentialBytesNotQualifiedOrRecovered": 2965995520,
+    "productionGraphChanged": false,
+    "retirementAuthorized": false
+  },
   "capacityRecoveryControlPlane": {
     "state": "PRODUCTION_AUDIT_BINDING_DENY_TERMINAL_NO_EFFECT",
     "script": "scripts/capacity-recovery.py",

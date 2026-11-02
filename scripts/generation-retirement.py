@@ -33,6 +33,11 @@ _preparation_spec.loader.exec_module(preparation_lifecycle)
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
 TERMINAL_DEPLOYMENT = {"DEPLOYED", "ROLLED_BACK", "SUPERSEDED"}
+TERMINAL_RELEASE_JOURNAL = {
+    "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
+    "ROLLED_BACK", "ROLLED_BACK_TECHNICAL_REJECTION",
+    "COMPLETED", "SANITIZED", "RECONCILED",
+}
 PRESERVE_CLASSES = {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "PRIVATE_DATA_NEVER_RETIRE"}
 F160_CACHE_CLASS = "EPHEMERAL_RUNTIME_CACHE"
 DERIVED_CLASSES = {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING"}
@@ -1038,12 +1043,16 @@ def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: di
     if kind == F160_CACHE_CLASS:
         return "ACTIVE_DEPENDENCY"
     if kind == "RELEASE_RUNTIME":
+        if release_runtime_private_dependency(artifact, contract):
+            return "ACTIVE_DEPENDENCY"
         if release in operational["activeReleases"]:
             return "ACTIVE_DEPENDENCY"
         if release in operational["rollbackReleases"] or release in operational["transitiveReturnReleases"]:
             return "ROLLBACK_DEPENDENCY"
         if release in operational["candidateReleases"]:
             return "CANDIDATE_PENDING_ACTIVATION"
+        if path_referenced(path, operational):
+            return "ACTIVE_DEPENDENCY"
         return "RETIREMENT_READY"
     if artifact.get("removedByAuthenticatedRetention") is not None:
         path = Path(path)
@@ -1065,6 +1074,51 @@ def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: di
     if kind == "DERIVED_STAGING":
         return "RETIREMENT_READY" if operational["deploymentState"]["state"] in TERMINAL_DEPLOYMENT else "ACTIVE_DEPENDENCY"
     deny("artifact_classification")
+
+
+def _strict_descendant(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return path != parent
+
+
+def release_runtime_private_dependency(artifact: dict[str, Any],
+                                       contract: dict[str, Any]) -> bool:
+    """Fail closed when a release directory owns mutable private data.
+
+    The contract may explicitly enumerate the overlay (legacy a959), while an
+    older contract may only carry the policy and acquire api-runtime/.data at
+    runtime (0fdec).  Both cases protect the parent.  A symlink, unreadable
+    path, or mismatched classification is deliberately treated as ambiguous
+    private data and therefore protected.
+    """
+    if artifact.get("class") != "RELEASE_RUNTIME":
+        return False
+    release_root = Path(str(artifact.get("path", "")))
+    if not release_root.is_absolute():
+        return True
+    private_children = []
+    for child in contract.get("artifacts", []):
+        if child.get("class") != "PRIVATE_DATA_NEVER_RETIRE":
+            continue
+        child_path = Path(str(child.get("path", "")))
+        if not child_path.is_absolute() or not _strict_descendant(child_path, release_root):
+            return True
+        private_children.append(child_path)
+    if private_children:
+        return True
+    canonical_overlay = release_root / "api-runtime" / ".data"
+    try:
+        canonical_overlay.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    # Presence is enough to protect the parent; the exact type is authenticated
+    # by the PRIVATE_DATA_NEVER_RETIRE artifact when one exists.
+    return True
 
 
 def review_state(states: list[str]) -> str:
@@ -2531,6 +2585,8 @@ def execute(args: argparse.Namespace) -> None:
             executable = []
             for item in commands:
                 state = classify(by_path[item["path"]], execution_contract, operational)
+                if item["class"] == "RELEASE_RUNTIME" and state != "RETIREMENT_READY":
+                    deny("release_runtime_no_longer_retirable")
                 if state == "RETIREMENT_READY":
                     executable.append(item)
             for item in executable:
@@ -2608,6 +2664,197 @@ def execute(args: argparse.Namespace) -> None:
         os.close(writer_fd); os.close(canonical_fd)
 
 
+RICH_GRAPH_KEYS = {
+    "activeReleases", "rollbackReleases", "transitiveReturnReleases",
+    "candidateReleases", "installedVerifiedReleases", "supersededCandidates",
+}
+RECONCILIATION_EVIDENCE_KINDS = {
+    "RETIREMENT_RECEIPT", "LEGACY_JOINT_RECEIPT", "REVIEW_EVIDENCE",
+}
+
+
+def _closed_file_binding(value: Any, label: str) -> tuple[Path, str, bytes]:
+    if (not isinstance(value, dict) or set(value) != {"path", "sha256"} or
+            not isinstance(value.get("path"), str) or
+            not Path(value["path"]).is_absolute() or
+            not SHA256.fullmatch(str(value.get("sha256", "")))):
+        deny(f"release_reconciliation_binding:{label}")
+    path = Path(value["path"])
+    raw, _ = stable_private(path, value["sha256"])
+    return path, value["sha256"], raw
+
+
+def _rich_graph(value: Any, label: str) -> dict[str, list[str]]:
+    if (not isinstance(value, dict) or set(value) != RICH_GRAPH_KEYS or
+            any(not isinstance(value.get(key), list) or
+                any(not isinstance(item, str) or not item for item in value[key]) or
+                len(value[key]) != len(set(value[key])) for key in RICH_GRAPH_KEYS)):
+        deny(f"release_reconciliation_graph:{label}")
+    return {key: sorted(value[key]) for key in RICH_GRAPH_KEYS}
+
+
+def _release_is_live(release: str, installed: Path, operational: dict[str, Any]) -> bool:
+    tokens = (release, str(installed))
+    for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths", "dependencies"):
+        values = operational.get(key)
+        if not isinstance(values, list):
+            deny("release_reconciliation_operational_schema")
+        if any(any(token in value for token in tokens) for value in values
+               if isinstance(value, str)):
+            return True
+    return False
+
+
+def reconcile_release_graph(args: argparse.Namespace) -> None:
+    outputs = (args.graph_output, args.projection_output, args.receipt_output)
+    if (len(set(outputs)) != len(outputs) or
+            any(not path.is_absolute() or path.exists() or path.is_symlink()
+                for path in outputs)):
+        deny("release_reconciliation_output_identity")
+    request_raw, _ = stable_private(args.request, args.request_sha256)
+    request = object_json(request_raw, "release-reconciliation-request")
+    required = {"schemaVersion", "reconciliationId", "releaseRoot", "sourceGraph",
+                "operationalState", "entries"}
+    if (set(request) != required or request.get("schemaVersion") != 1 or
+            not isinstance(request.get("reconciliationId"), str) or
+            not request["reconciliationId"].strip() or
+            not isinstance(request.get("entries"), list) or not request["entries"]):
+        deny("release_reconciliation_request_schema")
+    release_root = Path(str(request.get("releaseRoot", "")))
+    if not release_root.is_absolute() or release_root != Path(os.path.normpath(str(release_root))):
+        deny("release_reconciliation_release_root")
+    source_path, source_sha, source_raw = _closed_file_binding(
+        request["sourceGraph"], "source-graph")
+    source = _rich_graph(object_json(source_raw, "release-reconciliation-source"), "source")
+    operational_path, operational_sha, operational_raw = _closed_file_binding(
+        request["operationalState"], "operational-state")
+    operational = object_json(operational_raw, "release-reconciliation-operational")
+    observations = operational.get("observations")
+    if (not isinstance(observations, dict) or
+            observations.get("releaseGraph") != {"path": str(source_path), "sha256": source_sha}):
+        deny("release_reconciliation_source_graph_binding")
+    successor = {key: list(value) for key, value in source.items()}
+    results = []
+    private_parents: set[str] = set()
+    seen: set[str] = set()
+    for entry in request["entries"]:
+        expected = {"releaseId", "installedReleasePath", "expectedRole", "decision",
+                    "contract", "lifecycle", "journal", "review", "closureEvidence"}
+        if not isinstance(entry, dict) or set(entry) != expected:
+            deny("release_reconciliation_entry_schema")
+        release = entry.get("releaseId")
+        role = entry.get("expectedRole")
+        decision = entry.get("decision")
+        installed = Path(str(entry.get("installedReleasePath", "")))
+        if (not isinstance(release, str) or not release or release in seen or
+                role not in {"rollbackReleases", "transitiveReturnReleases"} or
+                decision not in {"CLOSE_OPERATIONAL_DEPENDENCY", "PRESERVE_PRIVATE_DATA"} or
+                installed != release_root / release or release not in source[role] or
+                release not in source["installedVerifiedReleases"]):
+            deny("release_reconciliation_entry_identity")
+        seen.add(release)
+        _, contract_sha, contract_raw = _closed_file_binding(entry["contract"], f"{release}:contract")
+        contract = object_json(contract_raw, f"{release}:contract")
+        validate_contract(contract)
+        if contract.get("releaseId") != release:
+            deny("release_reconciliation_contract_identity")
+        _, lifecycle_sha, lifecycle_raw = _closed_file_binding(entry["lifecycle"], f"{release}:lifecycle")
+        lifecycle = object_json(lifecycle_raw, f"{release}:lifecycle")
+        if (lifecycle.get("generationId") != release or
+                lifecycle.get("state") not in {"COMPLETE", "FAILED"}):
+            deny("release_reconciliation_lifecycle_identity")
+        _, journal_sha, journal_raw = _closed_file_binding(entry["journal"], f"{release}:journal")
+        journal = object_json(journal_raw, f"{release}:journal")
+        if journal.get("state") not in TERMINAL_RELEASE_JOURNAL:
+            deny("release_reconciliation_journal_open")
+        _, review_sha, review_raw = _closed_file_binding(entry["review"], f"{release}:review")
+        review = object_json(review_raw, f"{release}:review")
+        if (review.get("schemaVersion") != 2 or review.get("generationId") != release or
+                review.get("state") != "SANITIZED" or
+                review.get("lifecycleSha256") != lifecycle_sha):
+            deny("release_reconciliation_review_identity")
+        evidence = entry.get("closureEvidence")
+        if not isinstance(evidence, list) or not evidence:
+            deny("release_reconciliation_evidence_schema")
+        evidence_hashes = set()
+        receipt_seen = False
+        normalized_evidence = []
+        for item in evidence:
+            if (not isinstance(item, dict) or set(item) != {"kind", "path", "sha256"} or
+                    item.get("kind") not in RECONCILIATION_EVIDENCE_KINDS):
+                deny("release_reconciliation_evidence_schema")
+            path, sha256, raw = _closed_file_binding(
+                {"path": item["path"], "sha256": item["sha256"]}, f"{release}:evidence")
+            value = object_json(raw, f"{release}:evidence")
+            if item["kind"] in {"RETIREMENT_RECEIPT", "LEGACY_JOINT_RECEIPT"}:
+                receipt_seen = True
+                state = value.get("state", value.get("result"))
+                if state not in {"SANITIZED", "DEPLOYED_SANITIZED", "COMPLETED",
+                                  "LEGACY_CONTRACT_MATERIALIZED"}:
+                    deny("release_reconciliation_receipt_state")
+            evidence_hashes.add(sha256)
+            normalized_evidence.append({"kind": item["kind"], "path": str(path), "sha256": sha256})
+        if not receipt_seen or review.get("evidenceSha256") not in evidence_hashes:
+            deny("release_reconciliation_review_evidence")
+        release_artifacts = [item for item in contract["artifacts"]
+                             if item.get("class") == "RELEASE_RUNTIME" and
+                             item.get("path") == str(installed)]
+        if len(release_artifacts) != 1:
+            deny("release_reconciliation_release_artifact")
+        private = release_runtime_private_dependency(release_artifacts[0], contract)
+        live = _release_is_live(release, installed, operational)
+        if decision == "CLOSE_OPERATIONAL_DEPENDENCY" and (private or live):
+            deny("release_reconciliation_dependency_still_open")
+        if decision == "PRESERVE_PRIVATE_DATA":
+            if not private:
+                deny("release_reconciliation_private_data_missing")
+            private_parents.add(str(installed))
+            result = "PRESERVED_PRIVATE_DATA"
+        else:
+            successor[role] = [item for item in successor[role] if item != release]
+            result = "HISTORICAL_EVIDENCE_ONLY"
+        results.append({"releaseId": release, "priorRole": role, "result": result,
+                        "contractSha256": contract_sha, "lifecycleSha256": lifecycle_sha,
+                        "journalSha256": journal_sha, "reviewSha256": review_sha,
+                        "closureEvidence": normalized_evidence})
+    successor = _rich_graph(successor, "successor")
+    graph_raw = canonical(successor)
+    write_exclusive(args.graph_output, graph_raw)
+    graph_sha = digest_bytes(graph_raw)
+    protected_releases = sorted(set(successor["activeReleases"] + successor["rollbackReleases"] +
+                                    successor["transitiveReturnReleases"] +
+                                    successor["candidateReleases"]))
+    referenced_inventory = {
+        str(release_root / release)
+        for release in successor["installedVerifiedReleases"]
+        if _release_is_live(release, release_root / release, operational)
+    }
+    projection = {"schemaVersion": 2,
+                  "sourceGraph": {"path": str(source_path), "sha256": source_sha},
+                  "successorGraph": {"path": str(args.graph_output), "sha256": graph_sha},
+                  "protectedGraphPaths": sorted({str(release_root / item)
+                                                  for item in protected_releases} |
+                                                 private_parents | referenced_inventory),
+                  "inventoryPaths": sorted(str(release_root / item)
+                                           for item in successor["installedVerifiedReleases"])}
+    projection_raw = canonical(projection)
+    write_exclusive(args.projection_output, projection_raw)
+    receipt = {"schemaVersion": 1, "state": "RECONCILED_NO_EFFECT",
+               "reconciliationId": request["reconciliationId"],
+               "requestSha256": args.request_sha256,
+               "sourceGraphSha256": source_sha, "operationalStateSha256": operational_sha,
+               "successorGraphSha256": graph_sha,
+               "projectionSha256": digest_bytes(projection_raw), "results": results,
+               "originalsModified": False, "destructiveCommands": 0,
+               "freshRecaptureRequiredBeforeRetirement": True}
+    receipt_raw = canonical(receipt)
+    write_exclusive(args.receipt_output, receipt_raw)
+    print(canonical({"result": "RELEASE_GRAPH_RECONCILED_NO_EFFECT",
+                     "graphSha256": graph_sha,
+                     "projectionSha256": digest_bytes(projection_raw),
+                     "receiptSha256": digest_bytes(receipt_raw)}).decode().strip())
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
@@ -2645,6 +2892,13 @@ def parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--retention-journal", type=Path, required=True)
     batch_parser.add_argument("--retention-journal-sha256", required=True)
     batch_parser.set_defaults(handler=bootstrap_legacy_batch_v1_preserve)
+    reconciliation_parser = commands.add_parser("reconcile-release-graph")
+    reconciliation_parser.add_argument("--request", type=Path, required=True)
+    reconciliation_parser.add_argument("--request-sha256", required=True)
+    reconciliation_parser.add_argument("--graph-output", type=Path, required=True)
+    reconciliation_parser.add_argument("--projection-output", type=Path, required=True)
+    reconciliation_parser.add_argument("--receipt-output", type=Path, required=True)
+    reconciliation_parser.set_defaults(handler=reconcile_release_graph)
     prepare_parser = commands.add_parser("prepare")
     for name in ("contract", "lifecycle", "operational-state"):
         prepare_parser.add_argument(f"--{name}", type=Path, required=True)

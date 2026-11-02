@@ -43,6 +43,11 @@ def invoke(*args: str) -> subprocess.CompletedProcess[str]:
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
+def invoke_tool(tool: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, "-B", str(tool), *args], text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
 class Fixture:
     def __init__(self, *, active=False, rollback=False, candidate=False, installed=True, deployed=True,
                  release_id="immutable-fixture"):
@@ -1429,6 +1434,21 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+        fixture = Fixture(active=False, rollback=False, candidate=False,
+                          installed=True, deployed=False,
+                          release_id="immutable-current-reference-fixture")
+        try:
+            prepared = fixture.prepare()
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            intent = json.loads(fixture.intent.read_text())
+            release = next(item for item in intent["artifacts"]
+                           if item["class"] == "RELEASE_RUNTIME")
+            self.assertEqual(release["retentionState"], "ACTIVE_DEPENDENCY")
+            self.assertNotIn(str(fixture.installed_release),
+                             [item["path"] for item in intent["commands"]])
+        finally:
+            fixture.close()
+
         fixture = Fixture(rollback=True, deployed=False)
         try:
             self.assertEqual(fixture.prepare().returncode, 0)
@@ -1472,6 +1492,245 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(receipt["state"], "SANITIZED")
             self.assertIn(str(fixture.installed_release), receipt["removedPaths"])
             self.assertEqual(receipt["remainingDerivedPaths"], [])
+        finally:
+            fixture.close()
+
+    def test_private_overlay_protects_parent_at_prepare_and_execute(self):
+        fixture = Fixture(active=False, rollback=False, candidate=False,
+                          installed=True, deployed=False,
+                          release_id="immutable-0fdec-private-fixture")
+        try:
+            operational = json.loads(fixture.operational.read_text())
+            operational["currentPaths"] = []
+            operational["observations"]["currentLinks"] = []
+            operational["deploymentState"] = {"state": "SUPERSEDED"}
+            private_json(fixture.operational, operational)
+
+            overlay = fixture.installed_release / "api-runtime/.data"
+            overlay.mkdir(parents=True)
+            contract = json.loads(fixture.contract.read_text())
+            release = next(item for item in contract["artifacts"]
+                           if item["class"] == "RELEASE_RUNTIME")
+            release.update(MODULE.structural_metrics(fixture.installed_release))
+            private_json(fixture.contract, contract)
+            prepared = fixture.prepare()
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            intent = json.loads(fixture.intent.read_text())
+            release = next(item for item in intent["artifacts"]
+                           if item["class"] == "RELEASE_RUNTIME")
+            self.assertEqual(release["retentionState"], "ACTIVE_DEPENDENCY")
+            self.assertNotIn(str(fixture.installed_release),
+                             [item["path"] for item in intent["commands"]])
+        finally:
+            fixture.close()
+
+        fixture = Fixture(active=False, rollback=False, candidate=False,
+                          installed=True, deployed=False,
+                          release_id="immutable-a959-execute-drift-fixture")
+        try:
+            operational = json.loads(fixture.operational.read_text())
+            operational["currentPaths"] = []
+            operational["observations"]["currentLinks"] = []
+            operational["deploymentState"] = {"state": "SUPERSEDED"}
+            private_json(fixture.operational, operational)
+            self.assertEqual(fixture.prepare().returncode, 0)
+            authorization = fixture.authorize("private-parent-drift")
+            (fixture.installed_release / "api-runtime/.data").mkdir(parents=True)
+            executed, _ = fixture.execute(authorization)
+            self.assertEqual(executed.returncode, 2)
+            self.assertTrue(fixture.installed_release.is_dir())
+            self.assertIn("DENY", executed.stderr)
+        finally:
+            fixture.close()
+
+    def test_release_graph_reconciliation_is_non_destructive_and_drives_prepare(self):
+        fixture = Fixture(active=False, rollback=True, candidate=False,
+                          installed=True, deployed=False,
+                          release_id="immutable-708f-fixture")
+        try:
+            control = fixture.root / "materialized-control"
+            control.mkdir(mode=0o700)
+            copied_tool = control / "generation-retirement.py"
+            copied_dependency = control / "preparation_artifact_lifecycle.py"
+            shutil.copyfile(TOOL, copied_tool)
+            shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", copied_dependency)
+            copied_tool.chmod(0o500); copied_dependency.chmod(0o600)
+
+            ids = ["immutable-708f-fixture", "immutable-d436-fixture",
+                   "immutable-f160-fixture", "immutable-0fdec-fixture",
+                   "immutable-a959-fixture"]
+            unreconciled = "immutable-unreconciled-dependency"
+            roles = {
+                "activeReleases": ["immutable-active-fixture"],
+                "rollbackReleases": ["immutable-immediate-rollback", ids[0], ids[3]],
+                "transitiveReturnReleases": [ids[1], ids[2], ids[4]],
+                "candidateReleases": [],
+                "installedVerifiedReleases": ["immutable-active-fixture",
+                                               "immutable-immediate-rollback", unreconciled, *ids],
+                "supersededCandidates": [],
+            }
+            private_json(fixture.graph, roles)
+            entries = []
+            originals = {}
+            for release_id in ids:
+                release_path = (fixture.installed_release if release_id == ids[0]
+                                else fixture.releases_root / release_id)
+                release_path.mkdir(parents=True, exist_ok=True)
+                private = release_id in {ids[3], ids[4]}
+                if private:
+                    (release_path / "api-runtime/.data").mkdir(parents=True)
+                info = release_path.lstat()
+                metrics = MODULE.structural_metrics(release_path)
+                artifact = {"path": str(release_path), "releaseId": release_id,
+                            "targetCommit": "b" * 40, "expectedType": "directory",
+                            "initialIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                            "observedIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                            **metrics, "digest": {"structural": "fixture"},
+                            "class": "RELEASE_RUNTIME", "state": "ROLLBACK_DEPENDENCY",
+                            "retirableOn": "authenticated graph reconciliation",
+                            "dependencies": []}
+                contract_path = fixture.evidence_root / f"{release_id}.contract.json"
+                if release_id == ids[0]:
+                    contract_path = fixture.contract
+                else:
+                    private_json(contract_path, {"schemaVersion": 1,
+                        "generationId": release_id, "releaseId": release_id,
+                        "targetCommit": "b" * 40, "state": "COMPLETE",
+                        "writerLockPath": str(fixture.writer_lock),
+                        "classes": sorted(MODULE.PRESERVE_CLASSES | MODULE.DERIVED_CLASSES |
+                                          {"RELEASE_RUNTIME"}),
+                        "artifacts": [artifact],
+                        "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+                        "privateDataOverlay": {"path": "api-runtime/.data",
+                            "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                            "state": "ACTIVE_DEPENDENCY",
+                            "retirableOn": "NEVER_AUTOMATIC"}})
+                lifecycle_path = fixture.evidence_root / f"{release_id}.lifecycle.json"
+                if release_id == ids[0]:
+                    lifecycle_path = fixture.lifecycle
+                else:
+                    private_json(lifecycle_path, {"schemaVersion": 1,
+                        "generationId": release_id, "targetCommit": "b" * 40,
+                        "state": "COMPLETE"})
+                receipt_path = fixture.evidence_root / f"{release_id}.receipt.json"
+                private_json(receipt_path, {"schemaVersion": 1, "state": "COMPLETED",
+                                            "releaseId": release_id})
+                journal_path = fixture.evidence_root / f"{release_id}.journal.json"
+                private_json(journal_path, {"schemaVersion": 1,
+                                            "state": "DEPLOYED_SANITIZED",
+                                            "releaseId": release_id})
+                review_path = fixture.evidence_root / f"{release_id}.review.json"
+                private_json(review_path, {"schemaVersion": 2, "generationId": release_id,
+                    "lifecycleSha256": sha(lifecycle_path), "state": "SANITIZED",
+                    "evidenceSha256": sha(contract_path), "reviewer": "fixture",
+                    "reason": "terminal proof"})
+                role = ("rollbackReleases" if release_id in {ids[0], ids[3]}
+                        else "transitiveReturnReleases")
+                entries.append({"releaseId": release_id,
+                    "installedReleasePath": str(release_path), "expectedRole": role,
+                    "decision": ("PRESERVE_PRIVATE_DATA" if private
+                                 else "CLOSE_OPERATIONAL_DEPENDENCY"),
+                    "contract": {"path": str(contract_path), "sha256": sha(contract_path)},
+                    "lifecycle": {"path": str(lifecycle_path), "sha256": sha(lifecycle_path)},
+                    "journal": {"path": str(journal_path), "sha256": sha(journal_path)},
+                    "review": {"path": str(review_path), "sha256": sha(review_path)},
+                    "closureEvidence": [
+                        {"kind": "REVIEW_EVIDENCE", "path": str(contract_path),
+                         "sha256": sha(contract_path)},
+                        {"kind": "RETIREMENT_RECEIPT", "path": str(receipt_path),
+                         "sha256": sha(receipt_path)},
+                    ]})
+                originals[str(contract_path)] = sha(contract_path)
+
+            operational_path = fixture.evidence_root / "reconciliation-operational.json"
+            private_json(operational_path, {"schemaVersion": 1,
+                "currentPaths": [str(fixture.releases_root / "immutable-active-fixture")],
+                "pm2LivePaths": [], "pm2DumpPaths": [],
+                "dependencies": [str(fixture.releases_root / unreconciled)],
+                "observations": {"releaseGraph": {"path": str(fixture.graph),
+                                                    "sha256": sha(fixture.graph)}}})
+            request_path = fixture.evidence_root / "reconcile-request.json"
+            private_json(request_path, {"schemaVersion": 1,
+                "reconciliationId": "fixture-five-release-reconciliation",
+                "releaseRoot": str(fixture.releases_root),
+                "sourceGraph": {"path": str(fixture.graph), "sha256": sha(fixture.graph)},
+                "operationalState": {"path": str(operational_path),
+                                     "sha256": sha(operational_path)},
+                "entries": entries})
+            for path in (fixture.graph, operational_path, request_path):
+                originals[str(path)] = sha(path)
+            for entry in entries:
+                for label in ("contract", "lifecycle", "journal", "review"):
+                    path = Path(entry[label]["path"])
+                    originals[str(path)] = sha(path)
+                for evidence in entry["closureEvidence"]:
+                    path = Path(evidence["path"])
+                    originals[str(path)] = sha(path)
+            successor = fixture.evidence_root / "successor-graph.json"
+            projection = fixture.evidence_root / "flat-projection.json"
+            receipt = fixture.evidence_root / "reconciliation-receipt.json"
+            reconciled = invoke_tool(copied_tool, "reconcile-release-graph",
+                "--request", str(request_path), "--request-sha256", sha(request_path),
+                "--graph-output", str(successor), "--projection-output", str(projection),
+                "--receipt-output", str(receipt))
+            self.assertEqual(reconciled.returncode, 0, reconciled.stderr)
+            successor_value = json.loads(successor.read_text())
+            self.assertNotIn(ids[0], successor_value["rollbackReleases"])
+            self.assertNotIn(ids[1], successor_value["transitiveReturnReleases"])
+            self.assertNotIn(ids[2], successor_value["transitiveReturnReleases"])
+            self.assertIn(ids[3], successor_value["rollbackReleases"])
+            self.assertIn(ids[4], successor_value["transitiveReturnReleases"])
+            projected = json.loads(projection.read_text())
+            self.assertEqual(projected["successorGraph"]["sha256"], sha(successor))
+            for closed in ids[:3]:
+                self.assertNotIn(str(fixture.releases_root / closed),
+                                 projected["protectedGraphPaths"])
+                self.assertIn(str(fixture.releases_root / closed), projected["inventoryPaths"])
+            self.assertIn(str(fixture.releases_root / ids[3]), projected["protectedGraphPaths"])
+            self.assertIn(str(fixture.releases_root / ids[4]), projected["protectedGraphPaths"])
+            self.assertIn(str(fixture.releases_root / "immutable-active-fixture"),
+                          projected["protectedGraphPaths"])
+            self.assertIn(str(fixture.releases_root / "immutable-immediate-rollback"),
+                          projected["protectedGraphPaths"])
+            self.assertIn(str(fixture.releases_root / unreconciled),
+                          projected["protectedGraphPaths"])
+            self.assertTrue(all(sha(Path(path)) == digest for path, digest in originals.items()))
+            self.assertEqual(json.loads(receipt.read_text())["destructiveCommands"], 0)
+
+            operational = json.loads(fixture.operational.read_text())
+            for key in MODULE.RICH_GRAPH_KEYS:
+                operational[key] = successor_value[key]
+            operational["currentPaths"] = []
+            operational["observations"]["currentLinks"] = []
+            operational["observations"]["releaseGraph"] = {
+                "path": str(successor), "sha256": sha(successor)}
+            operational["deploymentState"] = {"state": "SUPERSEDED"}
+            private_json(fixture.operational, operational)
+            prepared = invoke_tool(copied_tool, "prepare",
+                "--contract", str(fixture.contract), "--contract-sha256", sha(fixture.contract),
+                "--lifecycle", str(fixture.lifecycle), "--lifecycle-sha256", sha(fixture.lifecycle),
+                "--operational-state", str(fixture.operational),
+                "--operational-state-sha256", sha(fixture.operational),
+                "--root-policy", str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
+                "--deployment-lock", str(fixture.deploy_lock),
+                "--intent-output", str(fixture.intent), "--commands-output", str(fixture.commands),
+                "--review-output", str(fixture.review), "--reviewer", "fixture-owner",
+                "--reason", "reconciled fixture")
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            self.assertIn(str(fixture.installed_release),
+                          [item["path"] for item in json.loads(fixture.intent.read_text())["commands"]])
+
+            drifted_review = Path(entries[1]["review"]["path"])
+            review_value = json.loads(drifted_review.read_text())
+            review_value["reason"] = "drifted after sealing"
+            private_json(drifted_review, review_value)
+            denied = invoke_tool(copied_tool, "reconcile-release-graph",
+                "--request", str(request_path), "--request-sha256", sha(request_path),
+                "--graph-output", str(fixture.evidence_root / "denied-successor.json"),
+                "--projection-output", str(fixture.evidence_root / "denied-projection.json"),
+                "--receipt-output", str(fixture.evidence_root / "denied-receipt.json"))
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("private_hash", denied.stderr)
         finally:
             fixture.close()
 
