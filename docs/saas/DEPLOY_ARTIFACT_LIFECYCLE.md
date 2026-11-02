@@ -1125,11 +1125,14 @@ novamente `inventoryPaths` e `protectedGraphPaths` e exige igualdade exata.
 
 Uma aresta só deixa `rollbackReleases` ou `transitiveReturnReleases` quando o
 fechamento autenticado está completo e a recaptura não encontra referência viva.
-O rollback imediato por componente é provado pelo runtime manifest, pelo
-`previous.releases`, pelas seleções do preflight e pelo binding de componentes do
-journal da ativação que produziu a seleção ativa. Evidência omitida, de ativação
-anterior ou sem cobertura simultânea de API e frontend nega; o rollback imediato
-não pode ser fechado, mesmo ausente de PM2/current.
+O rollback imediato de cada componente é provado pela ativação autenticada que
+efetivamente selecionou aquele componente: runtime manifest, `previous.releases`,
+seleções do preflight e binding do journal. Em ativação API-only, a prova do
+frontend vem da ativação anterior que selecionou o frontend e estabeleceu seu
+rollback; frontend-only aplica a regra simétrica à API. A seleção ativa da janela
+parcial não substitui essa prova. Evidência omitida, de ativação anterior
+incompatível ou sem cobertura simultânea de API e frontend nega; o rollback
+imediato não pode ser fechado, mesmo ausente de PM2/current.
 Omissão, binding divergente ou estado aberto preservam a aresta. Releases ativas,
 rollback imediato, candidatas e dependências transitivas não reconciliadas
 continuam protegidas.

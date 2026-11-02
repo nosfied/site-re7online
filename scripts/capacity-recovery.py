@@ -1595,62 +1595,64 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
                                  successor_value["rollbackReleases"] +
                                  successor_value["transitiveReturnReleases"] +
                                  successor_value["candidateReleases"])
-        expected_activation_keys = {"runtimeManifest", "transactionJournal", "components",
-                                    "selectedReleases", "immediateRollbacks"}
-        if set(activation_evidence) != expected_activation_keys:
+        if set(activation_evidence) != {"api", "frontend"}:
             deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
-        manifest_binding = activation_evidence["runtimeManifest"]
-        journal_binding = activation_evidence["transactionJournal"]
-        if (not isinstance(manifest_binding, dict) or
-                set(manifest_binding) != {"path", "sha256"} or
-                not isinstance(journal_binding, dict) or
-                set(journal_binding) != {"path", "sha256"}):
-            deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
-        manifest_raw, _ = stable_regular(Path(manifest_binding["path"]),
-                                         manifest_binding["sha256"],
-                                         allowed_modes={0o600, 0o644})
-        journal_raw, _ = stable_regular(Path(journal_binding["path"]),
-                                        journal_binding["sha256"],
-                                        allowed_modes={0o600, 0o644})
-        manifest = object_json(manifest_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_MANIFEST")
-        journal = object_json(journal_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_JOURNAL")
-        binding = journal.get("binding")
-        components = journal.get("components",
-                                 binding.get("components") if isinstance(binding, dict) else None)
-        rollback = manifest.get("rollbackReleases")
-        previous = journal.get("previous", {}).get("releases")
-        selections = journal.get("preflight", {}).get("selections")
-        candidate = binding.get("release") if isinstance(binding, dict) else None
-        if (not isinstance(binding, dict) or
-                binding.get("runtimeManifestSha256") != manifest_binding["sha256"] or
-                not isinstance(components, list) or not components or
-                any(item not in {"api", "frontend"} for item in components) or
-                not isinstance(rollback, dict) or not isinstance(previous, dict) or
-                not isinstance(selections, dict) or set(selections) != {"api", "frontend"} or
-                not isinstance(candidate, str)):
-            deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
         selected_now = {}
         immediate = {}
         for component in ("api", "frontend"):
+            evidence = activation_evidence.get(component)
+            if (not isinstance(evidence, dict) or
+                    set(evidence) != {"runtimeManifest", "transactionJournal",
+                                     "selectedRelease", "immediateRollback"}):
+                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+            manifest_binding = evidence["runtimeManifest"]
+            journal_binding = evidence["transactionJournal"]
+            if (not isinstance(manifest_binding, dict) or
+                    set(manifest_binding) != {"path", "sha256"} or
+                    not isinstance(journal_binding, dict) or
+                    set(journal_binding) != {"path", "sha256"}):
+                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+            manifest_raw, _ = stable_regular(Path(manifest_binding["path"]),
+                                             manifest_binding["sha256"],
+                                             allowed_modes={0o600, 0o644})
+            journal_raw, _ = stable_regular(Path(journal_binding["path"]),
+                                            journal_binding["sha256"],
+                                            allowed_modes={0o600, 0o644})
+            manifest = object_json(manifest_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_MANIFEST")
+            journal = object_json(journal_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_JOURNAL")
+            binding = journal.get("binding")
+            components = journal.get("components",
+                                     binding.get("components") if isinstance(binding, dict) else None)
+            rollback = manifest.get("rollbackReleases")
+            previous = journal.get("previous", {}).get("releases")
+            selections = journal.get("preflight", {}).get("selections")
+            candidate = binding.get("release") if isinstance(binding, dict) else None
+            if (not isinstance(binding, dict) or
+                    binding.get("runtimeManifestSha256") != manifest_binding["sha256"] or
+                    not isinstance(components, list) or component not in components or
+                    any(item not in {"api", "frontend"} for item in components) or
+                    not isinstance(rollback, dict) or not isinstance(previous, dict) or
+                    not isinstance(selections, dict) or set(selections) != {"api", "frontend"} or
+                    not isinstance(candidate, str) or
+                    candidate not in rich_values["sourceGraph"]["activeReleases"]):
+                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
             selection = selections.get(component)
             selected = selection.get("releaseId") if isinstance(selection, dict) else None
             if (not isinstance(selected, str) or
                     selected not in rich_values["sourceGraph"]["installedVerifiedReleases"]):
                 deny("LIVE_RELEASE_GRAPH_COMPONENT_COVERAGE")
-            if component in components:
-                definition = rollback.get(component)
-                if (not isinstance(definition, dict) or definition.get("releaseId") != selected or
-                        previous.get(component) != selected):
-                    deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
-                immediate[component] = selected
-                selected_now[component] = candidate
-            else:
-                selected_now[component] = selected
-            if selected_now[component] not in rich_values["sourceGraph"]["activeReleases"]:
+            definition = rollback.get(component)
+            if (not isinstance(definition, dict) or definition.get("releaseId") != selected or
+                    previous.get(component) != selected):
+                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+            immediate[component] = selected
+            selected_now[component] = candidate
+            if candidate not in rich_values["sourceGraph"]["activeReleases"]:
                 deny("LIVE_RELEASE_GRAPH_ACTIVE_SELECTION")
-        if (activation_evidence["components"] != sorted(components) or
-                activation_evidence["selectedReleases"] != selected_now or
-                activation_evidence["immediateRollbacks"] != immediate):
+            if (evidence["selectedRelease"] != candidate or
+                    evidence["immediateRollback"] != selected):
+                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+        if set(selected_now) != {"api", "frontend"} or set(immediate) != {"api", "frontend"}:
             deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
         immediate_rollbacks = set(immediate.values())
         referenced = set()

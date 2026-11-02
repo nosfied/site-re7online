@@ -1587,6 +1587,15 @@ class GenerationRetirementTest(unittest.TestCase):
                           deployed=False,
                           release_id="immutable-708f018c-vps-20261027T152109Z")
         try:
+            materialized = fixture.root / "materialized-reconciliation-control"
+            materialized.mkdir(mode=0o700)
+            copied_tool = materialized / "generation-retirement.py"
+            copied_dependency = materialized / "preparation_artifact_lifecycle.py"
+            shutil.copyfile(TOOL, copied_tool)
+            shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py",
+                            copied_dependency)
+            copied_tool.chmod(0o500); copied_dependency.chmod(0o600)
+            self.assertEqual(sha(copied_tool), sha(TOOL))
             producer_operational = json.loads(fixture.operational.read_text())
             producer_operational["deploymentState"] = {"state": "SUPERSEDED"}
             private_json(fixture.operational, producer_operational)
@@ -1614,12 +1623,14 @@ class GenerationRetirementTest(unittest.TestCase):
             active_api = "immutable-current-api"
             active_frontend = "immutable-current-frontend"
             immediate_api = "immutable-immediate-api"
+            immediate_frontend = "immutable-immediate-frontend"
             source = {
                 "activeReleases": [active_api, active_frontend],
-                "rollbackReleases": [immediate_api, fixture.release_id],
+                "rollbackReleases": [immediate_api, immediate_frontend, fixture.release_id],
                 "transitiveReturnReleases": [], "candidateReleases": [],
                 "installedVerifiedReleases": [active_api, active_frontend,
-                                               immediate_api, fixture.release_id],
+                                               immediate_api, immediate_frontend,
+                                               fixture.release_id],
                 "supersededCandidates": [],
             }
             private_json(fixture.graph, source)
@@ -1642,6 +1653,19 @@ class GenerationRetirementTest(unittest.TestCase):
                     "frontend": {"releaseId": active_frontend}}},
                 "previous": {"releases": {"api": immediate_api,
                                              "frontend": active_frontend}}})
+            frontend_manifest = fixture.evidence_root / "frontend-runtime-manifest.json"
+            private_json(frontend_manifest, {"schemaVersion": 1,
+                "rollbackReleases": {"frontend": {"releaseId": immediate_frontend}}})
+            frontend_transaction = fixture.evidence_root / "frontend-transaction.json"
+            private_json(frontend_transaction, {"schemaVersion": 1, "state": "DEPLOYED",
+                "components": ["frontend"],
+                "binding": {"release": active_frontend, "components": ["frontend"],
+                            "runtimeManifestSha256": sha(frontend_manifest)},
+                "preflight": {"selections": {
+                    "api": {"releaseId": active_api},
+                    "frontend": {"releaseId": immediate_frontend}}},
+                "previous": {"releases": {"api": active_api,
+                                             "frontend": immediate_frontend}}})
             request = fixture.evidence_root / "reconcile-request.json"
             private_json(request, {"schemaVersion": 2,
                 "reconciliationId": "emitted-producer-chain",
@@ -1649,11 +1673,16 @@ class GenerationRetirementTest(unittest.TestCase):
                 "sourceGraph": {"path": str(fixture.graph), "sha256": sha(fixture.graph)},
                 "operationalState": {"path": str(operational_path),
                                      "sha256": sha(operational_path)},
-                "activationEvidence": {
+                "activationEvidence": {"api": {
                     "runtimeManifest": {"path": str(runtime_manifest),
                                         "sha256": sha(runtime_manifest)},
                     "transactionJournal": {"path": str(transaction),
                                            "sha256": sha(transaction)}},
+                    "frontend": {
+                    "runtimeManifest": {"path": str(frontend_manifest),
+                                        "sha256": sha(frontend_manifest)},
+                    "transactionJournal": {"path": str(frontend_transaction),
+                                           "sha256": sha(frontend_transaction)}}},
                 "entries": [{"releaseId": fixture.release_id,
                     "installedReleasePath": str(fixture.installed_release),
                     "expectedRole": "rollbackReleases",
@@ -1669,7 +1698,8 @@ class GenerationRetirementTest(unittest.TestCase):
                         "journal": {"path": str(journal_path), "sha256": sha(journal_path)}}]}}]})
 
             def reconcile(name: str, request_path: Path = request):
-                return invoke("reconcile-release-graph", "--request", str(request_path),
+                return invoke_tool(copied_tool, "reconcile-release-graph",
+                    "--request", str(request_path),
                     "--request-sha256", sha(request_path),
                     "--graph-output", str(fixture.evidence_root / f"{name}-graph.json"),
                     "--projection-output", str(fixture.evidence_root / f"{name}-projection.json"),
@@ -1693,7 +1723,7 @@ class GenerationRetirementTest(unittest.TestCase):
             private_json(fixture.operational, operational)
             post_intent = fixture.evidence_root / "post-reconciliation-intent.json"
             post_commands = fixture.evidence_root / "post-reconciliation-commands.txt"
-            post = invoke("prepare", "--contract", str(fixture.contract),
+            post = invoke_tool(copied_tool, "prepare", "--contract", str(fixture.contract),
                 "--contract-sha256", sha(fixture.contract),
                 "--lifecycle", str(fixture.lifecycle),
                 "--lifecycle-sha256", sha(fixture.lifecycle),
@@ -1735,7 +1765,7 @@ class GenerationRetirementTest(unittest.TestCase):
             missing_value = json.loads(transaction.read_text())
             del missing_value["preflight"]["selections"]["frontend"]
             private_json(missing_journal, missing_value)
-            missing_component["activationEvidence"]["transactionJournal"] = {
+            missing_component["activationEvidence"]["api"]["transactionJournal"] = {
                 "path": str(missing_journal), "sha256": sha(missing_journal)}
             missing_path = fixture.evidence_root / "missing-component-request.json"
             private_json(missing_path, missing_component)
@@ -1743,18 +1773,55 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(denied.returncode, 2)
             self.assertIn("release_reconciliation_activation_identity", denied.stderr)
 
+            omitted = json.loads(request.read_text())
+            del omitted["activationEvidence"]["frontend"]
+            omitted_path = fixture.evidence_root / "omitted-component-request.json"
+            private_json(omitted_path, omitted)
+            denied = reconcile("omitted-component", omitted_path)
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("release_reconciliation_activation_schema", denied.stderr)
+
             historical = json.loads(request.read_text())
             historical_journal = fixture.evidence_root / "historical-selection.json"
-            historical_value = json.loads(transaction.read_text())
+            historical_value = json.loads(frontend_transaction.read_text())
             historical_value["binding"]["release"] = "immutable-old-api"
             private_json(historical_journal, historical_value)
-            historical["activationEvidence"]["transactionJournal"] = {
+            historical["activationEvidence"]["frontend"]["transactionJournal"] = {
                 "path": str(historical_journal), "sha256": sha(historical_journal)}
             historical_path = fixture.evidence_root / "historical-request.json"
             private_json(historical_path, historical)
             denied = reconcile("historical", historical_path)
             self.assertEqual(denied.returncode, 2)
             self.assertIn("release_reconciliation_activation_identity", denied.stderr)
+
+            for component, candidate in (("frontend", active_frontend),
+                                         ("api", active_api)):
+                protected_manifest = fixture.evidence_root / f"{component}-protected-manifest.json"
+                private_json(protected_manifest, {"rollbackReleases": {
+                    component: {"releaseId": fixture.release_id}}})
+                protected_journal = fixture.evidence_root / f"{component}-protected-journal.json"
+                selections = {"api": {"releaseId": active_api},
+                              "frontend": {"releaseId": active_frontend}}
+                selections[component] = {"releaseId": fixture.release_id}
+                private_json(protected_journal, {"components": [component],
+                    "binding": {"release": candidate, "components": [component],
+                                "runtimeManifestSha256": sha(protected_manifest)},
+                    "preflight": {"selections": selections},
+                    "previous": {"releases": {
+                        "api": fixture.release_id if component == "api" else active_api,
+                        "frontend": (fixture.release_id if component == "frontend"
+                                     else active_frontend)}}})
+                protected = json.loads(request.read_text())
+                protected["activationEvidence"][component] = {
+                    "runtimeManifest": {"path": str(protected_manifest),
+                                        "sha256": sha(protected_manifest)},
+                    "transactionJournal": {"path": str(protected_journal),
+                                           "sha256": sha(protected_journal)}}
+                protected_path = fixture.evidence_root / f"{component}-protected-request.json"
+                private_json(protected_path, protected)
+                denied = reconcile(f"{component}-protected", protected_path)
+                self.assertEqual(denied.returncode, 2)
+                self.assertIn("release_reconciliation_immediate_rollback_close", denied.stderr)
         finally:
             fixture.close()
 

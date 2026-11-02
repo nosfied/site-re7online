@@ -2563,10 +2563,11 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
             "pm2DumpPaths": [], "dependencies": []})
         runtime_manifest = self.base / "activation-runtime-manifest.private.json"
         private_json(runtime_manifest, {"rollbackReleases": {
-            "api": {"releaseId": release_id}}})
+            "api": {"releaseId": release_id},
+            "frontend": {"releaseId": release_id}}})
         transaction = self.base / "activation-transaction.private.json"
-        private_json(transaction, {"components": ["api"],
-            "binding": {"release": release_id, "components": ["api"],
+        private_json(transaction, {"components": ["api", "frontend"],
+            "binding": {"release": release_id, "components": ["api", "frontend"],
                         "runtimeManifestSha256": sha(runtime_manifest)},
             "preflight": {"selections": {
                 "api": {"releaseId": release_id},
@@ -2581,12 +2582,14 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
                                  "sha256": sha(reconciliation_operational)},
             "successorGraph": {"path": str(successor), "sha256": sha(successor)},
             "privateDataParents": [], "activationEvidence": {
-                "runtimeManifest": {"path": str(runtime_manifest),
-                                    "sha256": sha(runtime_manifest)},
-                "transactionJournal": {"path": str(transaction), "sha256": sha(transaction)},
-                "components": ["api"],
-                "selectedReleases": {"api": release_id, "frontend": release_id},
-                "immediateRollbacks": {"api": release_id}}, "results": [],
+                component: {
+                    "runtimeManifest": {"path": str(runtime_manifest),
+                                        "sha256": sha(runtime_manifest)},
+                    "transactionJournal": {"path": str(transaction),
+                                           "sha256": sha(transaction)},
+                    "selectedRelease": release_id,
+                    "immediateRollback": release_id}
+                for component in ("api", "frontend")}, "results": [],
             "originalsModified": False, "destructiveCommands": 0,
             "freshRecaptureRequiredBeforeRetirement": True})
         private_json(self.release_graph, {"schemaVersion": 2,

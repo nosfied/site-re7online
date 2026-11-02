@@ -2708,52 +2708,54 @@ def _release_is_live(release: str, installed: Path, operational: dict[str, Any])
 
 
 def _activation_selection(value: Any, source: dict[str, list[str]]) -> tuple[dict[str, str], dict[str, Any]]:
-    if not isinstance(value, dict) or set(value) != {"runtimeManifest", "transactionJournal"}:
+    if not isinstance(value, dict) or set(value) != {"api", "frontend"}:
         deny("release_reconciliation_activation_schema")
-    manifest_path, manifest_sha, manifest_raw = _closed_file_binding(
-        value["runtimeManifest"], "activation:manifest")
-    journal_path, journal_sha, journal_raw = _closed_file_binding(
-        value["transactionJournal"], "activation:journal")
-    manifest = object_json(manifest_raw, "activation:manifest")
-    journal = object_json(journal_raw, "activation:journal")
-    binding = journal.get("binding")
-    components = journal.get("components",
-                             binding.get("components") if isinstance(binding, dict) else None)
-    if (not isinstance(binding, dict) or binding.get("runtimeManifestSha256") != manifest_sha or
-            not isinstance(components, list) or not components or
-            any(item not in {"api", "frontend"} for item in components) or
-            len(components) != len(set(components))):
-        deny("release_reconciliation_activation_identity")
-    candidate = binding.get("release")
-    rollback = manifest.get("rollbackReleases")
-    previous = journal.get("previous", {}).get("releases")
-    selections = journal.get("preflight", {}).get("selections")
-    if (not isinstance(candidate, str) or candidate not in source["activeReleases"] or
-            not isinstance(rollback, dict) or not isinstance(previous, dict) or
-            not isinstance(selections, dict) or set(selections) != {"api", "frontend"}):
-        deny("release_reconciliation_activation_identity")
     immediate: dict[str, str] = {}
     selected_now: dict[str, str] = {}
+    normalized: dict[str, Any] = {}
     for component in ("api", "frontend"):
+        evidence = value.get(component)
+        if (not isinstance(evidence, dict) or
+                set(evidence) != {"runtimeManifest", "transactionJournal"}):
+            deny("release_reconciliation_activation_schema")
+        manifest_path, manifest_sha, manifest_raw = _closed_file_binding(
+            evidence["runtimeManifest"], f"activation:{component}:manifest")
+        journal_path, journal_sha, journal_raw = _closed_file_binding(
+            evidence["transactionJournal"], f"activation:{component}:journal")
+        manifest = object_json(manifest_raw, f"activation:{component}:manifest")
+        journal = object_json(journal_raw, f"activation:{component}:journal")
+        binding = journal.get("binding")
+        components = journal.get("components",
+                                 binding.get("components") if isinstance(binding, dict) else None)
+        candidate = binding.get("release") if isinstance(binding, dict) else None
+        rollback = manifest.get("rollbackReleases")
+        previous = journal.get("previous", {}).get("releases")
+        selections = journal.get("preflight", {}).get("selections")
+        if (not isinstance(binding, dict) or
+                binding.get("runtimeManifestSha256") != manifest_sha or
+                not isinstance(components, list) or component not in components or
+                any(item not in {"api", "frontend"} for item in components) or
+                len(components) != len(set(components)) or
+                not isinstance(candidate, str) or candidate not in source["activeReleases"] or
+                not isinstance(rollback, dict) or not isinstance(previous, dict) or
+                not isinstance(selections, dict) or set(selections) != {"api", "frontend"}):
+            deny("release_reconciliation_activation_identity")
         selected = selections.get(component)
         release = selected.get("releaseId") if isinstance(selected, dict) else None
         if not isinstance(release, str) or release not in source["installedVerifiedReleases"]:
             deny("release_reconciliation_component_coverage")
-        if component in components:
-            definition = rollback.get(component)
-            if (not isinstance(definition, dict) or definition.get("releaseId") != release or
-                    previous.get(component) != release):
-                deny("release_reconciliation_immediate_rollback_identity")
-            immediate[component] = release
-            selected_now[component] = candidate
-        else:
-            selected_now[component] = release
-        if selected_now[component] not in source["activeReleases"]:
+        definition = rollback.get(component)
+        if (not isinstance(definition, dict) or definition.get("releaseId") != release or
+                previous.get(component) != release):
+            deny("release_reconciliation_immediate_rollback_identity")
+        immediate[component] = release
+        selected_now[component] = candidate
+        if candidate not in source["activeReleases"]:
             deny("release_reconciliation_active_selection")
-    normalized = {"runtimeManifest": {"path": str(manifest_path), "sha256": manifest_sha},
-                  "transactionJournal": {"path": str(journal_path), "sha256": journal_sha},
-                  "components": sorted(components), "selectedReleases": selected_now,
-                  "immediateRollbacks": immediate}
+        normalized[component] = {
+            "runtimeManifest": {"path": str(manifest_path), "sha256": manifest_sha},
+            "transactionJournal": {"path": str(journal_path), "sha256": journal_sha},
+            "selectedRelease": candidate, "immediateRollback": release}
     return immediate, normalized
 
 
