@@ -30,6 +30,7 @@ import time
 from typing import Any, Callable, Iterable
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
 ROOT = Path(__file__).resolve().parents[1]
 NPM_CACHE = Path("/home/deploy/.npm/_cacache")
 NPM_PARENT = Path("/home/deploy/.npm")
@@ -3681,6 +3682,9 @@ def acquire_lock(path: Path) -> int:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         os.close(fd); deny(f"LOCK_BUSY:{path}")
+    if os.pread(fd, len(FIXED_CURRENT_LOCK_PREFIX), 0).startswith(
+            FIXED_CURRENT_LOCK_PREFIX):
+        os.close(fd); deny(f"LOCK_BOUND_FIXED_CURRENT:{path}")
     return fd
 
 

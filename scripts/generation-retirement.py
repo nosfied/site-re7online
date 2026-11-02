@@ -32,6 +32,7 @@ preparation_lifecycle = importlib.util.module_from_spec(_preparation_spec)
 _preparation_spec.loader.exec_module(preparation_lifecycle)
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
+FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
 TERMINAL_DEPLOYMENT = {"DEPLOYED", "ROLLED_BACK", "SUPERSEDED"}
 TERMINAL_RELEASE_JOURNAL = {
     "DEPLOYED", "DEPLOYED_SANITIZED",
@@ -320,6 +321,9 @@ def acquire_existing_lock(path: Path):
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         os.close(fd); deny(f"lock_busy:{path.name}")
+    if os.pread(fd, len(FIXED_CURRENT_LOCK_PREFIX), 0).startswith(
+            FIXED_CURRENT_LOCK_PREFIX):
+        os.close(fd); deny(f"lock_bound_fixed_current:{path.name}")
     return fd
 
 
