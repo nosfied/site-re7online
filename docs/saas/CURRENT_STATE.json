@@ -1323,6 +1323,26 @@
       "locksFreeAfterCompletion": true,
       "executeRequired": false
     },
+    "d436TerminalRetirement20261102": {
+      "state": "SANITIZED",
+      "releaseId": "immutable-d436239e-vps-20261026T131821Z",
+      "intentSha256": "11018393db431f1ee9ad43b329fed6bd9c3bb7cdb05d610f210319f59a068c5b",
+      "receiptSha256": "b638b25a20823acfbc0797c0bdca037edf95e9d214578022c0c1d703c503ed5c",
+      "commandLogSha256": "525ab03b5b414a90bc6e8703597f1c7d7953cbfa192a9e17cd00225dfeba975c",
+      "reviewSha256": "11a301e4b266994eac124e54eadd0ae5178002a4e1f5d50f59672b948e4ffb52",
+      "commandsAttempted": 1,
+      "commandsCompleted": 1,
+      "removedPaths": [
+        "/opt/re7online/releases/immutable-d436239e-vps-20261026T131821Z"
+      ],
+      "netRecoveredBytes": 988528640,
+      "finalAvailableBytes": 9756708864,
+      "netRecoveredInodes": 34350,
+      "canonicalClosureValidated": true,
+      "repeatForbidden": true,
+      "productionChanged": false,
+      "f160State": "PRESENT_AUTHORIZATION_V3_FROZEN_NOT_INVOKED"
+    },
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
       "state": "COMPLETED",

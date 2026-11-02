@@ -732,3 +732,31 @@ dimensionar o ganho possível, juntamente com a proposta preventiva em
 [DEPLOY_ARTIFACT_LIFECYCLE](../DEPLOY_ARTIFACT_LIFECYCLE.md#extensão-preventiva-proposta--preparações-volumosas-01112026).
 Nenhum novo audit, prepare, execute, mudança de permissão ou retirada é autorizado
 por esta classificação documental.
+
+#### Fechamento terminal d436 — 02/11/2026
+
+A release `immutable-d436239e-vps-20261026T131821Z` foi retirada uma única vez
+pelo `generation-retirement.py execute`, depois da reconciliação v6 sem efeitos e
+da fotografia sucessora que derivou `deploymentState=SUPERSEDED` do receipt
+`HISTORICAL_EVIDENCE_ONLY` e do grafo sucessor autenticado. A intenção permaneceu
+byte-exatamente em
+`11018393db431f1ee9ad43b329fed6bd9c3bb7cdb05d610f210319f59a068c5b`.
+
+O fechamento canônico é `SANITIZED`: receipt
+`b638b25a20823acfbc0797c0bdca037edf95e9d214578022c0c1d703c503ed5c`,
+journal `525ab03b5b414a90bc6e8703597f1c7d7953cbfa192a9e17cd00225dfeba975c`
+e review terminal
+`11a301e4b266994eac124e54eadd0ae5178002a4e1f5d50f59672b948e4ffb52`.
+O validador `_canonical_retirement_closure()` relacionou `ATTEMPT`, `RESULT` e
+`VERIFIED` pelo ordinal `5`; o evento `VERIFIED` canônico contém `absent=true` e
+não contém `path`. O único caminho aprovado está ausente.
+
+O ganho líquido medido foi `988.528.640 bytes`, de `8.768.180.224` para
+`9.756.708.864 bytes`, com `34.350` inodes líquidos recuperados. API `fa63994a`,
+frontend `aa9527cc`, worker `e2e7`, PM2, dump, grafo sucessor e lock canônico
+permaneceram inalterados. Esta retirada é terminal e irrepetível: não repetir
+reconciliação, `prepare`, autorização ou `execute` para d436.
+
+`f160` permanece fisicamente presente. Sua autorização v3 não foi invocada e
+continua congelada; qualquer continuação exige preflight fresco restrito a f160,
+sem reapresentar o lote d436.

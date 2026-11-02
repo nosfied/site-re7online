@@ -577,6 +577,15 @@ imediatos e autentica a projeção schema 2 no consumidor. O potencial de
 2.965.995.520 bytes não foi recapturado nem recuperado. Nenhum grafo produtivo foi
 alterado e nenhuma retirada foi autorizada.
 
+Atualização terminal de 02/11/2026: d436 foi posteriormente fechado em
+`SANITIZED`, validado por `_canonical_retirement_closure()` e não pode ser
+reaberto. Receipt `b638b25a20823acfbc0797c0bdca037edf95e9d214578022c0c1d703c503ed5c`,
+journal `525ab03b5b414a90bc6e8703597f1c7d7953cbfa192a9e17cd00225dfeba975c`
+e review `11a301e4b266994eac124e54eadd0ae5178002a4e1f5d50f59672b948e4ffb52`.
+O ganho líquido medido foi `988.528.640 bytes`; a capacidade passou para
+`9.756.708.864 bytes`. Produção, PM2, dump e grafos permaneceram inalterados.
+f160 permanece presente e sua autorização v3 está congelada e não consumida.
+
 A primeira materialização operacional foi interrompida antes de qualquer escrita:
 a ativação frontend `aa9527cc` usa o formato frontend-only do control plane
 `9441de5a569219d38303c711d82c45870e8755cc`, não o journal fixed-current. A
