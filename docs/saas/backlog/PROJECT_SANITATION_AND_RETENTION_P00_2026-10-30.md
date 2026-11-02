@@ -706,3 +706,28 @@ Ela contém 1.023 registros e 316.038 bytes. Não houve `chmod`, `chown`, mudan�
 de gate ou novo audit. Decisão: `NOT_QUALIFIED / KEEP_PRESERVED`; a identidade
 histórica real é incompatível com a política vigente e não pode ser normalizada
 para fabricar elegibilidade.
+
+### Fotografia reconciliada da VPS inteira — 02/11/2026
+
+A auditoria proporcional somente leitura foi incorporada à
+[auditoria de capacidade de 26/10](../VPS_CAPACITY_AUDIT_2026-10-26.md#reconciliação-integral-somente-leitura--02112026).
+O filesystem raiz tem 82.086.711.296 B, dos quais 73.247.272.960 B usados e
+8.822.661.120 B disponíveis; 1.627.204 de 10.354.688 inodes estão ocupados.
+O crescimento líquido desde o receipt do lote v3 é 4.593.938.432 B, reconciliado
+entre releases, outputs, worktrees, preparações, transações, cache e um residual
+explicitamente não atribuído de 759.816.192 B.
+
+Os paths retirados nos lotes `automation`, `hybrid-b9` e 3/3 permanecem terminais
+e foram excluídos da lista de trabalho. O grafo protege 60/60 releases; dados,
+mídias, DB, WAL, overlays e backups necessários continuam `PRESERVE`. O ganho
+qualificado atual é zero. Próximos objetos de **qualificação**, não de retirada,
+são o cache npm (341.782.528 B), logs PM2 (405.860.352 B) e a materialização
+`deploy-control/ef7db111-prep` (1.023.299.584 B), cada qual exigindo sua autoridade
+e lifecycle próprios. Itens `KEEP_PROTECTED` e a árvore `worker-package-audit`
+negada por identidade não devem ser reciclados como candidatos.
+
+A causa preventiva permanece objetiva: o adapter de lifecycle para preparações
+volumosas foi implementado/ensaiado, mas ainda não é consumido por todas as rotas
+reais de produção. Encerramento dessa lacuna exige interceptar a alocação antes de
+cópia/compactação e registrar `OPEN → SANITIZED|RETENTION_DEBT`; não autoriza
+limpeza automática nem bloqueio global de escopos independentes.
