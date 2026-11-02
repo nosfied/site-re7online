@@ -219,7 +219,7 @@ raise SystemExit(2 if os.environ.get('FAKE_RETIREMENT')=='fail' else 0)
         self.retirement_authorization = self.root / "retirement-authorization.private.json"; self.retirement_authorization.write_text('{}\n'); self.retirement_authorization.chmod(0o600)
         self.retirement_operational = self.root / "retirement-operational.private.json"
         self.retirement_operational.write_text(json.dumps({
-            "activeReleases":[self.rollback.name],"rollbackReleases":[],"transitiveReturnReleases":[],
+            "activeReleases":[self.rollback.name,"immutable-api-preserved"],"rollbackReleases":[],"transitiveReturnReleases":[],
             "candidateReleases":[self.release.name],"installedVerifiedReleases":[self.release.name],"supersededCandidates":[],
             "observations":{"currentLinks":[{"path":str(self.current/"frontend"),"target":str(self.rollback/"frontend-runtime")}],
                             "pm2":{"path":str(self.pm2),"sha256":digest(self.pm2),"fingerprintSha256":"0"*64},
@@ -470,6 +470,9 @@ class FrontendExecutorTest(unittest.TestCase):
             self.assertEqual(f.save_counter.read_text(),"1")
             self.assertEqual(f.retirement_counter.read_text(),"1")
             self.assertEqual(json.loads((f.tx/"window-state.private.json").read_text())["state"],"DEPLOYED_SANITIZED")
+            operational=json.loads((f.tx/"generation-operational.final.private.json").read_text())
+            self.assertIn("immutable-api-preserved",operational["activeReleases"])
+            self.assertNotIn("immutable-api-preserved",operational["rollbackReleases"])
             self.assertEqual(int(f.counter.read_text()),8)
         finally:f.close()
 

@@ -520,6 +520,25 @@ class DriverTests(DeployFixture):
         marker = deploy.read_json(driver.release_root / "DEPLOYED")
         self.assertEqual(marker["components"], ["api"])
 
+    def test_api_only_release_roles_preserve_unaffected_frontend(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate()
+        journal = driver._journal_read()
+        frontend_release = "immutable-frontend-preserved"
+        journal["previous"]["releases"]["frontend"] = frontend_release
+        operational = deploy.read_json(self.retirement.operational_state)
+        operational["activeReleases"] = [self.rollback, frontend_release]
+        put(self.retirement.operational_state, operational)
+        binding = dataclasses.replace(
+            self.retirement,
+            operational_state_sha256=sha(self.retirement.operational_state),
+        )
+        final_path, _ = driver._retirement_final_operational(binding, journal)
+        final = deploy.read_json(final_path)
+        self.assertEqual(final["activeReleases"],
+                         sorted([self.candidate, frontend_release]))
+        self.assertIn(self.rollback, final["rollbackReleases"])
+        self.assertNotIn(frontend_release, final["rollbackReleases"])
+
     def test_external_lock_finalize_passes_fd_to_retirement_and_preserves_lock_file(self) -> None:
         driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
         restarts = [event for event in self.host.events if event.startswith("PM2:restart")]

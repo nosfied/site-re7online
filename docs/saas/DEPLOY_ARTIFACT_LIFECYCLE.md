@@ -1101,6 +1101,59 @@ A próxima classificação de artefatos segue
 Ela separa ativo, rollback, evidência, dado único, derivado e duplicado; idade ou
 tamanho isolados não autorizam retirada.
 
+## Reconciliação versionada dos papéis de release — implementada localmente
+
+**Estado: IMPLEMENTADA E ENSAIADA NO REPOSITÓRIO / NÃO PUBLICADA NO GRAFO
+OPERACIONAL.**
+
+`installedVerifiedReleases` é inventário histórico, não proteção operacional por
+si só. O comando fechado `generation-retirement.py reconcile-release-graph`
+autentica o grafo rico anterior e, para cada geração explicitamente enumerada,
+contrato, lifecycle, review e a cadeia realmente emitida. No fluxo canônico,
+`review.evidenceSha256` autentica o receipt, o receipt autentica
+`intentSha256` e `commandLogSha256`, e a intenção autentica contrato e lifecycle.
+Nos lotes legados `d436`/`f160`, o descriptor fechado e os validadores existentes
+autenticam receipt/journal anteriores, receipt do bootstrap, intenção e review v2;
+nenhum campo é acrescentado ao histórico. Journal original incompleto só é aceito
+pela cadeia posterior completa prevista pelo contrato; os bytes originais não são
+reescritos.
+Ele publica, sem alterar
+os originais, um grafo rico sucessor, uma projeção plana schema 2 e um receipt
+`RECONCILED_NO_EFFECT`. A projeção vincula caminho e SHA do grafo rico de origem,
+do sucessor e do receipt. O consumidor reabre a fotografia vinculada, deriva
+novamente `inventoryPaths` e `protectedGraphPaths` e exige igualdade exata.
+
+Uma aresta só deixa `rollbackReleases` ou `transitiveReturnReleases` quando o
+fechamento autenticado está completo e a recaptura não encontra referência viva.
+O rollback imediato de cada componente é provado pela ativação autenticada que
+efetivamente selecionou aquele componente: runtime manifest, `previous.releases`,
+seleções do preflight e binding do journal. Em ativação API-only, a prova do
+frontend vem da ativação anterior que selecionou o frontend e estabeleceu seu
+rollback; frontend-only aplica a regra simétrica à API. A seleção ativa da janela
+parcial não substitui essa prova. Evidência omitida, de ativação anterior
+incompatível ou sem cobertura simultânea de API e frontend nega; o rollback
+imediato não pode ser fechado, mesmo ausente de PM2/current.
+Omissão, binding divergente ou estado aberto preservam a aresta. Releases ativas,
+rollback imediato, candidatas e dependências transitivas não reconciliadas
+continuam protegidas.
+
+Uma release que contenha descendente `PRIVATE_DATA_NEVER_RETIRE` ou o overlay
+literal `api-runtime/.data` permanece `ACTIVE_DEPENDENCY`, mesmo fora das listas
+operacionais. A presença ambígua também protege. Essa regra é aplicada na
+classificação, no `prepare` e novamente no `execute`; o pai nunca recebe comando
+de retirada enquanto possuir dado privado. `0fdec` e `a959` são os casos de
+regressão protegidos. Não há migração de overlay neste delta.
+
+Os produtores de papéis passam a promover somente os componentes selecionados:
+API-only não retira o frontend anterior de `activeReleases`, e frontend-only não
+retira a API anterior. Rollbacks acumulados não desaparecem por omissão; somente
+uma reconciliação autenticada os fecha. O ensaio materializa o executor e sua
+dependência fora do checkout, reproduz formatos sanitizados do fixed-current
+`708f` e dos contratos legados `d436`/`f160`, percorre reconciliação → projeção → `prepare`, torna
+`708f`, `d436` e `f160` condicionalmente elegíveis e mantém `0fdec`/`a959`, ativos
+e retornos imediatos protegidos. O potencial de 2.965.995.520 bytes permanece
+estimativa, não capacidade recuperada nem autorização operacional.
+
 
 ## Extensão preventiva versionada — preparações volumosas (01/11/2026)
 

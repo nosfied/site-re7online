@@ -566,6 +566,17 @@ do adapter versionado e de sua `reservationRoot`, não de produtores históricos
 do filesystem inteiro. A implementação não foi instalada nem executada na VPS e não
 altera o déficit histórico de 817.209.344 bytes.
 
+### Reconciliação dos papéis de releases — versionada, não operacional
+
+O checkout isolado contém uma reconciliação não destrutiva do grafo de releases e
+a proteção do pai de dados privados. Ela separa inventário histórico de proteção
+operacional, preserva arestas sem fechamento autenticado e impede `prepare` ou
+`execute` de retirar uma release com `api-runtime/.data`. O ensaio cobre
+condicionalmente `708f`/`d436`/`f160`, preserva `0fdec`/`a959`, ativos e rollbacks
+imediatos e autentica a projeção schema 2 no consumidor. O potencial de
+2.965.995.520 bytes não foi recapturado nem recuperado. Nenhum grafo produtivo foi
+alterado e nenhuma retirada foi autorizada.
+
 A única instrução executável vigente é o [runbook canônico](DEPLOY_RUNBOOK.md).
 O modelo é build once / promote the same artifact, com release imutável, seleção
 API→frontend, worker apenas quando impactado, três amostras de readiness, smoke

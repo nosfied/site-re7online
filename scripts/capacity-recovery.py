@@ -1480,9 +1480,213 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
     graph_raw, _ = stable_regular(Path(graph["path"]), graph["sha256"],
                                   allowed_modes={0o600, 0o644})
     graph_value = object_json(graph_raw, "LIVE_RELEASE_GRAPH_JSON")
-    if (set(graph_value) != {"schemaVersion", "protectedGraphPaths"} or
-            graph_value.get("schemaVersion") != 1 or
-            not isinstance(graph_value.get("protectedGraphPaths"), list) or
+    if graph_value.get("schemaVersion") == 1:
+        if set(graph_value) != {"schemaVersion", "protectedGraphPaths"}:
+            deny("LIVE_RELEASE_GRAPH_SCHEMA")
+    elif graph_value.get("schemaVersion") == 2:
+        expected = {"schemaVersion", "sourceGraph", "successorGraph",
+                    "reconciliationReceipt", "protectedGraphPaths", "inventoryPaths"}
+        if set(graph_value) != expected:
+            deny("LIVE_RELEASE_GRAPH_SCHEMA")
+        rich_values = {}
+        for label in ("sourceGraph", "successorGraph"):
+            binding = graph_value[label]
+            if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+                    not isinstance(binding.get("path"), str) or
+                    not SHA256.fullmatch(str(binding.get("sha256", "")))):
+                deny("LIVE_RELEASE_GRAPH_PROVENANCE")
+            source_raw, _ = stable_regular(Path(binding["path"]), binding["sha256"],
+                                           allowed_modes={0o600, 0o644})
+            source_value = object_json(source_raw, "LIVE_RELEASE_GRAPH_PROVENANCE_JSON")
+            rich_keys = {"activeReleases", "rollbackReleases", "transitiveReturnReleases",
+                         "candidateReleases", "installedVerifiedReleases",
+                         "supersededCandidates"}
+            if (set(source_value) != rich_keys or
+                    any(not isinstance(source_value.get(key), list) or
+                        any(not isinstance(item, str) for item in source_value[key])
+                        for key in rich_keys)):
+                deny("LIVE_RELEASE_GRAPH_PROVENANCE_SCHEMA")
+            rich_values[label] = source_value
+        receipt_binding = graph_value["reconciliationReceipt"]
+        if (not isinstance(receipt_binding, dict) or
+                set(receipt_binding) != {"path", "sha256"} or
+                not isinstance(receipt_binding.get("path"), str) or
+                not SHA256.fullmatch(str(receipt_binding.get("sha256", "")))):
+            deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+        receipt_raw, _ = stable_regular(Path(receipt_binding["path"]),
+                                        receipt_binding["sha256"],
+                                        allowed_modes={0o600, 0o644})
+        receipt = object_json(receipt_raw, "LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT_JSON")
+        receipt_keys = {"schemaVersion", "state", "reconciliationId", "requestSha256",
+                        "releaseRoot", "sourceGraph", "operationalState", "successorGraph",
+                        "privateDataParents", "activationEvidence", "results",
+                        "originalsModified", "destructiveCommands",
+                        "freshRecaptureRequiredBeforeRetirement"}
+        if (set(receipt) != receipt_keys or receipt.get("schemaVersion") != 2 or
+                receipt.get("state") != "RECONCILED_NO_EFFECT" or
+                receipt.get("sourceGraph") != graph_value["sourceGraph"] or
+                receipt.get("successorGraph") != graph_value["successorGraph"] or
+                receipt.get("originalsModified") is not False or
+                receipt.get("destructiveCommands") != 0):
+            deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+        operational_binding = receipt["operationalState"]
+        if (not isinstance(operational_binding, dict) or
+                set(operational_binding) != {"path", "sha256"}):
+            deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+        operational_raw, _ = stable_regular(Path(operational_binding["path"]),
+                                            operational_binding["sha256"],
+                                            allowed_modes={0o600, 0o644})
+        reconciliation_operational = object_json(
+            operational_raw, "LIVE_RELEASE_GRAPH_RECONCILIATION_OPERATIONAL_JSON")
+        release_root = normalized_absolute(receipt.get("releaseRoot", ""),
+                                           "LIVE_RELEASE_GRAPH_RELEASE_ROOT")
+        successor_value = rich_values["successorGraph"]
+        expected_inventory = sorted(str(release_root / release)
+                                    for release in successor_value["installedVerifiedReleases"])
+        private_parents = receipt.get("privateDataParents")
+        activation_evidence = receipt.get("activationEvidence")
+        results = receipt.get("results")
+        if (not isinstance(private_parents, list) or
+                any(not isinstance(item, str) for item in private_parents) or
+                not isinstance(activation_evidence, dict) or not isinstance(results, list)):
+            deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+        derived_private_parents = set()
+        for result in results:
+            expected_result = {"releaseId", "priorRole", "result", "contract",
+                               "lifecycleSha256", "reviewSha256", "closure"}
+            if (not isinstance(result, dict) or set(result) != expected_result or
+                    not isinstance(result.get("releaseId"), str)):
+                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+            contract_binding = result["contract"]
+            if (not isinstance(contract_binding, dict) or
+                    set(contract_binding) != {"path", "sha256"}):
+                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+            contract_raw, _ = stable_regular(Path(contract_binding["path"]),
+                                             contract_binding["sha256"],
+                                             allowed_modes={0o600, 0o644})
+            contract = object_json(contract_raw, "LIVE_RELEASE_GRAPH_CONTRACT_JSON")
+            release = result["releaseId"]
+            installed = release_root / release
+            if contract.get("releaseId") != release:
+                deny("LIVE_RELEASE_GRAPH_CONTRACT_IDENTITY")
+            private_declared = any(
+                isinstance(artifact, dict) and
+                artifact.get("class") == "PRIVATE_DATA_NEVER_RETIRE" and
+                isinstance(artifact.get("path"), str) and
+                installed in Path(artifact["path"]).parents
+                for artifact in contract.get("artifacts", []))
+            try:
+                (installed / "api-runtime/.data").lstat()
+                private_present = True
+            except FileNotFoundError:
+                private_present = False
+            except OSError:
+                private_present = True
+            if private_declared or private_present:
+                derived_private_parents.add(str(installed))
+            expected_result_name = ("PRESERVED_PRIVATE_DATA"
+                                    if private_declared or private_present
+                                    else "HISTORICAL_EVIDENCE_ONLY")
+            if result.get("result") != expected_result_name:
+                deny("LIVE_RELEASE_GRAPH_PRIVATE_PARENT_DIVERGENCE")
+        if sorted(private_parents) != sorted(derived_private_parents):
+            deny("LIVE_RELEASE_GRAPH_PRIVATE_PARENT_DIVERGENCE")
+        protected_releases = set(successor_value["activeReleases"] +
+                                 successor_value["rollbackReleases"] +
+                                 successor_value["transitiveReturnReleases"] +
+                                 successor_value["candidateReleases"])
+        if set(activation_evidence) != {"api", "frontend"}:
+            deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+        selected_now = {}
+        immediate = {}
+        for component in ("api", "frontend"):
+            evidence = activation_evidence.get(component)
+            if (not isinstance(evidence, dict) or
+                    set(evidence) != {"runtimeManifest", "transactionJournal",
+                                     "selectedRelease", "immediateRollback"}):
+                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+            manifest_binding = evidence["runtimeManifest"]
+            journal_binding = evidence["transactionJournal"]
+            if (not isinstance(manifest_binding, dict) or
+                    set(manifest_binding) != {"path", "sha256"} or
+                    not isinstance(journal_binding, dict) or
+                    set(journal_binding) != {"path", "sha256"}):
+                deny("LIVE_RELEASE_GRAPH_RECONCILIATION_RECEIPT")
+            manifest_raw, _ = stable_regular(Path(manifest_binding["path"]),
+                                             manifest_binding["sha256"],
+                                             allowed_modes={0o600, 0o644})
+            journal_raw, _ = stable_regular(Path(journal_binding["path"]),
+                                            journal_binding["sha256"],
+                                            allowed_modes={0o600, 0o644})
+            manifest = object_json(manifest_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_MANIFEST")
+            journal = object_json(journal_raw, "LIVE_RELEASE_GRAPH_ROLLBACK_JOURNAL")
+            binding = journal.get("binding")
+            components = journal.get("components",
+                                     binding.get("components") if isinstance(binding, dict) else None)
+            rollback = manifest.get("rollbackReleases")
+            previous = journal.get("previous", {}).get("releases")
+            selections = journal.get("preflight", {}).get("selections")
+            candidate = binding.get("release") if isinstance(binding, dict) else None
+            if (not isinstance(binding, dict) or
+                    binding.get("runtimeManifestSha256") != manifest_binding["sha256"] or
+                    not isinstance(components, list) or component not in components or
+                    any(item not in {"api", "frontend"} for item in components) or
+                    not isinstance(rollback, dict) or not isinstance(previous, dict) or
+                    not isinstance(selections, dict) or set(selections) != {"api", "frontend"} or
+                    not isinstance(candidate, str) or
+                    candidate not in rich_values["sourceGraph"]["activeReleases"]):
+                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+            selection = selections.get(component)
+            selected = selection.get("releaseId") if isinstance(selection, dict) else None
+            if (not isinstance(selected, str) or
+                    selected not in rich_values["sourceGraph"]["installedVerifiedReleases"]):
+                deny("LIVE_RELEASE_GRAPH_COMPONENT_COVERAGE")
+            definition = rollback.get(component)
+            if (not isinstance(definition, dict) or definition.get("releaseId") != selected or
+                    previous.get(component) != selected):
+                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+            immediate[component] = selected
+            selected_now[component] = candidate
+            if candidate not in rich_values["sourceGraph"]["activeReleases"]:
+                deny("LIVE_RELEASE_GRAPH_ACTIVE_SELECTION")
+            if (evidence["selectedRelease"] != candidate or
+                    evidence["immediateRollback"] != selected):
+                deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+        if set(selected_now) != {"api", "frontend"} or set(immediate) != {"api", "frontend"}:
+            deny("LIVE_RELEASE_GRAPH_IMMEDIATE_ROLLBACK_DIVERGENCE")
+        immediate_rollbacks = set(immediate.values())
+        referenced = set()
+        for release in successor_value["installedVerifiedReleases"]:
+            installed = release_root / release
+            tokens = (release, str(installed))
+            for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths", "dependencies"):
+                values = reconciliation_operational.get(key)
+                if not isinstance(values, list):
+                    deny("LIVE_RELEASE_GRAPH_RECONCILIATION_OPERATIONAL_SCHEMA")
+                if any(isinstance(value, str) and any(token in value for token in tokens)
+                       for value in values):
+                    referenced.add(str(installed))
+        expected_protected = sorted(
+            {str(release_root / release) for release in protected_releases | immediate_rollbacks} |
+            {str(normalized_absolute(item, "LIVE_RELEASE_GRAPH_PRIVATE_PARENT"))
+             for item in private_parents} | referenced)
+        if (graph_value.get("inventoryPaths") != expected_inventory or
+                graph_value.get("protectedGraphPaths") != expected_protected):
+            deny("LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE")
+        inventory = graph_value.get("inventoryPaths")
+        if (not isinstance(inventory, list) or
+                any(not isinstance(item, str) for item in inventory)):
+            deny("LIVE_RELEASE_GRAPH_INVENTORY")
+        normalized_inventory = [normalized_absolute(item, "LIVE_RELEASE_GRAPH_INVENTORY_PATH")
+                                for item in inventory]
+        for raw_path in graph_value.get("protectedGraphPaths", []):
+            protected = normalized_absolute(raw_path, "LIVE_RELEASE_GRAPH_PATH")
+            if not any(protected == parent or parent in protected.parents
+                       for parent in normalized_inventory):
+                deny("LIVE_RELEASE_GRAPH_PROTECTION_OUTSIDE_INVENTORY")
+    else:
+        deny("LIVE_RELEASE_GRAPH_SCHEMA")
+    if (not isinstance(graph_value.get("protectedGraphPaths"), list) or
             any(not isinstance(item, str) for item in graph_value["protectedGraphPaths"])):
         deny("LIVE_RELEASE_GRAPH_SCHEMA")
     graph_paths = [str(normalized_absolute(item, "LIVE_RELEASE_GRAPH_PATH"))

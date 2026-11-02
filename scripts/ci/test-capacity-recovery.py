@@ -2549,6 +2549,79 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
         with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
             MODULE.capture_live_operational(operational)
 
+    def test_versioned_release_projection_authenticates_rich_graph_provenance(self):
+        release_id = self.release.name
+        rich_keys = {"activeReleases": [release_id], "rollbackReleases": [release_id],
+                     "transitiveReturnReleases": [], "candidateReleases": [],
+                     "installedVerifiedReleases": [release_id],
+                     "supersededCandidates": []}
+        source = self.base / "source-rich-graph.private.json"
+        successor = self.base / "successor-rich-graph.private.json"
+        private_json(source, rich_keys); private_json(successor, rich_keys)
+        reconciliation_operational = self.base / "reconciliation-operational.private.json"
+        private_json(reconciliation_operational, {"currentPaths": [], "pm2LivePaths": [],
+            "pm2DumpPaths": [], "dependencies": []})
+        runtime_manifest = self.base / "activation-runtime-manifest.private.json"
+        private_json(runtime_manifest, {"rollbackReleases": {
+            "api": {"releaseId": release_id},
+            "frontend": {"releaseId": release_id}}})
+        transaction = self.base / "activation-transaction.private.json"
+        private_json(transaction, {"components": ["api", "frontend"],
+            "binding": {"release": release_id, "components": ["api", "frontend"],
+                        "runtimeManifestSha256": sha(runtime_manifest)},
+            "preflight": {"selections": {
+                "api": {"releaseId": release_id},
+                "frontend": {"releaseId": release_id}}},
+            "previous": {"releases": {"api": release_id, "frontend": release_id}}})
+        receipt = self.base / "reconciliation-receipt.private.json"
+        private_json(receipt, {"schemaVersion": 2, "state": "RECONCILED_NO_EFFECT",
+            "reconciliationId": "fixture", "requestSha256": "a" * 64,
+            "releaseRoot": str(self.release.parent),
+            "sourceGraph": {"path": str(source), "sha256": sha(source)},
+            "operationalState": {"path": str(reconciliation_operational),
+                                 "sha256": sha(reconciliation_operational)},
+            "successorGraph": {"path": str(successor), "sha256": sha(successor)},
+            "privateDataParents": [], "activationEvidence": {
+                component: {
+                    "runtimeManifest": {"path": str(runtime_manifest),
+                                        "sha256": sha(runtime_manifest)},
+                    "transactionJournal": {"path": str(transaction),
+                                           "sha256": sha(transaction)},
+                    "selectedRelease": release_id,
+                    "immediateRollback": release_id}
+                for component in ("api", "frontend")}, "results": [],
+            "originalsModified": False, "destructiveCommands": 0,
+            "freshRecaptureRequiredBeforeRetirement": True})
+        private_json(self.release_graph, {"schemaVersion": 2,
+            "sourceGraph": {"path": str(source), "sha256": sha(source)},
+            "successorGraph": {"path": str(successor), "sha256": sha(successor)},
+            "reconciliationReceipt": {"path": str(receipt), "sha256": sha(receipt)},
+            "protectedGraphPaths": [str(self.release)],
+            "inventoryPaths": [str(self.release)]})
+        self.write_operational()
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+        captured, evidence = MODULE.capture_live_operational(operational)
+        self.assertIn(str(self.release), captured["protectedGraphPaths"])
+        self.assertEqual(evidence["releaseGraphSha256"], sha(self.release_graph))
+
+        omitted = json.loads(self.release_graph.read_text())
+        omitted["protectedGraphPaths"] = []
+        private_json(self.release_graph, omitted)
+        self.write_operational()
+        omitted_operational = MODULE.validate_operational(self.operational.read_bytes())
+        with self.assertRaisesRegex(MODULE.Denied, "LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE"):
+            MODULE.capture_live_operational(omitted_operational)
+        omitted["protectedGraphPaths"] = [str(self.release)]
+        private_json(self.release_graph, omitted)
+        self.write_operational()
+        operational = MODULE.validate_operational(self.operational.read_bytes())
+
+        successor_value = json.loads(successor.read_text())
+        successor_value["activeReleases"] = []
+        private_json(successor, successor_value)
+        with self.assertRaisesRegex(MODULE.Denied, "FILE_SHA256"):
+            MODULE.capture_live_operational(operational)
+
     def test_runtime_outside_build_output_is_denied(self):
         outside = self.base / "outside"; outside.mkdir()
         with self.process_patch(), self.assertRaisesRegex(MODULE.Denied, "DERIVED_OUTPUT_OUTSIDE_ROOT"):
