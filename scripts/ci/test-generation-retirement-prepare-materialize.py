@@ -59,6 +59,16 @@ class PrepareMaterializationFixture:
         self.deploy_lock = self.evidence / ".deployment-window.lock"; self.deploy_lock.write_text(""); self.deploy_lock.chmod(0o600)
         self.control = self.root / "control-source"; self.control.mkdir(mode=0o700)
         (self.control / "copied.py").write_text("# fixture\n"); (self.control / "copied.py").chmod(0o600)
+        self.policy = self.root / "policy.private.json"
+        def policy_entry(path: Path):
+            info = path.lstat()
+            return {"path": str(path), "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                    "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}
+        private_json(self.policy, {"schemaVersion": 1, "canonicalRoots": {
+            "repository": policy_entry(self.repo), "worktrees": policy_entry(self.worktrees),
+            "outputs": policy_entry(self.outputs), "releases": policy_entry(self.releases),
+            "staging": policy_entry(self.staging),
+            "evidence": [{**policy_entry(self.evidence), "allowedModes": ["0700", "0750"]}]}})
         self.pm2_rows = [{"name": "fixture", "pid": 44, "pm2_env": {"status": "online",
                           "pm_cwd": str(self.root / "unrelated"), "pm_exec_path": str(self.root / "unrelated/index.js"),
                           "exec_mode": "fork_mode", "instances": 1, "args": [], "namespace": "default"}}]
@@ -127,16 +137,6 @@ class PrepareMaterializationFixture:
         if reconciled.returncode != 0:
             raise RuntimeError(reconciled.stdout + reconciled.stderr)
         graph = json.loads(self.graph.read_text())
-        self.policy = self.root / "policy.private.json"
-        def policy_entry(path: Path):
-            info = path.lstat()
-            return {"path": str(path), "ownerUid": info.st_uid, "groupGid": info.st_gid,
-                    "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}
-        private_json(self.policy, {"schemaVersion": 1, "canonicalRoots": {
-            "repository": policy_entry(self.repo), "worktrees": policy_entry(self.worktrees),
-            "outputs": policy_entry(self.outputs), "releases": policy_entry(self.releases),
-            "staging": policy_entry(self.staging),
-            "evidence": [{**policy_entry(self.evidence), "allowedModes": ["0700", "0750"]}]}})
         self.custody = self.evidence / "custody"
         for item in self.generations:
             operational = {"schemaVersion": 2, "generationId": item["releaseId"],
@@ -176,16 +176,40 @@ class PrepareMaterializationFixture:
         intent = self.evidence / f"{item['name']}-prior-intent.private.json"
         journal = self.evidence / f"{item['name']}-prior-journal.private.jsonl"
         receipt = self.evidence / f"{item['name']}-prior-receipt.private.json"
-        journal.write_bytes(b""); journal.chmod(0o600)
+        removed = item.get("historicalRemoved", [])
+        commands = [{"ordinal": ordinal, "path": artifact["path"],
+                     "class": artifact["class"],
+                     "argv": (["/usr/bin/git", "-C", str(self.repo), "worktree", "remove",
+                               artifact["path"]]
+                              if artifact["class"] == "DERIVED_WORKTREE" else
+                              ["/usr/bin/rm", "-r", "--", artifact["path"]]),
+                     "literal": "fixture historical command",
+                     "allocatedBytes": artifact["allocatedBytes"],
+                     "eligibilityAtPrepare": "RETIREMENT_READY"}
+                    for ordinal, artifact in removed]
+        events = []
+        for command in commands:
+            events.extend([
+                {"event": "ATTEMPT", "ordinal": command["ordinal"],
+                 "path": command["path"], "argv": command["argv"]},
+                {"event": "RESULT", "ordinal": command["ordinal"], "exitCode": 0},
+                {"event": "VERIFIED", "ordinal": command["ordinal"], "absent": True},
+            ])
+        journal.write_bytes(b"".join(
+            json.dumps(event, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+            for event in events)); journal.chmod(0o600)
         contract = json.loads(item["contract"].read_text())
         private_json(intent, {"generationId": item["releaseId"],
             "releaseId": item["releaseId"], "targetCommit": item["targetCommit"],
             "contractSha256": sha(item["contract"]), "lifecycleSha256": sha(item["lifecycle"]),
+            "rootPolicySha256": sha(self.policy),
             "reconciliation": {"chain": [], "completed": []},
-            "artifacts": contract["artifacts"], "commands": []})
+            "artifacts": contract["artifacts"], "commands": commands})
         private_json(receipt, {"schemaVersion": 1, "state": "SANITIZED",
-            "failurePredicate": None, "attemptedCommands": 0, "completedCommands": 0,
-            "removedPaths": [], "intentSha256": sha(intent),
+            "failurePredicate": None, "attemptedCommands": len(commands),
+            "completedCommands": len(commands),
+            "removedPaths": [command["path"] for command in commands],
+            "intentSha256": sha(intent),
             "commandLogSha256": sha(journal), "automaticRetry": False,
             "remainingDerivedPaths": [], "freshObservation": {},
             "lock": {"canonicalHeldThroughReceiptFsync": True,
@@ -196,6 +220,7 @@ class PrepareMaterializationFixture:
             "reason": "terminal synthetic closure", "evidenceSha256": sha(receipt)})
         item["closure"] = {"kind": "CANONICAL_RETIREMENT", "chain": [{
             "intent": binding(intent), "receipt": binding(receipt), "journal": binding(journal)}]}
+        item["priorEvidence"] = {"intent": intent, "receipt": receipt, "journal": journal}
 
     def make_activation_evidence(self):
         result = {}
@@ -235,12 +260,28 @@ class PrepareMaterializationFixture:
                 **metrics, "digest": {"sha256": sha(path)} if path.is_file() else {"structural": "fixture"},
                 "class": cls, "state": state, "retirableOn": "fixture", "dependencies": []}
         contract = output / "generation-artifacts.private.json"
+        artifacts = [artifact(package, "PACKAGE_PRESERVE"),
+                     artifact(lifecycle, "EVIDENCE_PRESERVE"),
+                     artifact(release, "RELEASE_RUNTIME", "ROLLBACK_DEPENDENCY")]
+        historical_removed = []
+        if name == "b96":
+            worktree = self.worktrees / f"{release_id}-source"
+            worktree.mkdir(mode=0o755); (worktree / "tracked").write_text("source\n")
+            runtime_root = output / release_id; runtime_root.mkdir(mode=0o755)
+            api = runtime_root / "api-runtime"; api.mkdir(mode=0o755); (api / "app").write_text("api\n")
+            frontend = runtime_root / "frontend-runtime"; frontend.mkdir(mode=0o755); (frontend / "app").write_text("frontend\n")
+            for path, cls in ((worktree, "DERIVED_WORKTREE"),
+                              (api, "DERIVED_OUTPUT_RUNTIME"),
+                              (frontend, "DERIVED_OUTPUT_RUNTIME")):
+                entry = artifact(path, cls)
+                artifacts.append(entry)
+                historical_removed.append((len(artifacts), entry))
+            shutil.rmtree(worktree); shutil.rmtree(api); shutil.rmtree(frontend)
         private_json(contract, {"schemaVersion": 1, "generationId": release_id,
             "releaseId": release_id, "targetCommit": target, "state": "COMPLETE",
             "writerLockPath": str(self.writer_lock),
             "classes": sorted(RETIREMENT.PRESERVE_CLASSES | RETIREMENT.DERIVED_CLASSES | {"RELEASE_RUNTIME"}),
-            "artifacts": [artifact(package, "PACKAGE_PRESERVE"), artifact(lifecycle, "EVIDENCE_PRESERVE"),
-                          artifact(release, "RELEASE_RUNTIME", "ROLLBACK_DEPENDENCY")],
+            "artifacts": artifacts,
             "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"})
         review = output / "generation-review.private.json"
         private_json(review, {"schemaVersion": 2, "generationId": release_id,
@@ -248,7 +289,8 @@ class PrepareMaterializationFixture:
             "reason": "prior evidence", "evidenceSha256": "0" * 64})
         return {"name": name, "releaseId": release_id, "targetCommit": target,
                 "expectedRole": expected_role, "deploymentState": deployment_state,
-                "release": release, "contract": contract, "lifecycle": lifecycle, "review": review}
+                "release": release, "contract": contract, "lifecycle": lifecycle, "review": review,
+                "historicalRemoved": historical_removed}
 
     def materialize(self):
         return subprocess.run(["/usr/bin/python3", "-B", str(self.entrypoint),
@@ -295,6 +337,12 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
                              binding(fixture.receipt))
 
             plan = manifest["prepares"][0]
+            self.assertEqual(plan["priorEvidence"], {
+                key: binding(item["priorEvidence"][key])
+                for key in ("intent", "receipt", "journal")})
+            for name in ("intent", "receipt", "journal"):
+                self.assertIn(f"--prior-{name}", plan["argv"])
+                self.assertIn(f"--prior-{name}-sha256", plan["argv"])
             completed = subprocess.run(plan["argv"], text=True,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
@@ -305,6 +353,11 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
             self.assertEqual(intent["commands"][0]["path"], str(item["release"]))
             self.assertEqual(intent["commands"][0]["literal"],
                              f"/usr/bin/rm -r -- {item['release']}")
+            self.assertEqual(
+                [entry["path"] for entry in intent["reconciliation"]["completed"]],
+                [artifact["path"] for _, artifact in item["historicalRemoved"]])
+            for _, artifact in item["historicalRemoved"]:
+                self.assertFalse(Path(artifact["path"]).exists())
             self.assertEqual(Path(plan["priorReview"]["path"]).read_bytes(), prior_review)
         finally:
             fixture.close()
@@ -372,6 +425,43 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("REQUEST_BINDING_SHA256_DIVERGENCE", result.stdout)
             self.assertFalse(fixture.custody.exists())
+        finally:
+            fixture.close()
+
+    def test_prior_retirement_missing_or_adulterated_denies_before_custody(self):
+        for label in ("missing", "adulterated"):
+            with self.subTest(label=label):
+                fixture = PrepareMaterializationFixture(single_generation=True)
+                try:
+                    prior = fixture.generations[0]["priorEvidence"]
+                    if label == "missing":
+                        prior["journal"].unlink()
+                    else:
+                        prior["receipt"].write_bytes(prior["receipt"].read_bytes() + b"\n")
+                    result = fixture.materialize()
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("REQUEST_BINDING_", result.stdout)
+                    self.assertFalse(fixture.custody.exists())
+                finally:
+                    fixture.close()
+
+    def test_crossed_prior_retirement_is_rejected_by_real_reconciler(self):
+        fixture = PrepareMaterializationFixture()
+        try:
+            request = json.loads(fixture.reconciliation_request.read_text())
+            request["entries"][0]["closure"] = request["entries"][1]["closure"]
+            crossed = fixture.evidence / "reconciliation-request-crossed.private.json"
+            private_json(crossed, request)
+            result = subprocess.run(["/usr/bin/python3", "-B", str(RETIRE),
+                "reconcile-release-graph", "--request", str(crossed),
+                "--request-sha256", sha(crossed),
+                "--graph-output", str(fixture.evidence / "crossed-graph.private.json"),
+                "--projection-output", str(fixture.evidence / "crossed-projection.private.json"),
+                "--receipt-output", str(fixture.evidence / "crossed-receipt.private.json")],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("release_reconciliation_intent_identity", result.stderr)
+            self.assertFalse((fixture.evidence / "crossed-receipt.private.json").exists())
         finally:
             fixture.close()
 
