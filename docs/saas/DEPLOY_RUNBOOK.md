@@ -293,9 +293,9 @@ já preservadas, sem repetir a ativação.
 
 ## Aceite, persistência e retorno
 
-Após `ACEITE TÉCNICO PASS`, revalidar o trio sem restart, executar `pm2 save`
-exatamente uma vez, conferir dump regular `0600` e hash, criar `DEPLOYED` somente
-depois do dump e liberar o lock. O marker registra `components=["api"]` quando somente a API foi selecionada; o frontend continua fisicamente vinculado à release anterior.
+Materializar `ACEITE TÉCNICO PASS` somente pelo request/hash de
+`scripts/fixed-current-acceptance-materialize.py`: ele autentica payload, driver,
+transação `AWAITING_ACCEPTANCE` e bindings, usa `O_EXCL|O_NOFOLLOW`, fsync e readback; não interpolar o literal remotamente nem reutilizar janela terminal. Autorização e verificações funcionais permanecem externas. Depois, revalidar o trio sem restart, executar `pm2 save` exatamente uma vez, conferir dump `0600`/hash, criar `DEPLOYED` e liberar o lock. O marker registra `components=["api"]` quando só a API foi selecionada; o frontend permanece na release anterior.
 
 Antes do save, qualquer negativa restaura em ordem inversa somente os componentes
 selecionados aos symlinks anteriores, reinicia seus registros existentes sem atualização de ambiente e comprova

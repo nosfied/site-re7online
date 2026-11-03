@@ -550,6 +550,17 @@ a adoção falhar antes de efeitos. Ela ainda não foi instalada nem executada n
 VPS. Próximas custódias devem ser produzidas pelo materializador integrado e
 reabertas integralmente antes da selagem.
 
+A primeira janela de ativação do pacote v2 chegou a `AWAITING_ACCEPTANCE`, com API e
+frontend `785bde80` saudáveis e worker preservado, mas a montagem inline do aceite
+corrompeu o literal UTF-8 antes de criar `acceptance.private.txt`. Não houve save,
+marker ou retenção; o rollback canônico restaurou API/frontend `911a9708`, terminou
+`ROLLED_BACK`, removeu o lock terminal e preservou release instalada, intenção e os
+três derivados. Journal `b017180c596ba8849bed747cd30b860c917b98e594f08dd17f9ea990787bc992`;
+essa transação é terminal e não pode ser reutilizada. O aceite 911a preservado prova
+os 21 bytes UTF-8 e SHA `1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a`,
+mas não preserva seu comando produtor. Nova janela exige pacote sucessor e transporte
+autenticado pelo materializador versionado, ensaiado até o leitor real antes da VPS.
+
 Historicamente, a retenção frontend-only inicial da b96 concluiu 3/3 em
 `DEPLOYED_SANITIZED` e registrou 12.402.286.592 bytes disponíveis. Esse checkpoint
 não é capacidade atual nem inclui a retirada sucessora acima. Também há bloqueio diante
