@@ -71,7 +71,7 @@ def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
             "request", "successorGraph", "projection", "receipt"}:
         deny("PREPARE_RECONCILIATION_BINDINGS")
     generations = value.get("generations")
-    if not isinstance(generations, list) or len(generations) != 2:
+    if not isinstance(generations, list) or len(generations) not in {1, 2}:
         deny("PREPARE_GENERATIONS")
     names: set[str] = set()
     releases: set[str] = set()
