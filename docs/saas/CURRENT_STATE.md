@@ -356,9 +356,12 @@ O código implantado, porém, ainda combinava timeout comum de 10 s com duas
 resoluções integrais e consultas de elegibilidade por contato.
 
 Em checkout isolado está em validação uma correção que reaproveita o read model
-em lote e a disciplina de páginas do CRM: request id transacional para
-confirmação sem duplicação, busca server-side sobre o conjunto inteiro e
-`Carregar mais` deduplicado na prévia e no detalhe. A campanha histórica de 25
+em lote e a disciplina de páginas do CRM: tentativa pendente preserva em sessão,
+sob chave tenant/usuário, payload e
+request id, trata perda de transporte/502/504 como resultado incerto e é
+reconciliada antes de nova prévia; o binding transacional cobre todo o conteúdo
+aceito. Busca server-side percorre o conjunto inteiro e `Carregar mais` acumula
+páginas sem duplicação na prévia e no detalhe. A campanha histórica de 25
 destinatários permanece inalterada. Estado: `LOCAL / NOT MERGED / NOT DEPLOYED`;
 não autoriza reparo, envio ou agendamento.
 

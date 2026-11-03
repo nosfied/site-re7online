@@ -203,6 +203,13 @@ test("static audience draft is resolved server-side and never from the visible p
   assert.ok(block.includes("requestId: creationRequestId"));
   assert.ok(block.includes("recoverAppCampaignDraftCreation(session, creationRequestId)"));
   assert.ok(block.includes("Criação em confirmação"));
+  assert.ok(block.includes("const pending = audienceDraftCreationRef.current"));
+  assert.ok(block.includes("loadPendingAppCampaignDraftCreation(session)"));
+  assert.ok(block.includes("savePendingAppCampaignDraftCreation(session"));
+  assert.ok(block.includes("clearPendingAppCampaignDraftCreation(session)"));
+  assert.ok(block.indexOf("recoverAppCampaignDraftCreation(session, pending.id)") < block.indexOf("previewAppCampaignDraftSplit(session"));
+  assert.ok(block.includes("createAppCampaignDraft(session, pending.payload)"));
+  assert.ok(block.includes("isCampaignDraftCreationOutcomeUncertain(typed)"));
 });
 
 test("campaign audience and draft recipient lists search server-side and append unique pages", () => {

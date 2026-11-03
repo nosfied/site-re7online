@@ -5257,9 +5257,7 @@ export async function createAppCampaign(
   });
 }
 
-export async function createAppCampaignDraft(
-  session: AppSession,
-  payload: {
+export type AppCampaignDraftCreationPayload = {
     name: string;
     templateId: string;
     selectedLeadIds?: string[];
@@ -5284,7 +5282,56 @@ export async function createAppCampaignDraft(
     }>;
     templateMediaAssetId?: string;
     requestId?: string;
+};
+
+export type PendingAppCampaignDraftCreation = {
+  id: string;
+  payload: AppCampaignDraftCreationPayload;
+};
+
+function pendingAppCampaignDraftStorageKey(session: AppSession) {
+  return `campaign_draft_pending_v1:${session.user.clientId}:${session.user.id}`;
+}
+
+export function savePendingAppCampaignDraftCreation(
+  session: AppSession,
+  pending: PendingAppCampaignDraftCreation
+) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(pendingAppCampaignDraftStorageKey(session), JSON.stringify(pending));
+}
+
+export function loadPendingAppCampaignDraftCreation(
+  session: AppSession
+): PendingAppCampaignDraftCreation | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(
+      sessionStorage.getItem(pendingAppCampaignDraftStorageKey(session)) ?? "null"
+    ) as Partial<PendingAppCampaignDraftCreation> | null;
+    const id = String(parsed?.id ?? "").trim();
+    const payload = parsed?.payload;
+    if (
+      !/^[a-zA-Z0-9_-]{8,120}$/.test(id) ||
+      !payload ||
+      payload.requestId !== id ||
+      typeof payload.name !== "string" ||
+      typeof payload.templateId !== "string"
+    ) return null;
+    return { id, payload };
+  } catch {
+    return null;
   }
+}
+
+export function clearPendingAppCampaignDraftCreation(session: AppSession) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(pendingAppCampaignDraftStorageKey(session));
+}
+
+export async function createAppCampaignDraft(
+  session: AppSession,
+  payload: AppCampaignDraftCreationPayload
 ): Promise<{
   ok: true;
   campaign: CampaignItem & { campaignId: string };

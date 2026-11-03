@@ -1405,9 +1405,12 @@ integral, incluindo um gate SQL por destinatário. A correção local reutiliza 
 princípios dos contatos (`b12c300d`, `4755e029`, `a80c5b95`, `6c6fd3f9`):
 busca tenant-scoped no servidor, resposta obsoleta descartada,
 enriquecimento/elegibilidade em lote e páginas visuais que não redefinem a
-seleção. A criação recebe request id idempotente, grava campanha, seed e marcador
-de confirmação na mesma transação e oferece readback por request id; resposta
-perdida deixa resultado em confirmação e nunca afirma ausência de escrita.
+seleção. A criação recebe request id idempotente, vinculado canonicamente a
+tenant, modo, destinatários, componentes, filtros, variáveis, mídia e destino;
+grava campanha, seed e marcador de confirmação na mesma transação e oferece
+readback por request id. A UI preserva em sessão, com escopo tenant/usuário,
+payload e identidade enquanto o resultado estiver incerto, inclusive em 502/504, e reconcilia essa tentativa antes de
+recalcular audiência ou admitir outra criação; nunca afirma ausência de escrita.
 Prévia e detalhe passam a acumular páginas sem duplicar `leadId` e exibem
 `Exibindo X de Y`; a busca do detalhe consulta todo o seed persistido, inclusive
 além dos primeiros 200. Nenhum envio ou agendamento integra essa correção.

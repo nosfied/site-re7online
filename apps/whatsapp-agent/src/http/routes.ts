@@ -16317,6 +16317,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 400, httpError("invalid_request_id", "Identificador de criação inválido."));
         return;
       }
+      if (creationRequestId && selectionMode !== "STATIC_RECIPIENTS") {
+        json(res, 400, httpError("request_id_mode_not_supported", "A confirmação idempotente exige seleção estática."));
+        return;
+      }
       if (staticAudienceSelection && selectedLeadIds.length > 0) {
         json(res, 400, httpError("ambiguous_audience_selection", "Use apenas uma origem de audiência por rascunho."));
         return;
@@ -16336,6 +16340,41 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       if (selectedLeadIds.length > CAMPAIGN_DRAFT_RECIPIENT_LIMIT) {
         json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: CAMPAIGN_DRAFT_RECIPIENT_LIMIT }));
         return;
+      }
+      const creationBindingHash = creationRequestId
+        ? campaignDraftCreationBindingHash({
+            clientId: client.id,
+            name,
+            templateId,
+            selectionMode,
+            selectedLeadIds,
+            components: components ?? null,
+            dynamicFilter,
+            staticAudienceSelection,
+            templateVariableMappings: body.templateVariableMappings ?? null,
+            templateMediaAssetId: String(body.templateMediaAssetId ?? "").trim() || null,
+            returnDestination: body.returnDestination ?? null,
+          })
+        : null;
+      if (creationRequestId && creationBindingHash) {
+        const existing = await loadCampaignDraftCreationByRequest(prisma, {
+          clientId: client.id,
+          requestId: creationRequestId,
+          bindingHash: creationBindingHash,
+        });
+        if (existing?.conflict) {
+          json(res, 409, httpError("idempotency_conflict", "Esta tentativa já está vinculada a outro conteúdo."));
+          return;
+        }
+        if (existing) {
+          json(res, 200, {
+            ok: true,
+            campaign: { ...serializeCampaign(existing.campaign), campaignId: existing.campaign.id },
+            draft: { summary: existing.summary, recipients: [] },
+            idempotent: true,
+          });
+          return;
+        }
       }
       if (staticAudienceSelection) {
         if (!(await enforceAppCapability(prisma, res, {
@@ -16461,6 +16500,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         staticAudienceSummary,
         templateMedia: templateMedia.media,
         requestId: creationRequestId,
+        requestBindingHash: creationBindingHash,
       });
       if (!created.ok) {
         if (created.reason === "idempotency_conflict") {
@@ -38272,21 +38312,36 @@ function normalizeCampaignDraftCreationRequestId(value: unknown) {
   return /^[a-zA-Z0-9_-]{8,120}$/.test(normalized) ? normalized : null;
 }
 
+function canonicalCampaignDraftBindingJson(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalCampaignDraftBindingJson).join(",")}]`;
+  if (typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalCampaignDraftBindingJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function campaignDraftCreationBindingHash(params: {
+  clientId: string;
   name: string;
   templateId: string;
-  returnDestination: OutboundReturnDestination;
+  selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+  selectedLeadIds: string[];
+  components: CampaignTemplateComponents | null;
+  dynamicFilter: CampaignDynamicCrmFilter | null;
   staticAudienceSelection?: CampaignStaticAudienceSelection | null;
-  templateVariableMappings?: CampaignTemplateVariableMapping[];
-  templateMedia?: CampaignTemplateMediaSnapshot | null;
+  templateVariableMappings: unknown;
+  templateMediaAssetId: string | null;
+  returnDestination: unknown;
 }) {
-  return crypto.createHash("sha256").update(JSON.stringify({
-    name: params.name,
-    templateId: params.templateId,
-    returnDestination: params.returnDestination,
+  return crypto.createHash("sha256").update(canonicalCampaignDraftBindingJson({
+    schema: 1,
+    ...params,
     staticAudienceSelection: params.staticAudienceSelection ?? null,
-    templateVariableMappings: params.templateVariableMappings ?? [],
-    templateMedia: params.templateMedia ?? null,
   })).digest("hex");
 }
 
@@ -38615,6 +38670,7 @@ async function createScopedCampaignDraft(params: {
   staticAudienceSummary?: CampaignDraftRecipientSummary | null;
   templateMedia?: CampaignTemplateMediaSnapshot | null;
   requestId?: string | null;
+  requestBindingHash?: string | null;
 }) {
   const prisma = getPrisma();
   if (params.selectionMode === "DYNAMIC_CRM_FILTER") {
@@ -38671,8 +38727,9 @@ async function createScopedCampaignDraft(params: {
       },
     };
   }
-  const requestBindingHash = campaignDraftCreationBindingHash(params);
+  const requestBindingHash = params.requestBindingHash ?? null;
   if (params.requestId) {
+    if (!requestBindingHash) throw new Error("campaign_draft_request_binding_missing");
     const existing = await loadCampaignDraftCreationByRequest(prisma, {
       clientId: params.clientId,
       requestId: params.requestId,
@@ -38742,10 +38799,30 @@ async function createScopedCampaignDraft(params: {
     take: 5000,
   });
   if (existingNames.some((item) => normalizeCampaignNameForUniqueness(item.name) === normalizedName)) {
+    if (params.requestId && requestBindingHash) {
+      const existing = await loadCampaignDraftCreationByRequest(prisma, {
+        clientId: params.clientId,
+        requestId: params.requestId,
+        bindingHash: requestBindingHash,
+      });
+      if (existing && !existing.conflict) {
+        return {
+          ok: true as const,
+          idempotent: true,
+          campaign: existing.campaign,
+          recipients: {
+            ...persistedRecipients,
+            summary: existing.summary,
+          },
+        };
+      }
+    }
     throw new CampaignNameConflictError();
   }
-  const campaign = params.requestId
-    ? await prisma.$transaction(async (tx) => {
+  let campaign: Awaited<ReturnType<typeof createCampaign>>;
+  if (params.requestId) {
+    try {
+      campaign = await prisma.$transaction(async (tx) => {
         const created = await tx.campaign.create({
           data: {
             clientId: params.clientId,
@@ -38801,8 +38878,35 @@ async function createScopedCampaignDraft(params: {
           },
         });
         return created;
-      })
-    : await createCampaign({
+      });
+    } catch (error) {
+      const existing = await loadCampaignDraftCreationByRequest(prisma, {
+        clientId: params.clientId,
+        requestId: params.requestId,
+        bindingHash: requestBindingHash,
+      });
+      if (existing?.conflict) {
+        return {
+          ok: false as const,
+          reason: "idempotency_conflict" as const,
+          recipients,
+        };
+      }
+      if (existing) {
+        return {
+          ok: true as const,
+          idempotent: true,
+          campaign: existing.campaign,
+          recipients: {
+            ...persistedRecipients,
+            summary: existing.summary,
+          },
+        };
+      }
+      throw error;
+    }
+  } else {
+    campaign = await createCampaign({
         clientId: params.clientId,
         templateId: params.templateId,
         name: params.name,
@@ -38812,6 +38916,7 @@ async function createScopedCampaignDraft(params: {
         templateMediaAssetId: params.templateMedia?.assetId ?? null,
         templateMediaSnapshot: params.templateMedia ?? null,
       });
+  }
   if (!params.requestId) {
     await persistCampaignDraftSeed({
       clientId: params.clientId,

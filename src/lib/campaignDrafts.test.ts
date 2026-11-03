@@ -5,6 +5,7 @@ import {
   getCampaignUserFacingError,
   isCampaignOperationsClosedError,
   getFriendlyCampaignError,
+  isCampaignDraftCreationOutcomeUncertain,
   mergeCampaignRecipientPages,
 } from "./campaignDrafts";
 import type { CampaignItem } from "./whatsappAdminApi";
@@ -161,4 +162,13 @@ test("campaign recipient pages append in order without duplicating a repeated bo
     { leadId: "lead-2", label: "B atual" },
     { leadId: "lead-3", label: "C" },
   ]);
+});
+
+test("campaign draft creation treats transport and proxy failures as uncertain outcomes", () => {
+  for (const status of [0, 408, 425, 502, 503, 504]) {
+    assert.equal(isCampaignDraftCreationOutcomeUncertain({ status }), true, `status ${status}`);
+  }
+  for (const status of [400, 401, 404, 409, 422, 500]) {
+    assert.equal(isCampaignDraftCreationOutcomeUncertain({ status }), false, `status ${status}`);
+  }
 });

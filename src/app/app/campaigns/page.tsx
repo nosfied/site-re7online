@@ -17,6 +17,7 @@ import {
   getCampaignUserFacingError,
   isCampaignOperationsClosedError,
   getFriendlyCampaignError,
+  isCampaignDraftCreationOutcomeUncertain,
   mergeCampaignRecipientPages,
 } from "@/lib/campaignDrafts";
 import {
@@ -29,6 +30,8 @@ import {
   AppCampaignAudiencePreviewFilter,
   AppCampaignAudienceSplitPlan,
   AppCampaignDraftRecipientPage,
+  AppCampaignDraftCreationPayload,
+  PendingAppCampaignDraftCreation,
   AppCampaignImportReport,
   AppCampaignImportPreview,
   AppCampaignReturnDestination,
@@ -38,6 +41,7 @@ import {
   CrmBusinessStatusConfig,
   cancelAppCampaign,
   cancelAppCampaignBatch,
+  clearPendingAppCampaignDraftCreation,
   clearAppSession,
   createAppCampaign,
   createAppCampaignDraft,
@@ -55,6 +59,7 @@ import {
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
+  loadPendingAppCampaignDraftCreation,
   uploadAppTemplateMedia,
   loadAppSession,
   pauseAppCampaign,
@@ -68,6 +73,7 @@ import {
   scheduleAppCampaignBatch,
   sendAppCampaignBatch,
   saveAppSession,
+  savePendingAppCampaignDraftCreation,
   sendAppCampaignDraft,
   sendAppCampaignTest,
 } from "@/lib/appClientApi";
@@ -831,7 +837,7 @@ export default function AppCampaignsPage() {
   const [creatingAudienceSplitDrafts, setCreatingAudienceSplitDrafts] = useState(false);
   const [campaignReusePreviewState, setCampaignReusePreviewState] = useState<CampaignReusePreviewState>("idle");
   const csvCreationRequestRef = useRef<{ key: string; id: string } | null>(null);
-  const audienceDraftCreationRef = useRef<{ key: string; id: string } | null>(null);
+  const audienceDraftCreationRef = useRef<PendingAppCampaignDraftCreation | null>(null);
   const [csvText, setCsvText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
   const [csvInputKey, setCsvInputKey] = useState(0);
@@ -2792,8 +2798,92 @@ export default function AppCampaignsPage() {
   };
 
   const handleCreateDraftFromAudience = async () => {
+    if (!session) return;
+    const finishCreatedDraft = async (created: Awaited<ReturnType<typeof createAppCampaignDraft>>) => {
+      const createdCampaignId = created.campaign.id;
+      audienceDraftCreationRef.current = null;
+      clearPendingAppCampaignDraftCreation(session);
+      createdDraftDetailOwnerRef.current = createdCampaignId;
+      setSelectedCampaignId(createdCampaignId);
+      setDetailModalOpen(true);
+      resetCampaignComposer();
+      setStatusFilter("draft");
+      setActiveTab("drafts");
+      setCurrentPage(1);
+      const detail = await refreshCampaignDetail(session, createdCampaignId);
+      if (createdDraftDetailOwnerRef.current === createdCampaignId) createdDraftDetailOwnerRef.current = null;
+      const stillSelected = campaignSessionRef.current === session && selectedIdRef.current === createdCampaignId;
+      void refreshCampaigns(session, createdCampaignId).catch((listError) => {
+        const typed = listError as { status?: number; message?: string };
+        if (typed.status === 401) return handleUnauthorized();
+        setError(getCampaignUserFacingError(typed, "O rascunho foi criado, mas a lista ainda não pôde ser atualizada."));
+      });
+      if (!stillSelected) return;
+      showToast(
+        detail ? "success" : "warning",
+        "Rascunho criado",
+        detail
+          ? `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+          : "O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado. Tente atualizar o detalhe."
+      );
+    };
+    const preserveUncertainResult = () => {
+      const message = "A resposta foi interrompida e o resultado ainda não pôde ser confirmado. Tente novamente: a tentativa pendente será reconciliada antes de recalcular a audiência.";
+      setAudiencePreviewError(message);
+      showToast("warning", "Criação em confirmação", message);
+    };
+
+    const pending = audienceDraftCreationRef.current ?? loadPendingAppCampaignDraftCreation(session);
+    if (pending) {
+      audienceDraftCreationRef.current = pending;
+      setCreatingDraft(true);
+      setAudiencePreviewError(null);
+      try {
+        try {
+          const recovered = await recoverAppCampaignDraftCreation(session, pending.id);
+          await finishCreatedDraft(recovered);
+          return;
+        } catch (recoveryError) {
+          const recovery = recoveryError as { status?: number };
+          if (recovery.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          if (recovery.status !== 404) {
+            preserveUncertainResult();
+            return;
+          }
+        }
+
+        if (!(await ensureCampaignOperationsAvailable())) return;
+        try {
+          const replayed = await createAppCampaignDraft(session, pending.payload);
+          await finishCreatedDraft(replayed);
+        } catch (replayError) {
+          handleClosedCampaignAttempt(replayError);
+          const replay = replayError as { status?: number; message?: string };
+          if (replay.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          if (isCampaignDraftCreationOutcomeUncertain(replay)) {
+            preserveUncertainResult();
+            return;
+          }
+          audienceDraftCreationRef.current = null;
+          clearPendingAppCampaignDraftCreation(session);
+          const message = getCampaignUserFacingError(replay, "Não foi possível reconciliar a criação pendente.");
+          setAudiencePreviewError(message);
+          showToast("error", "Criação não concluída", message);
+        }
+      } finally {
+        setCreatingDraft(false);
+      }
+      return;
+    }
+
     if (!(await ensureCampaignOperationsAvailable())) return;
-    if (!session || !audiencePreview) return;
+    if (!audiencePreview) return;
     if (campaignReusePreviewState === "loading") {
       const message = "Aguarde a atualização da prévia antes de criar o rascunho.";
       setAudiencePreviewError(message);
@@ -2830,33 +2920,6 @@ export default function AppCampaignsPage() {
     setCreatingDraft(true);
     setAudiencePreviewError(null);
     let creationRequestId: string | null = null;
-    const finishCreatedDraft = async (created: Awaited<ReturnType<typeof createAppCampaignDraft>>) => {
-      const createdCampaignId = created.campaign.id;
-      audienceDraftCreationRef.current = null;
-      createdDraftDetailOwnerRef.current = createdCampaignId;
-      setSelectedCampaignId(createdCampaignId);
-      setDetailModalOpen(true);
-      resetCampaignComposer();
-      setStatusFilter("draft");
-      setActiveTab("drafts");
-      setCurrentPage(1);
-      const detail = await refreshCampaignDetail(session, createdCampaignId);
-      if (createdDraftDetailOwnerRef.current === createdCampaignId) createdDraftDetailOwnerRef.current = null;
-      const stillSelected = campaignSessionRef.current === session && selectedIdRef.current === createdCampaignId;
-      void refreshCampaigns(session, createdCampaignId).catch((listError) => {
-        const typed = listError as { status?: number; message?: string };
-        if (typed.status === 401) return handleUnauthorized();
-        setError(getCampaignUserFacingError(typed, "O rascunho foi criado, mas a lista ainda não pôde ser atualizada."));
-      });
-      if (!stillSelected) return;
-      showToast(
-        detail ? "success" : "warning",
-        "Rascunho criado",
-        detail
-          ? `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
-          : "O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado. Tente atualizar o detalhe."
-      );
-    };
     try {
       const selectionPayload = buildAudienceSplitPayload();
       if (!selectionPayload.ok) {
@@ -2873,22 +2936,8 @@ export default function AppCampaignsPage() {
         showToast("warning", "Divisão necessária", message);
         return;
       }
-      const requestKey = JSON.stringify({
-        name,
-        templateId,
-        audienceSignature: resolvedAudience.plan.audienceSignature,
-        returnDestination: returnDestination.value,
-        templateMediaAssetId: form.templateMediaAssetId || null,
-        mappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings),
-      });
-      if (audienceDraftCreationRef.current?.key !== requestKey) {
-        audienceDraftCreationRef.current = {
-          key: requestKey,
-          id: globalThis.crypto?.randomUUID?.() ?? `draft-${Date.now()}`,
-        };
-      }
-      creationRequestId = audienceDraftCreationRef.current.id;
-      const created = await createAppCampaignDraft(session, {
+      creationRequestId = globalThis.crypto?.randomUUID?.() ?? `draft-${Date.now()}`;
+      const creationPayload: AppCampaignDraftCreationPayload = {
         name,
         templateId,
         requestId: creationRequestId,
@@ -2904,7 +2953,10 @@ export default function AppCampaignsPage() {
         ...(templateVariableLabels.length > 0
           ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
           : {}),
-      });
+      };
+      audienceDraftCreationRef.current = { id: creationRequestId, payload: creationPayload };
+      savePendingAppCampaignDraftCreation(session, audienceDraftCreationRef.current);
+      const created = await createAppCampaignDraft(session, creationPayload);
       await finishCreatedDraft(created);
     } catch (err) {
       handleClosedCampaignAttempt(err);
@@ -2913,7 +2965,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      if (creationRequestId && typed.status === 0) {
+      if (creationRequestId && isCampaignDraftCreationOutcomeUncertain(typed)) {
         try {
           const recovered = await recoverAppCampaignDraftCreation(session, creationRequestId);
           await finishCreatedDraft(recovered);
@@ -2924,11 +2976,13 @@ export default function AppCampaignsPage() {
             handleUnauthorized();
             return;
           }
-          const message = "A resposta foi interrompida e o resultado ainda não pôde ser confirmado. Tente novamente: a mesma identificação será reutilizada e não criará duplicata.";
-          setAudiencePreviewError(message);
-          showToast("warning", "Criação em confirmação", message);
+          preserveUncertainResult();
           return;
         }
+      }
+      if (creationRequestId) {
+        audienceDraftCreationRef.current = null;
+        clearPendingAppCampaignDraftCreation(session);
       }
       const message = getCampaignUserFacingError(typed, "Não foi possível criar o rascunho da campanha.");
       setAudiencePreviewError(message);

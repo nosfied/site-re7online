@@ -11,8 +11,11 @@ import {
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
   loadAppSession,
+  loadPendingAppCampaignDraftCreation,
   logAppInboxEvent,
   logAppInboxEventSafely,
+  savePendingAppCampaignDraftCreation,
+  clearPendingAppCampaignDraftCreation,
   updateAppAgentSignatureSettings,
   updateAppSatisfactionPolicy,
   updateAppAgentAvailability,
@@ -87,6 +90,42 @@ test("loadAppSession preserves membership department ids from storage", () => {
     "department-mapa",
   ]);
   assert.equal(session?.user.primaryDepartmentId, "department-mapa");
+});
+
+test("pending campaign draft creation survives reload and remains tenant/user scoped", () => {
+  const storage = createMemoryStorage();
+  Object.assign(globalThis, { window: {}, sessionStorage: storage });
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token-a",
+    user: {
+      id: "admin-a",
+      name: "Admin A",
+      email: "admin-a@example.test",
+      clientId: "tenant-a",
+      role: "ADMIN",
+    },
+    features: {},
+    profile: "business",
+  };
+  const pending = {
+    id: "draft-request-a",
+    payload: {
+      name: "Draft A",
+      templateId: "template-a",
+      requestId: "draft-request-a",
+      selectedLeadIds: ["lead-a"],
+      returnDestination: { type: "human_department" as const, departmentId: "department-a" },
+    },
+  };
+  savePendingAppCampaignDraftCreation(session, pending);
+  assert.deepEqual(loadPendingAppCampaignDraftCreation(session), pending);
+  assert.equal(loadPendingAppCampaignDraftCreation({
+    ...session,
+    user: { ...session.user, id: "admin-b" },
+  }), null);
+  clearPendingAppCampaignDraftCreation(session);
+  assert.equal(loadPendingAppCampaignDraftCreation(session), null);
 });
 
 test("app WhatsApp identity display hides transport labels from end-user UX", () => {
