@@ -4,7 +4,7 @@ import type { CampaignMetaStatus, CampaignMetaSummary } from "../campaigns/campa
 import { projectCampaignJobExecution, aggregateCampaignExecution, type CampaignExecutionPresentation } from "../campaigns/campaignExecutionPresentation.js";
 import { projectCampaignLifecyclePresentation } from "../campaigns/campaignLifecyclePresentation.js";
 import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
-import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
+import { campaignRecipientEligibilityBatch, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
 import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
 import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
 import { resolveAllowAutomationConversationsInInbox, saveAllowAutomationConversationsInInbox } from "../config/tenantOperationalConfig.js";
@@ -16244,6 +16244,44 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
     return;
   }
 
+  const campaignDraftRequestMatch = pathname.match(/^\/app\/campaigns\/drafts\/requests\/([^/]+)$/);
+  if (req.method === "GET" && campaignDraftRequestMatch) {
+    const prisma = getPrisma();
+    try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const creationRequestId = normalizeCampaignDraftCreationRequestId(
+        decodeURIComponent(campaignDraftRequestMatch[1] ?? "")
+      );
+      if (!creationRequestId) {
+        json(res, 400, httpError("invalid_request_id", "Identificador de criação inválido."));
+        return;
+      }
+      const existing = await loadCampaignDraftCreationByRequest(prisma, {
+        clientId: access.client.id,
+        requestId: creationRequestId,
+      });
+      if (!existing || existing.conflict) {
+        json(res, 404, httpError("campaign_draft_request_not_found", "A criação ainda não foi confirmada."));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        campaign: { ...serializeCampaign(existing.campaign), campaignId: existing.campaign.id },
+        draft: { summary: existing.summary, recipients: [] },
+        idempotent: true,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.draft.request_lookup.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/app/campaigns/drafts") {
     const prisma = getPrisma();
     try {
@@ -16260,6 +16298,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       const selectionMode = normalizeCampaignSelectionMode(body.selectionMode);
       const dynamicFilter = extractCampaignDynamicCrmFilter(body.dynamicFilter);
       const staticAudienceSelection = extractCampaignStaticAudienceSelection(body.staticAudienceSelection);
+      const creationRequestId = normalizeCampaignDraftCreationRequestId(body.requestId);
       let staticAudienceSummary: CampaignDraftRecipientSummary | null = null;
       const components = parseTemplateComponents(body.templateParams);
       if (!name) {
@@ -16272,6 +16311,14 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       }
       if (body.staticAudienceSelection !== undefined && !staticAudienceSelection) {
         json(res, 400, httpError("invalid_audience_selection", "A seleção integral da audiência é inválida."));
+        return;
+      }
+      if (body.requestId !== undefined && !creationRequestId) {
+        json(res, 400, httpError("invalid_request_id", "Identificador de criação inválido."));
+        return;
+      }
+      if (creationRequestId && selectionMode !== "STATIC_RECIPIENTS") {
+        json(res, 400, httpError("request_id_mode_not_supported", "A confirmação idempotente exige seleção estática."));
         return;
       }
       if (staticAudienceSelection && selectedLeadIds.length > 0) {
@@ -16293,6 +16340,41 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       if (selectedLeadIds.length > CAMPAIGN_DRAFT_RECIPIENT_LIMIT) {
         json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: CAMPAIGN_DRAFT_RECIPIENT_LIMIT }));
         return;
+      }
+      const creationBindingHash = creationRequestId
+        ? campaignDraftCreationBindingHash({
+            clientId: client.id,
+            name,
+            templateId,
+            selectionMode,
+            selectedLeadIds,
+            components: components ?? null,
+            dynamicFilter,
+            staticAudienceSelection,
+            templateVariableMappings: body.templateVariableMappings ?? null,
+            templateMediaAssetId: String(body.templateMediaAssetId ?? "").trim() || null,
+            returnDestination: body.returnDestination ?? null,
+          })
+        : null;
+      if (creationRequestId && creationBindingHash) {
+        const existing = await loadCampaignDraftCreationByRequest(prisma, {
+          clientId: client.id,
+          requestId: creationRequestId,
+          bindingHash: creationBindingHash,
+        });
+        if (existing?.conflict) {
+          json(res, 409, httpError("idempotency_conflict", "Esta tentativa já está vinculada a outro conteúdo."));
+          return;
+        }
+        if (existing) {
+          json(res, 200, {
+            ok: true,
+            campaign: { ...serializeCampaign(existing.campaign), campaignId: existing.campaign.id },
+            draft: { summary: existing.summary, recipients: [] },
+            idempotent: true,
+          });
+          return;
+        }
       }
       if (staticAudienceSelection) {
         if (!(await enforceAppCapability(prisma, res, {
@@ -16417,8 +16499,14 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         staticAudienceSelection,
         staticAudienceSummary,
         templateMedia: templateMedia.media,
+        requestId: creationRequestId,
+        requestBindingHash: creationBindingHash,
       });
       if (!created.ok) {
+        if (created.reason === "idempotency_conflict") {
+          json(res, 409, httpError("idempotency_conflict", "Esta tentativa já está vinculada a outro conteúdo."));
+          return;
+        }
         if (created.reason === "audience_changed") {
           const finalLeadIds = created.recipients.acceptedVariableValues.map((item) => item.leadId);
           const plan = serializeCampaignAudienceSplitPlan({
@@ -16726,6 +16814,40 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
     } catch (error) {
       logger.error({
         event: "app.campaign.opt_out.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/campaigns/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/draft-recipients")
+  ) {
+    const prisma = getPrisma();
+    try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      const result = await buildCampaignDraftRecipientPage(prisma, {
+        clientId: access.client.id,
+        campaignId,
+        q: query.q,
+        page: query.page,
+        limit: query.limit,
+      });
+      if (!result) {
+        json(res, 404, httpError("campaign_not_found", "Rascunho não encontrado."));
+        return;
+      }
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.draft_recipients.error",
         message: (error as Error).message,
         requestId,
       });
@@ -37961,6 +38083,95 @@ export async function buildCampaignDetailPayload(
   };
 }
 
+async function buildCampaignDraftRecipientPage(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; campaignId: string; q?: unknown; page?: unknown; limit?: unknown }
+) {
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign || (campaign.status !== "draft" && campaign.status !== "scheduled")) return null;
+  const seed = await buildCampaignDraftSeed(prisma, {
+    clientId: params.clientId,
+    campaignId: campaign.id,
+    campaignName: campaign.name,
+    templateName: campaign.templateName,
+    outboundMessages: [],
+  });
+  const q = String(params.q ?? "").trim();
+  const pageValue = Number(params.page ?? 1);
+  const limitValue = Number(params.limit ?? 50);
+  const page = Number.isFinite(pageValue) ? Math.max(1, Math.floor(pageValue)) : 1;
+  const limit = Number.isFinite(limitValue) ? Math.min(200, Math.max(1, Math.floor(limitValue))) : 50;
+  const orderedLeadIds = Array.from(new Set((seed.leadIds ?? []).filter(Boolean)));
+  let matchingLeadIds = orderedLeadIds;
+  if (q && orderedLeadIds.length > 0) {
+    const matches = await prisma.lead.findMany({
+      where: {
+        tenantId: params.clientId,
+        id: { in: orderedLeadIds },
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { company: { contains: q, mode: "insensitive" } },
+          { city: { contains: q, mode: "insensitive" } },
+          { phone: { contains: q, mode: "insensitive" } },
+          { waId: { contains: q, mode: "insensitive" } },
+          { waIdCanonical: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true },
+    });
+    const matching = new Set(matches.map((item) => item.id));
+    matchingLeadIds = orderedLeadIds.filter((leadId) => matching.has(leadId));
+  }
+  const start = (page - 1) * limit;
+  const pageLeadIds = matchingLeadIds.slice(start, start + limit);
+  const leads = pageLeadIds.length > 0
+    ? await prisma.lead.findMany({
+        where: { tenantId: params.clientId, id: { in: pageLeadIds } },
+        select: { id: true, name: true, phone: true, waId: true, waIdCanonical: true },
+      })
+    : [];
+  const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+  let items = pageLeadIds.map((leadId) => {
+    const lead = leadById.get(leadId);
+    const identity = lead?.phone || lead?.waIdCanonical || lead?.waId || leadId;
+    return {
+      leadId,
+      displayName: lead?.name ?? null,
+      phoneDisplay: maskCampaignRecipientIdentifier(identity),
+      identifierDisplay: lead?.name || maskCampaignRecipientIdentifier(identity) || "WhatsApp User",
+    };
+  });
+  let total = matchingLeadIds.length;
+  if (orderedLeadIds.length === 0) {
+    const query = q.toLocaleLowerCase("pt-BR");
+    const legacy = Array.from(new Set(seed.recipients)).filter((identity) =>
+      !query || identity.toLocaleLowerCase("pt-BR").includes(query)
+    );
+    total = legacy.length;
+    items = legacy.slice(start, start + limit).map((identity) => ({
+      leadId: identity,
+      displayName: null,
+      phoneDisplay: maskCampaignRecipientIdentifier(identity),
+      identifierDisplay: maskCampaignRecipientIdentifier(identity) || "WhatsApp User",
+    }));
+  }
+  const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+  return {
+    ok: true as const,
+    campaignId: campaign.id,
+    q,
+    items,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    },
+  };
+}
+
 async function createScopedCampaign(params: {
   clientId: string;
   clientKey: string;
@@ -38094,6 +38305,84 @@ function formatCampaignSplitDraftName(name: string, index: number, total: number
 
 function buildCampaignAudienceSignature(leadIds: string[]) {
   return crypto.createHash("sha256").update(leadIds.join("\n")).digest("hex");
+}
+
+function normalizeCampaignDraftCreationRequestId(value: unknown) {
+  const normalized = String(value ?? "").trim();
+  return /^[a-zA-Z0-9_-]{8,120}$/.test(normalized) ? normalized : null;
+}
+
+function canonicalCampaignDraftBindingJson(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalCampaignDraftBindingJson).join(",")}]`;
+  if (typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalCampaignDraftBindingJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function campaignDraftCreationBindingHash(params: {
+  clientId: string;
+  name: string;
+  templateId: string;
+  selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+  selectedLeadIds: string[];
+  components: CampaignTemplateComponents | null;
+  dynamicFilter: CampaignDynamicCrmFilter | null;
+  staticAudienceSelection?: CampaignStaticAudienceSelection | null;
+  templateVariableMappings: unknown;
+  templateMediaAssetId: string | null;
+  returnDestination: unknown;
+}) {
+  return crypto.createHash("sha256").update(canonicalCampaignDraftBindingJson({
+    schema: 1,
+    ...params,
+    staticAudienceSelection: params.staticAudienceSelection ?? null,
+  })).digest("hex");
+}
+
+async function loadCampaignDraftCreationByRequest(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; requestId: string; bindingHash?: string | null }
+) {
+  const marker = await prisma.event.findUnique({
+    where: {
+      clientId_eventName_requestId: {
+        clientId: params.clientId,
+        eventName: "campaign.draft.created",
+        requestId: `campaign-draft:${params.requestId}`,
+      },
+    },
+    select: { payloadJson: true },
+  });
+  if (!marker?.payloadJson || typeof marker.payloadJson !== "object" || Array.isArray(marker.payloadJson)) {
+    return null;
+  }
+  const payload = marker.payloadJson as Record<string, unknown>;
+  const campaignId = String(payload.campaignId ?? "").trim();
+  const storedBindingHash = String(payload.bindingHash ?? "").trim();
+  if (!campaignId || !/^[a-f0-9]{64}$/.test(storedBindingHash)) return null;
+  if (params.bindingHash && storedBindingHash !== params.bindingHash) {
+    return { conflict: true as const };
+  }
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: campaignId, clientId: params.clientId },
+  });
+  if (!campaign) return null;
+  const summary = payload.summary && typeof payload.summary === "object" && !Array.isArray(payload.summary)
+    ? payload.summary as CampaignDraftRecipientSummary
+    : {
+        requested: campaign.totalRecipients,
+        accepted: campaign.totalRecipients,
+        blocked: campaign.blockedCount,
+        duplicatesRemoved: 0,
+        blockedByReason: [],
+      };
+  return { conflict: false as const, campaign, summary };
 }
 
 function normalizeCampaignAudienceSplitText(value: unknown) {
@@ -38380,6 +38669,8 @@ async function createScopedCampaignDraft(params: {
   staticAudienceSelection?: CampaignStaticAudienceSelection | null;
   staticAudienceSummary?: CampaignDraftRecipientSummary | null;
   templateMedia?: CampaignTemplateMediaSnapshot | null;
+  requestId?: string | null;
+  requestBindingHash?: string | null;
 }) {
   const prisma = getPrisma();
   if (params.selectionMode === "DYNAMIC_CRM_FILTER") {
@@ -38436,6 +38727,42 @@ async function createScopedCampaignDraft(params: {
       },
     };
   }
+  const requestBindingHash = params.requestBindingHash ?? null;
+  if (params.requestId) {
+    if (!requestBindingHash) throw new Error("campaign_draft_request_binding_missing");
+    const existing = await loadCampaignDraftCreationByRequest(prisma, {
+      clientId: params.clientId,
+      requestId: params.requestId,
+      bindingHash: requestBindingHash,
+    });
+    if (existing?.conflict) {
+      return {
+        ok: false as const,
+        reason: "idempotency_conflict" as const,
+        recipients: {
+          summary: { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] },
+          acceptedWaIds: [],
+          blocked: [],
+          safeRecipients: [],
+          acceptedVariableValues: [],
+        },
+      };
+    }
+    if (existing) {
+      return {
+        ok: true as const,
+        idempotent: true,
+        campaign: existing.campaign,
+        recipients: {
+          summary: existing.summary,
+          acceptedWaIds: [],
+          blocked: [],
+          safeRecipients: [],
+          acceptedVariableValues: [],
+        },
+      };
+    }
+  }
   const recipients = await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
     clientId: params.clientId,
     selectedLeadIds: params.selectedLeadIds,
@@ -38465,35 +38792,152 @@ async function createScopedCampaignDraft(params: {
         },
       }
     : recipients;
-  const campaign = await createCampaign({
-    clientId: params.clientId,
-    templateId: params.templateId,
-    name: params.name,
-    templateName: params.templateName,
-    totalRecipients: persistedRecipients.acceptedWaIds.length,
-    status: "draft",
-    templateMediaAssetId: params.templateMedia?.assetId ?? null,
-    templateMediaSnapshot: params.templateMedia ?? null,
+  const normalizedName = normalizeCampaignNameForUniqueness(params.name);
+  const existingNames = await prisma.campaign.findMany({
+    where: { clientId: params.clientId },
+    select: { name: true },
+    take: 5000,
   });
-  await persistCampaignDraftSeed({
-    clientId: params.clientId,
-    campaignId: campaign.id,
-    templateId: params.templateId,
-    name: params.name,
-    templateName: params.templateName,
-    leadIds: params.selectedLeadIds,
-    waIds: persistedRecipients.acceptedWaIds,
-    components: params.components,
-    templateVariableMappings: params.templateVariableMappings ?? [],
-    returnDestination: params.returnDestination,
-    source: params.staticAudienceSelection ? "crm_audience_filter" : "crm_audience_preview",
-    summary: persistedRecipients.summary,
-    selectionMode: "STATIC_RECIPIENTS",
-    dynamicFilter: null,
-    staticAudienceSelection: params.staticAudienceSelection ?? null,
-    templateMedia: params.templateMedia ?? null,
-  });
-  return { ok: true as const, campaign, recipients: persistedRecipients };
+  if (existingNames.some((item) => normalizeCampaignNameForUniqueness(item.name) === normalizedName)) {
+    if (params.requestId && requestBindingHash) {
+      const existing = await loadCampaignDraftCreationByRequest(prisma, {
+        clientId: params.clientId,
+        requestId: params.requestId,
+        bindingHash: requestBindingHash,
+      });
+      if (existing && !existing.conflict) {
+        return {
+          ok: true as const,
+          idempotent: true,
+          campaign: existing.campaign,
+          recipients: {
+            ...persistedRecipients,
+            summary: existing.summary,
+          },
+        };
+      }
+    }
+    throw new CampaignNameConflictError();
+  }
+  let campaign: Awaited<ReturnType<typeof createCampaign>>;
+  if (params.requestId) {
+    try {
+      campaign = await prisma.$transaction(async (tx) => {
+        const created = await tx.campaign.create({
+          data: {
+            clientId: params.clientId,
+            templateId: params.templateId,
+            name: params.name,
+            templateName: params.templateName,
+            status: "draft",
+            totalRecipients: persistedRecipients.acceptedWaIds.length,
+            templateMediaAssetId: params.templateMedia?.assetId ?? null,
+            ...(params.templateMedia
+              ? { templateMediaSnapshot: params.templateMedia as Prisma.InputJsonValue }
+              : {}),
+          },
+        });
+        await tx.event.create({
+          data: {
+            clientId: params.clientId,
+            messageId: created.id,
+            requestId: `campaign-seed:${created.id}:${params.requestId}`,
+            eventName: "campaign.seed.saved",
+            payloadJson: buildCampaignDraftSeedPayload({
+              clientId: params.clientId,
+              campaignId: created.id,
+              templateId: params.templateId,
+              name: params.name,
+              templateName: params.templateName,
+              leadIds: params.selectedLeadIds,
+              waIds: persistedRecipients.acceptedWaIds,
+              components: params.components,
+              templateVariableMappings: params.templateVariableMappings ?? [],
+              returnDestination: params.returnDestination,
+              source: params.staticAudienceSelection ? "crm_audience_filter" : "crm_audience_preview",
+              summary: persistedRecipients.summary,
+              selectionMode: "STATIC_RECIPIENTS",
+              dynamicFilter: null,
+              staticAudienceSelection: params.staticAudienceSelection ?? null,
+              templateMedia: params.templateMedia ?? null,
+            }) as Prisma.InputJsonValue,
+          },
+        });
+        await tx.event.create({
+          data: {
+            clientId: params.clientId,
+            messageId: created.id,
+            requestId: `campaign-draft:${params.requestId}`,
+            eventName: "campaign.draft.created",
+            payloadJson: {
+              requestId: params.requestId,
+              campaignId: created.id,
+              bindingHash: requestBindingHash,
+              summary: persistedRecipients.summary,
+            } as Prisma.InputJsonValue,
+          },
+        });
+        return created;
+      });
+    } catch (error) {
+      const existing = await loadCampaignDraftCreationByRequest(prisma, {
+        clientId: params.clientId,
+        requestId: params.requestId,
+        bindingHash: requestBindingHash,
+      });
+      if (existing?.conflict) {
+        return {
+          ok: false as const,
+          reason: "idempotency_conflict" as const,
+          recipients,
+        };
+      }
+      if (existing) {
+        return {
+          ok: true as const,
+          idempotent: true,
+          campaign: existing.campaign,
+          recipients: {
+            ...persistedRecipients,
+            summary: existing.summary,
+          },
+        };
+      }
+      throw error;
+    }
+  } else {
+    campaign = await createCampaign({
+        clientId: params.clientId,
+        templateId: params.templateId,
+        name: params.name,
+        templateName: params.templateName,
+        totalRecipients: persistedRecipients.acceptedWaIds.length,
+        status: "draft",
+        templateMediaAssetId: params.templateMedia?.assetId ?? null,
+        templateMediaSnapshot: params.templateMedia ?? null,
+      });
+  }
+  if (!params.requestId) {
+    await persistCampaignDraftSeed({
+      clientId: params.clientId,
+      campaignId: campaign.id,
+      templateId: params.templateId,
+      name: params.name,
+      templateName: params.templateName,
+      leadIds: params.selectedLeadIds,
+      waIds: persistedRecipients.acceptedWaIds,
+      components: params.components,
+      templateVariableMappings: params.templateVariableMappings ?? [],
+      returnDestination: params.returnDestination,
+      source: params.staticAudienceSelection ? "crm_audience_filter" : "crm_audience_preview",
+      summary: persistedRecipients.summary,
+      selectionMode: "STATIC_RECIPIENTS",
+      dynamicFilter: null,
+      staticAudienceSelection: params.staticAudienceSelection ?? null,
+      templateMedia: params.templateMedia ?? null,
+    });
+  }
+  return { ok: true as const, idempotent: false, campaign, recipients: persistedRecipients };
 }
 
 async function sendScopedCampaignDraft(params: {
@@ -39350,6 +39794,17 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
     clientId: params.clientId,
     waIds: optOutLookupWaIds,
   });
+  const eligibilityInputs = requestedLeadIds.map((leadId) => {
+      const lead = leadById.get(leadId);
+      return {
+        values: lead ? [lead.waId, lead.waIdCanonical || lead.waId] : [""],
+        channel: lead?.channel,
+      };
+    });
+  const currentEligibility: Array<Awaited<ReturnType<typeof campaignRecipientEligibilityBatch>>[number]> = [];
+  for (const inputs of chunkArray(eligibilityInputs, 500)) {
+    currentEligibility.push(...await campaignRecipientEligibilityBatch(prisma, params.clientId, inputs));
+  }
   const acceptedByCanonical = new Map<
     string,
     {
@@ -39366,7 +39821,7 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
   const blockedCounts = new Map<CampaignDraftBlockedReason, number>();
   let duplicatesRemoved = 0;
 
-  for (const leadId of requestedLeadIds) {
+  for (const [leadIndex, leadId] of requestedLeadIds.entries()) {
     const lead = leadById.get(leadId);
     let reason: CampaignDraftBlockedReason | null = null;
     let canonical: string | null = null;
@@ -39405,7 +39860,9 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
     }
 
     if (!reason && lead) {
-      const current = await campaignRecipientEligibility(prisma, params.clientId, [lead.waId, lead.waIdCanonical || lead.waId], lead.channel);
+      const current = currentEligibility[leadIndex] === undefined
+        ? "unknown"
+        : currentEligibility[leadIndex];
       if (current === "invalid_whatsapp_identity") reason = "missing_whatsapp_identity";
       else if (current === "identity_conflict") reason = "unknown";
       else if (current) reason = current;

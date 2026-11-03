@@ -17,6 +17,8 @@ import {
   getCampaignUserFacingError,
   isCampaignOperationsClosedError,
   getFriendlyCampaignError,
+  isCampaignDraftCreationOutcomeUncertain,
+  mergeCampaignRecipientPages,
 } from "@/lib/campaignDrafts";
 import {
   getCampaignResultEvidenceLabel,
@@ -27,6 +29,9 @@ import {
   AppCampaignAudiencePreviewItem,
   AppCampaignAudiencePreviewFilter,
   AppCampaignAudienceSplitPlan,
+  AppCampaignDraftRecipientPage,
+  AppCampaignDraftCreationPayload,
+  PendingAppCampaignDraftCreation,
   AppCampaignImportReport,
   AppCampaignImportPreview,
   AppCampaignReturnDestination,
@@ -36,6 +41,7 @@ import {
   CrmBusinessStatusConfig,
   cancelAppCampaign,
   cancelAppCampaignBatch,
+  clearPendingAppCampaignDraftCreation,
   clearAppSession,
   createAppCampaign,
   createAppCampaignDraft,
@@ -44,6 +50,7 @@ import {
   deleteAppTemplateMedia,
   discardAppCampaignDraft,
   fetchAppCampaignAudiencePreview,
+  fetchAppCampaignDraftRecipients,
   fetchAppCampaignAvailability,
   fetchAppCrmContactDetail,
   fetchAppCampaignReturnDestinations,
@@ -52,6 +59,7 @@ import {
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
+  loadPendingAppCampaignDraftCreation,
   uploadAppTemplateMedia,
   loadAppSession,
   pauseAppCampaign,
@@ -60,10 +68,12 @@ import {
   previewAppCampaignCsv,
   resumeAppCampaign,
   resumeAppCampaignBatch,
+  recoverAppCampaignDraftCreation,
   scheduleAppCampaignDraft,
   scheduleAppCampaignBatch,
   sendAppCampaignBatch,
   saveAppSession,
+  savePendingAppCampaignDraftCreation,
   sendAppCampaignDraft,
   sendAppCampaignTest,
 } from "@/lib/appClientApi";
@@ -827,6 +837,7 @@ export default function AppCampaignsPage() {
   const [creatingAudienceSplitDrafts, setCreatingAudienceSplitDrafts] = useState(false);
   const [campaignReusePreviewState, setCampaignReusePreviewState] = useState<CampaignReusePreviewState>("idle");
   const csvCreationRequestRef = useRef<{ key: string; id: string } | null>(null);
+  const audienceDraftCreationRef = useRef<PendingAppCampaignDraftCreation | null>(null);
   const [csvText, setCsvText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
   const [csvInputKey, setCsvInputKey] = useState(0);
@@ -845,6 +856,10 @@ export default function AppCampaignsPage() {
   const [audienceRecipientMode, setAudienceRecipientMode] = useState<RecipientSelectionMode>("STATIC_RECIPIENTS");
   const [sendingDraft, setSendingDraft] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [draftRecipientPage, setDraftRecipientPage] = useState<AppCampaignDraftRecipientPage | null>(null);
+  const [draftRecipientSearch, setDraftRecipientSearch] = useState("");
+  const [draftRecipientSearchInput, setDraftRecipientSearchInput] = useState("");
+  const [loadingDraftRecipients, setLoadingDraftRecipients] = useState(false);
   const [expandedCreationPanel, setExpandedCreationPanel] = useState<CampaignCreationPanel | null>(null);
   const [activeTab, setActiveTab] = useState<CampaignCenterTab>("create");
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
@@ -898,6 +913,7 @@ export default function AppCampaignsPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [toast, setToast] = useState<CampaignToast | null>(null);
   const audienceRequestGenerationRef = useRef(0);
+  const draftRecipientRequestGenerationRef = useRef(0);
   const csvRequestGenerationRef = useRef(0);
   const manualSendOpen = expandedCreationPanel === "manual";
 
@@ -1964,6 +1980,9 @@ export default function AppCampaignsPage() {
     setResultStatusFilter("all");
     setResultCrmStatusFilter("all");
     setResultSearch("");
+    setDraftRecipientPage(null);
+    setDraftRecipientSearch("");
+    setDraftRecipientSearchInput("");
   }, [selectedCampaignId]);
 
   const shouldPoll = useMemo(() => {
@@ -1985,14 +2004,14 @@ export default function AppCampaignsPage() {
     const statusClass = selectedCampaign.status === "scheduled"
       ? getStatusClasses("scheduled")
       : getStatusClasses("draft");
-    return (selectedCampaign.draftReview?.recipients ?? []).map((recipient, index) => ({
-      key: `${recipient.phoneDisplay ?? recipient.identifierDisplay}-${index}`,
-      name: recipient.identifierDisplay || "Sem nome atual",
+    return (draftRecipientPage?.items ?? []).map((recipient) => ({
+      key: recipient.leadId,
+      name: recipient.displayName || recipient.identifierDisplay || "Sem nome atual",
       reference: recipient.phoneDisplay || recipient.identifierDisplay || "Referência indisponível",
       status,
       statusClass,
     }));
-  }, [selectedCampaign]);
+  }, [draftRecipientPage?.items, selectedCampaign]);
   const hasRealCampaignResultItems = useMemo(
     () => campaignResultItems.some((item) => hasCampaignResultEvidence(item, selectedCampaign?.status)),
     [campaignResultItems, selectedCampaign?.status]
@@ -2309,7 +2328,10 @@ export default function AppCampaignsPage() {
           limit: 25,
         });
         if (requestGeneration !== audienceRequestGenerationRef.current) return;
-        setAudiencePreview(response);
+        setAudiencePreview((previous) => {
+          if (nextPage <= 1 || !previous) return response;
+          return { ...response, items: mergeCampaignRecipientPages(previous.items, response.items) };
+        });
         setAudiencePage(nextPage);
       } catch (err) {
         if (requestGeneration !== audienceRequestGenerationRef.current) return;
@@ -2325,6 +2347,50 @@ export default function AppCampaignsPage() {
     },
     [audienceFilters, audiencePage, audienceRecipientMode, handleUnauthorized, session]
   );
+
+  const loadDraftRecipients = useCallback(async (
+    campaignId: string,
+    options?: { q?: string; page?: number; append?: boolean }
+  ) => {
+    if (!session) return;
+    const requestGeneration = ++draftRecipientRequestGenerationRef.current;
+    const q = options?.q ?? draftRecipientSearch;
+    const page = options?.page ?? 1;
+    setLoadingDraftRecipients(true);
+    try {
+      const response = await fetchAppCampaignDraftRecipients(session, campaignId, { q, page, limit: 50 });
+      if (
+        selectedIdRef.current !== campaignId ||
+        requestGeneration !== draftRecipientRequestGenerationRef.current
+      ) return;
+      setDraftRecipientPage((previous) => {
+        if (!options?.append || !previous || previous.q !== response.q) return response;
+        return { ...response, items: mergeCampaignRecipientPages(previous.items, response.items) };
+      });
+      setDraftRecipientSearch(q);
+    } catch (error) {
+      const typed = error as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setDetailError(getCampaignUserFacingError(typed, "Não foi possível carregar os destinatários do rascunho."));
+    } finally {
+      if (
+        selectedIdRef.current === campaignId &&
+        requestGeneration === draftRecipientRequestGenerationRef.current
+      ) setLoadingDraftRecipients(false);
+    }
+  }, [draftRecipientSearch, handleUnauthorized, session]);
+
+  useEffect(() => {
+    if (
+      !detailModalOpen || !selectedCampaignId || !selectedCampaign ||
+      (selectedCampaign.status !== "draft" && selectedCampaign.status !== "scheduled") ||
+      draftRecipientPage?.campaignId === selectedCampaignId
+    ) return;
+    void loadDraftRecipients(selectedCampaignId, { q: "", page: 1 });
+  }, [detailModalOpen, draftRecipientPage?.campaignId, loadDraftRecipients, selectedCampaign, selectedCampaignId]);
 
   const handleAudiencePreviewSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -2732,8 +2798,92 @@ export default function AppCampaignsPage() {
   };
 
   const handleCreateDraftFromAudience = async () => {
+    if (!session) return;
+    const finishCreatedDraft = async (created: Awaited<ReturnType<typeof createAppCampaignDraft>>) => {
+      const createdCampaignId = created.campaign.id;
+      audienceDraftCreationRef.current = null;
+      clearPendingAppCampaignDraftCreation(session);
+      createdDraftDetailOwnerRef.current = createdCampaignId;
+      setSelectedCampaignId(createdCampaignId);
+      setDetailModalOpen(true);
+      resetCampaignComposer();
+      setStatusFilter("draft");
+      setActiveTab("drafts");
+      setCurrentPage(1);
+      const detail = await refreshCampaignDetail(session, createdCampaignId);
+      if (createdDraftDetailOwnerRef.current === createdCampaignId) createdDraftDetailOwnerRef.current = null;
+      const stillSelected = campaignSessionRef.current === session && selectedIdRef.current === createdCampaignId;
+      void refreshCampaigns(session, createdCampaignId).catch((listError) => {
+        const typed = listError as { status?: number; message?: string };
+        if (typed.status === 401) return handleUnauthorized();
+        setError(getCampaignUserFacingError(typed, "O rascunho foi criado, mas a lista ainda não pôde ser atualizada."));
+      });
+      if (!stillSelected) return;
+      showToast(
+        detail ? "success" : "warning",
+        "Rascunho criado",
+        detail
+          ? `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+          : "O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado. Tente atualizar o detalhe."
+      );
+    };
+    const preserveUncertainResult = () => {
+      const message = "A resposta foi interrompida e o resultado ainda não pôde ser confirmado. Tente novamente: a tentativa pendente será reconciliada antes de recalcular a audiência.";
+      setAudiencePreviewError(message);
+      showToast("warning", "Criação em confirmação", message);
+    };
+
+    const pending = audienceDraftCreationRef.current ?? loadPendingAppCampaignDraftCreation(session);
+    if (pending) {
+      audienceDraftCreationRef.current = pending;
+      setCreatingDraft(true);
+      setAudiencePreviewError(null);
+      try {
+        try {
+          const recovered = await recoverAppCampaignDraftCreation(session, pending.id);
+          await finishCreatedDraft(recovered);
+          return;
+        } catch (recoveryError) {
+          const recovery = recoveryError as { status?: number };
+          if (recovery.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          if (recovery.status !== 404) {
+            preserveUncertainResult();
+            return;
+          }
+        }
+
+        if (!(await ensureCampaignOperationsAvailable())) return;
+        try {
+          const replayed = await createAppCampaignDraft(session, pending.payload);
+          await finishCreatedDraft(replayed);
+        } catch (replayError) {
+          handleClosedCampaignAttempt(replayError);
+          const replay = replayError as { status?: number; message?: string };
+          if (replay.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          if (isCampaignDraftCreationOutcomeUncertain(replay)) {
+            preserveUncertainResult();
+            return;
+          }
+          audienceDraftCreationRef.current = null;
+          clearPendingAppCampaignDraftCreation(session);
+          const message = getCampaignUserFacingError(replay, "Não foi possível reconciliar a criação pendente.");
+          setAudiencePreviewError(message);
+          showToast("error", "Criação não concluída", message);
+        }
+      } finally {
+        setCreatingDraft(false);
+      }
+      return;
+    }
+
     if (!(await ensureCampaignOperationsAvailable())) return;
-    if (!session || !audiencePreview) return;
+    if (!audiencePreview) return;
     if (campaignReusePreviewState === "loading") {
       const message = "Aguarde a atualização da prévia antes de criar o rascunho.";
       setAudiencePreviewError(message);
@@ -2769,6 +2919,7 @@ export default function AppCampaignsPage() {
 
     setCreatingDraft(true);
     setAudiencePreviewError(null);
+    let creationRequestId: string | null = null;
     try {
       const selectionPayload = buildAudienceSplitPayload();
       if (!selectionPayload.ok) {
@@ -2785,9 +2936,11 @@ export default function AppCampaignsPage() {
         showToast("warning", "Divisão necessária", message);
         return;
       }
-      const created = await createAppCampaignDraft(session, {
+      creationRequestId = globalThis.crypto?.randomUUID?.() ?? `draft-${Date.now()}`;
+      const creationPayload: AppCampaignDraftCreationPayload = {
         name,
         templateId,
+        requestId: creationRequestId,
         selectedLeadIds: [],
         staticAudienceSelection: {
           version: 1,
@@ -2800,58 +2953,36 @@ export default function AppCampaignsPage() {
         ...(templateVariableLabels.length > 0
           ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
           : {}),
-      });
-      const createdCampaignId = created.campaign.id;
-      // Bind the UI to the persisted campaign before any follow-up read. This
-      // clears the previous snapshot and keeps the new draft selected even if
-      // detail or list reconciliation is slow or fails.
-      createdDraftDetailOwnerRef.current = createdCampaignId;
-      setSelectedCampaignId(createdCampaignId);
-      setDetailModalOpen(true);
-      resetCampaignComposer();
-      setStatusFilter("draft");
-      setActiveTab("drafts");
-      setCurrentPage(1);
-
-      // This path owns the first authenticated detail read. The selection
-      // effect skips only this same ID, preventing competing read generations.
-      const detail = await refreshCampaignDetail(session, createdCampaignId);
-      if (createdDraftDetailOwnerRef.current === createdCampaignId) {
-        createdDraftDetailOwnerRef.current = null;
-      }
-      const stillSelected =
-        campaignSessionRef.current === session && selectedIdRef.current === createdCampaignId;
-
-      // List reconciliation is intentionally posterior and independent. A
-      // timeout here must never restore or present the previously selected ID.
-      void refreshCampaigns(session, createdCampaignId).catch((listError) => {
-        const typed = listError as { status?: number; message?: string };
-        if (typed.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        setError(
-          getCampaignUserFacingError(
-            typed,
-            "O rascunho foi criado, mas a lista ainda não pôde ser atualizada."
-          )
-        );
-      });
-
-      if (!stillSelected) return;
-      showToast(
-        detail ? "success" : "warning",
-        "Rascunho criado",
-        detail
-          ? `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
-          : "O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado. Tente atualizar o detalhe."
-      );
+      };
+      audienceDraftCreationRef.current = { id: creationRequestId, payload: creationPayload };
+      savePendingAppCampaignDraftCreation(session, audienceDraftCreationRef.current);
+      const created = await createAppCampaignDraft(session, creationPayload);
+      await finishCreatedDraft(created);
     } catch (err) {
       handleClosedCampaignAttempt(err);
-      const typed = err as { status?: number; message?: string };
+      const typed = err as { status?: number; message?: string; errorCode?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
+      }
+      if (creationRequestId && isCampaignDraftCreationOutcomeUncertain(typed)) {
+        try {
+          const recovered = await recoverAppCampaignDraftCreation(session, creationRequestId);
+          await finishCreatedDraft(recovered);
+          return;
+        } catch (recoveryError) {
+          const recovery = recoveryError as { status?: number };
+          if (recovery.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          preserveUncertainResult();
+          return;
+        }
+      }
+      if (creationRequestId) {
+        audienceDraftCreationRef.current = null;
+        clearPendingAppCampaignDraftCreation(session);
       }
       const message = getCampaignUserFacingError(typed, "Não foi possível criar o rascunho da campanha.");
       setAudiencePreviewError(message);
@@ -4065,24 +4196,16 @@ export default function AppCampaignsPage() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <p className="text-white/70">
-                  Pagina {audiencePreview.pagination.page} de {Math.max(audiencePreview.pagination.totalPages, 1)}
+                  Exibindo {audiencePreview.items.length} de {audiencePreview.pagination.total}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={!audiencePreview.pagination.hasPreviousPage || loadingAudiencePreview}
-                    onClick={() => void loadAudiencePreview(Math.max(audiencePage - 1, 1))}
-                    className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Anterior
-                  </button>
                   <button
                     type="button"
                     disabled={!audiencePreview.pagination.hasNextPage || loadingAudiencePreview}
                     onClick={() => void loadAudiencePreview(audiencePage + 1)}
                     className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Proxima
+                    {loadingAudiencePreview ? "Carregando..." : "Carregar mais"}
                   </button>
                 </div>
               </div>
@@ -4840,7 +4963,7 @@ export default function AppCampaignsPage() {
                     </p>
                   </div>
 
-                  {campaignAudienceSummaryItems.length > 0 ? (
+                  {(campaignAudienceSummaryItems.length > 0 || draftRecipientPage) ? (
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold">
@@ -4849,9 +4972,34 @@ export default function AppCampaignsPage() {
                             : "Destinatários do rascunho"}
                         </h3>
                         <span className="rounded-full border border-white/15 px-2 py-1 text-xs text-white/75">
-                          {campaignAudienceSummaryItems.length} destinatário(s)
+                          Exibindo {campaignAudienceSummaryItems.length} de {draftRecipientPage?.pagination.total ?? selectedCampaign.totalRecipients}
                         </span>
                       </div>
+                      <form
+                        className="mb-3 flex flex-wrap gap-2"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void loadDraftRecipients(selectedCampaign.id, {
+                            q: draftRecipientSearchInput,
+                            page: 1,
+                          });
+                        }}
+                      >
+                        <input
+                          type="search"
+                          value={draftRecipientSearchInput}
+                          onChange={(event) => setDraftRecipientSearchInput(event.target.value)}
+                          placeholder="Buscar em todos os destinatários"
+                          className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        />
+                        <button
+                          type="submit"
+                          disabled={loadingDraftRecipients}
+                          className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:opacity-50"
+                        >
+                          Buscar
+                        </button>
+                      </form>
                       <div className="max-h-[300px] overflow-auto">
                         <table className="w-full min-w-[560px] text-sm">
                           <thead className="sticky top-0 bg-white/10 text-left backdrop-blur">
@@ -4876,6 +5024,22 @@ export default function AppCampaignsPage() {
                           </tbody>
                         </table>
                       </div>
+                      {draftRecipientPage?.pagination.hasNextPage ? (
+                        <div className="mt-3 flex justify-center">
+                          <button
+                            type="button"
+                            disabled={loadingDraftRecipients}
+                            onClick={() => void loadDraftRecipients(selectedCampaign.id, {
+                              q: draftRecipientSearch,
+                              page: draftRecipientPage.pagination.page + 1,
+                              append: true,
+                            })}
+                            className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:opacity-50"
+                          >
+                            {loadingDraftRecipients ? "Carregando..." : "Carregar mais"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 

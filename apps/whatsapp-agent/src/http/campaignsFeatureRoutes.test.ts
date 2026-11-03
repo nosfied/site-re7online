@@ -14445,6 +14445,20 @@ test("campaign audience split creates numbered static drafts without sending", a
   assert.equal(integralPageTwo.body.items.length, 25);
   assert.ok(integralPageTwo.body.items.every((item) => !item.displayName?.includes("Outro Tenant")));
 
+  const integralSearchBeyondTwoHundred = await request<{
+    summary: { total: number; eligible: number; blocked: number };
+    items: Array<{ displayName: string | null }>;
+  }>(
+    "GET",
+    `/app/campaigns/audience-preview?q=${encodeURIComponent(`${integralLabel} 0900`)}&page=1&limit=25`,
+    businessAdmin
+  );
+  assert.equal(integralSearchBeyondTwoHundred.status, 200, JSON.stringify(integralSearchBeyondTwoHundred.body));
+  assert.equal(integralSearchBeyondTwoHundred.body.summary.total, 1);
+  assert.equal(integralSearchBeyondTwoHundred.body.summary.eligible, 1);
+  assert.equal(integralSearchBeyondTwoHundred.body.summary.blocked, 0);
+  assert.equal(integralSearchBeyondTwoHundred.body.items[0]?.displayName, `${integralLabel} 0900`);
+
   const integralSelectionPreview = await request<{
     ok: true;
     plan: { totalEligible: number; draftCount: number; chunkSizes: number[]; audienceSignature: string };
@@ -14479,13 +14493,11 @@ test("campaign audience split creates numbered static drafts without sending", a
   assert.equal(getErrorCode(changedFilter.body), "audience_changed");
 
   const outboundBeforeIntegralDraft = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
-  const integralDraft = await request<{
-    ok: true;
-    campaign: { id: string; status: string; totalRecipients: number };
-    draft: { summary: { requested: number; accepted: number; blocked: number } };
-  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+  const integralDraftRequestId = `integral-draft-${safeTemplatePrefix}`;
+  const integralDraftBody = {
     name: "Campanha Integral 930",
     templateId: template.id,
+    requestId: integralDraftRequestId,
     selectedLeadIds: [],
     staticAudienceSelection: {
       version: 1,
@@ -14495,7 +14507,12 @@ test("campaign audience split creates numbered static drafts without sending", a
     },
     returnDestination: defaultCampaignReturnDestination(),
     templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
-  });
+  };
+  const integralDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+    draft: { summary: { requested: number; accepted: number; blocked: number } };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, integralDraftBody);
   assert.equal(integralDraft.status, 200, JSON.stringify(integralDraft.body));
   assert.equal(integralDraft.body.campaign.status, "draft");
   assert.equal(integralDraft.body.campaign.totalRecipients, 930);
@@ -14522,6 +14539,169 @@ test("campaign audience split creates numbered static drafts without sending", a
   );
   assert.equal(integralDetail.body.campaign.draftReview.summary.accepted, 930);
   assert.equal(integralDetail.body.campaign.draftReview.recipients.length, 200, "detail preview pagination must not redefine persisted recipients");
+
+  const replayedDraft = await request<{
+    ok: true;
+    campaign: { id: string; totalRecipients: number };
+    idempotent?: boolean;
+  }>("POST", "/app/campaigns/drafts", businessAdmin, integralDraftBody);
+  assert.equal(replayedDraft.status, 200, JSON.stringify(replayedDraft.body));
+  assert.equal(replayedDraft.body.campaign.id, integralDraft.body.campaign.id);
+  assert.equal(replayedDraft.body.campaign.totalRecipients, 930);
+  assert.equal(
+    await prisma.campaign.count({ where: { clientId: businessClientId, name: "Campanha Integral 930" } }),
+    1,
+    "a repeated request after a lost response must not create a duplicate"
+  );
+  const conflictingReplay = await request<ErrorPayload>("POST", "/app/campaigns/drafts", businessAdmin, {
+    ...integralDraftBody,
+    name: "Campanha Integral 930 conteúdo divergente",
+  });
+  assert.equal(conflictingReplay.status, 409, JSON.stringify(conflictingReplay.body));
+  assert.equal(getErrorCode(conflictingReplay.body), "idempotency_conflict");
+  assert.equal(
+    await prisma.campaign.count({ where: { clientId: businessClientId, name: "Campanha Integral 930 conteúdo divergente" } }),
+    0
+  );
+  const recoveredDraft = await request<{
+    ok: true;
+    campaign: { id: string; totalRecipients: number };
+  }>("GET", `/app/campaigns/drafts/requests/${integralDraftRequestId}`, businessAdmin);
+  assert.equal(recoveredDraft.status, 200, JSON.stringify(recoveredDraft.body));
+  assert.equal(recoveredDraft.body.campaign.id, integralDraft.body.campaign.id);
+
+  const explicitBindingLeads = await prisma.lead.findMany({
+    where: { tenantId: businessClientId, name: { in: [`${integralLabel} 0001`, `${integralLabel} 0002`, `${integralLabel} 0003`] } },
+    orderBy: { name: "asc" },
+    select: { id: true },
+  });
+  assert.equal(explicitBindingLeads.length, 3);
+  const explicitBindingRequestId = `explicit-binding-${safeTemplatePrefix}`;
+  const explicitBindingBody = {
+    name: "Campanha Binding Integral",
+    templateId: template.id,
+    requestId: explicitBindingRequestId,
+    selectedLeadIds: [explicitBindingLeads[0]!.id, explicitBindingLeads[1]!.id],
+    templateParams: ["valor-a"],
+    templateVariableMappings: [{ position: "1", source: "fixed", value: "valor-a" }],
+    returnDestination: defaultCampaignReturnDestination(),
+  };
+  const explicitBindingDraft = await request<{ campaign: { id: string } }>(
+    "POST",
+    "/app/campaigns/drafts",
+    businessAdmin,
+    explicitBindingBody
+  );
+  assert.equal(explicitBindingDraft.status, 200, JSON.stringify(explicitBindingDraft.body));
+  const changedRecipientsBinding = await request<ErrorPayload>("POST", "/app/campaigns/drafts", businessAdmin, {
+    ...explicitBindingBody,
+    selectedLeadIds: [explicitBindingLeads[0]!.id, explicitBindingLeads[2]!.id],
+  });
+  assert.equal(changedRecipientsBinding.status, 409, JSON.stringify(changedRecipientsBinding.body));
+  assert.equal(getErrorCode(changedRecipientsBinding.body), "idempotency_conflict");
+  const changedComponentsBinding = await request<ErrorPayload>("POST", "/app/campaigns/drafts", businessAdmin, {
+    ...explicitBindingBody,
+    templateParams: ["valor-b"],
+  });
+  assert.equal(changedComponentsBinding.status, 409, JSON.stringify(changedComponentsBinding.body));
+  assert.equal(getErrorCode(changedComponentsBinding.body), "idempotency_conflict");
+
+  const concurrentRequestId = `concurrent-draft-${safeTemplatePrefix}`;
+  const concurrentBody = {
+    name: "Campanha Concorrente Idempotente",
+    templateId: template.id,
+    requestId: concurrentRequestId,
+    selectedLeadIds: [explicitBindingLeads[2]!.id],
+    templateParams: ["concorrente"],
+    templateVariableMappings: [{ position: "1", source: "fixed", value: "concorrente" }],
+    returnDestination: defaultCampaignReturnDestination(),
+  };
+  const [concurrentOne, concurrentTwo] = await Promise.all([
+    request<{ campaign: { id: string } }>("POST", "/app/campaigns/drafts", businessAdmin, concurrentBody),
+    request<{ campaign: { id: string } }>("POST", "/app/campaigns/drafts", businessAdmin, concurrentBody),
+  ]);
+  assert.equal(concurrentOne.status, 200, JSON.stringify(concurrentOne.body));
+  assert.equal(concurrentTwo.status, 200, JSON.stringify(concurrentTwo.body));
+  assert.equal(concurrentOne.body.campaign.id, concurrentTwo.body.campaign.id);
+  assert.equal(
+    await prisma.campaign.count({ where: { clientId: businessClientId, name: concurrentBody.name } }),
+    1
+  );
+  assert.equal(await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      messageId: concurrentOne.body.campaign.id,
+      eventName: "campaign.seed.saved",
+    },
+  }), 1);
+  assert.equal(await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      messageId: concurrentOne.body.campaign.id,
+      eventName: "campaign.draft.created",
+      requestId: `campaign-draft:${concurrentRequestId}`,
+    },
+  }), 1);
+  const concurrentRecovery = await request<{ campaign: { id: string } }>(
+    "GET",
+    `/app/campaigns/drafts/requests/${concurrentRequestId}`,
+    businessAdmin
+  );
+  assert.equal(concurrentRecovery.status, 200, JSON.stringify(concurrentRecovery.body));
+  assert.equal(concurrentRecovery.body.campaign.id, concurrentOne.body.campaign.id);
+
+  const changedAfterLostResponse = await prisma.lead.findFirstOrThrow({
+    where: { tenantId: businessClientId, name: `${integralLabel} 0900` },
+    select: { waId: true },
+  });
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: changedAfterLostResponse.waId,
+    source: "test",
+    reason: "lost response audience drift regression",
+  });
+  const recoveredAfterAudienceChanged = await request<{
+    campaign: { id: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, integralDraftBody);
+  assert.equal(recoveredAfterAudienceChanged.status, 200, JSON.stringify(recoveredAfterAudienceChanged.body));
+  assert.equal(recoveredAfterAudienceChanged.body.campaign.id, integralDraft.body.campaign.id);
+  assert.equal(recoveredAfterAudienceChanged.body.campaign.totalRecipients, 930);
+  assert.equal(
+    await prisma.campaign.count({ where: { clientId: businessClientId, name: "Campanha Integral 930" } }),
+    1,
+    "audience drift after a lost response must reconcile the stored request before recomputing"
+  );
+
+  const draftPageOne = await request<{
+    items: Array<{ leadId: string }>;
+    pagination: { total: number; hasNextPage: boolean };
+  }>("GET", `/app/campaigns/${integralDraft.body.campaign.id}/draft-recipients?page=1&limit=25`, businessAdmin);
+  const draftPageTwo = await request<{
+    items: Array<{ leadId: string }>;
+    pagination: { total: number; hasNextPage: boolean };
+  }>("GET", `/app/campaigns/${integralDraft.body.campaign.id}/draft-recipients?page=2&limit=25`, businessAdmin);
+  assert.equal(draftPageOne.status, 200, JSON.stringify(draftPageOne.body));
+  assert.equal(draftPageTwo.status, 200, JSON.stringify(draftPageTwo.body));
+  assert.equal(draftPageOne.body.pagination.total, 930);
+  assert.equal(new Set([...draftPageOne.body.items, ...draftPageTwo.body.items].map((item) => item.leadId)).size, 50);
+
+  const draftSearchBeyondTwoHundred = await request<{
+    items: Array<{ displayName: string | null }>;
+    pagination: { total: number };
+  }>(
+    "GET",
+    `/app/campaigns/${integralDraft.body.campaign.id}/draft-recipients?q=${encodeURIComponent(`${integralLabel} 0900`)}&page=1&limit=25`,
+    businessAdmin
+  );
+  assert.equal(draftSearchBeyondTwoHundred.status, 200, JSON.stringify(draftSearchBeyondTwoHundred.body));
+  assert.equal(draftSearchBeyondTwoHundred.body.pagination.total, 1);
+  assert.equal(draftSearchBeyondTwoHundred.body.items[0]?.displayName, `${integralLabel} 0900`);
+  const crossTenantDraftPage = await request<ErrorPayload>(
+    "GET",
+    `/app/campaigns/${integralDraft.body.campaign.id}/draft-recipients?page=1&limit=25`,
+    overrideAdmin
+  );
+  assert.equal(crossTenantDraftPage.status, 404);
   assert.equal(
     await prisma.outboundMessage.count({ where: { clientId: businessClientId } }),
     outboundBeforeIntegralDraft,

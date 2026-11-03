@@ -205,6 +205,19 @@ export function getCampaignUserFacingError(error: CampaignApiErrorLike, fallback
   return englishMessageMap[lowerRaw] ?? (rawMessage || fallback);
 }
 
+export function mergeCampaignRecipientPages<T extends { leadId: string }>(
+  current: T[],
+  incoming: T[]
+) {
+  const unique = new Map(current.map((item) => [item.leadId, item]));
+  for (const item of incoming) unique.set(item.leadId, item);
+  return Array.from(unique.values());
+}
+
+export function isCampaignDraftCreationOutcomeUncertain(error: { status?: number } | null | undefined) {
+  return error?.status === 0 || [408, 425, 502, 503, 504].includes(error?.status ?? -1);
+}
+
 export function fixLegacyBrazilDuplicateNinthDigitForDisplay(recipient: string) {
   const value = recipient.trim();
   if (!/^\d+$/.test(value)) return value;

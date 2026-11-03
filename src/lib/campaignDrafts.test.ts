@@ -5,6 +5,8 @@ import {
   getCampaignUserFacingError,
   isCampaignOperationsClosedError,
   getFriendlyCampaignError,
+  isCampaignDraftCreationOutcomeUncertain,
+  mergeCampaignRecipientPages,
 } from "./campaignDrafts";
 import type { CampaignItem } from "./whatsappAdminApi";
 
@@ -148,4 +150,25 @@ test("campaign suspension is translated for flat, nested and client error envelo
   }
   assert.equal(isCampaignOperationsClosedError({ status: 503, message: "timeout" }), false);
   assert.equal(isCampaignOperationsClosedError({ payload: { error: "server_error" } }), false);
+});
+
+test("campaign recipient pages append in order without duplicating a repeated boundary", () => {
+  const merged = mergeCampaignRecipientPages(
+    [{ leadId: "lead-1", label: "A" }, { leadId: "lead-2", label: "B antigo" }],
+    [{ leadId: "lead-2", label: "B atual" }, { leadId: "lead-3", label: "C" }]
+  );
+  assert.deepEqual(merged, [
+    { leadId: "lead-1", label: "A" },
+    { leadId: "lead-2", label: "B atual" },
+    { leadId: "lead-3", label: "C" },
+  ]);
+});
+
+test("campaign draft creation treats transport and proxy failures as uncertain outcomes", () => {
+  for (const status of [0, 408, 425, 502, 503, 504]) {
+    assert.equal(isCampaignDraftCreationOutcomeUncertain({ status }), true, `status ${status}`);
+  }
+  for (const status of [400, 401, 404, 409, 422, 500]) {
+    assert.equal(isCampaignDraftCreationOutcomeUncertain({ status }), false, `status ${status}`);
+  }
 });

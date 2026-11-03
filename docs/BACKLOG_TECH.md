@@ -1387,6 +1387,34 @@ preservado e retenção 3/3. Build, instalação, ativação e retenção são t
 irrepetíveis. Esse fechamento não altera os 25 destinatários já persistidos em
 `Campanha teste nov.01` e não autoriza envio, agendamento ou reparo.
 
+**Diagnóstico posterior — resposta perdida e paginação (03/11/2026): LOCAL / NOT
+DEPLOYED.** Leitura `REPEATABLE READ / READ ONLY` do tenant Demo confirmou que a
+tentativa posterior não persistiu outra `Campaign` nem outro
+`campaign.seed.saved`: permanece somente
+`77e0ba85-c01b-4fcc-a962-9e176879fb15`, criado em
+`2026-11-02T14:47:24.867Z`, com 25 destinatários, zero outbound e seed em
+`2026-11-02T14:47:24.881Z`. A ausência da segunda escrita está comprovada; a
+camada que interrompeu a resposta não está. Os logs PM2 legíveis não contêm erro
+da rota e o access log nginx não é legível pelo usuário operacional, portanto
+timeout do navegador, proxy e cancelamento durante processamento continuam
+distintos no histórico.
+
+O percurso integrado revelou uma divergência objetiva: prévia/divisão usavam
+120 s, mas a criação comum usava o default de 10 s e repetia a resolução
+integral, incluindo um gate SQL por destinatário. A correção local reutiliza os
+princípios dos contatos (`b12c300d`, `4755e029`, `a80c5b95`, `6c6fd3f9`):
+busca tenant-scoped no servidor, resposta obsoleta descartada,
+enriquecimento/elegibilidade em lote e páginas visuais que não redefinem a
+seleção. A criação recebe request id idempotente, vinculado canonicamente a
+tenant, modo, destinatários, componentes, filtros, variáveis, mídia e destino;
+grava campanha, seed e marcador de confirmação na mesma transação e oferece
+readback por request id. A UI preserva em sessão, com escopo tenant/usuário,
+payload e identidade enquanto o resultado estiver incerto, inclusive em 502/504, e reconcilia essa tentativa antes de
+recalcular audiência ou admitir outra criação; nunca afirma ausência de escrita.
+Prévia e detalhe passam a acumular páginas sem duplicar `leadId` e exibem
+`Exibindo X de Y`; a busca do detalhe consulta todo o seed persistido, inclusive
+além dos primeiros 200. Nenhum envio ou agendamento integra essa correção.
+
 O delta local faz a criação estática comum reutilizar a resolução integral e a
 assinatura tenant-scoped já usadas pelo split. A grade continua paginada, mas
 não fornece mais os IDs que definem o universo persistido. Até 1.000 elegíveis,

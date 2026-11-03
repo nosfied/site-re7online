@@ -62,3 +62,111 @@ export async function campaignRecipientEligibility(prisma: PrismaClient, clientI
   const optOut = await filterOptedOutCampaignRecipients(prisma, { clientId, waIds: identities });
   return optOut.blocked.length ? "active_send_blocked" : null;
 }
+
+export async function campaignRecipientEligibilityBatch(
+  prisma: PrismaClient,
+  clientId: string,
+  recipients: Array<{ values: string[]; channel?: string | null }>
+): Promise<Array<EligibilityReason | null>> {
+  const normalized = recipients.map((recipient) => {
+    const identities = recipient.values.map(normalizeCampaignRecipientIdentity);
+    return {
+      ...recipient,
+      identities,
+      candidates: identities.every(Boolean) ? buildCrmWhatsappIdentityCandidates(identities) : [],
+    };
+  });
+  const allCandidates = Array.from(new Set(normalized.flatMap((recipient) => recipient.candidates)));
+  if (allCandidates.length === 0) {
+    return normalized.map((recipient) =>
+      recipient.values.some(isAnonymizedMarker) ? "anonymized_contact" : "invalid_whatsapp_identity"
+    );
+  }
+
+  const [markerRows, leads, contacts, excluded, optOut] = await Promise.all([
+    prisma.$queryRaw<Array<{ markerDigits: string }>>(Prisma.sql`
+      SELECT DISTINCT regexp_replace(marker, '[^0-9]', '', 'g') AS "markerDigits"
+      FROM "Lead", LATERAL (VALUES ("waId"), ("waIdCanonical")) values(marker)
+      WHERE "tenantId" = ${clientId}::uuid
+        AND (lower(marker) LIKE 'anon:%' OR lower(marker) LIKE 'hash:anon:%')
+        AND regexp_replace(marker, '[^0-9]', '', 'g') IN (${Prisma.join(allCandidates)})
+    `),
+    prisma.lead.findMany({
+      where: {
+        tenantId: clientId,
+        OR: [{ waId: { in: allCandidates } }, { waIdCanonical: { in: allCandidates } }],
+      },
+      select: {
+        waId: true,
+        waIdCanonical: true,
+        name: true,
+        phone: true,
+        externalUserHash: true,
+        channel: true,
+      },
+    }),
+    prisma.contact.findMany({
+      where: {
+        clientId,
+        OR: [
+          { waId: { in: allCandidates } },
+          { externalUserRef: { in: allCandidates } },
+          { legacyWaId: { in: allCandidates } },
+        ],
+      },
+      select: {
+        waId: true,
+        externalUserRef: true,
+        legacyWaId: true,
+        name: true,
+        externalUserHash: true,
+        channel: true,
+        lifecycle: true,
+        operationallyExcludedAt: true,
+      },
+    }),
+    loadOperationallyExcludedWaIds(prisma, { clientId, waIds: allCandidates }),
+    filterOptedOutCampaignRecipients(prisma, { clientId, waIds: allCandidates }),
+  ]);
+  const markerDigits = new Set(markerRows.map((row) => row.markerDigits).filter(Boolean));
+  const blockedOptOuts = new Set(optOut.blocked.map((item) => item.waIdCanonical).filter(Boolean));
+
+  return normalized.map((recipient) => {
+    if (recipient.values.some(isAnonymizedMarker)) return "anonymized_contact";
+    if (recipient.channel && recipient.channel.toLowerCase() !== "whatsapp") return "non_whatsapp_channel";
+    if (recipient.identities.some((identity) => !identity)) return "invalid_whatsapp_identity";
+    const candidates = new Set(recipient.candidates);
+    if ([...candidates].some((candidate) => markerDigits.has(candidate))) return "anonymized_contact";
+
+    const matchingLeads = leads.filter((lead) =>
+      [lead.waId, lead.waIdCanonical].some((value) => value && candidates.has(value))
+    );
+    if (
+      matchingLeads.some((lead) =>
+        [lead.waId, lead.waIdCanonical, lead.name, lead.phone, lead.externalUserHash].some(isAnonymizedMarker)
+      )
+    ) return "anonymized_contact";
+    if (matchingLeads.some((lead) => lead.channel && lead.channel.toLowerCase() !== "whatsapp")) {
+      return "non_whatsapp_channel";
+    }
+
+    const matchingContacts = contacts.filter((contact) =>
+      [contact.waId, contact.externalUserRef, contact.legacyWaId].some(
+        (value) => value && candidates.has(value)
+      )
+    );
+    if (
+      matchingContacts.some((contact) =>
+        [contact.waId, contact.name, contact.externalUserHash].some(isAnonymizedMarker)
+      )
+    ) return "anonymized_contact";
+    if (matchingContacts.some((contact) => (contact.channel ?? "whatsapp").toLowerCase() !== "whatsapp")) {
+      return "non_whatsapp_channel";
+    }
+    if ([...candidates].some((candidate) => excluded.has(candidate))) return "operationally_excluded_contact";
+    if (matchingContacts.some((contact) => contact.operationallyExcludedAt)) return "operationally_excluded_contact";
+    if (matchingContacts.some((contact) => !isOperationalContactLifecycle(contact.lifecycle))) return "provisional_contact";
+    if ([...candidates].some((candidate) => blockedOptOuts.has(candidate))) return "active_send_blocked";
+    return null;
+  });
+}
