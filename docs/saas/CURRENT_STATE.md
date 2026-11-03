@@ -346,6 +346,22 @@ envio e agendamento permanecem pendentes e não foram efeitos do deploy. Esta
 janela comprovou o lifecycle preventivo do produtor de releases. A adoção do
 adapter de `preparations` não ocorreu e continua uma frente separada.
 
+### Continuidade local — confirmação de criação e páginas de destinatários
+
+Uma leitura produtiva posterior, exclusivamente read-only, confirmou que a
+tentativa com resposta perdida não criou campanha/seed adicional no tenant Demo.
+Isso não prova qual camada encerrou a resposta: não houve erro correlato nos logs
+PM2 disponíveis e o access log do proxy permaneceu fora da permissão operacional.
+O código implantado, porém, ainda combinava timeout comum de 10 s com duas
+resoluções integrais e consultas de elegibilidade por contato.
+
+Em checkout isolado está em validação uma correção que reaproveita o read model
+em lote e a disciplina de páginas do CRM: request id transacional para
+confirmação sem duplicação, busca server-side sobre o conjunto inteiro e
+`Carregar mais` deduplicado na prévia e no detalhe. A campanha histórica de 25
+destinatários permanece inalterada. Estado: `LOCAL / NOT MERGED / NOT DEPLOYED`;
+não autoriza reparo, envio ou agendamento.
+
 ## Histórico superado — API 0fdec / frontend b96
 
 Fonte: relatório do Codex local encaminhado pelo owner, com hashes das evidências

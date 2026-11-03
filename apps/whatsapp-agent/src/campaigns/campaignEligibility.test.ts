@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import crypto from 'node:crypto';
 import { getPrisma } from '../db.js';
-import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from './campaignEligibility.js';
+import { campaignRecipientEligibility, campaignRecipientEligibilityBatch, normalizeCampaignRecipientIdentity } from './campaignEligibility.js';
 import { recordContactOptOut } from './optOutRegistry.js';
 import { ensureCampaignOutboundCrmAttemptMaterialization } from './campaignOutboundConversation.js';
 import { sanitizeMailDeliveryError } from '../mail/canonicalMail.js';
@@ -27,6 +27,19 @@ test('real PostgreSQL: aliases/exclusion/optout/tenant and immutable old pseudo 
     await recordContactOptOut({ clientId, waId: '5541991100902', source: 'synthetic' });
     assert.equal(await campaignRecipientEligibility(db, clientId, ['554191100902']), 'active_send_blocked');
     assert.equal(await campaignRecipientEligibility(db, clientId, ['5541991100903'], 'instagram'), 'non_whatsapp_channel');
+    assert.deepEqual(await campaignRecipientEligibilityBatch(db, clientId, [
+      { values: ['1234567890123'] },
+      { values: ['5541991100901'] },
+      { values: ['554191100902'] },
+      { values: ['5541991100903'], channel: 'instagram' },
+      { values: ['12025550199'] },
+    ]), [
+      'anonymized_contact',
+      'operationally_excluded_contact',
+      'active_send_blocked',
+      'non_whatsapp_channel',
+      null,
+    ]);
     await assert.rejects(ensureCampaignOutboundCrmAttemptMaterialization(db, { clientId, waId: '4191202', waIdCanonical: '4191202', phoneNumberId: 'synthetic', messageId: 'synthetic-accepted', campaignId: crypto.randomUUID(), campaignRunId: crypto.randomUUID(), templateName: 'synthetic', source: 'campaign' }), /Invalid WhatsApp number/);
     assert.equal(await db.contact.count({ where: { clientId, waId: '4191202' } }), 0);
     assert.equal(sanitizeMailDeliveryError(new Error('invalid_phone Bearer private token=private')), 'invalid_phone Bearer [REDACTED] token=[REDACTED]');

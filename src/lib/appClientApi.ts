@@ -955,6 +955,21 @@ export type AppCampaignDraftRecipient = {
   identifierDisplay: string;
 };
 
+export type AppCampaignDraftRecipientPage = {
+  ok: true;
+  campaignId: string;
+  q: string;
+  items: AppCampaignDraftRecipient[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+};
+
 export type AppCampaignImportSummary = {
   received: number;
   valid: number;
@@ -5194,6 +5209,23 @@ export async function getAppCampaign(
   return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}`, options);
 }
 
+export async function fetchAppCampaignDraftRecipients(
+  session: AppSession,
+  campaignId: string,
+  options?: { q?: string; page?: number; limit?: number }
+): Promise<AppCampaignDraftRecipientPage> {
+  const params = new URLSearchParams();
+  if (options?.q?.trim()) params.set("q", options.q.trim());
+  if (typeof options?.page === "number") params.set("page", String(Math.max(1, Math.floor(options.page))));
+  if (typeof options?.limit === "number") params.set("limit", String(Math.max(1, Math.floor(options.limit))));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(
+    session,
+    `/app/campaigns/${encodeURIComponent(campaignId)}/draft-recipients${suffix}`,
+    { timeoutMs: 20000 }
+  );
+}
+
 export async function exportAppCampaignConsumptionCsv(
   session: AppSession,
   campaignId: string
@@ -5251,6 +5283,7 @@ export async function createAppCampaignDraft(
       fallback?: string;
     }>;
     templateMediaAssetId?: string;
+    requestId?: string;
   }
 ): Promise<{
   ok: true;
@@ -5262,8 +5295,25 @@ export async function createAppCampaignDraft(
 }> {
   return requestAppJson(session, "/app/campaigns/drafts", {
     method: "POST",
+    timeoutMs: 120000,
     body: JSON.stringify(payload),
   });
+}
+
+export async function recoverAppCampaignDraftCreation(
+  session: AppSession,
+  requestId: string
+): Promise<{
+  ok: true;
+  idempotent: true;
+  campaign: CampaignItem & { campaignId: string };
+  draft: { summary: CampaignDraftSummary; recipients: AppCampaignDraftRecipient[] };
+}> {
+  return requestAppJson(
+    session,
+    `/app/campaigns/drafts/requests/${encodeURIComponent(requestId)}`,
+    { timeoutMs: 20000 }
+  );
 }
 
 export async function previewAppCampaignDraftSplit(

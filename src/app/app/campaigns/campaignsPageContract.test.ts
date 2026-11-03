@@ -165,14 +165,16 @@ test("new draft identity wins before detail and delayed list reconciliation", ()
   const modal = block.indexOf("setDetailModalOpen(true);");
   const detail = block.indexOf("await refreshCampaignDetail(session, createdCampaignId);");
   const list = block.indexOf("void refreshCampaigns(session, createdCampaignId).catch");
+  const finish = block.indexOf("await finishCreatedDraft(created);");
 
   assert.ok(persisted >= 0);
-  assert.ok(persisted < identity);
+  assert.ok(identity >= 0);
   assert.ok(identity < owner);
   assert.ok(owner < selected);
   assert.ok(selected < modal);
   assert.ok(modal < detail);
   assert.ok(detail < list);
+  assert.ok(persisted < finish);
   assert.ok(block.includes("selectedIdRef.current === createdCampaignId"));
   assert.ok(block.includes("campaignSessionRef.current === session"));
   assert.ok(block.includes('"O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado.'));
@@ -198,6 +200,19 @@ test("static audience draft is resolved server-side and never from the visible p
   assert.ok(!block.includes("audienceEligibleItems.map"));
   assert.ok(pageSource.includes("audiencePreview.summary.eligible === 0"));
   assert.ok(pageSource.includes("audiencePreview.summary.eligible} contato(s) elegível(is) da audiência integral"));
+  assert.ok(block.includes("requestId: creationRequestId"));
+  assert.ok(block.includes("recoverAppCampaignDraftCreation(session, creationRequestId)"));
+  assert.ok(block.includes("Criação em confirmação"));
+});
+
+test("campaign audience and draft recipient lists search server-side and append unique pages", () => {
+  assert.ok(pageSource.includes("fetchAppCampaignDraftRecipients(session, campaignId"));
+  assert.ok(pageSource.includes("mergeCampaignRecipientPages(previous.items, response.items)"));
+  assert.ok(pageSource.includes("Exibindo {audiencePreview.items.length} de {audiencePreview.pagination.total}"));
+  assert.ok(pageSource.includes("Exibindo {campaignAudienceSummaryItems.length} de {draftRecipientPage?.pagination.total"));
+  assert.ok(pageSource.includes("Buscar em todos os destinatários"));
+  assert.ok(pageSource.includes('append: true'));
+  assert.ok(!pageSource.includes("void loadAudiencePreview(Math.max(audiencePage - 1, 1))"));
 });
 
 test("campaign result detail exposes status, CRM situation and text filters", () => {
@@ -507,7 +522,7 @@ test("campaign detail leads with identity and shows audience only while pending"
   assert.ok(pageSource.includes('"Destinatários agendados"'));
   assert.ok(pageSource.includes('"Destinatários do rascunho"'));
   assert.ok(!pageSource.includes('"Destinatários processados"'));
-  assert.ok(pageSource.includes("selectedCampaign.draftReview?.recipients ?? []"));
+  assert.ok(pageSource.includes("draftRecipientPage?.items ?? []"));
   assert.ok(!pageSource.includes("campaignResultItems.flatMap"));
   assert.ok(!pageSource.includes("Este tenant executa somente uma campanha ou lote por vez."));
 });

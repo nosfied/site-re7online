@@ -205,6 +205,15 @@ export function getCampaignUserFacingError(error: CampaignApiErrorLike, fallback
   return englishMessageMap[lowerRaw] ?? (rawMessage || fallback);
 }
 
+export function mergeCampaignRecipientPages<T extends { leadId: string }>(
+  current: T[],
+  incoming: T[]
+) {
+  const unique = new Map(current.map((item) => [item.leadId, item]));
+  for (const item of incoming) unique.set(item.leadId, item);
+  return Array.from(unique.values());
+}
+
 export function fixLegacyBrazilDuplicateNinthDigitForDisplay(recipient: string) {
   const value = recipient.trim();
   if (!/^\d+$/.test(value)) return value;
