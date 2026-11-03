@@ -881,8 +881,8 @@ zero.
 | --- | --- | ---: | --- | --- |
 | `immutable-d7de6453-vps-20261024T221500Z` | deploy versionado SHA `3babb512…`; sucessão a959 com receipt `3567a10a…` e journal `991d549a…`; runtimes encerrados nos ordinais 2/3 do receipt `97a121df…`; release observada com `988.606.464` bytes físicos e sem os overlays canônicos `.data` | `988.606.464 B` | o worktree está ausente, mas caminho/SHA/ordinal do receipt+journal terminal não foram localizados; o consumidor também não possui descriptor fechado d7de | **bloqueada**. Ampliar allowlist sem a prova do worktree não resolve. Não omitir o derivado conhecido nem sintetizar histórico |
 | `immutable-3630e16-vps-20261024T195842Z` | d7de fixa 3630 como predecessor imediato da API e usa seu commit como `baseCommit`; o documento histórico relata output 3630 retirado no lote ef7/3630 e worktree retirado no lote 3630/d7de | cerca de `943 MiB`, medição histórica | não há registro versionado próprio de ativação 3630 nem bindings publicados dos receipts/journals privados dos dois lotes; faltam contrato/lifecycle/review e cadeia sucessora consumível | custo **muito alto**; não priorizar antes de recuperar as custódias já relatadas |
-| `immutable-ec2a9fde-vps-20261024T162005Z` | deploy versionado SHA `84d3e9c0…`; rollback anterior a62; ef7 fixa ec2 como rollback da API; d7de fixa ec2 como predecessor do frontend; quatro runtimes output/staging encerrados em lote histórico cuja custódia de 19 arquivos foi relatada | cerca de `943 MiB`, medição histórica | caminhos e hashes do receipt/journal privado do lote ec2 não estão publicados; faltam binding terminal dos quatro efeitos, observação atual de identidade/dados privados e descriptor legado fechado | **primeira candidata para qualificação**, por possuir a cadeia pública mais completa e não depender de um worktree final conhecido; ainda não está pronta para operação |
-| `immutable-ef7db111-vps-20261024T174000Z` | deploy API-only versionado SHA `446d727b…`, marker/dump e rollback ec2; output encerrado no lote histórico ef7/3630 cuja custódia de 69 arquivos foi relatada | cerca de `943 MiB`, medição histórica | falta a ativação autenticada de 3630 que substituiu ef7, além dos bindings privados do lote de output e do descriptor fechado | custo **alto**; vem depois de ec2 ou junto da recuperação da custódia ef7/3630 |
+| `immutable-ec2a9fde-vps-20261024T162005Z` | deploy versionado SHA `84d3e9c0…`; rollback anterior a62; ef7 fixa ec2 como rollback da API; d7de fixa ec2 como predecessor do frontend; quatro runtimes output/staging encerrados em lote histórico cuja custódia de 19 arquivos foi relatada | cerca de `943 MiB`, medição histórica | caminhos e hashes do receipt/journal privado do lote ec2 não estão publicados; faltam binding terminal dos quatro efeitos, observação atual de identidade/dados privados e descriptor legado fechado | **priorização histórica, superada pela busca encerrada abaixo**; estado vigente `EC2_PRIVATE_CUSTODY_NOT_LOCATED_IN_CANONICAL_ROOTS`, sem nova busca prevista |
+| `immutable-ef7db111-vps-20261024T174000Z` | deploy API-only versionado SHA `446d727b…`, marker/dump e rollback ec2; output encerrado no lote histórico ef7/3630 cuja custódia de 69 arquivos foi relatada | cerca de `943 MiB`, medição histórica | falta a ativação autenticada de 3630 que substituiu ef7, além dos bindings privados do lote de output e do descriptor fechado | custo **alto**; permanece bloqueada pela mesma classe de bindings privados não recuperáveis; nenhuma alternância de candidata está prevista |
 | `immutable-a62da468-vps-20261024T124726Z` | deploy versionado SHA `9e3380a0…`, predecessor 5c339 e sucessão por ec2 | `0 B` no escopo atual | preservação expressa; não iniciar migração de dados nem reclassificação nesta frente | `KEEP_PROTECTED` |
 | `immutable-5c339b2e-20261022T125717Z` | deploy versionado SHA `fa2684f5…` e vínculo como predecessor de a62 | `0 B` no escopo atual | preservação expressa; cadeia mais antiga sem fechamento completo próprio nesta frente | `KEEP_PROTECTED` |
 
@@ -892,12 +892,12 @@ journals já identificados, além do histórico Git que introduziu o relato. O c
 mas não publica localização, SHA ou ordinal. Portanto, a custódia é narrada, não
 recuperável pelos bindings disponíveis, e d7de continua não consumível.
 
-Próximo ato permitido: montar uma prova local de ec2 usando primeiro a custódia
-histórica de 19 arquivos já relatada. Se seus caminhos/hashes não estiverem nos
-registros existentes, parar com a lacuna nominal; não criar descriptor, alterar
-contrato ou abrir janela produtiva. Qualquer futura extensão contratual precisa
-atravessar o consumidor real materializado, preservar todos os derivados conhecidos
-e negar omissão, drift e evidência cruzada antes da VPS.
+Orientação histórica consumida: a proposta anterior era montar uma prova local de
+ec2 se a custódia de 19 arquivos pudesse ser recuperada. A busca dirigida abaixo
+encerrou esse escopo sem localizar o binding. Não há nova busca, leitor, descriptor,
+reconstrução de receipt/journal ou janela produtiva prevista para ec2. A cadeia maior
+permanece backlog bloqueado por custódias históricas não recuperáveis, sem tratar
+“não localizado nas raízes consultadas” como “inexistente”.
 
 #### Resultado da busca dirigida da custódia ec2
 
@@ -944,5 +944,6 @@ os bytes. O único resultado nominal é
 `EC2_PRIVATE_CUSTODY_NOT_LOCATED_IN_CANONICAL_ROOTS`: receipt, journal, formato e
 ordinais permanecem não autenticados. Nenhum ensaio do consumidor foi executado,
 porque fazê-lo exigiria fabricar receipt, journal ou ordinais. A ec2 permanece
-preservada e não qualificada; identidade física, overlays privados e referências
-operacionais ficam explicitamente adiados até existir o binding imutável da prova.
+preservada e não qualificada. Não há nova busca prevista; identidade física,
+overlays privados e referências operacionais só poderiam ser retomados diante de
+um binding imutável apresentado por fonte externa a este escopo encerrado.
