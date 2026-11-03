@@ -314,10 +314,12 @@ DB-first tenant-scoped depois dos backfills e gates selecionados de Tendência,
 Justa e CRA. O fechamento está concluído e não deve ser reaberto. Contrato detalhado em
 [WhatsApp Meta tenant runtime DB-first](WHATSAPP_META_TENANT_RUNTIME.md).
 
-O produtor versionado em revisão substitui o piso estático por admissão derivada
+O produtor versionado substituiu o piso estático por admissão derivada
 do contrato, preservando todos os custos, 4 GiB de reserva e margem igual ao
 envelope de evidência de falha. Overrides P00 históricos continuam evidência, mas
-não dispensam esse gate. A alteração ainda não foi usada em build/deploy produtivo.
+não dispensam esse gate. A geração `immutable-911a9708-vps-20261102T221325Z`
+usou essa política no build produtivo concluído e verificado; a amostragem registra
+o menor saldo observado, sem alegar captura de todo pico temporário.
 
 ## Campanha integral — 911a9708 DEPLOYED_SANITIZED
 

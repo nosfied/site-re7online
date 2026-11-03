@@ -15,7 +15,12 @@
     "packageSha256": "83a91d1455670c12731e79e4e4dd7d060c0ff4d65ef3a59dba4dea9729ac59e2",
     "manifestSha256": "27e899dde0d37ffa2d3686f46390ed2baef099e81e966d2b6eb603ee942d72b8",
     "indexSha256": "97365b7fdc318301086e7a84bf7c083c4d8017df9b51c8cc32b04099dceb2ec1",
-    "indexEntries": 34353,
+    "indexEntries": 34372,
+    "indexEntryTypes": {
+      "files": 30945,
+      "directories": 3386,
+      "symlinks": 41
+    },
     "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
     "buildCount": 1,
     "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
