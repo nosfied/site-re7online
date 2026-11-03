@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -291,6 +292,15 @@ class RetirementBinding:
 
 
 @dataclass(frozen=True)
+class RetirementSentinelClosureBinding:
+    manifest: Path
+    manifest_sha256: str
+
+    def binding(self) -> dict[str, str]:
+        return {"manifest": str(self.manifest), "manifestSha256": self.manifest_sha256}
+
+
+@dataclass(frozen=True)
 class Inputs:
     release: str
     target: str
@@ -302,6 +312,7 @@ class Inputs:
     retirement: RetirementBinding | None = None
     private_data_reconciliation: Path | None = None
     private_data_reconciliation_sha256: str | None = None
+    retirement_sentinel_closure: RetirementSentinelClosureBinding | None = None
 
     def binding(self) -> dict[str, Any]:
         value = {
@@ -313,6 +324,8 @@ class Inputs:
         }
         if self.retirement is not None:
             value["generationRetirement"] = self.retirement.binding()
+        if self.retirement_sentinel_closure is not None:
+            value["retirementSentinelClosure"] = self.retirement_sentinel_closure.binding()
         return value
 
 
@@ -1029,6 +1042,97 @@ class Driver:
         return binding
 
     @staticmethod
+    def _closed_file_binding(value: Any, label: str) -> tuple[Path, str, bytes]:
+        if (not isinstance(value, dict) or set(value) != {"path", "sha256"} or
+                not isinstance(value.get("path"), str) or
+                not SHA256.fullmatch(str(value.get("sha256", "")))):
+            deny(f"retirement_sentinel_closure_binding:{label}")
+        path = Path(value["path"])
+        if not path.is_absolute():
+            deny(f"retirement_sentinel_closure_binding:{label}")
+        raw, _ = stable_regular_bytes(path, required_mode=0o600)
+        observed = hashlib.sha256(raw).hexdigest()
+        if observed != value["sha256"]:
+            deny(f"retirement_sentinel_closure_hash:{label}")
+        return path, observed, raw
+
+    def _authenticate_retirement_sentinel_closure(self, lock_raw: bytes) -> dict[str, Any]:
+        """Authenticate a completed retirement before re-binding its persistent sentinel."""
+        binding = self.inputs.retirement_sentinel_closure
+        retirement = self.inputs.retirement
+        if binding is None or retirement is None:
+            deny("retirement_sentinel_closure_required")
+        manifest_raw, _ = stable_regular_bytes(binding.manifest, required_mode=0o600)
+        if hashlib.sha256(manifest_raw).hexdigest() != binding.manifest_sha256:
+            deny("retirement_sentinel_closure_manifest_hash")
+        manifest = json_object(manifest_raw, binding.manifest.name)
+        required = {"schemaVersion", "kind", "releaseId", "targetCommit", "removedPath",
+                    "sentinelIntentSha256", "contract", "lifecycle", "review", "closure"}
+        if (set(manifest) != required or manifest.get("schemaVersion") != 1 or
+                manifest.get("kind") != "TERMINAL_GENERATION_RETIREMENT_SENTINEL_V1" or
+                not isinstance(manifest.get("releaseId"), str) or
+                not SHA40.fullmatch(str(manifest.get("targetCommit", ""))) or
+                not SHA256.fullmatch(str(manifest.get("sentinelIntentSha256", "")))):
+            deny("retirement_sentinel_closure_manifest_schema")
+        sentinel_intent = manifest["sentinelIntentSha256"]
+        if lock_raw != (sentinel_intent + "\n").encode():
+            deny("retirement_sentinel_content")
+        removed = Path(str(manifest.get("removedPath", "")))
+        if (removed != self.releases / manifest["releaseId"] or
+                removed.exists() or removed.is_symlink()):
+            deny("retirement_sentinel_removed_release")
+        _, contract_sha, contract_raw = self._closed_file_binding(
+            manifest["contract"], "contract")
+        _, lifecycle_sha, lifecycle_raw = self._closed_file_binding(
+            manifest["lifecycle"], "lifecycle")
+        _, _, review_raw = self._closed_file_binding(manifest["review"], "review")
+        contract = json_object(contract_raw, "retirement-sentinel-contract")
+        lifecycle = json_object(lifecycle_raw, "retirement-sentinel-lifecycle")
+        review = json_object(review_raw, "retirement-sentinel-review")
+        release = manifest["releaseId"]
+        target = manifest["targetCommit"]
+        if (contract.get("generationId") != release or contract.get("releaseId") != release or
+                contract.get("targetCommit") != target or
+                lifecycle.get("generationId") != release or lifecycle.get("state") != "COMPLETE" or
+                review.get("schemaVersion") != 2 or review.get("generationId") != release or
+                review.get("state") != "SANITIZED" or
+                review.get("lifecycleSha256") != lifecycle_sha):
+            deny("retirement_sentinel_closure_identity")
+        tool_raw, tool_before = stable_regular_bytes(retirement.tool, required_mode=0o600)
+        if hashlib.sha256(tool_raw).hexdigest() != retirement.tool_sha256:
+            deny("retirement_sentinel_consumer_hash")
+        spec = importlib.util.spec_from_file_location(
+            "converta_authenticated_generation_retirement", retirement.tool)
+        if spec is None or spec.loader is None:
+            deny("retirement_sentinel_consumer_import")
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+            normalized = module._canonical_retirement_closure(
+                manifest["closure"], release, target, contract_sha, lifecycle_sha, review)
+        except Exception as error:
+            deny(f"retirement_sentinel_closure:{self._failure_predicate(error)}")
+        tool_after = retirement.tool.lstat()
+        before_identity = (tool_before.st_dev, tool_before.st_ino, tool_before.st_size,
+                           tool_before.st_mtime_ns, tool_before.st_ctime_ns)
+        after_identity = (tool_after.st_dev, tool_after.st_ino, tool_after.st_size,
+                          tool_after.st_mtime_ns, tool_after.st_ctime_ns)
+        if before_identity != after_identity or digest(retirement.tool) != retirement.tool_sha256:
+            deny("retirement_sentinel_consumer_drift")
+        chain = normalized.get("chain") if isinstance(normalized, dict) else None
+        if (not isinstance(chain, list) or not chain or
+                chain[-1].get("intent", {}).get("sha256") != sentinel_intent):
+            deny("retirement_sentinel_intent_binding")
+        return {
+            "schemaVersion": 1,
+            "kind": manifest["kind"],
+            "releaseId": release,
+            "targetCommit": target,
+            "sentinelIntentSha256": sentinel_intent,
+            "closureManifestSha256": binding.manifest_sha256,
+        }
+
+    @staticmethod
     def _retirement_pm2_fingerprint(rows: list[dict[str, Any]]) -> str:
         projected = []
         for row in rows:
@@ -1339,7 +1443,7 @@ class Driver:
         try:
             fd = os.open(self.lock, flags, 0o600)
         except FileExistsError:
-            self._adopt_empty_lock(journal)
+            self._adopt_existing_lock(journal)
         else:
             try:
                 opened = os.fstat(fd)
@@ -1359,7 +1463,8 @@ class Driver:
         return FIXED_CURRENT_LOCK_PREFIX + binding + b"\n"
 
     def _bind_lock_fd(self, journal: dict[str, Any], fd: int, opened: os.stat_result,
-                      *, adopted_existing: bool) -> None:
+                      *, adopted_existing: bool,
+                      adopted_retirement_sentinel: dict[str, Any] | None = None) -> None:
         """Persist journal ownership before publishing the bound lock bytes."""
         value = self._lock_value(journal)
         expected_digest = hashlib.sha256(value).hexdigest()
@@ -1373,7 +1478,10 @@ class Driver:
             "contentSha256": expected_digest,
             "zeroOperationalEffects": True,
         }
+        if adopted_retirement_sentinel is not None:
+            journal["lockTransition"]["adoptedRetirementSentinel"] = adopted_retirement_sentinel
         self._journal_write(journal, "ACTIVATING")
+        self._failpoint("after_lock_transition_pending")
         if os.pwrite(fd, value, 0) != len(value):
             deny("global_lock_short_write")
         os.ftruncate(fd, len(value))
@@ -1394,17 +1502,17 @@ class Driver:
         finally:
             os.close(directory_fd)
 
-    def _adopt_empty_lock(self, journal: dict[str, Any]) -> None:
-        """Bind a canonical empty retirement sentinel without replacing its inode."""
+    def _adopt_existing_lock(self, journal: dict[str, Any]) -> None:
+        """Bind an empty or terminally authenticated retirement sentinel in place."""
         try:
             before = self.lock.lstat()
         except OSError:
             deny("global_lock_changed")
-        expected = (os.geteuid(), os.getegid(), 0o600, 1, 0)
-        observed = (before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode),
-                    before.st_nlink, before.st_size)
+        expected_identity = (os.geteuid(), os.getegid(), 0o600, 1)
+        observed_identity = (before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode),
+                             before.st_nlink)
         if (self.lock.is_symlink() or not stat.S_ISREG(before.st_mode) or
-                observed != expected):
+                observed_identity != expected_identity or before.st_size not in {0, 65}):
             deny("global_lock_active")
         self._failpoint("existing_empty_lock_observed")
         try:
@@ -1415,20 +1523,30 @@ class Driver:
             opened = os.fstat(fd)
             if ((before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino) or
                     (opened.st_uid, opened.st_gid, stat.S_IMODE(opened.st_mode),
-                     opened.st_nlink, opened.st_size) != expected):
+                     opened.st_nlink) != expected_identity or opened.st_size != before.st_size):
                 deny("global_lock_changed")
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 deny("global_lock_active")
             current = self.lock.lstat()
+            content = os.pread(fd, 66, 0)
             if (self.lock.is_symlink() or
                     (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino) or
                     (current.st_uid, current.st_gid, stat.S_IMODE(current.st_mode),
-                     current.st_nlink, current.st_size) != expected or
-                    os.pread(fd, 1, 0) != b""):
+                     current.st_nlink) != expected_identity or current.st_size != opened.st_size or
+                    len(content) != opened.st_size):
                 deny("global_lock_changed")
-            self._bind_lock_fd(journal, fd, opened, adopted_existing=True)
+            adopted_sentinel = None
+            if content:
+                adopted_sentinel = self._authenticate_retirement_sentinel_closure(content)
+                after_auth = self.lock.lstat()
+                if ((after_auth.st_dev, after_auth.st_ino) != (opened.st_dev, opened.st_ino) or
+                        os.pread(fd, 66, 0) != content):
+                    deny("global_lock_changed")
+            self._bind_lock_fd(
+                journal, fd, opened, adopted_existing=True,
+                adopted_retirement_sentinel=adopted_sentinel)
         finally:
             os.close(fd)
 
@@ -1503,6 +1621,27 @@ class Driver:
             deny("global_lock_identity")
         self.lock.unlink()
 
+    def _transition_original_lock_bytes(self, transition: dict[str, Any]) -> bytes | None:
+        """Return an authenticated pre-transition sentinel, or None for a created lock."""
+        adopted_existing = transition.get("adoptedExisting")
+        if adopted_existing is False:
+            return None
+        if adopted_existing is not True:
+            deny("lock_transition_recovery_state")
+        adopted_sentinel = transition.get("adoptedRetirementSentinel")
+        if adopted_sentinel is None:
+            return b""
+        expected_keys = {"schemaVersion", "kind", "releaseId", "targetCommit",
+                         "sentinelIntentSha256", "closureManifestSha256"}
+        if (not isinstance(adopted_sentinel, dict) or
+                set(adopted_sentinel) != expected_keys or
+                not SHA256.fullmatch(str(adopted_sentinel.get("sentinelIntentSha256", "")))):
+            deny("lock_transition_recovery_sentinel")
+        restored = (adopted_sentinel["sentinelIntentSha256"] + "\n").encode()
+        if self._authenticate_retirement_sentinel_closure(restored) != adopted_sentinel:
+            deny("lock_transition_recovery_sentinel")
+        return restored
+
     def _rollback_lock_transition(self, journal: dict[str, Any]) -> None:
         """Canonically close a lock transition that preceded all operational effects."""
         transition = journal.get("lockTransition")
@@ -1536,17 +1675,28 @@ class Driver:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     deny("global_lock_recovery_busy")
+                original_value = self._transition_original_lock_bytes(transition)
                 content = os.pread(fd, len(expected_value) + 1, 0)
-                if content not in {b"", expected_value}:
-                    deny("global_lock_recovery_content")
-                if content == b"" and transition.get("state") != "PENDING":
+                admissible = {expected_value}
+                if original_value is not None:
+                    admissible.add(original_value)
+                elif transition.get("state") == "PENDING":
+                    admissible.add(b"")
+                if content not in admissible:
                     deny("global_lock_recovery_content")
                 progress["lockReleaseStarted"] = True
                 self._journal_write(journal, "ROLLING_BACK")
                 if transition.get("adoptedExisting") is True:
-                    os.ftruncate(fd, 0)
+                    restored = original_value
+                    if restored is None:
+                        deny("lock_transition_recovery_state")
+                    if restored and os.pwrite(fd, restored, 0) != len(restored):
+                        deny("global_lock_recovery_short_write")
+                    os.ftruncate(fd, len(restored))
                     os.fsync(fd)
-                    progress["result"] = "EMPTY_SENTINEL_RESTORED"
+                    self._failpoint("after_lock_sentinel_restore_fsync")
+                    progress["result"] = ("RETIREMENT_SENTINEL_RESTORED" if restored else
+                                          "EMPTY_SENTINEL_RESTORED")
                 elif transition.get("adoptedExisting") is False:
                     current = self.lock.lstat()
                     if (current.st_dev, current.st_ino) != expected_identity:
@@ -1965,10 +2115,15 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--generation-retirement-deployment-lock", type=Path, required=True)
     parser.add_argument("--private-data-reconciliation", type=Path)
     parser.add_argument("--private-data-reconciliation-sha256")
+    parser.add_argument("--retirement-sentinel-closure", type=Path)
+    parser.add_argument("--retirement-sentinel-closure-sha256")
     args = parser.parse_args()
     if ((args.private_data_reconciliation is None) !=
             (args.private_data_reconciliation_sha256 is None)):
         deny("private_data_reconciliation_binding")
+    if ((args.retirement_sentinel_closure is None) !=
+            (args.retirement_sentinel_closure_sha256 is None)):
+        deny("retirement_sentinel_closure_binding")
     components = tuple(args.components.split(","))
     retirement = RetirementBinding(
         args.generation_retirement_tool, args.generation_retirement_tool_sha256,
@@ -1978,11 +2133,15 @@ def parse() -> tuple[str, Inputs]:
         args.generation_retirement_root_policy, args.generation_retirement_root_policy_sha256,
         args.generation_retirement_receipt_root, args.generation_retirement_review_output,
         args.generation_retirement_deployment_lock)
+    sentinel_closure = (RetirementSentinelClosureBinding(
+        args.retirement_sentinel_closure, args.retirement_sentinel_closure_sha256)
+        if args.retirement_sentinel_closure is not None else None)
     return args.command, Inputs(args.release, args.target, args.control_plane,
                                 components, args.runtime_manifest, args.transaction_root,
                                 args.runtime_manifest_sha256, retirement,
                                 args.private_data_reconciliation,
-                                args.private_data_reconciliation_sha256)
+                                args.private_data_reconciliation_sha256,
+                                sentinel_closure)
 
 
 def main() -> int:

@@ -325,6 +325,80 @@ class DeployFixture(unittest.TestCase):
         driver.failpoints = set()
         return driver
 
+    def terminal_retirement_sentinel(self) -> tuple[Path, bytes]:
+        """Bind a real canonical closure to a removed synthetic release sentinel."""
+        control = self.base / "retirement-control"
+        control.mkdir()
+        tool = control / "generation-retirement.py"
+        dependency = control / "preparation_artifact_lifecycle.py"
+        tool.write_bytes((ROOT / "scripts/generation-retirement.py").read_bytes())
+        dependency.write_bytes((ROOT / "scripts/preparation_artifact_lifecycle.py").read_bytes())
+        tool.chmod(0o600); dependency.chmod(0o600)
+        release = "immutable-retired-sentinel"
+        target = "d" * 40
+        removed = self.releases / release
+        contract = self.base / "retired-generation-artifacts.private.json"
+        lifecycle = self.base / "retired-generation-lifecycle.private.json"
+        intent = self.base / "retired-intent.private.json"
+        journal = self.base / "retired-journal.private.jsonl"
+        receipt = self.base / "retired-receipt.private.json"
+        review = self.base / "retired-review.private.json"
+        put(contract, {"schemaVersion": 1, "generationId": release,
+                       "releaseId": release, "targetCommit": target})
+        put(lifecycle, {"schemaVersion": 1, "generationId": release,
+                        "targetCommit": target, "state": "COMPLETE"})
+        command = {"ordinal": 1, "path": str(removed),
+                   "argv": ["/usr/bin/rm", "-r", "--", str(removed)]}
+        put(intent, {"schemaVersion": 3, "generationId": release,
+                     "releaseId": release, "targetCommit": target,
+                     "contractSha256": sha(contract), "lifecycleSha256": sha(lifecycle),
+                     "reconciliation": {"chain": [], "completed": [],
+                                        "subordinateAbsences": []},
+                     "artifacts": [], "commands": [command]})
+        events = [
+            {"event": "ATTEMPT", "ordinal": 1, "path": str(removed),
+             "argv": command["argv"]},
+            {"event": "RESULT", "ordinal": 1, "exitCode": 0},
+            {"event": "VERIFIED", "ordinal": 1, "absent": True},
+        ]
+        journal.write_text("".join(json.dumps(event, sort_keys=True,
+                                                separators=(",", ":")) + "\n"
+                                   for event in events))
+        journal.chmod(0o600)
+        put(receipt, {"state": "SANITIZED", "intentSha256": sha(intent),
+                      "commandLogSha256": sha(journal), "attemptedCommands": 1,
+                      "completedCommands": 1, "removedPaths": [str(removed)],
+                      "subordinateAbsences": []})
+        put(review, {"schemaVersion": 2, "generationId": release,
+                     "lifecycleSha256": sha(lifecycle), "state": "SANITIZED",
+                     "evidenceSha256": sha(receipt)})
+        closure = {"kind": "CANONICAL_RETIREMENT", "chain": [{
+            "intent": {"path": str(intent), "sha256": sha(intent)},
+            "receipt": {"path": str(receipt), "sha256": sha(receipt)},
+            "journal": {"path": str(journal), "sha256": sha(journal)},
+        }]}
+        manifest = self.base / "retirement-sentinel-closure.private.json"
+        put(manifest, {
+            "schemaVersion": 1, "kind": "TERMINAL_GENERATION_RETIREMENT_SENTINEL_V1",
+            "releaseId": release, "targetCommit": target, "removedPath": str(removed),
+            "sentinelIntentSha256": sha(intent),
+            "contract": {"path": str(contract), "sha256": sha(contract)},
+            "lifecycle": {"path": str(lifecycle), "sha256": sha(lifecycle)},
+            "review": {"path": str(review), "sha256": sha(review)},
+            "closure": closure,
+        })
+        retirement_binding = dataclasses.replace(
+            self.retirement, tool=tool, tool_sha256=sha(tool))
+        self.inputs = dataclasses.replace(
+            self.inputs, retirement=retirement_binding,
+            retirement_sentinel_closure=deploy.RetirementSentinelClosureBinding(
+                manifest, sha(manifest)))
+        self.retirement = retirement_binding
+        self.driver = self._driver()
+        sentinel = (sha(intent) + "\n").encode()
+        self.lock.write_bytes(sentinel); self.lock.chmod(0o600)
+        return manifest, sentinel
+
     def _release(self, release: str, build_id: str, target: str) -> None:
         root = self.releases / release
         api = root / "api-runtime"
@@ -500,6 +574,164 @@ class DriverTests(DeployFixture):
             with self.assertRaisesRegex(deploy.Denied, "global_lock_changed"):
                 self.driver.activate()
         self.assertEqual(self.lock.read_bytes(), b"")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_retirement_sentinel_is_authenticated_and_adopted_in_place(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        original = self.lock.stat()
+        self.driver.preflight()
+        authenticate = self.driver._authenticate_retirement_sentinel_closure
+
+        def prove_flock_scope(raw: bytes) -> dict[str, Any]:
+            probe = os.open(self.lock, os.O_RDWR | os.O_NOFOLLOW)
+            try:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(probe)
+            return authenticate(raw)
+
+        with patch.object(self.driver, "_authenticate_retirement_sentinel_closure",
+                          side_effect=prove_flock_scope):
+            self.driver.activate()
+        adopted = self.lock.stat()
+        self.assertEqual((adopted.st_dev, adopted.st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertNotEqual(self.lock.read_bytes(), sentinel)
+        self.assertTrue(self.lock.read_bytes().startswith(deploy.FIXED_CURRENT_LOCK_PREFIX))
+        transition = self.driver._journal_read()["lockTransition"]
+        self.assertEqual(transition["state"], "BOUND")
+        self.assertEqual(transition["adoptedRetirementSentinel"]["sentinelIntentSha256"],
+                         sentinel.decode().strip())
+
+    def test_interrupted_terminal_sentinel_adoption_restores_same_inode_and_bytes(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        original = self.lock.stat()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_lock_binding_fsync")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_binding_fsync"):
+            self.driver.activate()
+        self.assertNotEqual(self.lock.read_bytes(), sentinel)
+        self.driver.failpoints.clear()
+        self.driver.rollback()
+        restored = self.lock.stat()
+        self.assertEqual((restored.st_dev, restored.st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        journal = self.driver._journal_read()
+        self.assertEqual(journal["rollback"]["result"], "RETIREMENT_SENTINEL_RESTORED")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_sentinel_recovers_pending_before_first_write(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        original = self.lock.stat()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_lock_transition_pending")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_transition_pending"):
+            self.driver.activate()
+        pending = self.driver._journal_read()
+        self.assertEqual(pending["lockTransition"]["state"], "PENDING")
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.driver.failpoints.clear()
+        self.driver.rollback()
+        restored = self.lock.stat()
+        self.assertEqual((restored.st_dev, restored.st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        recovered = self.driver._journal_read()
+        self.assertEqual(recovered["lockTransition"]["state"], "ROLLED_BACK")
+        self.assertEqual(recovered["rollback"]["result"], "RETIREMENT_SENTINEL_RESTORED")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_sentinel_recovers_interrupted_restoration(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        original = self.lock.stat()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_lock_binding_fsync")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_binding_fsync"):
+            self.driver.activate()
+        self.driver.failpoints.clear()
+        self.driver.failpoints.add("after_lock_sentinel_restore_fsync")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_sentinel_restore_fsync"):
+            self.driver.rollback()
+        interrupted = self.lock.stat()
+        self.assertEqual((interrupted.st_dev, interrupted.st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.assertNotEqual(self.driver._journal_read()["lockTransition"]["state"], "ROLLED_BACK")
+        self.driver.failpoints.clear()
+        self.driver.rollback()
+        recovered = self.driver._journal_read()
+        self.assertEqual(recovered["lockTransition"]["state"], "ROLLED_BACK")
+        self.assertEqual(recovered["rollback"]["result"], "RETIREMENT_SENTINEL_RESTORED")
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.assertEqual((self.lock.stat().st_dev, self.lock.stat().st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_sentinel_pending_recovery_rejects_unknown_content(self) -> None:
+        self.terminal_retirement_sentinel()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_lock_transition_pending")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_transition_pending"):
+            self.driver.activate()
+        self.lock.write_bytes(b"unknown-retirement-sentinel\n")
+        self.driver.failpoints.clear()
+        with self.assertRaisesRegex(deploy.Denied, "global_lock_recovery_content"):
+            self.driver.rollback()
+        self.assertEqual(self.lock.read_bytes(), b"unknown-retirement-sentinel\n")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_retirement_sentinel_drift_denies_before_operational_effects(self) -> None:
+        manifest, sentinel = self.terminal_retirement_sentinel()
+        original = self.lock.stat()
+        value = json.loads(manifest.read_text())
+        receipt = Path(value["closure"]["chain"][-1]["receipt"]["path"])
+        receipt.write_bytes(receipt.read_bytes() + b"\n")
+        self.driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "retirement_sentinel_closure"):
+            self.driver.activate()
+        current = self.lock.stat()
+        self.assertEqual((current.st_dev, current.st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_retirement_sentinel_without_binding_denies(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        self.inputs = dataclasses.replace(self.inputs, retirement_sentinel_closure=None)
+        self.driver = self._driver()
+        self.driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "retirement_sentinel_closure_required"):
+            self.driver.activate()
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_retirement_sentinel_occupied_or_crossed_closure_denies(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        self.driver.preflight()
+        fd = os.open(self.lock, os.O_RDWR | os.O_NOFOLLOW)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with self.assertRaisesRegex(deploy.Denied, "global_lock_active"):
+                self.driver.activate()
+        finally:
+            os.close(fd)
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+        # A different terminal intent cannot consume the authenticated closure.
+        self.transaction.unlink(missing_ok=True) if self.transaction.is_file() else None
+        if self.transaction.is_dir():
+            for child in self.transaction.iterdir():
+                child.unlink()
+            self.transaction.rmdir()
+        self.lock.write_bytes(("e" * 64 + "\n").encode())
+        self.driver = self._driver()
+        self.driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "retirement_sentinel_content"):
+            self.driver.activate()
+        self.assertEqual(self.lock.read_bytes(), ("e" * 64 + "\n").encode())
         self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
 
     def test_existing_lock_with_unexpected_content_denies_before_operational_effects(self) -> None:

@@ -521,6 +521,35 @@ O [registro verificável](releases/B96_GENERATION_RETIREMENT_2026-11-03_SANITIZE
 torna esse lote terminal e proibido de replay. A cadeia
 `d7de / 3630 / ec2 / ef7 / a62 / 5c339` continua aberta e separada.
 
+### Continuidade da campanha 785bde80 — instalada; ativação pendente
+
+A geração `immutable-785bde80-vps-20261103T103429Z`, target
+`785bde80cb8bacbbf6375337dd169247738ab0f9`, concluiu build único, verificação e
+instalação inerte. O primeiro `generation-retirement prepare` negou antes de
+intenção ou efeito porque a montagem manual da custódia copiou três controles e
+omitiu `preparation_artifact_lifecycle.py`, apesar de a dependência já integrar as
+listas do admission controller e do materializador. Essa v1 e o stderr
+`329742ea8998292d2142e0c3d55c2cbb49588b889e4f716de4b53c261f62735f`
+permanecem históricos; a montagem manual é desvio e não pode ser repetida.
+
+A custódia sucessora materializou executor e dependência lado a lado, autenticou
+novamente os bytes e concluiu uma única preparação. Intenção
+`860d67cb7b8467b1117b9bca64c14dd2cc8a2aec42178cd59df94c2bf433eb0c`,
+comandos `c5da1a12868dbd9b2e3ebcc7c1fe727ddf494b773938566238e63637aafd3635`
+e review `6d0502d050f97e7fafd28586e13d3bff4ef0aebec1974475664558dfc4d9cc8e`
+estão selados. Os três comandos alcançam somente worktree, runtime API e runtime
+frontend derivados; release instalada, pacote, retornos e worker permanecem
+preservados. Não repetir build, instalação ou `prepare`, e não consumir retenção
+fora do `finalize` posterior ao aceite.
+
+O sentinel físico deixado pela retirada b96 continua no inode `64769:803457`,
+vinculado à intenção terminal b96. A extensão local em revisão autentica essa
+closure pelo validador canônico, mantém o mesmo inode sob `flock`, transfere a
+janela ao protocolo fixed-current e restaura os bytes originais no mesmo inode se
+a adoção falhar antes de efeitos. Ela ainda não foi instalada nem executada na
+VPS. Próximas custódias devem ser produzidas pelo materializador integrado e
+reabertas integralmente antes da selagem.
+
 Historicamente, a retenção frontend-only inicial da b96 concluiu 3/3 em
 `DEPLOYED_SANITIZED` e registrou 12.402.286.592 bytes disponíveis. Esse checkpoint
 não é capacidade atual nem inclui a retirada sucessora acima. Também há bloqueio diante
