@@ -22,7 +22,11 @@
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
 - [Revisão da reconciliação não destrutiva b96](releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)
-  — pacote não consumível com bindings b96 → aa952 → 911a; sem autorização de reconciliação ou retirada.
+  — pacote histórico de revisão dos bindings b96 → aa952 → 911a, preservado sem
+  reuso depois da reconciliação concluída.
+- [Retirada terminal da geração b96](releases/B96_GENERATION_RETIREMENT_2026-11-03_SANITIZED.json)
+  — closure canônica 2/2, autorização consumida, uma retirada nova, três efeitos
+  históricos reconhecidos e 988.491.776 bytes fisicamente recuperados.
 - [Release fixed-current 708f implantada e sanitizada](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json)
 - [Release API-only fixed-current 0fdec implantada e sanitizada](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json)
   — API histórica substituída por 754281d3; registro preservado da promoção API-only.

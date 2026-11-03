@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "recordType": "GENERATION_RETIREMENT_CLOSURE",
+  "state": "SANITIZED",
+  "terminal": true,
+  "repeatPermitted": false,
+  "generation": {
+    "releaseId": "immutable-b96eb779-vps-20261028T025159Z",
+    "targetCommit": "b96eb779f4ce091a79cf67e97bcd25be255e1af3",
+    "removedPath": "/opt/re7online/releases/immutable-b96eb779-vps-20261028T025159Z",
+    "removedPathAbsent": true
+  },
+  "controlPlane": {
+    "merge": "5fc17306be9e77c8ecf10bc9d4a5705d1a377509",
+    "generationRetirementSha256": "03859afb482610410c3adb35454d196d0b165afc56215f054f2e084ea41a89c3",
+    "rootPolicySha256": "d398f85763841e2738287970b0e67ad450e5dfb7c32fc90f701c525778b4910f"
+  },
+  "sealedArtifacts": {
+    "intentSha256": "1fb36999039f8553dce364891d9669b4690cc3c8a52727b2dc2e59049131175c",
+    "commandsSha256": "23fe35d06d150f1d069340afc676921c1cf4c6c1db1b60e6b31b0c2679ffe18c",
+    "authorizationSha256": "b5d0b0037eb23a84828ac9445f285deeea65dd8fc6a1b39ff534992a9104a8c1",
+    "authorizationOwner": "Deifson Oliveira",
+    "authorizationConsumed": true,
+    "operationalStateSha256": "f1e5488ca82c05c6dca12a9565e22a663b9be5514b0d84ca1258fe975f9f7d2b",
+    "contractSha256": "92ac8a6e68c1b9c947888e7748b31d71e15a84f958d81a0f858303e10c738e47",
+    "lifecycleSha256": "8821d009480c5174db26d4ba8850a15e6786a1484ff21390af73facacb3e0772"
+  },
+  "execution": {
+    "startedAtUtc": "2026-11-03T13:57:33Z",
+    "finishedAtUtc": "2026-11-03T13:57:38Z",
+    "exitCode": 0,
+    "newCommandsAttempted": 1,
+    "newCommandsCompleted": 1,
+    "historicalEffectsRecognized": 3,
+    "totalEffectsAccounted": 4,
+    "automaticRetry": false,
+    "receiptSha256": "15aa21e258fd2fea42ff6ca49041d581d644b049e55db0864821fe0b038629a6",
+    "journalSha256": "a129f919897d87cdb9b21ba6098e39a09df65940421f4203613301b420afa0b7",
+    "terminalReviewSha256": "4b1c5a2bc32b22418e2761b35b3b4bce9ca07628a10e9bb4ce74a21f9599c7b4",
+    "stdoutSha256": "b52a459aac1717ff3975737fe4504f138a4991848ad9f14ee43a2e3020abe9d2",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "canonicalClosure": {
+    "validator": "generation-retirement.py::_canonical_retirement_closure",
+    "result": "PASS",
+    "chainLength": 2,
+    "normalizedClosureSha256": "73feb66a4ebecfc27bcf54b17f407d2486afdc9857124d044b7d1a03df4e5154",
+    "reviewEvidenceMatchesFinalReceipt": true
+  },
+  "capacity": {
+    "availableBytesBefore": 9268555776,
+    "availableBytesAfter": 10257047552,
+    "recoveredBytesMeasured": 988491776,
+    "buildGateBytes": 9663676416,
+    "marginAboveBuildGateBytes": 593371136,
+    "buildAuthorizedByThisRecord": false
+  },
+  "preservation": {
+    "activeApiFrontendRelease": "immutable-911a9708-vps-20261102T221325Z",
+    "pm2FingerprintSha256": "dba54b658e37a2bd709e36ff5889d74e26e1e1beeeab679f90b53125f6ac6d5e",
+    "pm2DumpSha256": "8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a",
+    "successorReleaseGraphSha256": "6b00f741690b046a20cae505411052c79d40931b61d698e5059cafa711e47d98",
+    "packageSha256": "ba3649399db491e712c1736bd49a44ad256e87eae4fad52e60982cde0b332437",
+    "manifestSha256": "4a696eb6b8fb7c23fd251dc8e8db0ce150f36636fd87647a381a2407b5f501b6",
+    "indexSha256": "598703e0417ef43a64c7549592529ef24119a0e38526a9e096b2f1a13d8405bd",
+    "productionChanged": false
+  },
+  "sentinel": {
+    "path": "/opt/re7online/backups/converta-persistent/deploy.lock",
+    "sha256": "d7cf1d3c2596891ad8208fd6fdd2c8b4ca2028738a51217bc30dfaec8fe99535",
+    "device": 64769,
+    "inode": 803457,
+    "uid": 1000,
+    "gid": 1000,
+    "mode": "0600",
+    "nlink": 1,
+    "sizeBytes": 65,
+    "flockFreeAfterCompletion": true
+  },
+  "separateOpenFront": {
+    "generationChain": [
+      "d7de6453",
+      "3630e16",
+      "ec2a9fde",
+      "ef7db111",
+      "a62da468",
+      "5c339b2e"
+    ],
+    "campaignBuildPackageRequiresFreshRecaptureAndOwnAuthorization": true
+  }
+}

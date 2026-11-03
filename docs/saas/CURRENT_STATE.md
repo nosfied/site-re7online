@@ -497,11 +497,33 @@ continua `NOT_PROVEN`.
 
 ## Capacidade e retenção
 
-A geração b96 está encerrada em `DEPLOYED_SANITIZED`, sem dívida atual: a retenção
-concluiu 3/3. A medição final registrou 12.402.286.592 bytes (aprox. 11,55 GiB),
-abaixo do piso de 12 GiB (12.884.901.888 bytes). Novo build permanece bloqueado;
-auditorias e homologações que não constroem artefatos continuam permitidas. Também
-há bloqueio diante
+A retirada sucessora da geração histórica b96 encerrou em `SANITIZED` em
+03/11/2026. O consumidor `_canonical_retirement_closure()` autenticou os dois elos
+da cadeia, com closure normalizada
+`73feb66a4ebecfc27bcf54b17f407d2486afdc9857124d044b7d1a03df4e5154`.
+Três efeitos anteriores foram reconhecidos e somente a release
+`/opt/re7online/releases/immutable-b96eb779-vps-20261028T025159Z` foi retirada nesta
+execução. Receipt `15aa21e258fd2fea42ff6ca49041d581d644b049e55db0864821fe0b038629a6`,
+journal `a129f919897d87cdb9b21ba6098e39a09df65940421f4203613301b420afa0b7`
+e review terminal `4b1c5a2bc32b22418e2761b35b3b4bce9ca07628a10e9bb4ce74a21f9599c7b4`.
+A autorização `b5d0b0037eb23a84828ac9445f285deeea65dd8fc6a1b39ff534992a9104a8c1`
+foi consumida e não pode ser reapresentada.
+
+O ganho físico medido foi `988.491.776 bytes`: o saldo passou de
+`9.268.555.776` para `10.257.047.552 bytes`, ficando `593.371.136 bytes` acima
+do gate de build de `9.663.676.416 bytes`. Isso remove somente o bloqueio de
+capacidade observado; não autoriza o pacote da campanha, que ainda exige recaptura
+e autorização próprias. Produção 911a, PM2, dump, pacote, manifesto, índice,
+contrato e lifecycle b96 foram preservados. O sentinel do lock permaneceu físico,
+autenticado e livre em `64769:803457`, `deploy:deploy 0600`, SHA-256
+`d7cf1d3c2596891ad8208fd6fdd2c8b4ca2028738a51217bc30dfaec8fe99535`.
+O [registro verificável](releases/B96_GENERATION_RETIREMENT_2026-11-03_SANITIZED.json)
+torna esse lote terminal e proibido de replay. A cadeia
+`d7de / 3630 / ec2 / ef7 / a62 / 5c339` continua aberta e separada.
+
+Historicamente, a retenção frontend-only inicial da b96 concluiu 3/3 em
+`DEPLOYED_SANITIZED` e registrou 12.402.286.592 bytes disponíveis. Esse checkpoint
+não é capacidade atual nem inclui a retirada sucessora acima. Também há bloqueio diante
 de review não terminal ou quando criaria uma segunda candidata. Retenção incompleta
 não pode permanecer como tarefa informal: bloqueia a próxima geração até reconciliação.
 

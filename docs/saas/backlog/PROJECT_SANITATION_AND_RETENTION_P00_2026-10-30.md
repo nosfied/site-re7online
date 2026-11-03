@@ -817,28 +817,23 @@ varredura global ou hashing antecipado.
 
 Uma leitura dirigida de outra cadeia identificou, separadamente, a release
 `/opt/re7online/releases/immutable-b96eb779-vps-20261028T025159Z` como lote
-adicional condicionado, com `988.815.360 bytes` físicos registrados. A release
-continua presente (`64769:1121166`, `deploy:deploy 0755`), não aparece em current,
-PM2 live ou dump e não possui `api-runtime/.data`. Ela ainda integra
-`rollbackReleases` por união histórica no grafo 911a; logo não está qualificada
-para retirada enquanto esse papel não for reconciliado pelo consumidor canônico.
+adicional condicionado, com `988.815.360 bytes` físicos estimados. Na fotografia
+de qualificação, a release estava presente (`64769:1121166`, `deploy:deploy 0755`),
+não aparecia em current, PM2 live ou dump e não possuía `api-runtime/.data`. Naquele
+estado ainda integrava `rollbackReleases` por união histórica no grafo 911a e não
+estava qualificada enquanto esse papel não fosse reconciliado pelo consumidor
+canônico.
 
 O pacote de revisão versionado em
 [B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json](../releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)
-fixa contrato, lifecycle, review, fechamento de retenção, linhagem frontend-only
-b96 → aa952 e seleção ativa 911a. Os bindings voláteis são deliberadamente
-listados, não inventados: uma futura materialização deverá finalizar a fotografia,
-derivar seu SHA, construir o request, reabrir todos os bindings e somente então
-selá-lo. O pacote permanece `REVIEW_ONLY_NOT_CONSUMABLE` e não autoriza
-reconciliação, `prepare`, autorização destrutiva ou `rm`.
+fixou contrato, lifecycle, review, fechamento de retenção, linhagem frontend-only
+b96 → aa952 e seleção ativa 911a. Esse pacote inicial permanece histórico e não
+consumível; a operação posterior usou custódias sucessoras e bindings autenticados.
 
-O resultado exigido da futura reconciliação é estritamente sem efeitos: remover
-somente b96 do papel histórico no grafo sucessor, sem substituir o grafo produtivo,
-mantendo ativos, worker, aa952/fa639 como rollbacks imediatos, overlays privados e
-dependências não reconciliadas protegidos. Somente depois da aceitação do grafo,
-projeção e receipt sucessores uma fase `generation-retirement prepare` separada
-poderá dizer se o único efeito futuro é a release b96. Ganho estimado não é ganho
-qualificado nem recuperado.
+A reconciliação posterior encerrou somente o papel histórico b96 no grafo sucessor,
+sem substituir o grafo produtivo e mantendo ativos, worker, aa952/fa639 como
+rollbacks imediatos, overlays privados e dependências não reconciliadas protegidos.
+Seu receipt, projeção e grafo sucessor foram consumidos pela preparação separada.
 
 A reconciliação b96 foi concluída sem efeitos e permanece irrepetível. A custódia
 de preparação `p00-generation-retirement-b96-d662e503-v3` consumiu uma única fase
@@ -850,3 +845,23 @@ permaneceram byte-exatos; não houve autorização nem efeito destrutivo. Essa c
 é terminal e não pode ser reapresentada. A continuação exige o materializador
 versionado autenticando e encaminhando a evidência anterior; somente uma custódia
 sucessora, após integração e revisão própria, poderá executar novo `prepare`.
+
+A custódia sucessora v4 encaminhou a evidência histórica pelos argumentos
+`--prior-*`, reconheceu os três efeitos anteriores e selou exatamente um comando
+novo, limitado à release b96. A autorização
+`b5d0b0037eb23a84828ac9445f285deeea65dd8fc6a1b39ff534992a9104a8c1`, owner
+`Deifson Oliveira`, foi consumida uma vez. A execução terminou `SANITIZED`, com
+receipt `15aa21e258fd2fea42ff6ca49041d581d644b049e55db0864821fe0b038629a6`,
+journal `a129f919897d87cdb9b21ba6098e39a09df65940421f4203613301b420afa0b7`
+e review `4b1c5a2bc32b22418e2761b35b3b4bce9ca07628a10e9bb4ce74a21f9599c7b4`.
+`_canonical_retirement_closure()` validou os dois elos sob SHA-256 normalizado
+`73feb66a4ebecfc27bcf54b17f407d2486afdc9857124d044b7d1a03df4e5154`.
+
+O ganho físico efetivo foi `988.491.776 bytes`, não os `988.815.360 bytes`
+estimados: o saldo passou de `9.268.555.776` para `10.257.047.552 bytes`.
+Produção, pacote, manifesto, índice e evidências foram preservados. O sentinel
+`deploy.lock` permaneceu autenticado, físico e livre em `64769:803457`, modo `0600`,
+SHA-256 `d7cf1d3c2596891ad8208fd6fdd2c8b4ca2028738a51217bc30dfaec8fe99535`.
+Esse lote é terminal e proibido de replay. A margem de `593.371.136 bytes` sobre o
+gate remove somente o bloqueio de capacidade observado e não autoriza o build da
+campanha. A cadeia principal de seis gerações continua aberta.
