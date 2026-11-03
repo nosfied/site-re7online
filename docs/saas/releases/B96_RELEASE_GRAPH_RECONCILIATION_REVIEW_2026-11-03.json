@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "recordType": "RELEASE_GRAPH_RECONCILIATION_OPERATION_REVIEW",
+  "state": "REVIEW_ONLY_NOT_CONSUMABLE",
+  "scope": {
+    "releaseId": "immutable-b96eb779-vps-20261028T025159Z",
+    "installedReleasePath": "/opt/re7online/releases/immutable-b96eb779-vps-20261028T025159Z",
+    "expectedRole": "rollbackReleases",
+    "decision": "CLOSE_OPERATIONAL_DEPENDENCY",
+    "estimatedPhysicalBytes": 988815360,
+    "destructiveCommandsAuthorized": 0
+  },
+  "controlPlane": {
+    "sourceCommit": "785bde80cb8bacbbf6375337dd169247738ab0f9",
+    "generationRetirement": {
+      "path": "scripts/generation-retirement.py",
+      "sha256": "03859afb482610410c3adb35454d196d0b165afc56215f054f2e084ea41a89c3"
+    },
+    "materializer": {
+      "path": "scripts/release-graph-reconciliation-materialize.py",
+      "sha256": "fd33173bb4c7660974b11b8296d4d6351d708e63784c0fff4d3ff98fe03e1a20"
+    },
+    "projectionConsumer": {
+      "path": "scripts/capacity-recovery.py",
+      "sha256": "7af1334cc7e9a5e19dba630c71bc792fc392b3da87d43f02ae43ba8da72f6051"
+    }
+  },
+  "immutableBindings": {
+    "sourceGraph": {
+      "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-911a9708-vps-20261102T221325Z-api-frontend-d2ae1395-v2-once/generation-release-graph.final.private.json",
+      "sha256": "efdd879a4e664e5eabd4a4001fc266e236dc5356ee364f6d6c03c023b474c686"
+    },
+    "entry": {
+      "contract": {
+        "path": "/opt/re7online/build-output/immutable-b96eb779-vps-20261028T025159Z-producer/generation-artifacts.private.json",
+        "sha256": "92ac8a6e68c1b9c947888e7748b31d71e15a84f958d81a0f858303e10c738e47"
+      },
+      "lifecycle": {
+        "path": "/opt/re7online/build-output/immutable-b96eb779-vps-20261028T025159Z-producer/generation-lifecycle.private.json",
+        "sha256": "8821d009480c5174db26d4ba8850a15e6786a1484ff21390af73facacb3e0772"
+      },
+      "review": {
+        "path": "/opt/re7online/build-output/immutable-b96eb779-vps-20261028T025159Z-producer/generation-review.private.json",
+        "sha256": "4f860b3a49ccfdafbfecfb04b1e2263ac8e7096037be81b8cfd5c8e8cdf6f356"
+      },
+      "closure": {
+        "kind": "CANONICAL_RETIREMENT",
+        "chain": [
+          {
+            "intent": {
+              "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-b96eb779-vps-20261028T025159Z-frontend-final-b96eb779-v1-once/generation-retirement-intent.authenticated.private.json",
+              "sha256": "ef2e59752cd091253f3866316a8cdafdd22d658cab87723b67272efbfe6c661d"
+            },
+            "receipt": {
+              "path": "/opt/re7online/backups/converta-persistent/retention-receipts/immutable-b96eb779-vps-20261028T025159Z-frontend-final-b96eb779-v1/execution-receipt.private.json",
+              "sha256": "ce071492975ff08fcb1930364d22e94bcb45695ccb21ee5d545e87153f2ad1cf"
+            },
+            "journal": {
+              "path": "/opt/re7online/backups/converta-persistent/retention-receipts/immutable-b96eb779-vps-20261028T025159Z-frontend-final-b96eb779-v1/command-results.private.jsonl",
+              "sha256": "1c161981e6e0f6db91d218f7aa28f3b86015b64082785994d4d5eab874e95c0d"
+            }
+          }
+        ]
+      }
+    },
+    "currentActivation": {
+      "api": {
+        "runtimeManifest": {
+          "path": "/opt/re7online/backups/converta-persistent/preparations/immutable-911a9708-vps-20261102T221325Z-api-frontend-final-d2ae1395-v2/runtime-manifest.private.json",
+          "sha256": "4e1c6384f56fc88b3cd3bc590bbd9989e4d01659c5a204278dec235f16e0033a"
+        },
+        "transactionJournal": {
+          "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-911a9708-vps-20261102T221325Z-api-frontend-d2ae1395-v2-once/transaction.v1.private.json",
+          "sha256": "ed3f9576550d535121c23e581675daa2849fc2ad68671ec05e8b1460ef6e7946"
+        }
+      },
+      "frontend": {
+        "runtimeManifest": {
+          "path": "/opt/re7online/backups/converta-persistent/preparations/immutable-911a9708-vps-20261102T221325Z-api-frontend-final-d2ae1395-v2/runtime-manifest.private.json",
+          "sha256": "4e1c6384f56fc88b3cd3bc590bbd9989e4d01659c5a204278dec235f16e0033a"
+        },
+        "transactionJournal": {
+          "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-911a9708-vps-20261102T221325Z-api-frontend-d2ae1395-v2-once/transaction.v1.private.json",
+          "sha256": "ed3f9576550d535121c23e581675daa2849fc2ad68671ec05e8b1460ef6e7946"
+        }
+      }
+    },
+    "historicalFrontendLineage": {
+      "kind": "FRONTEND_ONLY_V1",
+      "selectedRelease": "immutable-aa9527cc-vps-20261029T222733Z",
+      "immediateRollback": "immutable-b96eb779-vps-20261028T025159Z",
+      "executor": {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/immutable-aa9527cc-vps-20261029T222733Z-frontend-final-9441de5a-b1689394-v1/frontend-only-activation.sh",
+        "sha256": "36d3d623620fc5557a689270842cc5aba9322b8c8b7e026e6163fde01057ba99"
+      },
+      "selectionIntent": {
+        "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-aa9527cc-vps-20261029T222733Z-frontend-final-aa9527cc-v1-once/selection-intent.private.json",
+        "sha256": "6cce115f61e32e9f0675e894d1b1996d7f55bd92816919934eb826a206583fad"
+      },
+      "activationIntent": {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/immutable-aa9527cc-vps-20261029T222733Z-frontend-final-9441de5a-b1689394-v1/activation-intent.private.json",
+        "sha256": "a48886eaee0ec2325aa29e05be0955d2f80486d378a2caff127e1c6546421f9f"
+      },
+      "awaitingAcceptanceState": {
+        "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-aa9527cc-vps-20261029T222733Z-frontend-final-aa9527cc-v1-once/window-state.private.json.previous.f1340234a0207e36a3f5205b098b37fa8eb4c2f25046b7f8a4a57a5008ad44c0",
+        "sha256": "f1340234a0207e36a3f5205b098b37fa8eb4c2f25046b7f8a4a57a5008ad44c0"
+      },
+      "technicalAcceptance": {
+        "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-aa9527cc-vps-20261029T222733Z-frontend-final-aa9527cc-v1-once/technical-acceptance.private.json",
+        "sha256": "c90b66aefb98dc842e2a2f4f6929de8744cc4e3f2a1e422be70eb2db3f20a694"
+      },
+      "finalizationReceipt": {
+        "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-aa9527cc-vps-20261029T222733Z-frontend-final-aa9527cc-v1-once/frontend-finalization-receipt.private.json",
+        "sha256": "c80e37abc9448ed1edf78eec40f420cb1ac595c0ee470964bed84fe139e74a23"
+      },
+      "finalWindowState": {
+        "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-aa9527cc-vps-20261029T222733Z-frontend-final-aa9527cc-v1-once/window-state.private.json",
+        "sha256": "9c86b6ebfa6308ee4ea00ef3bbc412c70b60513239cf7dc2cc3a02fc79cb2989"
+      }
+    }
+  },
+  "volatileBindingsRequiredAtExecution": [
+    "operationalState.path",
+    "operationalState.sha256",
+    "currentLinks",
+    "pm2Live",
+    "pm2Dump",
+    "transactions",
+    "deploymentLock",
+    "releaseIdentity"
+  ],
+  "proposedExclusiveDestinations": {
+    "custody": "/opt/re7online/backups/converta-persistent/preparations/p00-release-graph-reconciliation-b96-785bde80-v1",
+    "request": "/opt/re7online/backups/converta-persistent/preparations/p00-release-graph-reconciliation-b96-785bde80-v1/reconciliation-request.private.json",
+    "successorGraph": "/opt/re7online/backups/converta-persistent/preparations/p00-release-graph-reconciliation-b96-785bde80-v1/release-graph.successor.private.json",
+    "projection": "/opt/re7online/backups/converta-persistent/preparations/p00-release-graph-reconciliation-b96-785bde80-v1/release-graph.projection.private.json",
+    "receipt": "/opt/re7online/backups/converta-persistent/preparations/p00-release-graph-reconciliation-b96-785bde80-v1/reconciliation-receipt.private.json"
+  },
+  "expectedResult": {
+    "originalsModified": false,
+    "destructiveCommands": 0,
+    "b96HistoricalRoleClosed": true,
+    "immediateApiRollbackPreserved": "immutable-fa63994a-vps-20261030T153352Z",
+    "immediateFrontendRollbackPreserved": "immutable-aa9527cc-vps-20261029T222733Z",
+    "privateParentsPreserved": [
+      "immutable-708f018c-vps-20261027T152109Z",
+      "immutable-0fdec8b0-vps-20261028T224726Z",
+      "immutable-754281d3-vps-20261029T174145Z",
+      "immutable-fa63994a-vps-20261030T153352Z"
+    ]
+  },
+  "authorization": {
+    "reconciliationAuthorized": false,
+    "prepareAuthorized": false,
+    "retirementAuthorized": false
+  }
+}

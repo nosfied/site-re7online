@@ -806,3 +806,36 @@ o mesmo FD autenticado cria o artefato somente depois de registrar orçamento e
 `OPEN`; `review-preparation` faz o fechamento terminal. A cobertura é da rota
 canônica e da `reservationRoot`, não de escritores históricos/manuais nem do
 filesystem inteiro. Adoção produtiva permanece pendente e exige janela própria.
+
+## Escopos grandes ainda abertos e lote adicional b96 — 03/11/2026
+
+A análise originalmente solicitada permanece aberta para as seis gerações
+`d7de6453`, `3630e16`, `ec2a9fde`, `ef7db111`, `a62da468` e `5c339b2e`.
+Nenhuma conclusão sobre essa cadeia deve ser inferida da classificação abaixo;
+seus inventários, contratos e provas já preservados serão reutilizados sem nova
+varredura global ou hashing antecipado.
+
+Uma leitura dirigida de outra cadeia identificou, separadamente, a release
+`/opt/re7online/releases/immutable-b96eb779-vps-20261028T025159Z` como lote
+adicional condicionado, com `988.815.360 bytes` físicos registrados. A release
+continua presente (`64769:1121166`, `deploy:deploy 0755`), não aparece em current,
+PM2 live ou dump e não possui `api-runtime/.data`. Ela ainda integra
+`rollbackReleases` por união histórica no grafo 911a; logo não está qualificada
+para retirada enquanto esse papel não for reconciliado pelo consumidor canônico.
+
+O pacote de revisão versionado em
+[B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json](../releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)
+fixa contrato, lifecycle, review, fechamento de retenção, linhagem frontend-only
+b96 → aa952 e seleção ativa 911a. Os bindings voláteis são deliberadamente
+listados, não inventados: uma futura materialização deverá finalizar a fotografia,
+derivar seu SHA, construir o request, reabrir todos os bindings e somente então
+selá-lo. O pacote permanece `REVIEW_ONLY_NOT_CONSUMABLE` e não autoriza
+reconciliação, `prepare`, autorização destrutiva ou `rm`.
+
+O resultado exigido da futura reconciliação é estritamente sem efeitos: remover
+somente b96 do papel histórico no grafo sucessor, sem substituir o grafo produtivo,
+mantendo ativos, worker, aa952/fa639 como rollbacks imediatos, overlays privados e
+dependências não reconciliadas protegidos. Somente depois da aceitação do grafo,
+projeção e receipt sucessores uma fase `generation-retirement prepare` separada
+poderá dizer se o único efeito futuro é a release b96. Ganho estimado não é ganho
+qualificado nem recuperado.

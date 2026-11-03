@@ -21,6 +21,8 @@
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
+- [Revisão da reconciliação não destrutiva b96](releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)
+  — pacote não consumível com bindings b96 → aa952 → 911a; sem autorização de reconciliação ou retirada.
 - [Release fixed-current 708f implantada e sanitizada](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json)
 - [Release API-only fixed-current 0fdec implantada e sanitizada](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json)
   — API histórica substituída por 754281d3; registro preservado da promoção API-only.
