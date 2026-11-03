@@ -622,6 +622,66 @@ class DriverTests(DeployFixture):
         self.assertEqual(journal["rollback"]["result"], "RETIREMENT_SENTINEL_RESTORED")
         self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
 
+    def test_terminal_sentinel_recovers_pending_before_first_write(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        original = self.lock.stat()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_lock_transition_pending")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_transition_pending"):
+            self.driver.activate()
+        pending = self.driver._journal_read()
+        self.assertEqual(pending["lockTransition"]["state"], "PENDING")
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.driver.failpoints.clear()
+        self.driver.rollback()
+        restored = self.lock.stat()
+        self.assertEqual((restored.st_dev, restored.st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        recovered = self.driver._journal_read()
+        self.assertEqual(recovered["lockTransition"]["state"], "ROLLED_BACK")
+        self.assertEqual(recovered["rollback"]["result"], "RETIREMENT_SENTINEL_RESTORED")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_sentinel_recovers_interrupted_restoration(self) -> None:
+        _, sentinel = self.terminal_retirement_sentinel()
+        original = self.lock.stat()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_lock_binding_fsync")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_binding_fsync"):
+            self.driver.activate()
+        self.driver.failpoints.clear()
+        self.driver.failpoints.add("after_lock_sentinel_restore_fsync")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_sentinel_restore_fsync"):
+            self.driver.rollback()
+        interrupted = self.lock.stat()
+        self.assertEqual((interrupted.st_dev, interrupted.st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.assertNotEqual(self.driver._journal_read()["lockTransition"]["state"], "ROLLED_BACK")
+        self.driver.failpoints.clear()
+        self.driver.rollback()
+        recovered = self.driver._journal_read()
+        self.assertEqual(recovered["lockTransition"]["state"], "ROLLED_BACK")
+        self.assertEqual(recovered["rollback"]["result"], "RETIREMENT_SENTINEL_RESTORED")
+        self.assertEqual(self.lock.read_bytes(), sentinel)
+        self.assertEqual((self.lock.stat().st_dev, self.lock.stat().st_ino),
+                         (original.st_dev, original.st_ino))
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
+    def test_terminal_sentinel_pending_recovery_rejects_unknown_content(self) -> None:
+        self.terminal_retirement_sentinel()
+        self.driver.preflight()
+        self.driver.failpoints.add("after_lock_transition_pending")
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_lock_transition_pending"):
+            self.driver.activate()
+        self.lock.write_bytes(b"unknown-retirement-sentinel\n")
+        self.driver.failpoints.clear()
+        with self.assertRaisesRegex(deploy.Denied, "global_lock_recovery_content"):
+            self.driver.rollback()
+        self.assertEqual(self.lock.read_bytes(), b"unknown-retirement-sentinel\n")
+        self.assertFalse(any(event.startswith("PM2:") for event in self.host.events))
+
     def test_terminal_retirement_sentinel_drift_denies_before_operational_effects(self) -> None:
         manifest, sentinel = self.terminal_retirement_sentinel()
         original = self.lock.stat()

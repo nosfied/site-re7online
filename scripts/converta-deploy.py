@@ -1481,6 +1481,7 @@ class Driver:
         if adopted_retirement_sentinel is not None:
             journal["lockTransition"]["adoptedRetirementSentinel"] = adopted_retirement_sentinel
         self._journal_write(journal, "ACTIVATING")
+        self._failpoint("after_lock_transition_pending")
         if os.pwrite(fd, value, 0) != len(value):
             deny("global_lock_short_write")
         os.ftruncate(fd, len(value))
@@ -1620,6 +1621,27 @@ class Driver:
             deny("global_lock_identity")
         self.lock.unlink()
 
+    def _transition_original_lock_bytes(self, transition: dict[str, Any]) -> bytes | None:
+        """Return an authenticated pre-transition sentinel, or None for a created lock."""
+        adopted_existing = transition.get("adoptedExisting")
+        if adopted_existing is False:
+            return None
+        if adopted_existing is not True:
+            deny("lock_transition_recovery_state")
+        adopted_sentinel = transition.get("adoptedRetirementSentinel")
+        if adopted_sentinel is None:
+            return b""
+        expected_keys = {"schemaVersion", "kind", "releaseId", "targetCommit",
+                         "sentinelIntentSha256", "closureManifestSha256"}
+        if (not isinstance(adopted_sentinel, dict) or
+                set(adopted_sentinel) != expected_keys or
+                not SHA256.fullmatch(str(adopted_sentinel.get("sentinelIntentSha256", "")))):
+            deny("lock_transition_recovery_sentinel")
+        restored = (adopted_sentinel["sentinelIntentSha256"] + "\n").encode()
+        if self._authenticate_retirement_sentinel_closure(restored) != adopted_sentinel:
+            deny("lock_transition_recovery_sentinel")
+        return restored
+
     def _rollback_lock_transition(self, journal: dict[str, Any]) -> None:
         """Canonically close a lock transition that preceded all operational effects."""
         transition = journal.get("lockTransition")
@@ -1653,29 +1675,26 @@ class Driver:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     deny("global_lock_recovery_busy")
+                original_value = self._transition_original_lock_bytes(transition)
                 content = os.pread(fd, len(expected_value) + 1, 0)
-                if content not in {b"", expected_value}:
-                    deny("global_lock_recovery_content")
-                if content == b"" and transition.get("state") != "PENDING":
+                admissible = {expected_value}
+                if original_value is not None:
+                    admissible.add(original_value)
+                elif transition.get("state") == "PENDING":
+                    admissible.add(b"")
+                if content not in admissible:
                     deny("global_lock_recovery_content")
                 progress["lockReleaseStarted"] = True
                 self._journal_write(journal, "ROLLING_BACK")
                 if transition.get("adoptedExisting") is True:
-                    adopted_sentinel = transition.get("adoptedRetirementSentinel")
-                    restored = b""
-                    if adopted_sentinel is not None:
-                        expected_keys = {"schemaVersion", "kind", "releaseId", "targetCommit",
-                                         "sentinelIntentSha256", "closureManifestSha256"}
-                        if (not isinstance(adopted_sentinel, dict) or
-                                set(adopted_sentinel) != expected_keys or
-                                not SHA256.fullmatch(str(adopted_sentinel.get(
-                                    "sentinelIntentSha256", "")))):
-                            deny("lock_transition_recovery_sentinel")
-                        restored = (adopted_sentinel["sentinelIntentSha256"] + "\n").encode()
+                    restored = original_value
+                    if restored is None:
+                        deny("lock_transition_recovery_state")
                     if restored and os.pwrite(fd, restored, 0) != len(restored):
                         deny("global_lock_recovery_short_write")
                     os.ftruncate(fd, len(restored))
                     os.fsync(fd)
+                    self._failpoint("after_lock_sentinel_restore_fsync")
                     progress["result"] = ("RETIREMENT_SENTINEL_RESTORED" if restored else
                                           "EMPTY_SENTINEL_RESTORED")
                 elif transition.get("adoptedExisting") is False:
