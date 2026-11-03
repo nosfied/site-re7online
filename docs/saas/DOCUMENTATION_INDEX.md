@@ -24,6 +24,9 @@
 - [Release fixed-current 708f implantada e sanitizada](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json)
 - [Release API-only fixed-current 0fdec implantada e sanitizada](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json)
   — API histórica substituída por 754281d3; registro preservado da promoção API-only.
+- [Campanha integral 911a9708 implantada e sanitizada](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json)
+  — API+frontend ativos, worker preservado, save único e retenção 3/3; correção
+  vale para novos rascunhos, enquanto o reparo de `Campanha teste nov.01` segue pendente.
 - [Layout de mídia em campanhas: deploy frontend f160](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json)
   — registro histórico do frontend anterior, preservado como retorno.
 - [Disponibilidade e admissão de mídia de campanhas: deploy a959](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json)

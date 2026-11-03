@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "LOCAL_CODEX_CANONICAL_EXECUTION_REPORT",
+    "reportedDate": "2026-11-02",
+    "timezone": "America/Fortaleza"
+  },
+  "release": {
+    "id": "immutable-911a9708-vps-20261102T221325Z",
+    "target": "911a970838233ae92e00a45ef371f619511d8602",
+    "tree": "da908812649c2db8fe7fbfa0d1b2819ee91cd4be",
+    "buildId": "qnWlIpXNGY4SfMmtzYUT4",
+    "packageSha256": "83a91d1455670c12731e79e4e4dd7d060c0ff4d65ef3a59dba4dea9729ac59e2",
+    "manifestSha256": "27e899dde0d37ffa2d3686f46390ed2baef099e81e966d2b6eb603ee942d72b8",
+    "indexSha256": "97365b7fdc318301086e7a84bf7c083c4d8017df9b51c8cc32b04099dceb2ec1",
+    "indexEntries": 34372,
+    "indexEntryTypes": {
+      "files": 30945,
+      "directories": 3386,
+      "symlinks": 41
+    },
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "buildCount": 1,
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "controlPlane": {
+    "merge": "d2ae1395b701a4a6b0756a2c58c6e03e33561860",
+    "testedHead": "1da156a8dafa718a78258127367d9d6b61a28e7c",
+    "testedAndMergedTree": "66d4b0a7d5abca8c964d1cd163caf4303b5204d7"
+  },
+  "runtime": {
+    "api": {"pid": 2029695, "startTicks": 81785411, "restartCount": 13, "listener": 3001},
+    "frontend": {"pid": 2029778, "startTicks": 81785932, "restartCount": 14, "listener": 3000},
+    "worker": {
+      "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "preserved": true
+    }
+  },
+  "finalization": {
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a",
+    "dumpValidationSha256": "8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a",
+    "markerSha256": "a22fa40066e6e0ac61eb11bab0f10a69e06fcec5f18a1838436685293e9b8366",
+    "journalSha256": "ed3f9576550d535121c23e581675daa2849fc2ad68671ec05e8b1460ef6e7946",
+    "receiptSha256": "84f854eb11dfa1ce4dcc1eff75a5d8bcb2535e9e9eba9466f502975a2fae52e2"
+  },
+  "retirement": {
+    "execution": "AUTONOMOUS_V2_EXACTLY_ONCE",
+    "state": "DEPLOYED_SANITIZED",
+    "ordinals": [8, 9, 10],
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "failures": 0,
+    "automaticRetry": false,
+    "remainingDerivedArtifacts": 0,
+    "installedReleasePreserved": true,
+    "packagePreserved": true,
+    "rollbackReleasesPreserved": true,
+    "receiptSha256": "96ddd2f657bd7ea78841d4f81e696c51fa5ea34dcb7e2e702d3e2100704c90fc",
+    "journalSha256": "925e40c84db1cad6f2987ccc12240051acc8119bac27900399140551e451a1a0",
+    "reviewSha256": "e04add77e89a1a299e0199a2b3ceb58f89c7b7de178190d333a08cedf5683845",
+    "finalFreeBytes": 9406750720
+  },
+  "health": {
+    "apiLocal": {"http": 200},
+    "apiPublic": {"http": 200},
+    "frontendLocalHttp": 200,
+    "frontendPublicHttp": 200
+  },
+  "capacity": {
+    "availableBytesBeforeFinalization": 7397990400,
+    "availableBytesAfterFinalization": 9406750720,
+    "recoveredBytes": 2008760320,
+    "availableInodesAfterFinalization": 8757707,
+    "measurementIsTerminalCheckpointNotReservation": true
+  },
+  "campaignScope": {
+    "newDraftCreationFixDeployed": true,
+    "existingDraftPreservedWithOriginalRecipientCount": 25,
+    "existingDraftRepairPending": true,
+    "sendOrScheduleAuthorized": false
+  },
+  "preparationAdapter": {
+    "releaseProducerLifecycleProvenInThisGeneration": true,
+    "preparationsAdapterAdoptionProvenInThisGeneration": false,
+    "adoptionRemainsSeparate": true
+  },
+  "irreversibleCheckpoint": {
+    "buildRepeatForbidden": true,
+    "installationRepeatForbidden": true,
+    "activationRepeatForbidden": true,
+    "retirementRepeatForbidden": true
+  }
+}

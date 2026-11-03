@@ -1369,8 +1369,9 @@ O onboarding interno foi implementado, porém ainda não validado com novo tenan
 
 ### Campaign CRM audience split into numbered drafts - 2026-09-25
 
-**Correção da seleção estática integral — 02/11/2026: LOCAL VALIDATED / NOT
-DEPLOYED / RASCUNHO EXISTENTE PRESERVADO.** A leitura produtiva, sem mutação,
+**Correção da seleção estática integral — 02/11/2026: DEPLOYED_SANITIZED PARA
+NOVOS RASCUNHOS / REPARO DO RASCUNHO EXISTENTE PENDENTE.** A leitura produtiva,
+sem mutação,
 confirmou que `Campanha teste nov.01` pertence a `demo-converta`, está em
 `draft` e foi persistida com `totalRecipients=25`, seed
 `selectionMode=STATIC_RECIPIENTS`, 25 `leadIds`, `recipientCount=25`, zero
@@ -1379,6 +1380,12 @@ explica o caso: a própria campanha e o seed foram gravados com 25, portanto o
 corte ocorreu na criação a partir da página visual `limit=25`. O rascunho não
 foi alterado, recriado, agendado ou enviado; eventual reparo continua sendo uma
 ação separada.
+
+A release API+frontend `immutable-911a9708-vps-20261102T221325Z` implantou a
+correção e terminou `DEPLOYED_SANITIZED`, com um único `pm2 save`, worker
+preservado e retenção 3/3. Build, instalação, ativação e retenção são terminais e
+irrepetíveis. Esse fechamento não altera os 25 destinatários já persistidos em
+`Campanha teste nov.01` e não autoriza envio, agendamento ou reparo.
 
 O delta local faz a criação estática comum reutilizar a resolução integral e a
 assinatura tenant-scoped já usadas pelo split. A grade continua paginada, mas
@@ -1399,7 +1406,8 @@ seed/detalhe, com cinco opt-outs, outro tenant, filtro alterado, mais de 25
 contatos nos dois valores de `hasConversation` e opt-out inserido entre
 validação e persistência; a mudança negou com zero campanha/seed; 1/1 PASS.
 Contrato de UI 39/39 PASS e backend typecheck PASS. Nenhum schema/migration,
-build produtivo, deploy, provider ou envio foi executado.
+build produtivo, deploy, provider ou envio foi executado durante essa validação
+local anterior; o deploy posterior está registrado separadamente acima.
 
 Status: LOCAL PARTIAL IMPLEMENTATION / FOCUSED TEST VALIDATED / NOT DEPLOYED /
 OWNER UI PENDING / NOT CRA-READY FOR COMPLETE BATCH OPERATION. New local

@@ -847,7 +847,14 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
                   "apiEntrypointSha256"):
         require(bool(SHA256.fullmatch(release.get(field, ""))),
                 f"fixed-current {field}")
-    require(release.get("indexEntries") == 34353 and
+    index_entry_types = release.get("indexEntryTypes", {})
+    require(release.get("indexEntries") == 34372 and
+            index_entry_types == {
+                "files": 30945,
+                "directories": 3386,
+                "symlinks": 41,
+            } and
+            sum(index_entry_types.values()) == release.get("indexEntries") and
             release.get("buildCount") == 1 and
             release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
             bool(release.get("buildId")), "fixed-current release contract")

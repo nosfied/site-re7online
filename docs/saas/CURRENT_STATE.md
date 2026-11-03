@@ -1,27 +1,28 @@
 # Estado canônico do Converta
 
-**DEPLOYED_SANITIZED / CONSENT VISIBILITY ACCEPTED / PRODUCTION HEALTHY**
+**DEPLOYED_SANITIZED / CAMPAIGN INTEGRAL DRAFT CREATION ACTIVE / PRODUCTION HEALTHY**
 
-## Estado vigente — Tendência concluída e sanitização P00 liberada
+## Estado vigente — campanha integral 911a9708 concluída
 
-Fonte: relatório final do owner/Codex local; este editor não reinspecionou a VPS.
+Fonte: execução e verificação canônicas do Codex local em 02/11/2026.
 
-A release API-only `immutable-fa63994a-vps-20261030T153352Z`, target
-`fa63994acd5655bd499a328679a0f8c11e0740e2`, está
-`DEPLOYED_SANITIZED`. O owner confirmou PASS no teste do final `9614`:
-confirmação de encaminhamento, estado humano, fila/Inbox, ausência de reentrada da
-IA e frontend. Frontend `aa9527cc` e worker `e2e7f17a` foram preservados.
+A release API+frontend `immutable-911a9708-vps-20261102T221325Z`, target
+`911a970838233ae92e00a45ef371f619511d8602`, está `DEPLOYED_SANITIZED`.
+API e frontend apontam para a release, health local/público passou, e o worker
+`e2e7f17a` foi preservado sem restart.
+Os caminhos estáveis são `/opt/re7online/current/api` e
+`/opt/re7online/current/frontend`; o frontend permanece `fork_mode`, BUILD_ID
+`qnWlIpXNGY4SfMmtzYUT4`.
 
 A finalização executou um único `pm2 save`, validou o dump
-`440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280`,
-criou o marker, retirou 3/3 derivados e removeu o lock canônico. Registro:
-[TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json).
+`8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a`,
+criou o marker, retirou 3/3 derivados e encerrou o lock canônico. Registro:
+[CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json).
 
-Não repetir qualquer fase dessa geração. O saldo final relatado foi
-8.012.804.096 bytes; é checkpoint histórico, não capacidade reservada. A prioridade
-vigente é o [plano P00 de sanitização e retenção](backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md),
-com limpeza classificada de VPS, preparações, releases, outputs, worktrees,
-branches e PRs, seguida da prevenção permanente de novo acúmulo.
+Não repetir build, instalação, ativação, save ou retenção dessa geração. O saldo
+terminal foi 9.406.750.720 bytes, após recuperar 2.008.760.320 bytes de derivados;
+é checkpoint histórico, não capacidade reservada. O reparo de `Campanha teste
+nov.01` e a adoção do adapter de `preparations` continuam frentes separadas.
 
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 
@@ -313,22 +314,37 @@ DB-first tenant-scoped depois dos backfills e gates selecionados de Tendência,
 Justa e CRA. O fechamento está concluído e não deve ser reaberto. Contrato detalhado em
 [WhatsApp Meta tenant runtime DB-first](WHATSAPP_META_TENANT_RUNTIME.md).
 
-O produtor versionado em revisão substitui o piso estático por admissão derivada
+O produtor versionado substituiu o piso estático por admissão derivada
 do contrato, preservando todos os custos, 4 GiB de reserva e margem igual ao
 envelope de evidência de falha. Overrides P00 históricos continuam evidência, mas
-não dispensam esse gate. A alteração ainda não foi usada em build/deploy produtivo.
+não dispensam esse gate. A geração `immutable-911a9708-vps-20261102T221325Z`
+usou essa política no build produtivo concluído e verificado; a amostragem registra
+o menor saldo observado, sem alegar captura de todo pico temporário.
 
-## Campanha integral — orçamento 911a9708 qualificado localmente
+## Campanha integral — 911a9708 DEPLOYED_SANITIZED
 
 O merge `911a970838233ae92e00a45ef371f619511d8602` contém a correção API/frontend
-do corte em 25 destinatários; o rascunho produtivo permanece intocado. Contratos e
-checkpoints preservados de três builds comparáveis sustentam o perfil de
-9.395.240.960 bytes mais margem derivada de 268.435.456 bytes, total
-9.663.676.416 bytes e 800.000 inodes. A observação de 02/11 registrou
-10.731.368.448 bytes disponíveis, portanto o target passa a fórmula revisada de
-bytes com 1.067.692.032 bytes de margem; o saldo de inodes permanece gate de
-recaptura da janela. Isso não autoriza build: admissão produtiva, CI da política e
-revisão operacional continuam pendentes.
+do corte em 25 destinatários. A geração
+`immutable-911a9708-vps-20261102T221325Z` concluiu build único, instalação
+inerte, ativação API+frontend e retenção 3/3 em `DEPLOYED_SANITIZED`. O worker
+`immutable-e2e7f17a-20261022T005110Z` foi preservado, houve exatamente um
+`pm2 save` e os três derivados foram verificados ausentes. Pacote, release
+instalada e retornos permanecem preservados. Build, instalação, ativação e
+retenção são terminais e não podem ser repetidos.
+
+O fechamento recuperou fisicamente 2.008.760.320 bytes: o saldo passou de
+7.397.990.400 para 9.406.750.720 bytes, com 8.757.707 inodes disponíveis no
+checkpoint terminal. Receipt `96ddd2f657bd7ea78841d4f81e696c51fa5ea34dcb7e2e702d3e2100704c90fc`,
+journal de comandos `925e40c84db1cad6f2987ccc12240051acc8119bac27900399140551e451a1a0`
+e journal transacional `ed3f9576550d535121c23e581675daa2849fc2ad68671ec05e8b1460ef6e7946`.
+O [registro verificável](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json)
+contém os demais bindings.
+
+A correção vale para novas criações de rascunho. `Campanha teste nov.01`
+continua preservada com os 25 destinatários originalmente persistidos; reparo,
+envio e agendamento permanecem pendentes e não foram efeitos do deploy. Esta
+janela comprovou o lifecycle preventivo do produtor de releases. A adoção do
+adapter de `preparations` não ocorreu e continua uma frente separada.
 
 ## Histórico superado — API 0fdec / frontend b96
 

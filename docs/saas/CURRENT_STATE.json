@@ -1,10 +1,10 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-11-01T20:05:00Z",
+  "updatedAtUtc": "2026-11-02T23:55:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
-  "activeOperationalRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
-  "activeApiDeploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
+  "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json",
+  "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json",
+  "activeApiDeploymentRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "releaseGraphReconciliationControlPlane": {
     "state": "IMPLEMENTED_AND_TESTED_LOCALLY_NOT_OPERATIONAL",
@@ -555,29 +555,29 @@
   "production": {
     "status": "DEPLOYED_SANITIZED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-fa63994a-vps-20261030T153352Z",
-    "releasePath": "/opt/re7online/releases/immutable-fa63994a-vps-20261030T153352Z",
-    "targetCommit": "fa63994acd5655bd499a328679a0f8c11e0740e2",
+    "releaseId": "immutable-911a9708-vps-20261102T221325Z",
+    "releasePath": "/opt/re7online/releases/immutable-911a9708-vps-20261102T221325Z",
+    "targetCommit": "911a970838233ae92e00a45ef371f619511d8602",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
       "entrySha256Scope": "CURRENT_FIXED_CURRENT_RELEASE",
-      "selectedTargetCommit": "fa63994acd5655bd499a328679a0f8c11e0740e2",
-      "selectedReleaseId": "immutable-fa63994a-vps-20261030T153352Z",
-      "lastReportedPid": 1371244,
-      "lastReportedStartTicks": null,
-      "restartCount": 12
+      "selectedTargetCommit": "911a970838233ae92e00a45ef371f619511d8602",
+      "selectedReleaseId": "immutable-911a9708-vps-20261102T221325Z",
+      "lastReportedPid": 2029695,
+      "lastReportedStartTicks": 81785411,
+      "restartCount": 13
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "lHKJnVlp6Onz0FpycKR_Z",
+      "buildId": "qnWlIpXNGY4SfMmtzYUT4",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 1210937,
-      "lastReportedStartTicks": 47134505,
-      "selectedTargetCommit": "aa9527cc39ae24efcd8c2bb6e653a8e04655009b",
-      "selectedReleaseId": "immutable-aa9527cc-vps-20261029T222733Z",
-      "restartCount": 13
+      "lastReportedPid": 2029778,
+      "lastReportedStartTicks": 81785932,
+      "selectedTargetCommit": "911a970838233ae92e00a45ef371f619511d8602",
+      "selectedReleaseId": "immutable-911a9708-vps-20261102T221325Z",
+      "restartCount": 14
     },
     "worker": {
       "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
@@ -603,15 +603,15 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280",
+      "dumpSha256": "8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a",
       "dumpSha256Scope": "CURRENT_FIXED_CURRENT_TOPOLOGY",
-      "currentDumpSha256": "440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280",
+      "currentDumpSha256": "8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a",
       "rollbackSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
       "savedExactlyOnce": true,
-      "previousDumpSha256": "c7ace2d4d8c8d7edf7ab39e6195bbb9f2318720c6e1e0c08f7f52a149b9f141b",
+      "previousDumpSha256": "440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280",
       "saveCount": 1,
       "instancesRepresentation": {
         "apiFrontend": "LIVE_ONE_EQUALS_DUMP_OMITTED_ONLY_FOR_AUTHENTICATED_PM2_6_0_14_FORK_MODE_SINGLETON",
@@ -619,30 +619,30 @@
       },
       "representationLookup": "TOP_LEVEL_THEN_PM2_ENV_CANONICAL_AND_ALIASES_WITHOUT_UNPROVEN_DEFAULTS"
     },
-    "markerSha256": "99bdae5577e9f205ae030ed46770224e1dde6795b6a97fd3967fa3be24d50614",
-    "markerSha256Scope": "CURRENT_TENDENCIA_API_RELEASE",
-    "currentMarkerSha256": "99bdae5577e9f205ae030ed46770224e1dde6795b6a97fd3967fa3be24d50614",
+    "markerSha256": "a22fa40066e6e0ac61eb11bab0f10a69e06fcec5f18a1838436685293e9b8366",
+    "markerSha256Scope": "CURRENT_CAMPAIGN_AUDIENCE_API_FRONTEND_RELEASE",
+    "currentMarkerSha256": "a22fa40066e6e0ac61eb11bab0f10a69e06fcec5f18a1838436685293e9b8366",
     "lastFinalization": {
-      "component": "api",
+      "component": "api,frontend",
       "journalState": "DEPLOYED_SANITIZED",
       "lockReleased": true,
       "pm2SaveCount": 1,
       "receiptSha256": null,
-      "journalSha256": "cfb74cd7ad5c58bceaae1ca5b8b9f93d4186ad4c2592f4b9bf9039f0becf2f2c",
-      "dumpValidationSha256": "440c5ed4631ff8715a33af0938bd032dff86451f0f79039273d067234d28b280",
-      "retirementReceiptSha256": "d7c7630bb4ca7b9a9ee47fdb3fb45e726af0832120229faabaee9636657ac7fc",
-      "retirementReviewSha256": null,
-      "markerSha256": "99bdae5577e9f205ae030ed46770224e1dde6795b6a97fd3967fa3be24d50614",
+      "journalSha256": "ed3f9576550d535121c23e581675daa2849fc2ad68671ec05e8b1460ef6e7946",
+      "dumpValidationSha256": "8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a",
+      "retirementReceiptSha256": "96ddd2f657bd7ea78841d4f81e696c51fa5ea34dcb7e2e702d3e2100704c90fc",
+      "retirementReviewSha256": "e04add77e89a1a299e0199a2b3ceb58f89c7b7de178190d333a08cedf5683845",
+      "markerSha256": "a22fa40066e6e0ac61eb11bab0f10a69e06fcec5f18a1838436685293e9b8366",
       "wrapperExitCode": 0,
       "stderrEmpty": true
     },
-    "controlPlaneCommit": "fa63994acd5655bd499a328679a0f8c11e0740e2",
+    "controlPlaneCommit": "d2ae1395b701a4a6b0756a2c58c6e03e33561860",
     "readiness": {
       "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
       "requiredStableSamples": 3,
       "apiResult": "READINESS_PASS",
-      "frontendResult": "PRESERVED_NOT_RESTARTED",
-      "activationMethod": "API_ONLY_FIXED_CURRENT_EXISTING_PM2_REGISTRATION"
+      "frontendResult": "READINESS_PASS",
+      "activationMethod": "API_FRONTEND_FIXED_CURRENT_EXISTING_PM2_REGISTRATION"
     },
     "fixedCurrentCapabilities": {
       "acceptedComponentSets": [
@@ -972,9 +972,9 @@
         }
       }
     },
-    "topology": "SPLIT_API_754281D3_FRONTEND_AA9527_WORKER_PRESERVED",
+    "topology": "FIXED_CURRENT_911A9708_API_FRONTEND_WORKER_PRESERVED",
     "frontendRollback": {
-      "releaseId": "immutable-708f018c-vps-20261027T152109Z",
+      "releaseId": "immutable-aa9527cc-vps-20261029T222733Z",
       "authenticated": true
     },
     "tendenciaHandoff": {
@@ -1089,7 +1089,7 @@
   },
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
-    "deploymentRecord": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
+    "deploymentRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json",
     "apiDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json",
     "components": [
       "api",
@@ -1157,7 +1157,7 @@
     "latestCampaignHomologationState": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN",
     "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md",
     "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK",
-    "frontendPresentationDeploymentRecord": "docs/saas/releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json",
+    "frontendPresentationDeploymentRecord": "docs/saas/releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json",
     "frontendPresentationState": "DEPLOYED_VISUAL_ACCEPTANCE_PASS",
     "draftSelectionReconciliation": {
       "state": "DEPLOYED_ACCEPTED",
@@ -1469,15 +1469,40 @@
       "completeSealPredicateAuditBeforeExecution": true
     }
   },
-  "updatedAtDate": "2026-10-30",
-  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_FROM_OWNER_RELAYED_TENDENCIA_DEPLOYED_SANITIZED_REPORT",
+  "latestCampaignAudienceIntegralDeployment": {
+    "state": "DEPLOYED_SANITIZED",
+    "releaseId": "immutable-911a9708-vps-20261102T221325Z",
+    "targetCommit": "911a970838233ae92e00a45ef371f619511d8602",
+    "controlPlaneMerge": "d2ae1395b701a4a6b0756a2c58c6e03e33561860",
+    "workerReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "workerPreserved": true,
+    "pm2SaveCount": 1,
+    "retirementCommandsCompleted": 3,
+    "retirementCommandsAttempted": 3,
+    "remainingDerivedArtifacts": 0,
+    "recoveredBytes": 2008760320,
+    "finalAvailableBytes": 9406750720,
+    "finalAvailableInodes": 8757707,
+    "transactionJournalSha256": "ed3f9576550d535121c23e581675daa2849fc2ad68671ec05e8b1460ef6e7946",
+    "retirementReceiptSha256": "96ddd2f657bd7ea78841d4f81e696c51fa5ea34dcb7e2e702d3e2100704c90fc",
+    "retirementJournalSha256": "925e40c84db1cad6f2987ccc12240051acc8119bac27900399140551e451a1a0",
+    "terminalReviewSha256": "e04add77e89a1a299e0199a2b3ceb58f89c7b7de178190d333a08cedf5683845",
+    "buildInstallActivationRetirementRepeatPermitted": false,
+    "newDraftCreationFixDeployed": true,
+    "existingDraftName": "Campanha teste nov.01",
+    "existingDraftRecipientCount": 25,
+    "existingDraftRepairPending": true,
+    "preparationsAdapterAdoption": "SEPARATE_PENDING_FRONT"
+  },
+  "updatedAtDate": "2026-11-02",
+  "updatedAtUtcScope": "CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_DEPLOYED_SANITIZED",
   "lastOperationalChange": {
     "state": "DEPLOYED_SANITIZED",
-    "front": "TENDENCIA_HANDOFF_P00",
-    "record": "docs/saas/releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json",
-    "releaseId": "immutable-fa63994a-vps-20261030T153352Z",
-    "targetCommit": "fa63994acd5655bd499a328679a0f8c11e0740e2",
+    "front": "CAMPAIGN_AUDIENCE_INTEGRAL_DRAFT_CREATION",
+    "record": "docs/saas/releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json",
+    "releaseId": "immutable-911a9708-vps-20261102T221325Z",
+    "targetCommit": "911a970838233ae92e00a45ef371f619511d8602",
     "repeatBuildOrActivation": false,
-    "nextFront": "PROJECT_SANITATION_AND_PROCEDURE_STANDARDIZATION"
+    "nextFront": "EXISTING_CAMPAIGN_DRAFT_REPAIR_AND_PREPARATIONS_ADAPTER_ADOPTION_SEPARATE"
   }
 }
