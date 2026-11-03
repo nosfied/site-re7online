@@ -1523,6 +1523,24 @@
     "existingDraftRepairPending": true,
     "preparationsAdapterAdoption": "SEPARATE_PENDING_FRONT"
   },
+  "latestCampaignLostResponseActivationAttempt": {
+    "state": "ROLLED_BACK",
+    "releaseId": "immutable-785bde80-vps-20261103T103429Z",
+    "targetCommit": "785bde80cb8bacbbf6375337dd169247738ab0f9",
+    "controlPlaneMerge": "4fc9598147946ee29a3bd4d6564516383e1bfc9a",
+    "transactionJournalSha256": "b017180c596ba8849bed747cd30b860c917b98e594f08dd17f9ea990787bc992",
+    "failureBeforeAcceptanceWrite": true,
+    "acceptanceFileCreated": false,
+    "pm2SaveCount": 0,
+    "retirementConsumed": false,
+    "rollbackReleases": {
+      "api": "immutable-911a9708-vps-20261102T221325Z",
+      "frontend": "immutable-911a9708-vps-20261102T221325Z"
+    },
+    "workerReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "transactionReplayPermitted": false,
+    "successorRequirement": "SEALED_ACCEPTANCE_PAYLOAD_TRANSPORT_READBACK_AND_REAL_CONSUMER_PROOF"
+  },
   "updatedAtDate": "2026-11-03",
   "updatedAtUtcScope": "B96_SUCCESSOR_GENERATION_RETIREMENT_SANITIZED",
   "lastOperationalChange": {

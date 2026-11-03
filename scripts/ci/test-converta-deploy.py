@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -1214,6 +1215,115 @@ class DriverTests(DeployFixture):
         self.assertNotIn("components", deploy.read_json(self.driver.release_root / "DEPLOYED"))
         self.assertNotIn("components", journal)
         self.assertFalse(self.lock.exists())
+
+    def test_sealed_acceptance_transport_readback_and_real_finalize(self) -> None:
+        self.driver.preflight(); self.driver.activate()
+        custody = self.base / "acceptance-custody"
+        custody.mkdir(mode=0o700)
+        materializer = custody / "fixed-current-acceptance-materialize.py"
+        copied_driver = custody / "converta-deploy.py"
+        copied_continuation = custody / "fixed-current-finalization-continuation.py"
+        payload = custody / "acceptance.payload.private.txt"
+        shutil.copyfile(ROOT / "scripts/fixed-current-acceptance-materialize.py", materializer)
+        shutil.copyfile(ROOT / "scripts/converta-deploy.py", copied_driver)
+        shutil.copyfile(ROOT / "scripts/fixed-current-finalization-continuation.py",
+                        copied_continuation)
+        materializer.chmod(0o600); copied_driver.chmod(0o600); copied_continuation.chmod(0o600)
+        payload.write_bytes("ACEITE TÉCNICO PASS\n".encode("utf-8")); payload.chmod(0o600)
+        binding = self.driver._journal_read()["binding"]
+        request = custody / "acceptance-request.private.json"
+        put(request, {
+            "schemaVersion": 1, "action": "materialize_fixed_current_acceptance",
+            "transactionRoot": str(self.transaction),
+            "transactionJournal": str(self.transaction / "transaction.v1.private.json"),
+            "acceptanceOutput": str(self.transaction / "acceptance.private.txt"),
+            "acceptancePayload": str(payload), "acceptancePayloadSha256": sha(payload),
+            "driver": str(copied_driver), "driverSha256": sha(copied_driver),
+            "binding": {name: binding[name] for name in
+                        ("release", "target", "controlPlane", "components")},
+        })
+        completed = subprocess.run(
+            [sys.executable, "-B", str(materializer), "--request", str(request),
+             "--request-sha256", sha(request)], check=True, capture_output=True, text=True)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["sha256"],
+                         "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a")
+        self.assertEqual(self.driver.acceptance.read_bytes(),
+                         "ACEITE TÉCNICO PASS\n".encode("utf-8"))
+        continuation_spec = importlib.util.spec_from_file_location(
+            "copied_fixed_current_continuation", copied_continuation)
+        assert continuation_spec and continuation_spec.loader
+        continuation = importlib.util.module_from_spec(continuation_spec)
+        continuation_spec.loader.exec_module(continuation)
+        continuation_request = {
+            "schemaVersion": 1, "action": "finalize", "lockPath": str(self.lock),
+            "transactionRoot": str(self.transaction), "driver": str(copied_driver),
+            "driverSha256": sha(copied_driver),
+            "finalizeArgv": [sys.executable, "-B", str(copied_driver), "finalize",
+                             "--release", self.candidate],
+        }
+        lock_fd = continuation.acquire_lock(self.lock)
+        def run_real_consumer(argv, **kwargs):
+            previous = os.environ.get(continuation.LOCK_ENV)
+            os.environ[continuation.LOCK_ENV] = kwargs["env"][continuation.LOCK_ENV]
+            try:
+                self.driver.finalize()
+            finally:
+                if previous is None:
+                    os.environ.pop(continuation.LOCK_ENV, None)
+                else:
+                    os.environ[continuation.LOCK_ENV] = previous
+            return subprocess.CompletedProcess(argv, 0)
+        try:
+            self.assertEqual(continuation.run(
+                continuation_request, lock_fd, runner=run_real_consumer), 0)
+            continuation.release_terminal_lock(continuation_request, lock_fd)
+        finally:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(lock_fd)
+        self.assertEqual(self.driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(self.host.save_calls, 1)
+
+    def test_acceptance_materializer_denies_payload_journal_and_request_drift(self) -> None:
+        for variant in ("payload", "journal", "request"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                self.driver.preflight(); self.driver.activate()
+                custody = self.base / "acceptance-custody"; custody.mkdir(mode=0o700)
+                materializer = custody / "fixed-current-acceptance-materialize.py"
+                copied_driver = custody / "converta-deploy.py"
+                payload = custody / "acceptance.payload.private.txt"
+                shutil.copyfile(ROOT / "scripts/fixed-current-acceptance-materialize.py", materializer)
+                shutil.copyfile(ROOT / "scripts/converta-deploy.py", copied_driver)
+                materializer.chmod(0o600); copied_driver.chmod(0o600)
+                payload.write_bytes("ACEITE TÉCNICO PASS\n".encode("utf-8")); payload.chmod(0o600)
+                binding = self.driver._journal_read()["binding"]
+                request = custody / "acceptance-request.private.json"
+                value = {
+                    "schemaVersion": 1, "action": "materialize_fixed_current_acceptance",
+                    "transactionRoot": str(self.transaction),
+                    "transactionJournal": str(self.transaction / "transaction.v1.private.json"),
+                    "acceptanceOutput": str(self.transaction / "acceptance.private.txt"),
+                    "acceptancePayload": str(payload), "acceptancePayloadSha256": sha(payload),
+                    "driver": str(copied_driver), "driverSha256": sha(copied_driver),
+                    "binding": {name: binding[name] for name in
+                                ("release", "target", "controlPlane", "components")},
+                }
+                put(request, value); sealed = sha(request)
+                if variant == "payload":
+                    payload.write_bytes(b"wrong\n")
+                elif variant == "journal":
+                    journal = self.driver._journal_read(); journal["state"] = "PREFLIGHT_PASS"
+                    put(self.transaction / "transaction.v1.private.json", journal)
+                else:
+                    value["binding"]["target"] = "0" * 40; put(request, value)
+                completed = subprocess.run(
+                    [sys.executable, "-B", str(materializer), "--request", str(request),
+                     "--request-sha256", sealed], capture_output=True, text=True)
+                self.assertEqual(completed.returncode, 2)
+                self.assertFalse(self.driver.acceptance.exists())
 
     def test_dump_instances_missing_is_only_equivalent_for_single_fork_process(self) -> None:
         self.driver.preflight(); self.driver.activate(); self.acceptance()
