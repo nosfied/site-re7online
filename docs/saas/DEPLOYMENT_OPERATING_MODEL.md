@@ -319,3 +319,9 @@ A configuração tenant-scoped de Meta App ID permanece pendente em janela próp
 ## Registro operacional vigente da API
 
 A API ativa da Tendência está autenticada por [TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json); frontend aa9527cc e worker e2e7f17a permanecem selecionados por componente. O registro é owner-relayed e não substitui as provas privadas da VPS.
+
+O fechamento posterior API+frontend da campanha integral está autenticado por
+[`CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json).
+A release 911a9708 substitui API e frontend, preserva o worker e termina com
+retenção 3/3. Esse registro não repara o rascunho histórico de 25 destinatários
+nem comprova adoção do adapter de `preparations`.

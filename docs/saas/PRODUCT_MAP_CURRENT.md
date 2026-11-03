@@ -1072,8 +1072,9 @@ links = 0. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
 remains owner PASS and real `****6787` repair remains a separate pending gate.
 
-Campaign static audience integrity (2026-11-02): LOCAL VALIDATED / NOT
-DEPLOYED. Read-only production evidence for Demo campaign `Campanha teste
+Campaign static audience integrity (2026-11-02): DEPLOYED_SANITIZED FOR NEW
+DRAFT CREATION / EXISTING DRAFT REPAIR PENDING. Read-only production evidence
+for Demo campaign `Campanha teste
 nov.01` proves a real creation-time truncation: campaign and encrypted seed
 metadata both persist 25 recipients/IDs, `STATIC_RECIPIENTS`, while the detail
 is not the source of that count and no outbound exists. The existing draft is
@@ -1087,9 +1088,11 @@ and a final signature comparison before the first write denies eligibility
 drift without creating campaign or seed. Local
 PostgreSQL regression covers 930 eligible recipients, page 2, blocked contacts,
 filter drift, both conversation-filter values beyond 25, an opt-out race,
-cross-tenant exclusion, persisted seed and detail; no send,
-schedule, schema, production build or deploy occurred. Repairing the preserved
-25-recipient draft is a separate, not-authorized effect.
+cross-tenant exclusion, persisted seed and detail. The immutable API+frontend
+release `immutable-911a9708-vps-20261102T221325Z` was subsequently deployed and
+closed as `DEPLOYED_SANITIZED`; no send, schedule or repair occurred. The fix
+therefore applies to new draft creation. Repairing the preserved 25-recipient
+draft remains a separate, not-authorized effect.
 
 Campaign UX / result truth integration (2026-09-18): integrated locally on the
 current Operational Queue baseline and ready for owner revalidation; not

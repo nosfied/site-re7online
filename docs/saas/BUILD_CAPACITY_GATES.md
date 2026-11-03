@@ -113,11 +113,18 @@ perfil API+frontend: 1.610.612.736 B de worktree, 1.342.177.280 B de runtimes,
 | margem contra lacuna de amostragem | segunda retenção do envelope de falha | 268.435.456 |
 
 Para o target integrado `911a970838233ae92e00a45ef371f619511d8602`, a
-observação preservada de 02/11/2026 registrou 10.731.368.448 B livres: o orçamento
-de bytes revisado fica qualificado com 1.067.692.032 B de margem. O contrato ainda
-exige 800.000 inodes e o saldo correspondente precisa ser recapturado na janela.
-Isso é qualificação local/versionada, não autorização nem medição válida para uma
-futura janela; admissão produtiva ainda precisa recapturar bytes e inodes.
+observação preservada de 02/11/2026 registrou 10.731.368.448 B livres. A geração
+produtiva passou a admissão, executou um único build e registrou as oito fases do
+lifecycle sem lacuna nem invasão do saldo protegido. O menor saldo observado
+durante o build foi aproximadamente 7,52 GB; a amostragem continua sendo pico
+observado, não garantia de capturar todo temporário.
+
+Após instalação, ativação e fechamento, a retenção 3/3 retirou worktree e os dois
+runtimes derivados. O saldo medido passou de 7.397.990.400 para 9.406.750.720 B:
+ganho físico de 2.008.760.320 B, com pacote, release e retornos preservados. Essa
+operação comprova a prevenção no produtor de releases. Não comprova adoção do
+adapter de `preparations`, que permanece separada, nem autoriza reutilizar a
+medição terminal como reserva futura.
 
 Os checkpoints históricos autenticam o perfil adotado e o saldo nas fronteiras,
 mas não mediram continuamente os temporários internos de tar/XZ/extração. Por isso

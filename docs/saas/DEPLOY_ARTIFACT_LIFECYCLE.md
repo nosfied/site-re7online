@@ -1105,6 +1105,36 @@ A próxima classificação de artefatos segue
 Ela separa ativo, rollback, evidência, dado único, derivado e duplicado; idade ou
 tamanho isolados não autorizam retirada.
 
+## Campanha integral 911a9708 — DEPLOYED_SANITIZED
+
+Fonte: execução canônica do Codex local em 02/11/2026. A release
+`immutable-911a9708-vps-20261102T221325Z` consumiu o mesmo pacote verificado,
+foi instalada inertemente e ativada uma única vez para API+frontend. O worker
+`immutable-e2e7f17a-20261022T005110Z` permaneceu com PID 2233, restart 0 e a
+mesma release. O fechamento fez exatamente um `pm2 save` e terminou
+`DEPLOYED_SANITIZED`.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| Pacote | `83a91d1455670c12731e79e4e4dd7d060c0ff4d65ef3a59dba4dea9729ac59e2` |
+| Manifesto | `27e899dde0d37ffa2d3686f46390ed2baef099e81e966d2b6eb603ee942d72b8` |
+| Índice | `97365b7fdc318301086e7a84bf7c083c4d8017df9b51c8cc32b04099dceb2ec1` |
+| Dump final | `8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a` |
+| Marker | `a22fa40066e6e0ac61eb11bab0f10a69e06fcec5f18a1838436685293e9b8366` |
+| Transaction journal | `ed3f9576550d535121c23e581675daa2849fc2ad68671ec05e8b1460ef6e7946` |
+| Retention receipt | `96ddd2f657bd7ea78841d4f81e696c51fa5ea34dcb7e2e702d3e2100704c90fc` |
+| Retention journal | `925e40c84db1cad6f2987ccc12240051acc8119bac27900399140551e451a1a0` |
+| Review terminal | `e04add77e89a1a299e0199a2b3ceb58f89c7b7de178190d333a08cedf5683845` |
+
+Os três comandos retiraram somente worktree e runtimes derivados de API/frontend.
+O saldo cresceu de 7.397.990.400 para 9.406.750.720 bytes: 2.008.760.320 bytes
+efetivamente recuperados. Pacote, release instalada e retornos foram preservados.
+Não repetir build, instalação, ativação, save ou retenção desta geração.
+
+O lifecycle do produtor de releases foi comprovado por esta operação. O adapter
+de `preparations` não foi necessário e sua adoção produtiva continua pendente;
+não fabricar preparação volumosa para demonstrá-la.
+
 ## Reconciliação versionada dos papéis de release — implementada localmente
 
 **Estado: IMPLEMENTADA E ENSAIADA NO REPOSITÓRIO / NÃO PUBLICADA NO GRAFO
