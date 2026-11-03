@@ -1436,6 +1436,35 @@
       "productionChangedByRetirement": false,
       "locksFreeAfterCompletion": true
     },
+    "b96SuccessorRetirement20261103": {
+      "state": "SANITIZED",
+      "releaseId": "immutable-b96eb779-vps-20261028T025159Z",
+      "target": "b96eb779f4ce091a79cf67e97bcd25be255e1af3",
+      "intentSha256": "1fb36999039f8553dce364891d9669b4690cc3c8a52727b2dc2e59049131175c",
+      "authorizationSha256": "b5d0b0037eb23a84828ac9445f285deeea65dd8fc6a1b39ff534992a9104a8c1",
+      "authorizationConsumed": true,
+      "receiptSha256": "15aa21e258fd2fea42ff6ca49041d581d644b049e55db0864821fe0b038629a6",
+      "commandJournalSha256": "a129f919897d87cdb9b21ba6098e39a09df65940421f4203613301b420afa0b7",
+      "terminalReviewSha256": "4b1c5a2bc32b22418e2761b35b3b4bce9ca07628a10e9bb4ce74a21f9599c7b4",
+      "canonicalClosureSha256": "73feb66a4ebecfc27bcf54b17f407d2486afdc9857124d044b7d1a03df4e5154",
+      "canonicalClosureChainLength": 2,
+      "historicalEffectsRecognized": 3,
+      "newCommandsAttempted": 1,
+      "newCommandsCompleted": 1,
+      "releaseAbsent": true,
+      "recoveredBytes": 988491776,
+      "availableBytesBefore": 9268555776,
+      "finalAvailableBytes": 10257047552,
+      "buildGateBytes": 9663676416,
+      "marginAboveBuildGateBytes": 593371136,
+      "sentinelSha256": "d7cf1d3c2596891ad8208fd6fdd2c8b4ca2028738a51217bc30dfaec8fe99535",
+      "sentinelDevice": 64769,
+      "sentinelInode": 803457,
+      "sentinelFlockFree": true,
+      "productionChanged": false,
+      "repeatForbidden": true,
+      "campaignBuildAuthorized": false
+    },
     "preflightCompleteness": {
       "exactConsumerModesRequired": true,
       "checkoutModeNotExecutionAuthority": true,
@@ -1494,15 +1523,15 @@
     "existingDraftRepairPending": true,
     "preparationsAdapterAdoption": "SEPARATE_PENDING_FRONT"
   },
-  "updatedAtDate": "2026-11-02",
-  "updatedAtUtcScope": "CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_DEPLOYED_SANITIZED",
+  "updatedAtDate": "2026-11-03",
+  "updatedAtUtcScope": "B96_SUCCESSOR_GENERATION_RETIREMENT_SANITIZED",
   "lastOperationalChange": {
-    "state": "DEPLOYED_SANITIZED",
-    "front": "CAMPAIGN_AUDIENCE_INTEGRAL_DRAFT_CREATION",
-    "record": "docs/saas/releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json",
-    "releaseId": "immutable-911a9708-vps-20261102T221325Z",
-    "targetCommit": "911a970838233ae92e00a45ef371f619511d8602",
-    "repeatBuildOrActivation": false,
-    "nextFront": "EXISTING_CAMPAIGN_DRAFT_REPAIR_AND_PREPARATIONS_ADAPTER_ADOPTION_SEPARATE"
+    "state": "SANITIZED",
+    "front": "B96_SUCCESSOR_GENERATION_RETIREMENT",
+    "record": "docs/saas/releases/B96_GENERATION_RETIREMENT_2026-11-03_SANITIZED.json",
+    "releaseId": "immutable-b96eb779-vps-20261028T025159Z",
+    "targetCommit": "b96eb779f4ce091a79cf67e97bcd25be255e1af3",
+    "repeatRetirement": false,
+    "nextFront": "CAMPAIGN_BUILD_PACKAGE_FRESH_RECAPTURE_AND_SIX_GENERATION_CHAIN_REMAIN_SEPARATE"
   }
 }
