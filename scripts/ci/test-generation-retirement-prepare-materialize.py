@@ -39,7 +39,7 @@ def binding(path: Path) -> dict[str, str]:
 
 
 class PrepareMaterializationFixture:
-    def __init__(self):
+    def __init__(self, single_generation: bool = False):
         self.temp = tempfile.TemporaryDirectory(prefix="retirement-prepare-materialized-")
         self.root = Path(self.temp.name)
         self.repo = self.root / "repo"; self.repo.mkdir(mode=0o755)
@@ -70,19 +70,28 @@ class PrepareMaterializationFixture:
         self.graph = self.evidence / "successor-graph.private.json"
         self.projection = self.evidence / "projection.private.json"
         self.receipt = self.evidence / "receipt.private.json"
-        self.generations = [
-            self.make_generation("d436", "immutable-synthetic-d436", "a" * 40),
-            self.make_generation("f160", "immutable-synthetic-f160", "b" * 40),
-        ]
+        if single_generation:
+            self.generations = [self.make_generation(
+                "b96", "immutable-synthetic-b96", "c" * 40,
+                "rollbackReleases", "SUPERSEDED")]
+        else:
+            self.generations = [
+                self.make_generation("d436", "immutable-synthetic-d436", "a" * 40,
+                                     "rollbackReleases", "DEPLOYED"),
+                self.make_generation("f160", "immutable-synthetic-f160", "b" * 40,
+                                     "transitiveReturnReleases", "DEPLOYED"),
+            ]
         self.active_api = "immutable-current-api"
         self.active_frontend = "immutable-current-frontend"
         self.immediate_api = "immutable-immediate-api"
         self.immediate_frontend = "immutable-immediate-frontend"
         self.source_graph = self.evidence / "source-graph.private.json"
         source_graph = {"activeReleases": [self.active_api, self.active_frontend],
-            "rollbackReleases": [self.immediate_api, self.immediate_frontend,
-                                  self.generations[0]["releaseId"]],
-            "transitiveReturnReleases": [self.generations[1]["releaseId"]],
+            "rollbackReleases": [self.immediate_api, self.immediate_frontend] +
+                [item["releaseId"] for item in self.generations
+                 if item["expectedRole"] == "rollbackReleases"],
+            "transitiveReturnReleases": [item["releaseId"] for item in self.generations
+                                           if item["expectedRole"] == "transitiveReturnReleases"],
             "candidateReleases": [],
             "installedVerifiedReleases": sorted([self.active_api, self.active_frontend,
                 self.immediate_api, self.immediate_frontend] +
@@ -104,8 +113,7 @@ class PrepareMaterializationFixture:
             "activationEvidence": activation,
             "entries": [{"releaseId": item["releaseId"],
                 "installedReleasePath": str(item["release"]),
-                "expectedRole": "rollbackReleases" if item["name"] == "d436"
-                                else "transitiveReturnReleases",
+                "expectedRole": item["expectedRole"],
                 "decision": "CLOSE_OPERATIONAL_DEPENDENCY",
                 "contract": binding(item["contract"]), "lifecycle": binding(item["lifecycle"]),
                 "review": binding(item["review"]), "closure": item["closure"]}
@@ -139,7 +147,8 @@ class PrepareMaterializationFixture:
                     {"path": str(self.custody / "control" / name), "sha256": sha(ROOT / "scripts" / name), "copied": True}
                     for name in ("generation-retirement.py", "preparation_artifact_lifecycle.py",
                                  "capacity-recovery.py", "converta-release.py")],
-                "dependencies": [], "deploymentState": {"state": "DEPLOYED"},
+                "dependencies": [],
+                "deploymentState": {"state": item["deploymentState"]},
                 "canonicalRoots": {"repository": str(self.repo), "worktrees": str(self.worktrees),
                     "outputs": str(self.outputs), "releases": str(self.releases),
                     "staging": str(self.staging), "evidence": [str(self.evidence)]},
@@ -209,7 +218,8 @@ class PrepareMaterializationFixture:
                                  "transactionJournal": binding(journal)}
         return result
 
-    def make_generation(self, name: str, release_id: str, target: str):
+    def make_generation(self, name: str, release_id: str, target: str,
+                        expected_role: str, deployment_state: str):
         output = self.outputs / name; output.mkdir(mode=0o755)
         release = self.releases / release_id; release.mkdir(mode=0o755); (release / "app").write_text(name)
         package = output / f"{release_id}.tar.xz"; package.write_bytes(b"package-" + name.encode())
@@ -237,6 +247,7 @@ class PrepareMaterializationFixture:
             "lifecycleSha256": sha(lifecycle), "state": "SANITIZED", "reviewer": "prior-owner",
             "reason": "prior evidence", "evidenceSha256": "0" * 64})
         return {"name": name, "releaseId": release_id, "targetCommit": target,
+                "expectedRole": expected_role, "deploymentState": deployment_state,
                 "release": release, "contract": contract, "lifecycle": lifecycle, "review": review}
 
     def materialize(self):
@@ -266,6 +277,64 @@ class PrepareMaterializationFixture:
 
 
 class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
+    def test_single_reconciled_generation_materializes_and_real_prepare_uses_superseded_state(self):
+        fixture = PrepareMaterializationFixture(single_generation=True)
+        try:
+            item = fixture.generations[0]
+            prior_review = item["review"].read_bytes()
+            operational = json.loads(item["operational"].read_text())
+            self.assertEqual(operational["deploymentState"], {"state": "SUPERSEDED"})
+
+            result = fixture.materialize()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = json.loads(
+                (fixture.custody / "prepare-materialization.private.json").read_text())
+            self.assertEqual([plan["releaseId"] for plan in manifest["prepares"]],
+                             [item["releaseId"]])
+            self.assertEqual(manifest["sourceReconciliation"]["receipt"],
+                             binding(fixture.receipt))
+
+            plan = manifest["prepares"][0]
+            completed = subprocess.run(plan["argv"], text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            intent = json.loads(Path(plan["intentOutput"]).read_text())
+            self.assertEqual(intent["releaseId"], item["releaseId"])
+            self.assertEqual(len(intent["commands"]), 1)
+            self.assertEqual(intent["commands"][0]["class"], "RELEASE_RUNTIME")
+            self.assertEqual(intent["commands"][0]["path"], str(item["release"]))
+            self.assertEqual(intent["commands"][0]["literal"],
+                             f"/usr/bin/rm -r -- {item['release']}")
+            self.assertEqual(Path(plan["priorReview"]["path"]).read_bytes(), prior_review)
+        finally:
+            fixture.close()
+
+    def test_generation_cardinality_and_exact_set_are_closed(self):
+        mutations = {
+            "omitted": lambda generations: [],
+            "duplicate": lambda generations: generations + [dict(generations[0])],
+            "additional": lambda generations: generations + [{
+                **generations[0], "name": "extra", "releaseId": "immutable-extra"}],
+        }
+        expected = {
+            "omitted": "PREPARE_GENERATIONS",
+            "duplicate": "PREPARE_GENERATION_IDENTITY",
+            "additional": "PREPARE_RECONCILIATION_GENERATIONS",
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                fixture = PrepareMaterializationFixture(single_generation=True)
+                try:
+                    request = json.loads(fixture.request.read_text())
+                    request["generations"] = mutate(request["generations"])
+                    private_json(fixture.request, request)
+                    result = fixture.materialize()
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn(expected[label], result.stdout)
+                    self.assertFalse(fixture.custody.exists())
+                finally:
+                    fixture.close()
+
     def test_outside_checkout_materialization_and_real_prepare_for_both_generations(self):
         fixture = PrepareMaterializationFixture()
         try:
