@@ -48,6 +48,7 @@ RICH_GRAPH_KEYS = {
     "activeReleases", "rollbackReleases", "transitiveReturnReleases",
     "candidateReleases", "installedVerifiedReleases", "supersededCandidates",
 }
+PRIOR_EVIDENCE_KEYS = {"intent", "receipt", "journal"}
 
 
 def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
@@ -110,7 +111,38 @@ def _bound_json(binding: Any, predicate: str) -> dict[str, Any]:
     return value
 
 
-def _validate_reconciliation_bundle(request: dict[str, Any]) -> None:
+def _bound_file(binding: Any, predicate: str) -> dict[str, str]:
+    if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+            not isinstance(binding.get("path"), str)):
+        deny(predicate)
+    require_sha256(binding.get("sha256"), predicate)
+    path = Path(binding["path"])
+    SUPPORT_MODULE.regular_identity(path, predicate)
+    if sha256_file(path) != binding["sha256"]:
+        deny(predicate)
+    return {"path": str(path), "sha256": binding["sha256"]}
+
+
+def _prior_evidence(entry: dict[str, Any], result: dict[str, Any]) -> dict[str, dict[str, str]]:
+    closure = entry.get("closure")
+    if result.get("closure") != closure:
+        deny("PREPARE_RECONCILIATION_CLOSURE_DIVERGENCE")
+    if (not isinstance(closure, dict) or set(closure) != {"kind", "chain"} or
+            closure.get("kind") != "CANONICAL_RETIREMENT" or
+            not isinstance(closure.get("chain"), list) or not closure["chain"]):
+        deny("PREPARE_RECONCILIATION_CLOSURE")
+    normalized = []
+    for link in closure["chain"]:
+        if not isinstance(link, dict) or set(link) != PRIOR_EVIDENCE_KEYS:
+            deny("PREPARE_RECONCILIATION_CLOSURE")
+        normalized.append({key: _bound_file(link[key],
+                           f"PREPARE_PRIOR_{key.upper()}_BINDING")
+                           for key in ("intent", "receipt", "journal")})
+    return normalized[-1]
+
+
+def _validate_reconciliation_bundle(
+        request: dict[str, Any]) -> dict[str, dict[str, dict[str, str]]]:
     source = request["sourceReconciliation"]
     original = _bound_json(source["request"], "PREPARE_RECONCILIATION_REQUEST")
     successor = _bound_json(source["successorGraph"], "PREPARE_SUCCESSOR_GRAPH")
@@ -155,6 +187,7 @@ def _validate_reconciliation_bundle(request: dict[str, Any]) -> None:
             len(result_by_release) != len(receipt["results"])):
         deny("PREPARE_RECONCILIATION_GENERATIONS")
 
+    prior_by_release = {}
     for release, generation in generation_by_release.items():
         entry = entry_by_release[release]
         result = result_by_release[release]
@@ -176,6 +209,8 @@ def _validate_reconciliation_bundle(request: dict[str, Any]) -> None:
                 source["successorGraph"] or
                 any(operational.get(key) != successor.get(key) for key in RICH_GRAPH_KEYS)):
             deny("PREPARE_RECONCILIATION_GENERATION_DIVERGENCE")
+        prior_by_release[release] = _prior_evidence(entry, result)
+    return prior_by_release
 
 
 def materialize(control_root: Path, custody: Path, source_commit: str,
@@ -183,7 +218,7 @@ def materialize(control_root: Path, custody: Path, source_commit: str,
     if not GIT_SHA1.fullmatch(source_commit):
         deny("CONTROL_SOURCE_COMMIT_FORMAT")
     request = _closed_request(request_path, request_sha256)
-    _validate_reconciliation_bundle(request)
+    prior_by_release = _validate_reconciliation_bundle(request)
     if custody.exists() or custody.is_symlink():
         deny("PREPARE_CUSTODY_EXISTS")
     custody.mkdir(mode=0o700, parents=False)
@@ -228,14 +263,20 @@ def materialize(control_root: Path, custody: Path, source_commit: str,
             "--review-output", item["review"]["path"],
             "--reviewer", item["reviewer"], "--reason", item["reason"],
         ]
+        prior = prior_by_release[item["releaseId"]]
+        for name in ("intent", "receipt", "journal"):
+            argv.extend([f"--prior-{name}", prior[name]["path"],
+                         f"--prior-{name}-sha256", prior[name]["sha256"]])
         plans.append({"name": item["name"], "releaseId": item["releaseId"],
                       "targetCommit": item["targetCommit"], "argv": argv,
+                      "priorEvidence": prior,
                       "priorReview": file_binding(preserved_review),
                       "intentOutput": str(intent), "commandsOutput": str(commands)})
     reopened_request = _closed_request(request_path, request_sha256)
     if reopened_request != request:
         deny("PREPARE_REQUEST_DRIFT")
-    _validate_reconciliation_bundle(reopened_request)
+    if _validate_reconciliation_bundle(reopened_request) != prior_by_release:
+        deny("PREPARE_RECONCILIATION_EVIDENCE_DRIFT")
     result = {"schemaVersion": 1, "state": "READY_FOR_RETIREMENT_PREPARE",
               "sourceCommit": source_commit,
               "request": {"path": str(request_path), "sha256": request_sha256},

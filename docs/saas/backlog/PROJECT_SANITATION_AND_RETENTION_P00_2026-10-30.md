@@ -839,3 +839,14 @@ dependências não reconciliadas protegidos. Somente depois da aceitação do gr
 projeção e receipt sucessores uma fase `generation-retirement prepare` separada
 poderá dizer se o único efeito futuro é a release b96. Ganho estimado não é ganho
 qualificado nem recuperado.
+
+A reconciliação b96 foi concluída sem efeitos e permanece irrepetível. A custódia
+de preparação `p00-generation-retirement-b96-d662e503-v3` consumiu uma única fase
+`prepare`, encerrada em `DENY` antes de intenção ou comandos: o materializador não
+encaminhou a closure histórica pelos argumentos `--prior-intent`, `--prior-receipt`
+e `--prior-journal`, e o executor encontrou ausente o worktree já retirado pelo
+fechamento frontend-only 3/3. Review anterior, grafo sucessor, projeção e receipt
+permaneceram byte-exatos; não houve autorização nem efeito destrutivo. Essa custódia
+é terminal e não pode ser reapresentada. A continuação exige o materializador
+versionado autenticando e encaminhando a evidência anterior; somente uma custódia
+sucessora, após integração e revisão própria, poderá executar novo `prepare`.
