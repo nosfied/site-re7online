@@ -4,7 +4,7 @@ import type { CampaignMetaStatus, CampaignMetaSummary } from "../campaigns/campa
 import { projectCampaignJobExecution, aggregateCampaignExecution, type CampaignExecutionPresentation } from "../campaigns/campaignExecutionPresentation.js";
 import { projectCampaignLifecyclePresentation } from "../campaigns/campaignLifecyclePresentation.js";
 import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
-import { campaignRecipientEligibility, campaignRecipientEligibilityBatch, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
+import { campaignRecipientEligibilityBatch, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
 import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
 import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
 import { resolveAllowAutomationConversationsInInbox, saveAllowAutomationConversationsInInbox } from "../config/tenantOperationalConfig.js";
