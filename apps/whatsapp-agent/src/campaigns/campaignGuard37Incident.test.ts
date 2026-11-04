@@ -65,14 +65,14 @@ test("guard37: international identity is blocked before provider and does not cl
   assert.equal(await db.event.count({ where: { clientId, eventName: "campaign.message.submit_started", messageId: `campaign.${campaign.id}.1` } }), 0);
   assert.equal(await db.event.count({ where: { clientId, eventName: "campaign.recipient.import_blocked", messageId: campaign.id } }), 1);
   assert.equal(errors.some(e => e.event === "campaign.result.persistence_pending"), false);
-  let ledger: any;
+  let ledger: { open: boolean; tasks: Record<string, unknown> } = { open: false, tasks: {} };
   for (let attempt = 0; attempt < 40; attempt += 1) {
     ledger = JSON.parse(fs.readFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!, "utf8"));
     if (Object.keys(ledger.tasks).length === 0) break;
     await new Promise(resolve => setTimeout(resolve, 25));
   }
   assert.equal(ledger.open, true);
-  const tasks: any[] = Object.values(ledger.tasks);
+  const tasks = Object.values(ledger.tasks);
   assert.equal(tasks.length, 0);
   const completed = await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id } });
   assert.equal(completed.status, "completed");

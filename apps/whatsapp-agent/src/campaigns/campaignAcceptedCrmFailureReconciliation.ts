@@ -20,10 +20,13 @@ export type AcceptedCrmFailureBindings = {
 
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) =>
   item && typeof item === "object" && !Array.isArray(item)
-    ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]))
+    ? Object.fromEntries(Object.keys(item).sort().map(key => [key, (item as Record<string, unknown>)[key]]))
     : item);
 const hash = (value: unknown) => crypto.createHash("sha256").update(canonical(value)).digest("hex");
-const record = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
+const record = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 function requireThat(value: unknown, reason: string): asserts value { if (!value) throw new Error(reason); }
 const messageIdFor = (b: AcceptedCrmFailureBindings) => `campaign.${b.campaignId}.${b.position}`;
 const receiptRequestId = (b: AcceptedCrmFailureBindings) => `accepted-crm-failure:${b.acceptedEventId}`;
@@ -130,6 +133,8 @@ export async function verifyAcceptedCrmFailure(db: PrismaClient, b: AcceptedCrmF
   const payload = record(receipt.payloadJson);
   requireThat(payload.providerCalls === 0 && payload.campaignRemainsSending === true && payload.guardRemainsClosed === true &&
     payload.jobContinuationAuthorized === false && typeof payload.taskHash === "string", "crm_failure_receipt_contract_drift");
+  requireThat(typeof payload.dispositionEventId === "string" && typeof payload.failureEventId === "string",
+    "crm_failure_receipt_effect_binding_invalid");
   requireThat(await db.event.count({ where: { id: { in: [payload.dispositionEventId, payload.failureEventId] }, clientId: b.clientId,
     messageId: messageIdFor(b) } }) === 2, "crm_failure_receipt_effect_missing");
   return { receiptId: receipt.id, taskHash: payload.taskHash as string, terminalForAcceptedResult: true as const,

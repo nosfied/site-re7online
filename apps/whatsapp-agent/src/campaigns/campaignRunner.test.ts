@@ -1820,7 +1820,7 @@ test("valid then unsupported international then invalid then valid blocks per re
   const final = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
   assert.equal(final.status, "completed"); assert.equal(final.sentCount, 2); assert.equal(final.blockedCount, 2);
   const blocked = await prisma.event.findMany({ where: { clientId, messageId: campaign.id, eventName: "campaign.recipient.import_blocked" }, orderBy: { createdAt: "asc" } });
-  assert.deepEqual(blocked.map(row => (row.payloadJson as any).reason), ["unsupported_international_identity", "invalid_whatsapp_identity"]);
+  assert.deepEqual(blocked.map(row => (row.payloadJson as { reason?: unknown }).reason), ["unsupported_international_identity", "invalid_whatsapp_identity"]);
   assert.equal(campaignOperationsStatus().open, true); assert.equal(campaignOperationsStatus().tasks.length, 0);
 });
 
