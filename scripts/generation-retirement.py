@@ -3172,7 +3172,10 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
         request["activationEvidence"], source, release_root)
     if any(release not in source["rollbackReleases"] for release in immediate_rollbacks.values()):
         deny("release_reconciliation_immediate_rollback_role")
-    successor = {key: list(value) for key, value in source.items()}
+    successor = {
+        key: (dict(value) if key == "immediateRollbackReleases" else list(value))
+        for key, value in source.items()
+    }
     results = []
     private_parents: set[str] = set()
     seen: set[str] = set()
