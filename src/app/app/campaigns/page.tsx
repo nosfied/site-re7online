@@ -5007,7 +5007,9 @@ export default function AppCampaignsPage() {
                     </p>
                   </div>
 
-                  {!sendingDraft && (campaignAudienceSummaryItems.length > 0 || draftRecipientPage) ? (
+                  {!sendingDraft
+                  && (selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled")
+                  && (campaignAudienceSummaryItems.length > 0 || draftRecipientPage) ? (
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold">
