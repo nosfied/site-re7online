@@ -252,10 +252,12 @@ Não criar inputs por edição de baselines históricas para fazer capturas coin
 Pelo procedimento canônico, API/frontend devem passar por
 `deploy-preparation-admission.py --run-preparation`. A ação reabre o report da
 admissão, o contrato e o input, autentica o caminho fixo e o SHA do produtor
-materializado e o executa pelo mesmo FD aberto com `O_NOFOLLOW`. Assim, `OPEN` e
-orçamento são persistidos antes do primeiro `copy`/`tar`. O entrypoint do produtor
-ainda aceita tecnicamente uma chamada direta; ela não é a rota canônica e não prova
-adoção pelos fluxos produtivos. O encerramento continua exclusivamente em
+materializado, abre-o com `O_NOFOLLOW` e carrega os bytes autenticados no próprio
+callsite. Assim, `OPEN` e orçamento são persistidos antes do primeiro `copy`/`tar`.
+O CLI API/frontend do produtor nega antes da alocação, inclusive quando o chamador
+fornece seu próprio FD e pipe; somente a função interna chamada pela admissão possui
+o caminho de mutação. Isso ainda não prova adoção pelos fluxos produtivos. O
+encerramento continua exclusivamente em
 `generation-retirement.py review-preparation`: `SANITIZED` exige ausência dos
 artefatos; resíduo ou interrupção permanece `RETENTION_DEBT`. Não há limpeza
 automática nem fallback para o checkout.

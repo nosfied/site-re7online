@@ -277,6 +277,39 @@ class AdapterTests(unittest.TestCase):
         input_path.write_text(json.dumps(value)); input_path.chmod(0o600)
         copied = admitted / 'preparation-producer-root/scripts/operational_preparers_v3.py'
         admission_report = admitted / 'admission-report.private.json'
+        caller_fd = os.open(copied, os.O_RDONLY | os.O_NOFOLLOW)
+        launch_read, launch_write = os.pipe()
+        try:
+            caller_binding = (json.dumps({
+                'adapter': 'api',
+                'contractSha256': value['preparationArtifactContract']['sha256'],
+                'controllerPid': os.getpid(),
+                'inputSha256': hashlib.sha256(input_path.read_bytes()).hexdigest(),
+                'nonce': '1' * 64,
+                'output': str(self.parent),
+                'producerPid': os.getpid(),
+                'producerSha256': hashlib.sha256(copied.read_bytes()).hexdigest(),
+                'reportSha256': hashlib.sha256(admission_report.read_bytes()).hexdigest(),
+                'schemaVersion': 2,
+            }, sort_keys=True, separators=(',', ':')) + '\n').encode()
+            os.write(launch_write, caller_binding); os.close(launch_write); launch_write = -1
+            direct = __import__('subprocess').run([
+                '/usr/bin/python3', '-I', '-B', '-E', '-s', f'/proc/self/fd/{caller_fd}',
+                '--adapter', 'api', '--input', str(input_path),
+                '--input-sha256', hashlib.sha256(input_path.read_bytes()).hexdigest(),
+                '--admission-report', str(admission_report),
+                '--admission-report-sha256', hashlib.sha256(admission_report.read_bytes()).hexdigest(),
+                '--admission-launch-fd', str(launch_read),
+                '--output', str(self.parent), '--local-only'], pass_fds=(caller_fd, launch_read),
+                capture_output=True, text=True,
+                env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+        finally:
+            if launch_write >= 0: os.close(launch_write)
+            os.close(launch_read)
+            os.close(caller_fd)
+        self.assertNotEqual(direct.returncode, 0)
+        self.assertEqual(json.loads(direct.stdout)['result'], 'DENY')
+        self.assertFalse((self.parent / generation).exists())
         result = __import__('subprocess').run([
             __import__('sys').executable, '-B', str(HERE / 'deploy-preparation-admission.py'),
             '--run-preparation', '--materialized-root', str(admitted),

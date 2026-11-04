@@ -683,6 +683,22 @@ class LegacyBatchV1PreserveFixture(LegacyA959V1PreserveFixture):
 
 
 class GenerationRetirementTest(unittest.TestCase):
+    def test_rich_graph_preserves_component_rollbacks_and_denies_omission(self):
+        graph = {
+            "activeReleases": ["active"],
+            "rollbackReleases": ["api-return", "frontend-return", "historical"],
+            "transitiveReturnReleases": [], "candidateReleases": [],
+            "installedVerifiedReleases": ["active", "api-return", "frontend-return", "historical"],
+            "supersededCandidates": [],
+            "immediateRollbackReleases": {
+                "api": "api-return", "frontend": "frontend-return"},
+        }
+        self.assertEqual(MODULE._rich_graph(graph, "fixture")["immediateRollbackReleases"],
+                         {"api": "api-return", "frontend": "frontend-return"})
+        graph["immediateRollbackReleases"].pop("frontend")
+        with self.assertRaisesRegex(MODULE.Denied, "release_reconciliation_graph"):
+            MODULE._rich_graph(graph, "fixture")
+
     def test_versioned_d436_f160_descriptors_are_closed_and_use_exact_batch_ordinals(self):
         expected = {
             "immutable-d436239e-vps-20261026T131821Z": ("2", "6", "7"),

@@ -219,7 +219,11 @@ raise SystemExit(2 if os.environ.get('FAKE_RETIREMENT')=='fail' else 0)
         self.retirement_authorization = self.root / "retirement-authorization.private.json"; self.retirement_authorization.write_text('{}\n'); self.retirement_authorization.chmod(0o600)
         self.retirement_operational = self.root / "retirement-operational.private.json"
         self.retirement_operational.write_text(json.dumps({
-            "activeReleases":[self.rollback.name,"immutable-api-preserved"],"rollbackReleases":[],"transitiveReturnReleases":[],
+            "activeReleases":[self.rollback.name,"immutable-api-preserved"],
+            "rollbackReleases":[self.rollback.name,"immutable-api-return"],
+            "immediateRollbackReleases":{
+                "api":"immutable-api-return","frontend":self.rollback.name},
+            "transitiveReturnReleases":[],
             "candidateReleases":[self.release.name],"installedVerifiedReleases":[self.release.name],"supersededCandidates":[],
             "observations":{"currentLinks":[{"path":str(self.current/"frontend"),"target":str(self.rollback/"frontend-runtime")}],
                             "pm2":{"path":str(self.pm2),"sha256":digest(self.pm2),"fingerprintSha256":"0"*64},
@@ -475,6 +479,101 @@ class FrontendExecutorTest(unittest.TestCase):
             self.assertNotIn("immutable-api-preserved",operational["rollbackReleases"])
             self.assertEqual(int(f.counter.read_text()),8)
         finally:f.close()
+
+    def test_finalize_preserves_api_and_updates_frontend_immediate_rollback(self):
+        f=ExecutorFixture()
+        try:
+            operational=json.loads(f.retirement_operational.read_text())
+            operational["rollbackReleases"]=["immutable-api-return","immutable-frontend-old"]
+            operational["immediateRollbackReleases"]={
+                "api":"immutable-api-return","frontend":"immutable-frontend-old"}
+            f.retirement_operational.write_text(json.dumps(operational,sort_keys=True)+"\n")
+            f.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(f.retirement_operational)
+            r=f.run();self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+            result=f.finalize();self.assertEqual(result.returncode,0,(result.stdout,result.stderr))
+            final=json.loads((f.tx/"generation-operational.final.private.json").read_text())
+            self.assertEqual(final["immediateRollbackReleases"],{
+                "api":"immutable-api-return","frontend":f.rollback.name})
+            self.assertIn("immutable-frontend-old",final["rollbackReleases"])
+        finally:f.close()
+
+    def test_accumulated_rollback_role_denies_before_frontend_selection(self):
+        f=ExecutorFixture()
+        try:
+            operational=json.loads(f.retirement_operational.read_text())
+            operational["rollbackReleases"]=[f.rollback.name,"immutable-api-return","historical"]
+            operational["immediateRollbackReleases"]={
+                "api":"immutable-api-return","frontend":f.rollback.name}
+            f.retirement_operational.write_text(json.dumps(operational,sort_keys=True)+"\n")
+            f.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(f.retirement_operational)
+            result=f.run()
+            self.assertNotEqual(result.returncode,0,(result.stdout,result.stderr))
+            self.assertIn("ROLLBACK_ROLE_RECONCILIATION_REQUIRED",result.stderr)
+            self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
+            self.assertFalse((f.tx/"selection-intent.private.json").exists())
+            self.assertEqual(int(f.counter.read_text()),7)
+        finally:f.close()
+
+    def test_legacy_graph_denies_frontend_only_before_selection(self):
+        f=ExecutorFixture()
+        try:
+            operational=json.loads(f.retirement_operational.read_text())
+            operational.pop("immediateRollbackReleases")
+            f.retirement_operational.write_text(json.dumps(operational,sort_keys=True)+"\n")
+            f.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(f.retirement_operational)
+            result=f.run()
+            self.assertNotEqual(result.returncode,0,(result.stdout,result.stderr))
+            self.assertIn("ROLLBACK_ROLE_LEGACY_TRANSITION_REQUIRED",result.stderr)
+            self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
+            self.assertFalse((f.tx/"selection-intent.private.json").exists())
+        finally:f.close()
+
+    def test_two_partial_activations_require_reconciliation_and_preserve_api_return(self):
+        first=ExecutorFixture()
+        historical="immutable-frontend-historical-return"
+        try:
+            operational=json.loads(first.retirement_operational.read_text())
+            operational["rollbackReleases"]=["immutable-api-return",historical]
+            operational["immediateRollbackReleases"]={
+                "api":"immutable-api-return","frontend":historical}
+            first.retirement_operational.write_text(json.dumps(operational,sort_keys=True)+"\n")
+            first.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(first.retirement_operational)
+            launched=first.run();self.assertEqual(launched.returncode,0,(launched.stdout,launched.stderr))
+            closed=first.finalize();self.assertEqual(closed.returncode,0,(closed.stdout,closed.stderr))
+            after_first=json.loads((first.tx/"generation-operational.final.private.json").read_text())
+            self.assertEqual(after_first["immediateRollbackReleases"],{
+                "api":"immutable-api-return","frontend":first.rollback.name})
+            self.assertIn(historical,after_first["rollbackReleases"])
+        finally:first.close()
+
+        blocked=ExecutorFixture()
+        try:
+            current=json.loads(blocked.retirement_operational.read_text())
+            for key in ("rollbackReleases","immediateRollbackReleases","supersededCandidates"):
+                current[key]=after_first[key]
+            blocked.retirement_operational.write_text(json.dumps(current,sort_keys=True)+"\n")
+            blocked.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(blocked.retirement_operational)
+            denied=blocked.run();self.assertNotEqual(denied.returncode,0)
+            self.assertIn("ROLLBACK_ROLE_RECONCILIATION_REQUIRED",denied.stderr)
+            self.assertEqual((blocked.current/"frontend").resolve(),blocked.rollback/"frontend-runtime")
+        finally:blocked.close()
+
+        second=ExecutorFixture()
+        try:
+            reconciled=json.loads(second.retirement_operational.read_text())
+            reconciled["immediateRollbackReleases"]={
+                "api":"immutable-api-return","frontend":second.rollback.name}
+            reconciled["rollbackReleases"]=["immutable-api-return",second.rollback.name]
+            reconciled["supersededCandidates"]=sorted(set(
+                reconciled["supersededCandidates"]+[historical]))
+            second.retirement_operational.write_text(json.dumps(reconciled,sort_keys=True)+"\n")
+            second.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(second.retirement_operational)
+            launched=second.run();self.assertEqual(launched.returncode,0,(launched.stdout,launched.stderr))
+            closed=second.finalize();self.assertEqual(closed.returncode,0,(closed.stdout,closed.stderr))
+            after_second=json.loads((second.tx/"generation-operational.final.private.json").read_text())
+            self.assertEqual(after_second["immediateRollbackReleases"]["api"],"immutable-api-return")
+            self.assertIn(historical,after_second["supersededCandidates"])
+        finally:second.close()
 
     def test_finalize_retention_failure_is_deployed_incomplete(self):
         f,r=self.run_case()

@@ -666,6 +666,20 @@ class CapacityRecoveryTests(unittest.TestCase):
                 self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_MANIFEST_SCHEMA"):
             MODULE._disposition_manifest(binding)
 
+    def versioned_manifest_fixture(self, source: Path) -> tuple[Path, Path]:
+        root = self.base / ("versioned-" + source.stem)
+        manifest = json.loads(source.read_text())
+        relatives = {source.relative_to(MODULE.ROOT),
+                     Path(manifest["versionedEnvExample"]["path"])}
+        for entry in manifest["entries"]:
+            relatives.update(Path(item["path"]) for item in entry["historicalRecords"])
+        for relative in relatives:
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes((MODULE.ROOT / relative).read_bytes())
+            destination.chmod(0o644)
+        return root, root / source.relative_to(MODULE.ROOT)
+
     def test_production_disposition_manifest_and_versioned_evidence_are_exact(self):
         manifest_path = MODULE.DISPOSITION_MANIFEST_PATH
         self.assertEqual(
@@ -677,9 +691,12 @@ class CapacityRecoveryTests(unittest.TestCase):
             "b2b5bff4adeec32f12e9f32e0487a75f85fa334a3273931c88b62338b6d9f78d",
         )
         manifest = json.loads(manifest_path.read_text())
-        parsed, parsed_entries = MODULE._disposition_manifest({
-            "path": str(manifest_path), "sha256": MODULE.DISPOSITION_MANIFEST_SHA256,
-        })
+        versioned_root, fixture_manifest = self.versioned_manifest_fixture(manifest_path)
+        with mock.patch.multiple(MODULE, ROOT=versioned_root,
+                                 DISPOSITION_MANIFEST_PATH=fixture_manifest):
+            parsed, parsed_entries = MODULE._disposition_manifest({
+                "path": str(fixture_manifest), "sha256": MODULE.DISPOSITION_MANIFEST_SHA256,
+            })
         self.assertEqual(parsed, manifest)
         self.assertEqual(len(parsed_entries), 3)
         self.assertEqual(set(manifest), {
@@ -730,9 +747,13 @@ class CapacityRecoveryTests(unittest.TestCase):
             "40727a3c5f6c685ffa0169366310b6f4d92a203ade522835da0c83fbb3868c76",
         )
         self.assertEqual(sha(path), MODULE.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256)
-        manifest, entries = MODULE._disposition_manifest({
-            "path": str(path), "sha256": MODULE.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256,
-        })
+        versioned_root, fixture_manifest = self.versioned_manifest_fixture(path)
+        with mock.patch.multiple(MODULE, ROOT=versioned_root,
+                                 WORKER_PACKAGE_AUDIT_MANIFEST_PATH=fixture_manifest):
+            manifest, entries = MODULE._disposition_manifest({
+                "path": str(fixture_manifest),
+                "sha256": MODULE.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256,
+            })
         self.assertEqual(manifest["dispositionId"],
                          MODULE.WORKER_PACKAGE_AUDIT_DISPOSITION_ID)
         self.assertEqual(len(entries), 1)
@@ -2554,7 +2575,9 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
         rich_keys = {"activeReleases": [release_id], "rollbackReleases": [release_id],
                      "transitiveReturnReleases": [], "candidateReleases": [],
                      "installedVerifiedReleases": [release_id],
-                     "supersededCandidates": []}
+                     "supersededCandidates": [],
+                     "immediateRollbackReleases": {
+                         "api": release_id, "frontend": release_id}}
         source = self.base / "source-rich-graph.private.json"
         successor = self.base / "successor-rich-graph.private.json"
         private_json(source, rich_keys); private_json(successor, rich_keys)

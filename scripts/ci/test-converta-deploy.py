@@ -292,7 +292,10 @@ class DeployFixture(unittest.TestCase):
                 "dump": {"path": str(self.dump), "sha256": sha(self.dump)},
                 "releaseGraph": {"path": str(self.dump), "sha256": sha(self.dump)},
             },
-            "activeReleases": [self.rollback], "rollbackReleases": [],
+            "activeReleases": [self.rollback], "rollbackReleases": [self.rollback],
+            "immediateRollbackReleases": {
+                "api": self.rollback, "frontend": self.rollback,
+            },
             "transitiveReturnReleases": [], "candidateReleases": [self.candidate],
             "installedVerifiedReleases": [self.candidate], "supersededCandidates": [],
         })
@@ -921,6 +924,55 @@ class DriverTests(DeployFixture):
                          sorted([self.candidate, frontend_release]))
         self.assertIn(self.rollback, final["rollbackReleases"])
         self.assertNotIn(frontend_release, final["rollbackReleases"])
+
+    def test_api_only_updates_only_authenticated_component_rollback(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate()
+        journal = driver._journal_read()
+        operational = deploy.read_json(self.retirement.operational_state)
+        operational["rollbackReleases"] = ["immutable-api-old", "immutable-frontend-return"]
+        operational["immediateRollbackReleases"] = {
+            "api": "immutable-api-old", "frontend": "immutable-frontend-return"}
+        put(self.retirement.operational_state, operational)
+        binding = dataclasses.replace(
+            self.retirement,
+            operational_state_sha256=sha(self.retirement.operational_state),
+        )
+        final_path, _ = driver._retirement_final_operational(binding, journal)
+        final = deploy.read_json(final_path)
+        self.assertEqual(final["immediateRollbackReleases"], {
+            "api": self.rollback, "frontend": "immutable-frontend-return"})
+        self.assertIn("immutable-api-old", final["rollbackReleases"])
+        self.assertIn("immutable-frontend-return", final["rollbackReleases"])
+
+    def test_legacy_graph_denies_partial_activation_before_transaction(self) -> None:
+        operational = deploy.read_json(self.retirement.operational_state)
+        operational.pop("immediateRollbackReleases")
+        put(self.retirement.operational_state, operational)
+        binding = dataclasses.replace(
+            self.retirement,
+            operational_state_sha256=sha(self.retirement.operational_state),
+        )
+        driver = self.api_only()
+        driver.inputs = dataclasses.replace(driver.inputs, retirement=binding)
+        with self.assertRaisesRegex(deploy.Denied, "rollback_role_legacy_transition_required"):
+            driver.preflight()
+        self.assertFalse(driver.journal.exists())
+
+    def test_component_binding_blocks_next_activation_until_old_roles_reconciled(self) -> None:
+        operational = deploy.read_json(self.retirement.operational_state)
+        operational["rollbackReleases"] = [
+            self.rollback, "immutable-frontend-return", "immutable-historical"]
+        operational["immediateRollbackReleases"] = {
+            "api": self.rollback, "frontend": "immutable-frontend-return"}
+        put(self.retirement.operational_state, operational)
+        binding = dataclasses.replace(
+            self.retirement,
+            operational_state_sha256=sha(self.retirement.operational_state),
+        )
+        self.driver.inputs = dataclasses.replace(self.driver.inputs, retirement=binding)
+        with self.assertRaisesRegex(deploy.Denied, "rollback_role_reconciliation_required"):
+            self.driver.preflight()
+        self.assertFalse(self.driver.journal.exists())
 
     def test_external_lock_finalize_passes_fd_to_retirement_and_preserves_lock_file(self) -> None:
         driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()

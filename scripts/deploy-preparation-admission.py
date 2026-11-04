@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import re
 import stat
-import subprocess
 import sys
 from typing import Any
 import importlib.util
@@ -672,15 +671,25 @@ def run_materialized_preparation(args: argparse.Namespace) -> int:
         if fd_digest.hexdigest() != matches[0]["sha256"]:
             raise RuntimeError("preparation_run_producer_fd_hash")
         os.lseek(fd, 0, os.SEEK_SET)
-        command = ["/usr/bin/python3", "-I", "-B", "-E", "-s",
-                   f"/proc/self/fd/{fd}", "--adapter", args.adapter,
-                   "--input", str(input_path), "--input-sha256", args.producer_input_sha256,
-                   "--output", str(output), "--local-only"]
-        completed = subprocess.run(command, pass_fds=(fd,), check=False,
-                                   env={"PYTHONDONTWRITEBYTECODE": "1", "PATH": "/usr/bin:/bin"})
+        namespace: dict[str, Any] = {
+            "__file__": str(producer_path),
+            "__name__": "admitted_operational_preparation_producer",
+            "__package__": None,
+        }
+        exec(compile(producer_observed[0], str(producer_path), "exec"), namespace)
+        entrypoint = namespace.get("run_admitted_preparation")
+        if not callable(entrypoint):
+            raise RuntimeError("preparation_run_entrypoint_missing")
+        if (identity(os.fstat(fd)) != identity(opened) or
+                identity(producer_path.lstat()) != identity(opened)):
+            raise RuntimeError("preparation_run_producer_changed")
+        result = entrypoint(
+            args.adapter, producer_input, str(report_path),
+            args.admission_report_sha256, args.producer_input_sha256, str(output))
+        print(json.dumps(result, sort_keys=True))
     finally:
         os.close(fd)
-    return completed.returncode
+    return 0
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)

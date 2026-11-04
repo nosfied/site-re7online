@@ -16,7 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOL = ROOT / "scripts/generation-retirement-prepare-materialize.py"
 SUPPORT = ROOT / "scripts/release-graph-reconciliation-materialize.py"
 RETIRE = ROOT / "scripts/generation-retirement.py"
-SOURCE_COMMIT = "bab3a1e0f105b1551fb9b7447bebd270e6867a9a"
+SOURCE_COMMIT = subprocess.check_output(
+    ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+).strip()
 SPEC = importlib.util.spec_from_file_location("retirement", RETIRE)
 RETIREMENT = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(RETIREMENT)
 

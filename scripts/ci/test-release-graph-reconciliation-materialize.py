@@ -3,13 +3,16 @@ import copy
 import hashlib
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE_COMMIT = "bab3a1e0f105b1551fb9b7447bebd270e6867a9a"
+SOURCE_COMMIT = subprocess.check_output(
+    ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+).strip()
 SOURCE = ROOT / "scripts/release-graph-reconciliation-materialize.py"
 SPEC = importlib.util.spec_from_file_location("reconciliation_materializer", SOURCE)
 MODULE = importlib.util.module_from_spec(SPEC)

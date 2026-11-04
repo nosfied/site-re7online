@@ -1657,10 +1657,19 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
             rich_keys = {"activeReleases", "rollbackReleases", "transitiveReturnReleases",
                          "candidateReleases", "installedVerifiedReleases",
                          "supersededCandidates"}
-            if (set(source_value) != rich_keys or
+            optional_rich_keys = {"immediateRollbackReleases"}
+            if (frozenset(source_value) not in {frozenset(rich_keys),
+                                          frozenset(rich_keys | optional_rich_keys)} or
                     any(not isinstance(source_value.get(key), list) or
                         any(not isinstance(item, str) for item in source_value[key])
                         for key in rich_keys)):
+                deny("LIVE_RELEASE_GRAPH_PROVENANCE_SCHEMA")
+            immediate = source_value.get("immediateRollbackReleases")
+            if immediate is not None and (not isinstance(immediate, dict) or
+                    set(immediate) != {"api", "frontend"} or
+                    any(not isinstance(item, str) or
+                        item not in source_value["rollbackReleases"]
+                        for item in immediate.values())):
                 deny("LIVE_RELEASE_GRAPH_PROVENANCE_SCHEMA")
             rich_values[label] = source_value
         receipt_binding = graph_value["reconciliationReceipt"]

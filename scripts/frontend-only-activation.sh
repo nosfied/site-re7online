@@ -622,12 +622,19 @@ for row in live:
 fingerprint=hashlib.sha256(canonical(sorted(projected,key=lambda item:str(item.get("name"))))).hexdigest()
 active=set(value["activeReleases"]);active.discard(previous);active.add(release)
 rollback=set(value["rollbackReleases"]);rollback.add(previous)
+immediate=value.get("immediateRollbackReleases")
+if immediate is not None:
+    if set(immediate)!={"api","frontend"} or any(not isinstance(v,str) or not v for v in immediate.values()):
+        raise SystemExit("FINAL_OPERATIONAL_IMMEDIATE_ROLLBACK")
+    immediate=dict(immediate);immediate["frontend"]=previous
 candidates=set(value["candidateReleases"]);candidates.discard(release)
 installed=set(value["installedVerifiedReleases"]);installed.add(release)
 value.update(currentPaths=sorted(set(current)),pm2LivePaths=paths(live),pm2DumpPaths=paths(dump),
  activeReleases=sorted(active),rollbackReleases=sorted(rollback),candidateReleases=sorted(candidates),
  installedVerifiedReleases=sorted(installed),deploymentState={"state":"DEPLOYED"})
+if immediate is not None:value["immediateRollbackReleases"]=immediate
 graph={key:value[key] for key in ("activeReleases","rollbackReleases","transitiveReturnReleases","candidateReleases","installedVerifiedReleases","supersededCandidates")}
+if immediate is not None:graph["immediateRollbackReleases"]=immediate
 def exclusive(path,raw):
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
     try:
@@ -891,6 +898,18 @@ RETURN_FRONTEND_ENTRY=$(/usr/bin/sha256sum "$RETURN/frontend-runtime/node_module
 test ! -e "$FINAL/DEPLOYED"
 
 CURRENT_STEP=preflight_runtime
+test -f "$RETIREMENT_OPERATIONAL_STATE"
+test ! -L "$RETIREMENT_OPERATIONAL_STATE"
+test "$(/usr/bin/stat -Lc '%a' "$RETIREMENT_OPERATIONAL_STATE")" = 600
+test "$(/usr/bin/sha256sum "$RETIREMENT_OPERATIONAL_STATE" | /usr/bin/awk '{print $1}')" = "$RETIREMENT_OPERATIONAL_STATE_SHA256"
+/usr/bin/jq -e 'has("immediateRollbackReleases")' "$RETIREMENT_OPERATIONAL_STATE" >/dev/null || {
+  printf 'ROLLBACK_ROLE_LEGACY_TRANSITION_REQUIRED\n' >&2; exit 2; }
+/usr/bin/jq -e '
+  (.immediateRollbackReleases|type)=="object" and
+  (.immediateRollbackReleases|keys|sort)==["api","frontend"] and
+  ([.immediateRollbackReleases.api,.immediateRollbackReleases.frontend]|unique|sort)==(.rollbackReleases|unique|sort)' \
+  "$RETIREMENT_OPERATIONAL_STATE" >/dev/null || {
+    printf 'ROLLBACK_ROLE_RECONCILIATION_REQUIRED\n' >&2; exit 2; }
 test -x "$PM2"
 test "$("$PM2" --version)" = 6.0.14
 worker_row=$(pm2_row re7-whatsapp-web-worker)
