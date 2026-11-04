@@ -40,7 +40,7 @@ export async function campaignRecipientEligibility(prisma: PrismaClient, clientI
   const markers = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT id FROM "Lead" WHERE "tenantId" = ${clientId}::uuid AND (
       ((lower("waId") LIKE 'anon:%' OR lower("waId") LIKE 'hash:anon:%') AND
-        regexp_replace("waId", '[^0-9]', '', 'g') IN (${Prisma.join(candidates)})) OR
+        regexp_replace("waId", '[^0-9]', '', 'g') IN (${Prisma.join(markerQueryCandidates)})) OR
       ((lower("waIdCanonical") LIKE 'anon:%' OR lower("waIdCanonical") LIKE 'hash:anon:%') AND
         regexp_replace("waIdCanonical", '[^0-9]', '', 'g') IN (${Prisma.join(markerQueryCandidates)}))
     ) LIMIT 1`);

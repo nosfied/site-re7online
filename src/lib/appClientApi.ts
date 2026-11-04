@@ -622,6 +622,7 @@ export type AppCrmContactsResponse = {
 };
 
 export type AppCampaignAudiencePreviewFilter = AppCrmContactsFilter & {
+  listQ?: string | null;
   onlyWhatsappEligible?: boolean | null;
   excludeOptOut?: boolean | null;
   crmStatus?: string | null;
@@ -666,6 +667,7 @@ export type AppCampaignAudiencePreviewItem = {
 
 export type AppCampaignAudiencePreviewResponse = {
   ok: true;
+  listQuery: string;
   filters: {
     q: string | null;
     status: string | null;
@@ -4784,6 +4786,7 @@ export async function fetchAppCampaignAudiencePreview(
   filters?: AppCampaignAudiencePreviewFilter
 ): Promise<AppCampaignAudiencePreviewResponse> {
   const params = new URLSearchParams();
+  if (filters?.listQ?.trim()) params.set("listQ", filters.listQ.trim());
   if (filters?.q?.trim()) params.set("q", filters.q.trim());
   if (filters?.status?.trim()) params.set("status", filters.status.trim());
   if (filters?.crmStatus?.trim()) params.set("crmStatus", filters.crmStatus.trim());

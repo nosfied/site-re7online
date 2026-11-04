@@ -3,7 +3,7 @@
 Status: IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED
 LOCAL / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
-Last updated: 2026-11-03.
+Last updated: 2026-11-04.
 
 This document records the implemented local contract for campaign CSV import as
 CRM upsert. It does not authorize real sends, production deployment or CRA

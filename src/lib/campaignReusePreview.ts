@@ -181,6 +181,7 @@ export async function buildHydratedCampaignReusePreview(params: {
   return {
     preview: {
       ok: true,
+      listQuery: "",
       filters: {
         q: "",
         status: null,

@@ -513,6 +513,24 @@ O rascunho/campanha existente permanece preservado. O reconciliador dirigido é
 dry-run por padrão e não cria CRM, não chama Meta, não altera contadores e não
 abre a guarda.
 
+Leitura dirigida de 04/11/2026 confirmou a origem da posição 3 sem nova mutação:
+o `Lead` e a conversa já haviam sido criados pelo inbound de 30/10, antes da
+campanha; não existe `Contact` nem `ContactChannelIdentity` para essa identidade.
+Na execução, `conversation_resolved` apenas vinculou a conversa existente; não há
+evento de criação ou reativação pela campanha. O telefone veio do inbound
+normalizado e foi copiado para `Lead.phone`, `waIdCanonical` e `waId`. A campanha
+então submeteu o mesmo destinatário ao provedor. Essa cronologia sustenta a
+reconciliação histórica separada, mas não autoriza retomada. O dry-run produtivo
+não foi executado: o reconciliador proposto ainda não está implantado, e as provas
+locais não substituem a recaptura dos bindings privados.
+
+A interface proposta pesquisa a lista gerada no conjunto integral no servidor,
+mantém `Carregar mais` acumulativo e deduplicado dentro de uma área com rolagem
+própria e exibe `Exibindo X de Y`. O detalhe do rascunho oferece `Limpar`, que
+retorna à primeira página sem filtro. Ao iniciar processamento, a prévia deixa de
+ser exibida e o painel de acompanhamento permanece. Essas mudanças não alteram a
+seleção autenticada nem autorizam envio.
+
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 
 Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`

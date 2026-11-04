@@ -7,8 +7,8 @@ import { recordContactOptOut } from './optOutRegistry.js';
 import { ensureCampaignOutboundCrmAttemptMaterialization } from './campaignOutboundConversation.js';
 import { sanitizeMailDeliveryError } from '../mail/canonicalMail.js';
 
-test('identity rejects privacy markers and unsupported international E164 while preserving approved Brazilian aliases', () => {
-  for (const marker of ['anon:subject:1234567890123', 'HASH:ANON:1234567890123', 'usuario anonimizado', '******12345678901', 'abc1234567890123', '4191202']) assert.equal(normalizeCampaignRecipientIdentity(marker), '');
+test('identity rejects privacy markers, digitless invalid values and unsupported international E164 while preserving approved Brazilian aliases', () => {
+  for (const marker of ['anon:subject:1234567890123', 'HASH:ANON:1234567890123', 'usuario anonimizado', '******12345678901', 'abc1234567890123', '4191202', 'sem-numero']) assert.equal(normalizeCampaignRecipientIdentity(marker), '');
   assert.equal(normalizeCampaignRecipientIdentity('+1 (202) 555-0199'), '');
   assert.equal(normalizeCampaignRecipientIdentity('5541991100901'), '5541991100901');
   assert.equal(normalizeCampaignRecipientIdentity('554191100901'), '554191100901');
@@ -28,12 +28,14 @@ test('real PostgreSQL: aliases/exclusion/optout/tenant and immutable old pseudo 
     assert.equal(await campaignRecipientEligibility(db, clientId, ['554191100902']), 'active_send_blocked');
     assert.equal(await campaignRecipientEligibility(db, clientId, ['5541991100903'], 'instagram'), 'non_whatsapp_channel');
     assert.deepEqual(await campaignRecipientEligibilityBatch(db, clientId, [
+      { values: ['sem-numero'] },
       { values: ['1234567890123'] },
       { values: ['5541991100901'] },
       { values: ['554191100902'] },
       { values: ['5541991100903'], channel: 'instagram' },
       { values: ['12025550199'] },
     ]), [
+      'invalid_whatsapp_identity',
       'anonymized_contact',
       'operationally_excluded_contact',
       'active_send_blocked',

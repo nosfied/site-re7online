@@ -13957,7 +13957,8 @@ test("campaign draft uses approved template and stores safe seed without sending
   const eligibleWaId = "5541991188001";
   const duplicateWaId = "5541991188002";
   const optOutWaId = "5541991188003";
-  const [eligible, international, duplicateA, duplicateB, optOut, anonymized, instagram] =
+  const phonePrecedenceWaId = "5541991188099";
+  const [eligible, phonePrecedence, international, duplicateA, duplicateB, optOut, anonymized, instagram] =
     await Promise.all([
       prisma.lead.create({
         data: {
@@ -13968,6 +13969,18 @@ test("campaign draft uses approved template and stores safe seed without sending
           provider: "meta",
           name: "Draft Elegivel",
           phone: eligibleWaId,
+          status: "RETORNO_FUTURO",
+        },
+      }),
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: "12025550190",
+          waIdCanonical: "12025550190",
+          channel: "whatsapp",
+          provider: "meta",
+          name: "Draft Telefone Autoritativo",
+          phone: phonePrecedenceWaId,
           status: "RETORNO_FUTURO",
         },
       }),
@@ -14074,6 +14087,7 @@ test("campaign draft uses approved template and stores safe seed without sending
       anonymized.id,
       instagram.id,
       international.id,
+      phonePrecedence.id,
     ],
     returnDestination: defaultCampaignReturnDestination(),
   });
@@ -14081,11 +14095,11 @@ test("campaign draft uses approved template and stores safe seed without sending
   assert.equal(response.status, 200);
   assert.equal(response.body.ok, true);
   assert.equal(response.body.campaign.status, "draft");
-  assert.equal(response.body.campaign.totalRecipients, 2);
+  assert.equal(response.body.campaign.totalRecipients, 3);
   assert.equal(response.body.campaign.sentCount, 0);
   assert.equal(response.body.campaign.blockedCount, 0);
-  assert.equal(response.body.draft.summary.requested, 7);
-  assert.equal(response.body.draft.summary.accepted, 2);
+  assert.equal(response.body.draft.summary.requested, 8);
+  assert.equal(response.body.draft.summary.accepted, 3);
   assert.equal(response.body.draft.summary.blocked, 5);
   assert.equal(response.body.draft.summary.duplicatesRemoved, 1);
   assert.ok(
@@ -14130,7 +14144,10 @@ test("campaign draft uses approved template and stores safe seed without sending
     anonymized.id,
     instagram.id,
     international.id,
+    phonePrecedence.id,
   ]);
+  assert.ok(response.body.draft.recipients.some((item) => item.leadId === phonePrecedence.id));
+  assert.equal(JSON.stringify(response.body).includes("12025550190"), false);
 
   const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
   const sendEvents = await prisma.event.count({
@@ -14501,16 +14518,20 @@ test("campaign audience split creates numbered static drafts without sending", a
 
   const integralSearchBeyondTwoHundred = await request<{
     summary: { total: number; eligible: number; blocked: number };
+    listQuery: string;
+    pagination: { total: number };
     items: Array<{ displayName: string | null }>;
   }>(
     "GET",
-    `/app/campaigns/audience-preview?q=${encodeURIComponent(`${integralLabel} 0900`)}&page=1&limit=25`,
+    `/app/campaigns/audience-preview?q=${encodeURIComponent(integralLabel)}&listQ=${encodeURIComponent(`${integralLabel} 0900`)}&page=1&limit=25`,
     businessAdmin
   );
   assert.equal(integralSearchBeyondTwoHundred.status, 200, JSON.stringify(integralSearchBeyondTwoHundred.body));
-  assert.equal(integralSearchBeyondTwoHundred.body.summary.total, 1);
-  assert.equal(integralSearchBeyondTwoHundred.body.summary.eligible, 1);
-  assert.equal(integralSearchBeyondTwoHundred.body.summary.blocked, 0);
+  assert.equal(integralSearchBeyondTwoHundred.body.summary.total, 935);
+  assert.equal(integralSearchBeyondTwoHundred.body.summary.eligible, 930);
+  assert.equal(integralSearchBeyondTwoHundred.body.summary.blocked, 5);
+  assert.equal(integralSearchBeyondTwoHundred.body.pagination.total, 1);
+  assert.equal(integralSearchBeyondTwoHundred.body.listQuery, `${integralLabel} 0900`.toLocaleLowerCase("pt-BR"));
   assert.equal(integralSearchBeyondTwoHundred.body.items[0]?.displayName, `${integralLabel} 0900`);
 
   const integralSelectionPreview = await request<{

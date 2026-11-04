@@ -1799,11 +1799,11 @@ test("old pseudo snapshot stays immutable and blocks anonymized digits at origin
   assert.equal(JSON.stringify(blockedEvent.payloadJson).includes(recipients[1]), false);
 });
 
-test("valid then unsupported international then invalid then valid blocks per recipient and continues", async (t) => {
+test("valid then digitless invalid then unsupported international then valid blocks per recipient and continues", async (t) => {
   createOpenCampaignOperationsTestLedger("campaign-identity-continuity");
   const clientId = crypto.randomUUID(), clientKey = `identity-continuity-${clientId}`;
   const templateName = `identity_continuity_${Date.now()}`;
-  const recipients = ["5541991100201", "12025550199", "4191202", "5541991100204"];
+  const recipients = ["5541991100201", "sem-numero", "12025550199", "5541991100204"];
   t.after(() => cleanup(clientId).catch(() => undefined));
   await prisma.client.create({ data: { id: clientId, clientKey, name: "Synthetic", profile: "business", features: { campaigns: true } } });
   await prisma.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
@@ -1820,7 +1820,7 @@ test("valid then unsupported international then invalid then valid blocks per re
   const final = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
   assert.equal(final.status, "completed"); assert.equal(final.sentCount, 2); assert.equal(final.blockedCount, 2);
   const blocked = await prisma.event.findMany({ where: { clientId, messageId: campaign.id, eventName: "campaign.recipient.import_blocked" }, orderBy: { createdAt: "asc" } });
-  assert.deepEqual(blocked.map(row => (row.payloadJson as { reason?: unknown }).reason), ["unsupported_international_identity", "invalid_whatsapp_identity"]);
+  assert.deepEqual(blocked.map(row => (row.payloadJson as { reason?: unknown }).reason), ["invalid_whatsapp_identity", "unsupported_international_identity"]);
   assert.equal(campaignOperationsStatus().open, true); assert.equal(campaignOperationsStatus().tasks.length, 0);
 });
 

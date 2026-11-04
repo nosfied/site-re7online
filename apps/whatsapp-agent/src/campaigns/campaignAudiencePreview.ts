@@ -29,6 +29,7 @@ type CrmStatusConfig = {
 };
 
 export type CampaignAudiencePreviewQuery = CrmContactsQuery & {
+  listQ?: string | null;
   onlyWhatsappEligible?: string | boolean | null;
   excludeOptOut?: string | boolean | null;
   crmStatus?: string | null;
@@ -64,6 +65,7 @@ export type CampaignAudiencePreviewItem = Pick<
 
 export type CampaignAudiencePreviewPayload = {
   ok: true;
+  listQuery: string;
   filters: {
     q: string | null;
     status: string | null;
@@ -366,13 +368,21 @@ export async function buildCampaignAudiencePreviewPayload(
   const page = normalizePage(params.query.page);
   const limit = normalizeLimit(params.query.limit);
   const analysis = await resolveCampaignAudiencePreviewAnalysis(prisma, params);
-  const total = analysis.eligibleItems.length;
+  const listQuery = String(params.query.listQ ?? "").trim().toLocaleLowerCase("pt-BR");
+  const listedItems = listQuery
+    ? analysis.eligibleItems.filter((item) => [
+        item.displayName, item.companyName, item.city, item.crmStatusLabel, item.channel,
+        item.phoneDisplay, item.identifierDisplay, item.lastProtocol,
+      ].some((value) => String(value ?? "").toLocaleLowerCase("pt-BR").includes(listQuery)))
+    : analysis.eligibleItems;
+  const total = listedItems.length;
   const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
   return {
     ok: true,
+    listQuery,
     filters: analysis.filters,
     summary: analysis.summary,
-    items: analysis.eligibleItems.slice((page - 1) * limit, page * limit),
+    items: listedItems.slice((page - 1) * limit, page * limit),
     pagination: {
       page,
       limit,
