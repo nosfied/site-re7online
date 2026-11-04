@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API 708F + FRONTEND B96 DEPLOYED_SANITIZED EM 28/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
+**Status: CANÔNICO / API+FRONTEND 785BDE80 DEPLOYED_SANITIZED EM 03/11/2026 / WORKER E2E7 PRESERVADO**
 
 Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação. Os comandos executáveis estão
@@ -322,6 +322,13 @@ Na observação encerrada em 30/10, a API ativa da Tendência era autenticada po
 
 O fechamento posterior API+frontend da campanha integral está autenticado por
 [`CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json).
-A release 911a9708 substitui API e frontend, preserva o worker e termina com
-retenção 3/3. Esse registro não repara o rascunho histórico de 25 destinatários
-nem comprova adoção do adapter de `preparations`.
+A release 911a9708 substituiu API e frontend, preservou o worker e terminou com
+retenção 3/3; agora é o retorno autenticado da geração 785bde80.
+
+O estado ativo está autenticado por
+[`CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json).
+A release 785bde80 ativou API+frontend, preservou worker e retorno 911a, executou
+um único `pm2 save` e encerrou retenção 3/3. O registro não comprova adoção do
+adapter de `preparations`; essa frente permanece separada. A validação funcional
+de novo rascunho não inclui envio, agendamento ou reparo silencioso do rascunho
+histórico.
