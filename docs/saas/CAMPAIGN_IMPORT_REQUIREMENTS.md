@@ -3,11 +3,40 @@
 Status: IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED
 LOCAL / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
-Last updated: 2026-09-17.
+Last updated: 2026-11-03.
 
 This document records the implemented local contract for campaign CSV import as
 CRM upsert. It does not authorize real sends, production deployment or CRA
 customer-data import; each requires its own controlled gate.
+
+## Campaign identity contract — reconciliation of preview, creation and execution
+
+The executable campaign identity contract is the tenant-scoped Brazilian CRM
+WhatsApp identity contract. A valid international E.164 number that cannot be
+represented by that contract is not an eligible campaign recipient. It is
+classified separately from malformed input as
+`unsupported_international_identity`.
+
+The same classification must be used by audience preview, draft creation,
+dynamic materialization, legacy/static execution revalidation and CSV/manual
+import. A blocked identity:
+
+- is reported with an explicit invalid or unsupported-international reason;
+- is counted as blocked and never selected silently;
+- causes no provider call and no CRM bootstrap;
+- does not suspend the campaign or the global campaign guard;
+- does not prevent later eligible recipients from being processed.
+
+The authoritative CRM phone is used when present; otherwise the canonical
+WhatsApp identity and then the stored WhatsApp identity are considered. Existing
+Brazilian aliases still converge through the canonical resolver. Privacy markers,
+opt-out, operational exclusion, channel checks, deduplication and tenant
+isolation retain precedence and may only deny, never grant identity ownership.
+
+This pre-provider rule does not rewrite history. A recipient already accepted by
+the provider must be reconciled from its durable provider result and persistence
+evidence. It cannot be relabelled retroactively as a preview/import block, and it
+cannot be resent merely because the current identity contract would now reject it.
 
 ## Optional CRM Situation Column
 

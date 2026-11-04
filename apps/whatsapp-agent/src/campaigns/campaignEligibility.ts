@@ -1,26 +1,23 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { buildCrmWhatsappIdentityCandidates, isAnonymizedMarker, normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
-import { normalizeWaIdDigits } from "../utils/waid.js";
+import { buildCrmWhatsappIdentityCandidates, classifyCrmWhatsappIdentity, isAnonymizedMarker } from "../crm/crmWhatsappIdentity.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { filterOptedOutCampaignRecipients } from "./optOutRegistry.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
+import { normalizeWaIdDigits } from "../utils/waid.js";
 
 export function normalizeCampaignRecipientIdentity(value: unknown) {
   const raw = String(value ?? "").trim();
   if (isAnonymizedMarker(raw) || !/^\+?[\d\s().-]+$/.test(raw)) return "";
-  const digits = normalizeWaIdDigits(raw);
-  const brazil = normalizeCrmWhatsappIdentity(raw);
-  if (brazil) return brazil.crmCanonicalPhone;
-  // Preserve international E.164 identities; never salvage arbitrary text/hashes.
-  return !digits.startsWith("55") && /^[1-9]\d{7,14}$/.test(digits) ? digits : "";
+  const classified = classifyCrmWhatsappIdentity(raw);
+  return classified.status === "SUPPORTED" ? classified.identity.crmCanonicalPhone : "";
 }
 
-export type EligibilityReason = "anonymized_contact" | "invalid_whatsapp_identity" |
+export type EligibilityReason = "anonymized_contact" | "invalid_whatsapp_identity" | "unsupported_international_identity" |
   "operationally_excluded_contact" | "active_send_blocked" | "non_whatsapp_channel" | "identity_conflict" | "provisional_contact";
 export function crmOperationalBlockedReason(item: {
   isAnonymized: boolean; isOperationallyExcluded: boolean; activeOptOut: boolean;
   channel?: string | null;
-}): Exclude<EligibilityReason, "invalid_whatsapp_identity" | "identity_conflict" | "provisional_contact"> | null {
+}): Exclude<EligibilityReason, "invalid_whatsapp_identity" | "unsupported_international_identity" | "identity_conflict" | "provisional_contact"> | null {
   if (item.isAnonymized) return "anonymized_contact";
   if (item.isOperationallyExcluded) return "operationally_excluded_contact";
   if (item.activeOptOut) return "active_send_blocked";
@@ -33,9 +30,11 @@ export async function campaignRecipientEligibility(prisma: PrismaClient, clientI
   values: string[], channel?: string | null): Promise<EligibilityReason | null> {
   if (values.some(isAnonymizedMarker)) return "anonymized_contact";
   if (channel && channel.toLowerCase() !== "whatsapp") return "non_whatsapp_channel";
+  const classifications = values.map(classifyCrmWhatsappIdentity);
   const identities = values.map(normalizeCampaignRecipientIdentity);
-  if (identities.some(value => !value)) return "invalid_whatsapp_identity";
-  const candidates = buildCrmWhatsappIdentityCandidates(identities);
+  const markerCandidates = Array.from(new Set(values.map(value => normalizeWaIdDigits(value)).filter(Boolean)));
+  const candidates = identities.every(Boolean) ? buildCrmWhatsappIdentityCandidates(identities) : markerCandidates;
+  const markerQueryCandidates = candidates.length > 0 ? candidates : ["__no_marker_identity__"];
   // Old immutable snapshots can contain digits extracted from anonymized markers.
   // Matching that lossy transform only DENIES; it never grants identity ownership.
   const markers = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -43,9 +42,11 @@ export async function campaignRecipientEligibility(prisma: PrismaClient, clientI
       ((lower("waId") LIKE 'anon:%' OR lower("waId") LIKE 'hash:anon:%') AND
         regexp_replace("waId", '[^0-9]', '', 'g') IN (${Prisma.join(candidates)})) OR
       ((lower("waIdCanonical") LIKE 'anon:%' OR lower("waIdCanonical") LIKE 'hash:anon:%') AND
-        regexp_replace("waIdCanonical", '[^0-9]', '', 'g') IN (${Prisma.join(candidates)}))
+        regexp_replace("waIdCanonical", '[^0-9]', '', 'g') IN (${Prisma.join(markerQueryCandidates)}))
     ) LIMIT 1`);
   if (markers.length) return "anonymized_contact";
+  if (classifications.some(value => value.status === "UNSUPPORTED_INTERNATIONAL")) return "unsupported_international_identity";
+  if (identities.some(value => !value)) return "invalid_whatsapp_identity";
   const leads = await prisma.lead.findMany({ where: { tenantId: clientId, OR: [
     { waId: { in: candidates } }, { waIdCanonical: { in: candidates } },
   ] }, select: { waId: true, waIdCanonical: true, name: true, phone: true, externalUserHash: true, channel: true } });
@@ -69,19 +70,20 @@ export async function campaignRecipientEligibilityBatch(
   recipients: Array<{ values: string[]; channel?: string | null }>
 ): Promise<Array<EligibilityReason | null>> {
   const normalized = recipients.map((recipient) => {
+    const classifications = recipient.values.map(classifyCrmWhatsappIdentity);
     const identities = recipient.values.map(normalizeCampaignRecipientIdentity);
     return {
       ...recipient,
+      classifications,
       identities,
+      markerCandidates: Array.from(new Set(recipient.values.map(value => normalizeWaIdDigits(value)).filter(Boolean))),
       candidates: identities.every(Boolean) ? buildCrmWhatsappIdentityCandidates(identities) : [],
     };
   });
   const allCandidates = Array.from(new Set(normalized.flatMap((recipient) => recipient.candidates)));
-  if (allCandidates.length === 0) {
-    return normalized.map((recipient) =>
-      recipient.values.some(isAnonymizedMarker) ? "anonymized_contact" : "invalid_whatsapp_identity"
-    );
-  }
+  const allMarkerCandidates = Array.from(new Set(normalized.flatMap((recipient) => recipient.markerCandidates)));
+  const operationalCandidates = allCandidates.length ? allCandidates : ["__no_supported_identity__"];
+  const markerQueryCandidates = allMarkerCandidates.length ? allMarkerCandidates : ["__no_marker_identity__"];
 
   const [markerRows, leads, contacts, excluded, optOut] = await Promise.all([
     prisma.$queryRaw<Array<{ markerDigits: string }>>(Prisma.sql`
@@ -89,12 +91,12 @@ export async function campaignRecipientEligibilityBatch(
       FROM "Lead", LATERAL (VALUES ("waId"), ("waIdCanonical")) values(marker)
       WHERE "tenantId" = ${clientId}::uuid
         AND (lower(marker) LIKE 'anon:%' OR lower(marker) LIKE 'hash:anon:%')
-        AND regexp_replace(marker, '[^0-9]', '', 'g') IN (${Prisma.join(allCandidates)})
+        AND regexp_replace(marker, '[^0-9]', '', 'g') IN (${Prisma.join(markerQueryCandidates)})
     `),
     prisma.lead.findMany({
       where: {
         tenantId: clientId,
-        OR: [{ waId: { in: allCandidates } }, { waIdCanonical: { in: allCandidates } }],
+        OR: [{ waId: { in: operationalCandidates } }, { waIdCanonical: { in: operationalCandidates } }],
       },
       select: {
         waId: true,
@@ -109,9 +111,9 @@ export async function campaignRecipientEligibilityBatch(
       where: {
         clientId,
         OR: [
-          { waId: { in: allCandidates } },
-          { externalUserRef: { in: allCandidates } },
-          { legacyWaId: { in: allCandidates } },
+          { waId: { in: operationalCandidates } },
+          { externalUserRef: { in: operationalCandidates } },
+          { legacyWaId: { in: operationalCandidates } },
         ],
       },
       select: {
@@ -125,8 +127,8 @@ export async function campaignRecipientEligibilityBatch(
         operationallyExcludedAt: true,
       },
     }),
-    loadOperationallyExcludedWaIds(prisma, { clientId, waIds: allCandidates }),
-    filterOptedOutCampaignRecipients(prisma, { clientId, waIds: allCandidates }),
+    loadOperationallyExcludedWaIds(prisma, { clientId, waIds: operationalCandidates }),
+    filterOptedOutCampaignRecipients(prisma, { clientId, waIds: operationalCandidates }),
   ]);
   const markerDigits = new Set(markerRows.map((row) => row.markerDigits).filter(Boolean));
   const blockedOptOuts = new Set(optOut.blocked.map((item) => item.waIdCanonical).filter(Boolean));
@@ -134,6 +136,8 @@ export async function campaignRecipientEligibilityBatch(
   return normalized.map((recipient) => {
     if (recipient.values.some(isAnonymizedMarker)) return "anonymized_contact";
     if (recipient.channel && recipient.channel.toLowerCase() !== "whatsapp") return "non_whatsapp_channel";
+    if (recipient.markerCandidates.some((candidate) => markerDigits.has(candidate))) return "anonymized_contact";
+    if (recipient.classifications.some(value => value.status === "UNSUPPORTED_INTERNATIONAL")) return "unsupported_international_identity";
     if (recipient.identities.some((identity) => !identity)) return "invalid_whatsapp_identity";
     const candidates = new Set(recipient.candidates);
     if ([...candidates].some((candidate) => markerDigits.has(candidate))) return "anonymized_contact";

@@ -458,6 +458,7 @@ async function materializeDynamicCampaignSnapshot(params: {
       waId: true,
       waIdCanonical: true,
       name: true,
+      phone: true,
       company: true,
       city: true,
       channel: true,
@@ -470,10 +471,11 @@ async function materializeDynamicCampaignSnapshot(params: {
   const blocked: Array<{ leadId: string; reason: string }> = [];
   const seen = new Set<string>();
   for (const lead of leads) {
+    const authoritativeIdentity = lead.phone || lead.waIdCanonical || lead.waId;
     const reason = await campaignRecipientEligibility(prisma, params.clientId,
-      [lead.waId, lead.waIdCanonical || lead.waId], lead.channel);
+      [authoritativeIdentity], lead.channel);
     if (reason) { blocked.push({ leadId: lead.id, reason }); continue; }
-    const rawWaId = normalizeCampaignRunRecipientWaId(lead.waIdCanonical || lead.waId);
+    const rawWaId = normalizeCampaignRunRecipientWaId(authoritativeIdentity);
     const canonical = normalizeCampaignRunRecipientWaId(rawWaId);
     const dedupeKey = canonical || rawWaId;
     if (!rawWaId || !canonical) {
@@ -599,6 +601,7 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
       waId: true,
       waIdCanonical: true,
       name: true,
+      phone: true,
       company: true,
       city: true,
       channel: true,
@@ -612,10 +615,11 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
   const blocked: Array<{ leadId: string; reason: string }> = [];
   const seen = new Set<string>();
   for (const lead of leads) {
+    const authoritativeIdentity = lead.phone || lead.waIdCanonical || lead.waId;
     const reason = await campaignRecipientEligibility(prisma, params.clientId,
-      [lead.waId, lead.waIdCanonical || lead.waId], lead.channel);
+      [authoritativeIdentity], lead.channel);
     if (reason) { blocked.push({ leadId: lead.id, reason }); continue; }
-    const rawWaId = normalizeCampaignRunRecipientWaId(lead.waIdCanonical || lead.waId);
+    const rawWaId = normalizeCampaignRunRecipientWaId(authoritativeIdentity);
     const canonical = normalizeCampaignRunRecipientWaId(rawWaId);
     const dedupeKey = canonical || rawWaId;
     if (!rawWaId || !canonical) {
@@ -1185,6 +1189,8 @@ async function runCampaignInBackground(
   if (!campaignOperationsAreOpen()) { params.operationallySuspended = true; return; }
   const prisma = getPrisma();
   let pendingAcceptance = false;
+  let providerAccepted = false;
+  let submissionUncertain = false;
   let persistenceStage = "before_provider";
   let lastLeaseRenewedAt = 0;
   const ensureLease = async () => {
@@ -1707,8 +1713,11 @@ async function runCampaignInBackground(
             },
           }), { clientId: params.clientId, campaignId: params.campaignId, messageId });
           const result = attempt.result;
-          pendingAcceptance = result.ok;
+          providerAccepted = result.ok;
+          submissionUncertain = result.failureDisposition === "submission_uncertain";
+          pendingAcceptance = providerAccepted || submissionUncertain;
           persistenceStage = "provider_result_persistence";
+          if (submissionUncertain) throw new Error("provider_submission_uncertain");
           if (result.blockedByEligibility) {
             blockedCount += 1;
             await persistEvent({ clientId: params.clientId, messageId: params.campaignId,
@@ -1897,6 +1906,19 @@ async function runCampaignInBackground(
           attempt.persisted();
           pendingAcceptance = false;
           if (!result.ok) {
+            if (result.failureDisposition === "recipient_definitive") {
+              logger.warn({
+                event: "campaign.message.recipient_failed",
+                campaignId: params.campaignId,
+                campaignRunId,
+                requestId,
+                templateName: params.templateName,
+                status: result.status ?? null,
+                providerErrorCode: result.providerErrorCode ?? null,
+                retryAllowed: false,
+              });
+              continue;
+            }
             await prisma.campaign.updateMany({
               where: { id: params.campaignId, status: { in: ["sending", "paused"] } },
               data: {
@@ -1978,7 +2000,8 @@ async function runCampaignInBackground(
     if (pendingAcceptance) {
       params.operationallySuspended = true;
       logger.error({ event: "campaign.result.persistence_pending", campaignId: params.campaignId,
-        campaignRunId, clientId: params.clientId, providerAccepted: true, retryAllowed: false, persistenceStage,
+        campaignRunId, clientId: params.clientId, providerAccepted, submissionUncertain,
+        retryAllowed: false, persistenceStage,
         ...campaignFailureDiagnostic(error) });
       return; // Durable intent/task remains; never classify a known acceptance as rejected.
     }

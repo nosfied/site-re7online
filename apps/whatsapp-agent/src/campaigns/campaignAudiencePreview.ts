@@ -17,6 +17,7 @@ export type CampaignAudienceBlockedReason =
   | "missing_whatsapp_identity"
   | "non_whatsapp_channel"
   | "invalid_whatsapp_identity"
+  | "unsupported_international_identity"
   | "missing_contact"
   | "unsupported_channel"
   | "unknown";
@@ -143,6 +144,8 @@ function getBlockedReasonLabel(reason: CampaignAudienceBlockedReason) {
       return "Canal nao WhatsApp";
     case "invalid_whatsapp_identity":
       return "Identidade WhatsApp invalida";
+    case "unsupported_international_identity":
+      return "Numero internacional nao suportado";
     case "missing_contact":
       return "Contato incompleto";
     case "unsupported_channel":
@@ -160,6 +163,8 @@ function resolveBlockedReason(item: CrmContactListItem): CampaignAudienceBlocked
     if (!item.hasValidWhatsappIdentity) {
       return item.templateSendBlockedReason === "missing_phone"
         ? "missing_whatsapp_identity"
+        : item.templateSendBlockedReason === "unsupported_international"
+          ? "unsupported_international_identity"
         : "invalid_whatsapp_identity";
     }
     if (item.templateSendBlockedReason === "unsupported_channel") return "unsupported_channel";
@@ -289,7 +294,18 @@ async function resolveCampaignAudiencePreviewAnalysis(
   const eligibleItems = filteredItems
     .filter((item) => item.eligible)
     .map((item) => ({ ...item, blockedReason: null, blockedReasonLabel: null }));
-  const filteredTotal = eligibleItems.length;
+  const blockedItems = filteredItems.filter((item) => !item.eligible && item.blockedReason);
+  const blockedByReason = Array.from(blockedItems.reduce((summary, item) => {
+    const reason = item.blockedReason!;
+    const current = summary.get(reason);
+    summary.set(reason, {
+      reason,
+      label: item.blockedReasonLabel ?? getBlockedReasonLabel(reason),
+      count: (current?.count ?? 0) + 1,
+    });
+    return summary;
+  }, new Map<CampaignAudienceBlockedReason, { reason: CampaignAudienceBlockedReason; label: string; count: number }>()).values())
+    .sort((left, right) => left.reason.localeCompare(right.reason));
 
   return {
     filters: {
@@ -307,12 +323,12 @@ async function resolveCampaignAudiencePreviewAnalysis(
       importedSource,
     },
     summary: {
-      total: filteredTotal,
+      total: filteredItems.length,
       analyzed: analyzedItems.length,
-      eligible: filteredTotal,
-      blocked: 0,
+      eligible: eligibleItems.length,
+      blocked: blockedItems.length,
       truncated: firstPage.pagination.total > MAX_ANALYSIS_ITEMS,
-      blockedByReason: [],
+      blockedByReason,
     },
     candidateItems: filteredItems,
     eligibleItems,

@@ -1798,3 +1798,103 @@ test("old pseudo snapshot stays immutable and blocks anonymized digits at origin
   assert.ok(blockedEvent);
   assert.equal(JSON.stringify(blockedEvent.payloadJson).includes(recipients[1]), false);
 });
+
+test("valid then unsupported international then invalid then valid blocks per recipient and continues", async (t) => {
+  createOpenCampaignOperationsTestLedger("campaign-identity-continuity");
+  const clientId = crypto.randomUUID(), clientKey = `identity-continuity-${clientId}`;
+  const templateName = `identity_continuity_${Date.now()}`;
+  const recipients = ["5541991100201", "12025550199", "4191202", "5541991100204"];
+  t.after(() => cleanup(clientId).catch(() => undefined));
+  await prisma.client.create({ data: { id: clientId, clientKey, name: "Synthetic", profile: "business", features: { campaigns: true } } });
+  await prisma.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
+  const campaign = await prisma.campaign.create({ data: { clientId, name: "Identity continuity", templateName, status: "sending", totalRecipients: recipients.length } });
+  const originalFetch = globalThis.fetch; const submitted: string[] = [];
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const payload = JSON.parse(String(init?.body ?? "{}")); submitted.push(payload.to);
+    return new Response(JSON.stringify({ messages: [{ id: `wamid.${submitted.length}` }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(async () => { await drainCampaignRunnersForTests(); globalThis.fetch = originalFetch; });
+  startCampaignRun({ clientId, clientKey, campaignId: campaign.id, name: campaign.name, templateName, waIds: recipients });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  assert.deepEqual(submitted, [recipients[0], recipients[3]]);
+  const final = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
+  assert.equal(final.status, "completed"); assert.equal(final.sentCount, 2); assert.equal(final.blockedCount, 2);
+  const blocked = await prisma.event.findMany({ where: { clientId, messageId: campaign.id, eventName: "campaign.recipient.import_blocked" }, orderBy: { createdAt: "asc" } });
+  assert.deepEqual(blocked.map(row => (row.payloadJson as any).reason), ["unsupported_international_identity", "invalid_whatsapp_identity"]);
+  assert.equal(campaignOperationsStatus().open, true); assert.equal(campaignOperationsStatus().tasks.length, 0);
+});
+
+test("known recipient provider failure is recorded and later recipients continue", async (t) => {
+  createOpenCampaignOperationsTestLedger("campaign-known-recipient-failure");
+  const clientId = crypto.randomUUID(), clientKey = `known-recipient-${clientId}`;
+  const templateName = `known_recipient_${Date.now()}`;
+  const recipients = ["5541991100301", "5541991100302", "5541991100303"];
+  t.after(() => cleanup(clientId).catch(() => undefined));
+  await prisma.client.create({ data: { id: clientId, clientKey, name: "Synthetic", profile: "business", features: { campaigns: true } } });
+  await prisma.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
+  const campaign = await prisma.campaign.create({ data: { clientId, name: "Known recipient failure", templateName, status: "sending", totalRecipients: recipients.length } });
+  const originalFetch = globalThis.fetch; let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    if (calls === 2) return new Response(JSON.stringify({ error: { code: 130497, message: "Synthetic recipient country restriction" } }), { status: 400, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ messages: [{ id: `wamid.known.${calls}` }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(async () => { await drainCampaignRunnersForTests(); globalThis.fetch = originalFetch; });
+  startCampaignRun({ clientId, clientKey, campaignId: campaign.id, name: campaign.name, templateName, waIds: recipients });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  assert.equal(calls, 3);
+  const final = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
+  assert.equal(final.status, "completed"); assert.equal(final.sentCount, 2); assert.equal(final.blockedCount, 0);
+  const results = await prisma.outboundMessage.findMany({ where: { clientId }, orderBy: { messageId: "asc" }, select: { status: true } });
+  assert.deepEqual(results.map(row => row.status), ["SENT", "FAILED", "SENT"]);
+  assert.equal(await prisma.event.count({ where: { clientId, eventName: "campaign.message.failed", messageId: `campaign.${campaign.id}.2` } }), 1);
+  assert.equal(campaignOperationsStatus().open, true); assert.equal(campaignOperationsStatus().tasks.length, 0);
+});
+
+test("account or template provider failure stops the campaign without weakening the global guard", async (t) => {
+  createOpenCampaignOperationsTestLedger("campaign-operation-failure");
+  const clientId = crypto.randomUUID(), clientKey = `operation-failure-${clientId}`;
+  const templateName = `operation_failure_${Date.now()}`;
+  const recipients = ["5541991100401", "5541991100402", "5541991100403"];
+  t.after(() => cleanup(clientId).catch(() => undefined));
+  await prisma.client.create({ data: { id: clientId, clientKey, name: "Synthetic", profile: "business", features: { campaigns: true } } });
+  await prisma.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
+  const campaign = await prisma.campaign.create({ data: { clientId, name: "Operation failure", templateName, status: "sending", totalRecipients: recipients.length } });
+  const originalFetch = globalThis.fetch; let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    if (calls === 2) return new Response(JSON.stringify({ error: { code: 132000, message: "Synthetic template parameter mismatch" } }), { status: 400, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ messages: [{ id: `wamid.operation.${calls}` }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(async () => { await drainCampaignRunnersForTests(); globalThis.fetch = originalFetch; });
+  startCampaignRun({ clientId, clientKey, campaignId: campaign.id, name: campaign.name, templateName, waIds: recipients });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  assert.equal(calls, 2);
+  assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status, "failed");
+  assert.equal(campaignOperationsStatus().open, true); assert.equal(campaignOperationsStatus().tasks.length, 0);
+});
+
+test("transport uncertainty retains the provider task and closes globally without retry", async (t) => {
+  createOpenCampaignOperationsTestLedger("campaign-submission-uncertain");
+  const clientId = crypto.randomUUID(), clientKey = `submission-uncertain-${clientId}`;
+  const templateName = `submission_uncertain_${Date.now()}`;
+  const recipients = ["5541991100501", "5541991100502", "5541991100503"];
+  t.after(() => cleanup(clientId).catch(() => undefined));
+  await prisma.client.create({ data: { id: clientId, clientKey, name: "Synthetic", profile: "business", features: { campaigns: true } } });
+  await prisma.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
+  const campaign = await prisma.campaign.create({ data: { clientId, name: "Submission uncertain", templateName, status: "sending", totalRecipients: recipients.length } });
+  const originalFetch = globalThis.fetch; let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    if (calls === 2) throw new Error("synthetic_connection_lost_after_write");
+    return new Response(JSON.stringify({ messages: [{ id: `wamid.uncertain.${calls}` }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(async () => { await drainCampaignRunnersForTests(); globalThis.fetch = originalFetch; });
+  startCampaignRun({ clientId, clientKey, campaignId: campaign.id, name: campaign.name, templateName, waIds: recipients });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  assert.equal(calls, 2);
+  const guard = campaignOperationsStatus(); assert.equal(guard.open, false); assert.equal(guard.tasks.length, 1);
+  assert.equal(guard.tasks[0].phase, "persisting"); assert.equal(guard.tasks[0].reference?.messageId, `campaign.${campaign.id}.2`);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 1);
+  assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status, "sending");
+});

@@ -13762,6 +13762,7 @@ test("campaign audience preview is tenant scoped and does not create operational
   const blockedWaId = "5541991177002";
   const excludedWaId = "5541991177005";
   const invalidWaId = `${prefix}-new-invalid-audience`;
+  const internationalWaId = "12025550188";
   const otherTenantWaId = "5541991177003";
   const anonymizedWaId = "5541******7004:anon001";
 
@@ -13807,6 +13808,16 @@ test("campaign audience preview is tenant scoped and does not create operational
         provider: "meta",
         name: "New Status Gate Invalido",
         phone: "telefone-invalido",
+        status: "NEW",
+      },
+      {
+        tenantId: businessClientId,
+        waId: internationalWaId,
+        waIdCanonical: internationalWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: "New Status Gate Internacional",
+        phone: internationalWaId,
         status: "NEW",
       },
       {
@@ -13885,9 +13896,9 @@ test("campaign audience preview is tenant scoped and does not create operational
 
   assert.equal(response.status, 200);
   assert.equal(response.body.ok, true);
-  assert.equal(response.body.summary.total, 1);
+  assert.equal(response.body.summary.total, 4);
   assert.equal(response.body.summary.eligible, 1);
-  assert.equal(response.body.summary.blocked, 0);
+  assert.equal(response.body.summary.blocked, 3);
   assert.equal(response.body.items.some((item) => item.displayName === "Outro Tenant"), false);
 
   const eligible = response.body.items.find((item) => item.displayName === "New Status Gate Elegivel");
@@ -13900,7 +13911,31 @@ test("campaign audience preview is tenant scoped and does not create operational
   assert.equal(response.body.items.some((item) => item.displayName === "New Status Gate Invalido"), false);
   assert.equal(response.body.items.some((item) => item.displayName === "Usuario Anonimizado"), false);
   assert.equal(response.body.items.some((item) => item.displayName === "Contato Instagram"), false);
-  assert.deepEqual(response.body.summary.blockedByReason, []);
+  assert.deepEqual(response.body.summary.blockedByReason, [
+    { reason: "active_send_blocked", label: "Envio ativo bloqueado", count: 1 },
+    { reason: "missing_whatsapp_identity", label: "Sem WhatsApp valido", count: 1 },
+    {
+      reason: "unsupported_international_identity",
+      label: "Numero internacional nao suportado",
+      count: 1,
+    },
+  ]);
+
+  const international = await request<typeof response.body>(
+    "GET",
+    "/app/campaigns/audience-preview?status=NEW&q=New%20Status%20Gate%20Internacional&limit=20",
+    businessAdmin
+  );
+  assert.equal(international.status, 200);
+  assert.equal(international.body.summary.total, 1);
+  assert.equal(international.body.summary.eligible, 0);
+  assert.equal(international.body.summary.blocked, 1);
+  assert.equal(international.body.items.length, 0, "blocked identities are reported but never selectable");
+  assert.deepEqual(international.body.summary.blockedByReason, [{
+    reason: "unsupported_international_identity",
+    label: "Numero internacional nao suportado",
+    count: 1,
+  }]);
 
   const campaignsAfter = await prisma.campaign.count({ where: { clientId: businessClientId } });
   const eventsAfter = await prisma.event.count({ where: { clientId: businessClientId } });
@@ -13922,7 +13957,7 @@ test("campaign draft uses approved template and stores safe seed without sending
   const eligibleWaId = "5541991188001";
   const duplicateWaId = "5541991188002";
   const optOutWaId = "5541991188003";
-  const [eligible, duplicateA, duplicateB, optOut, anonymized, instagram] =
+  const [eligible, international, duplicateA, duplicateB, optOut, anonymized, instagram] =
     await Promise.all([
       prisma.lead.create({
         data: {
@@ -13933,6 +13968,18 @@ test("campaign draft uses approved template and stores safe seed without sending
           provider: "meta",
           name: "Draft Elegivel",
           phone: eligibleWaId,
+          status: "RETORNO_FUTURO",
+        },
+      }),
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: "12025550189",
+          waIdCanonical: "12025550189",
+          channel: "whatsapp",
+          provider: "meta",
+          name: "Draft Internacional",
+          phone: "12025550189",
           status: "RETORNO_FUTURO",
         },
       }),
@@ -14026,6 +14073,7 @@ test("campaign draft uses approved template and stores safe seed without sending
       optOut.id,
       anonymized.id,
       instagram.id,
+      international.id,
     ],
     returnDestination: defaultCampaignReturnDestination(),
   });
@@ -14036,9 +14084,9 @@ test("campaign draft uses approved template and stores safe seed without sending
   assert.equal(response.body.campaign.totalRecipients, 2);
   assert.equal(response.body.campaign.sentCount, 0);
   assert.equal(response.body.campaign.blockedCount, 0);
-  assert.equal(response.body.draft.summary.requested, 6);
+  assert.equal(response.body.draft.summary.requested, 7);
   assert.equal(response.body.draft.summary.accepted, 2);
-  assert.equal(response.body.draft.summary.blocked, 4);
+  assert.equal(response.body.draft.summary.blocked, 5);
   assert.equal(response.body.draft.summary.duplicatesRemoved, 1);
   assert.ok(
     response.body.draft.summary.blockedByReason.some(
@@ -14053,6 +14101,11 @@ test("campaign draft uses approved template and stores safe seed without sending
   assert.ok(
     response.body.draft.summary.blockedByReason.some(
       (item) => item.reason === "non_whatsapp_channel"
+    )
+  );
+  assert.ok(
+    response.body.draft.summary.blockedByReason.some(
+      (item) => item.reason === "unsupported_international_identity" && item.label === "Numero internacional nao suportado"
     )
   );
   assert.equal(JSON.stringify(response.body).includes(eligibleWaId), false);
@@ -14076,6 +14129,7 @@ test("campaign draft uses approved template and stores safe seed without sending
     optOut.id,
     anonymized.id,
     instagram.id,
+    international.id,
   ]);
 
   const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
@@ -14437,9 +14491,9 @@ test("campaign audience split creates numbered static drafts without sending", a
     businessAdmin
   );
   assert.equal(integralPageTwo.status, 200, JSON.stringify(integralPageTwo.body));
-  assert.equal(integralPageTwo.body.summary.total, 930);
+  assert.equal(integralPageTwo.body.summary.total, 935);
   assert.equal(integralPageTwo.body.summary.eligible, 930);
-  assert.equal(integralPageTwo.body.summary.blocked, 0);
+  assert.equal(integralPageTwo.body.summary.blocked, 5);
   assert.equal(integralPageTwo.body.pagination.page, 2);
   assert.equal(integralPageTwo.body.pagination.limit, 25);
   assert.equal(integralPageTwo.body.items.length, 25);

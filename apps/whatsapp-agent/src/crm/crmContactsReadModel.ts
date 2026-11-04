@@ -15,6 +15,7 @@ import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import {
   buildCrmWhatsappExternalUserHash,
   buildCrmWhatsappIdentityCandidates,
+  classifyCrmWhatsappIdentity,
   normalizeCrmWhatsappIdentity,
 } from "./crmWhatsappIdentity.js";
 import {
@@ -110,6 +111,7 @@ export type CrmContactListItem = {
   templateSendBlockedReason:
     | "not_whatsapp"
     | "missing_phone"
+    | "unsupported_international"
     | "opt_out"
     | "unsupported_channel"
     | "unknown"
@@ -531,6 +533,14 @@ function buildTemplateCandidate(lead: LeadRecord, activeOptOut: boolean) {
       hasValidWhatsappIdentity: false,
       canStartWhatsappTemplateCandidate: false,
       templateSendBlockedReason: "not_whatsapp" as const,
+    };
+  }
+  const classified = classifyCrmWhatsappIdentity(lead.phone || lead.waIdCanonical || lead.waId);
+  if (classified.status === "UNSUPPORTED_INTERNATIONAL") {
+    return {
+      hasValidWhatsappIdentity: false,
+      canStartWhatsappTemplateCandidate: false,
+      templateSendBlockedReason: "unsupported_international" as const,
     };
   }
   if (!hasUsableWhatsappPhone(lead)) {

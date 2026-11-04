@@ -716,6 +716,8 @@ function getAudienceBlockedReasonLabel(reason: AppCampaignAudiencePreviewItem["b
       return "Canal não WhatsApp";
     case "invalid_whatsapp_identity":
       return "Identidade WhatsApp inválida";
+    case "unsupported_international_identity":
+      return "Número internacional não suportado";
     case "missing_contact":
       return "Contato atual não localizado";
     case "unsupported_channel":
@@ -747,6 +749,8 @@ function resolveAudienceBlockedReasonFromCrmContact(
     if (!item.hasValidWhatsappIdentity) {
       return item.templateSendBlockedReason === "missing_phone"
         ? "missing_whatsapp_identity"
+        : item.templateSendBlockedReason === "unsupported_international"
+          ? "unsupported_international_identity"
         : "invalid_whatsapp_identity";
     }
     if (item.templateSendBlockedReason === "unsupported_channel") return "unsupported_channel";

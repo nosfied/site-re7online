@@ -7,9 +7,9 @@ import { recordContactOptOut } from './optOutRegistry.js';
 import { ensureCampaignOutboundCrmAttemptMaterialization } from './campaignOutboundConversation.js';
 import { sanitizeMailDeliveryError } from '../mail/canonicalMail.js';
 
-test('identity rejects privacy markers before digit extraction, preserves E164 and approved aliases', () => {
+test('identity rejects privacy markers and unsupported international E164 while preserving approved Brazilian aliases', () => {
   for (const marker of ['anon:subject:1234567890123', 'HASH:ANON:1234567890123', 'usuario anonimizado', '******12345678901', 'abc1234567890123', '4191202']) assert.equal(normalizeCampaignRecipientIdentity(marker), '');
-  assert.equal(normalizeCampaignRecipientIdentity('+1 (202) 555-0199'), '12025550199');
+  assert.equal(normalizeCampaignRecipientIdentity('+1 (202) 555-0199'), '');
   assert.equal(normalizeCampaignRecipientIdentity('5541991100901'), '5541991100901');
   assert.equal(normalizeCampaignRecipientIdentity('554191100901'), '554191100901');
 });
@@ -20,7 +20,7 @@ test('real PostgreSQL: aliases/exclusion/optout/tenant and immutable old pseudo 
     for (const id of [clientId, otherId]) await db.client.create({ data: { id, clientKey: `eligibility-${id}`, name: 'Synthetic', profile: 'business' } });
     await db.lead.create({ data: { tenantId: clientId, waId: 'anon:subject:1234567890123', waIdCanonical: 'anon:subject:1234567890123', status: 'NURTURE' } });
     assert.equal(await campaignRecipientEligibility(db, clientId, ['1234567890123']), 'anonymized_contact');
-    assert.equal(await campaignRecipientEligibility(db, otherId, ['1234567890123']), null);
+    assert.equal(await campaignRecipientEligibility(db, otherId, ['1234567890123']), 'unsupported_international_identity');
     await db.contact.create({ data: { clientId, waId: '554191100901', channel: 'whatsapp', operationallyExcludedAt: new Date() } });
     assert.equal(await campaignRecipientEligibility(db, clientId, ['5541991100901']), 'operationally_excluded_contact');
     assert.equal(await campaignRecipientEligibility(db, otherId, ['5541991100901']), null);
@@ -38,7 +38,7 @@ test('real PostgreSQL: aliases/exclusion/optout/tenant and immutable old pseudo 
       'operationally_excluded_contact',
       'active_send_blocked',
       'non_whatsapp_channel',
-      null,
+      'unsupported_international_identity',
     ]);
     await assert.rejects(ensureCampaignOutboundCrmAttemptMaterialization(db, { clientId, waId: '4191202', waIdCanonical: '4191202', phoneNumberId: 'synthetic', messageId: 'synthetic-accepted', campaignId: crypto.randomUUID(), campaignRunId: crypto.randomUUID(), templateName: 'synthetic', source: 'campaign' }), /Invalid WhatsApp number/);
     assert.equal(await db.contact.count({ where: { clientId, waId: '4191202' } }), 0);

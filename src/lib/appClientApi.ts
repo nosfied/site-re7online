@@ -381,6 +381,7 @@ export type AppCrmContactItem = {
   templateSendBlockedReason:
     | "not_whatsapp"
     | "missing_phone"
+    | "unsupported_international"
     | "opt_out"
     | "unsupported_channel"
     | "unknown"
@@ -635,6 +636,7 @@ export type AppCampaignAudienceBlockedReason =
   | "missing_whatsapp_identity"
   | "non_whatsapp_channel"
   | "invalid_whatsapp_identity"
+  | "unsupported_international_identity"
   | "missing_contact"
   | "unsupported_channel"
   | "unknown";

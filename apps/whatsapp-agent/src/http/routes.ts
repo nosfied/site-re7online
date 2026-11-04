@@ -31404,6 +31404,8 @@ function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
       return "Canal nao WhatsApp";
     case "invalid_whatsapp_identity":
       return "Identidade WhatsApp invalida";
+    case "unsupported_international_identity":
+      return "Numero internacional nao suportado";
     case "unsupported_channel":
       return "Canal nao suportado";
     case "missing_contact":
@@ -39795,12 +39797,12 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
     waIds: optOutLookupWaIds,
   });
   const eligibilityInputs = requestedLeadIds.map((leadId) => {
-      const lead = leadById.get(leadId);
-      return {
-        values: lead ? [lead.waId, lead.waIdCanonical || lead.waId] : [""],
-        channel: lead?.channel,
-      };
-    });
+    const lead = leadById.get(leadId);
+    return {
+      values: lead ? [lead.phone || lead.waIdCanonical || lead.waId] : [""],
+      channel: lead?.channel,
+    };
+  });
   const currentEligibility: Array<Awaited<ReturnType<typeof campaignRecipientEligibilityBatch>>[number]> = [];
   for (const inputs of chunkArray(eligibilityInputs, 500)) {
     currentEligibility.push(...await campaignRecipientEligibilityBatch(prisma, params.clientId, inputs));
@@ -39864,6 +39866,7 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
         ? "unknown"
         : currentEligibility[leadIndex];
       if (current === "invalid_whatsapp_identity") reason = "missing_whatsapp_identity";
+      else if (current === "unsupported_international_identity") reason = "unsupported_international_identity";
       else if (current === "identity_conflict") reason = "unknown";
       else if (current) reason = current;
     }

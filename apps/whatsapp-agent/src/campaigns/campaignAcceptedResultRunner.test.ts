@@ -20,7 +20,7 @@ assert.equal(process.env.NODE_ENV, "test");
 assert.ok(process.cwd().startsWith("/tmp/re7-guard37-"));
 const db = getPrisma();
 
-test("prevention: real runner persists accepted outbound before CRM fails, retains persisting and closes", async t => {
+test("prevention: unsupported international identity is blocked before provider and the next recipient continues", async t => {
   const clientId = crypto.randomUUID(), clientKey = `guard37-synthetic-${clientId}`;
   const waId = "447700900123"; // Synthetic UK example, never sent to a real network.
   const metaId = "synthetic-meta-guard37-accepted-once";
@@ -29,9 +29,9 @@ test("prevention: real runner persists accepted outbound before CRM fails, retai
   await db.client.create({ data: { id: clientId, clientKey, name: "Synthetic incident proof", profile: "business", features: { campaigns: true } } });
   await db.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
   const campaign = await db.campaign.create({ data: { clientId, name: "Synthetic incident", templateName, status: "sending", totalRecipients: 2 } });
-  assert.equal(normalizeCampaignRecipientIdentity(waId), waId);
+  assert.equal(normalizeCampaignRecipientIdentity(waId), "");
   assert.equal(normalizeCrmWhatsappIdentity(waId), null);
-  assert.equal(await campaignRecipientEligibility(db, clientId, [waId]), null);
+  assert.equal(await campaignRecipientEligibility(db, clientId, [waId]), "unsupported_international_identity");
   const job = await enqueueCampaignExecutionJob({ clientId, campaignId: campaign.id, eligibleAt: new Date(0), kind: "campaign" });
   const claimed = await claimNextCampaignExecutionJob();
   assert.ok(claimed); assert.equal(claimed.id, job.id);
@@ -42,7 +42,7 @@ test("prevention: real runner persists accepted outbound before CRM fails, retai
     const target = String(input);
     assert.ok(target.startsWith("https://graph.facebook.com/"), "unexpected network attempt forbidden");
     const body = JSON.parse(String(init?.body));
-    assert.equal(body.to, waId);
+    assert.equal(body.to, "5541991100990");
     submissions++;
     const ledger = JSON.parse(fs.readFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!, "utf8"));
     const child = Object.values(ledger.tasks).find((task: any) => task.kind === "provider") as any;
@@ -64,29 +64,23 @@ test("prevention: real runner persists accepted outbound before CRM fails, retai
   assert.equal(await db.outboundMessage.count({ where: { clientId } }), 1);
   const durable = await db.outboundMessage.findFirstOrThrow({ where: { clientId } });
   assert.equal(durable.metaMessageId, metaId); assert.equal(durable.status, "SENT");
-  assert.equal(await db.contact.count({ where: { clientId } }), 0);
-  assert.equal(await db.lead.count({ where: { tenantId: clientId } }), 0);
-  assert.equal(await db.event.count({ where: { clientId, eventName: "campaign.message.submit_started", messageId: `campaign.${campaign.id}.2` } }), 0);
-  const error = errors.find(e => e.event === "campaign.result.persistence_pending");
-  assert.ok(error);
-  assert.equal(error.persistenceStage, "crm_materialization");
-  assert.equal(error.errorMessage, "Invalid WhatsApp number");
-  assert.equal(error.providerAccepted, true); assert.equal(error.retryAllowed, false);
-  const ledger = JSON.parse(fs.readFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!, "utf8"));
-  assert.equal(ledger.open, false); assert.equal(ledger.generation, 2);
+  assert.equal(durable.messageId, `campaign.${campaign.id}.2`);
+  assert.equal(await db.event.count({ where: { clientId, eventName: "campaign.message.submit_started", messageId: `campaign.${campaign.id}.1` } }), 0);
+  assert.equal(await db.event.count({ where: { clientId, eventName: "campaign.recipient.import_blocked", messageId: campaign.id } }), 1);
+  assert.equal(errors.some(e => e.event === "campaign.result.persistence_pending"), false);
+  let ledger: any;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    ledger = JSON.parse(fs.readFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!, "utf8"));
+    if (Object.keys(ledger.tasks).length === 0) break;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  assert.equal(ledger.open, true);
   const tasks: any[] = Object.values(ledger.tasks);
-  assert.equal(tasks.length, 1); assert.equal(tasks[0].kind, "provider"); assert.equal(tasks[0].phase, "persisting");
-  assert.equal(tasks[0].reference.messageId, `campaign.${campaign.id}.1`);
-  assert.ok(tasks[0].parent); assert.equal(ledger.tasks[tasks[0].parent], undefined);
-  assert.equal(ledger.audit.at(-1).reason, "unfinished_child_requires_review");
-  const suspended = await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id } });
-  assert.equal(suspended.status, "queued"); assert.equal(suspended.attempt, 1);
-  assert.equal(suspended.failureReason, "operational_suspension");
-  assert.equal(suspended.leaseToken, null); assert.equal(suspended.leaseOwner, null); assert.equal(suspended.leaseExpiresAt, null);
-  assert.equal((await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status, "sending");
-  console.log(JSON.stringify({ proof: "guard37_prevention_proved", node: process.version, provider: "simulated", postgres: "real_isolated",
-    submissions, accepted: accepted.length, outbounds: 1, subsequentRecipientSubmissions: 0, taskPhase: tasks[0].phase,
-    guardOpen: ledger.open, jobStatus: suspended.status, originalError: error.errorMessage, persistenceStage: error.persistenceStage }));
+  assert.equal(tasks.length, 0);
+  const completed = await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id } });
+  assert.equal(completed.status, "completed");
+  const campaignState = await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
+  assert.equal(campaignState.status, "completed"); assert.equal(campaignState.sentCount, 1); assert.equal(campaignState.blockedCount, 1);
 });
 
 test("SQL failure after acceptance keeps intent/task and never resubmits", async t => {
