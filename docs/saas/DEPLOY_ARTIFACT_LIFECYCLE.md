@@ -1135,6 +1135,41 @@ O lifecycle do produtor de releases foi comprovado por esta operação. O adapte
 de `preparations` não foi necessário e sua adoção produtiva continua pendente;
 não fabricar preparação volumosa para demonstrá-la.
 
+## Recuperação de rascunho 785bde80 — DEPLOYED_SANITIZED
+
+Fonte: execução canônica do Codex local em 03/11/2026. A release
+`immutable-785bde80-vps-20261103T103429Z` reutilizou o build único, pacote
+`4013a865f6b521bc0aba54fc4d985b2aaf0a11cebbc30430023da4b469ebdc3f`,
+instalação inerte e intenção de retenção já concluídos. A janela sucessora v3
+ativou API+frontend, preservou o worker `e2e7f17a`, executou um único `pm2 save`
+e terminou `DEPLOYED_SANITIZED`.
+
+| Evidência | SHA-256 |
+| --- | --- |
+| Manifesto | `e2a573d689fcc0fa5d4d4813546eb1130f0134592153dd2d1c3f33d9db58f3a6` |
+| Índice | `4debd26b079ba2a9b3c455935537c8814433030fc8f76a14051ad214d30afd06` |
+| Dump final | `748ee3baf55e50d5746dfe88932384383dde18cc4ea1d8bcd813c2434c42733c` |
+| Marker | `de28c677067ab9862d1e6b7705b6a31ef8edad15c40ac2ed0c26cbbef8ab647b` |
+| Transaction journal | `59c6e8956a7bd1539bb1d8035e42940c6ad7d5afc5956ef3a16fc6b87e1bee80` |
+| Retention receipt | `6de66f2a73b84d43096f4d3d030f68a8f3a4ea9ee41a2585e211556b97c65708` |
+| Retention journal | `27b85250c0b9cb9c11c3c3b114d014a2832d0c0010b159419ab2fbf7e03c2c6f` |
+| Review terminal | `a364fe7221625d034be3ad7d9c3c44acbd3a8432e5cda2cbdd53a6e3482d2140` |
+
+Os três comandos consumiram somente worktree e runtimes derivados de API/frontend.
+O consumidor `_canonical_retirement_closure()` autenticou intenção, receipt,
+journal e review, reconheceu 3/3 efeitos e nenhum remanescente. A alocação física
+qualificada desses caminhos era `2.008.825.856 bytes`; a disponibilidade medida
+cresceu de `6.941.179.904` para `8.925.216.768 bytes`, ganho líquido observado de
+`1.984.036.864 bytes`. Não substituir uma medida pela outra.
+
+A tentativa v2 anterior permanece `ROLLED_BACK`, journal
+`b017180c596ba8849bed747cd30b860c917b98e594f08dd17f9ea990787bc992`,
+com zero save e zero retenção. O sucesso v3 não a reabre nem apaga. Não repetir
+build, instalação, ativação, save ou retenção da geração 785bde80. Pacote, release
+instalada, retorno 911a e worker foram preservados; o lock canônico ficou ausente.
+O adapter de `preparations` segue como frente separada e não foi comprovado por
+esta geração.
+
 ## Reconciliação versionada dos papéis de release — implementada localmente
 
 **Estado: IMPLEMENTADA E ENSAIADA NO REPOSITÓRIO / NÃO PUBLICADA NO GRAFO

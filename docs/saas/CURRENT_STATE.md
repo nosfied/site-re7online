@@ -1,28 +1,45 @@
 # Estado canônico do Converta
 
-**DEPLOYED_SANITIZED / CAMPAIGN INTEGRAL DRAFT CREATION ACTIVE / PRODUCTION HEALTHY**
+**DEPLOYED_SANITIZED / CAMPAIGN DRAFT RECOVERY ACTIVE / PRODUCTION HEALTHY**
 
-## Estado vigente — campanha integral 911a9708 concluída
+## Estado vigente — recuperação de rascunhos 785bde80 concluída
 
-Fonte: execução e verificação canônicas do Codex local em 02/11/2026.
+Fonte: execução e verificação canônicas do Codex local em 03/11/2026.
 
-A release API+frontend `immutable-911a9708-vps-20261102T221325Z`, target
-`911a970838233ae92e00a45ef371f619511d8602`, está `DEPLOYED_SANITIZED`.
+A release API+frontend `immutable-785bde80-vps-20261103T103429Z`, target
+`785bde80cb8bacbbf6375337dd169247738ab0f9`, está `DEPLOYED_SANITIZED`.
 API e frontend apontam para a release, health local/público passou, e o worker
-`e2e7f17a` foi preservado sem restart.
+`e2e7f17a` foi preservado sem restart. A release anterior `911a9708` permanece
+como retorno autenticado.
 Os caminhos estáveis são `/opt/re7online/current/api` e
 `/opt/re7online/current/frontend`; o frontend permanece `fork_mode`, BUILD_ID
-`qnWlIpXNGY4SfMmtzYUT4`.
+`k1SJGEhHYRXzqEZOLjlpA`.
 
 A finalização executou um único `pm2 save`, validou o dump
-`8cfa4ea73bb80cd7a74868ba40a8f44187786f7531786789617134d7bdc78d7a`,
+`748ee3baf55e50d5746dfe88932384383dde18cc4ea1d8bcd813c2434c42733c`,
 criou o marker, retirou 3/3 derivados e encerrou o lock canônico. Registro:
-[CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json).
+[CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json).
 
 Não repetir build, instalação, ativação, save ou retenção dessa geração. O saldo
-terminal foi 9.406.750.720 bytes, após recuperar 2.008.760.320 bytes de derivados;
-é checkpoint histórico, não capacidade reservada. O reparo de `Campanha teste
-nov.01` e a adoção do adapter de `preparations` continuam frentes separadas.
+terminal foi 8.925.216.768 bytes. A alocação retirada foi 2.008.825.856 bytes;
+o aumento líquido observado foi 1.984.036.864 bytes. São métricas distintas e o
+saldo é checkpoint histórico, não capacidade reservada. A validação funcional de
+um novo rascunho confirmou 963 destinatários persistidos; a execução dessa campanha
+é um incidente separado, descrito abaixo. A adoção do adapter de `preparations`
+continua uma frente separada.
+
+### Validação funcional posterior — criação integral e incidente de execução
+
+No tenant Demo, a campanha `5d1e71b1-d2a4-497a-9c2d-25761d94416c`
+(`Campanha teste nov.02`) foi criada com 963 destinatários persistidos. Isso valida
+a correção de criação integral desta release: não houve o corte anterior em 25.
+
+A execução posterior processou somente as três primeiras posições e ficou
+`Suspensa operacionalmente`. Esse resultado é um incidente de execução separado,
+não desfaz a validação da criação e não constitui aceite funcional do runner. A
+campanha, sua suspensão e os registros das posições 1–3 permanecem preservados;
+este fechamento não autoriza retomada, reenvio, agendamento nem reconstrução de
+destinatários.
 
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 
@@ -521,11 +538,16 @@ O [registro verificável](releases/B96_GENERATION_RETIREMENT_2026-11-03_SANITIZE
 torna esse lote terminal e proibido de replay. A cadeia
 `d7de / 3630 / ec2 / ef7 / a62 / 5c339` continua aberta e separada.
 
-### Continuidade da campanha 785bde80 — instalada; ativação pendente
+### Campanha 785bde80 — DEPLOYED_SANITIZED
 
 A geração `immutable-785bde80-vps-20261103T103429Z`, target
-`785bde80cb8bacbbf6375337dd169247738ab0f9`, concluiu build único, verificação e
-instalação inerte. O primeiro `generation-retirement prepare` negou antes de
+`785bde80cb8bacbbf6375337dd169247738ab0f9`, concluiu build único, verificação,
+instalação inerte, ativação API+frontend e retenção 3/3. O estado terminal é
+`DEPLOYED_SANITIZED`, com um único `pm2 save`, worker `e2e7f17a` preservado e
+lock canônico ausente. A closure canônica autenticou intent, receipt, journal e
+review; o lote é terminal e irrepetível.
+
+O primeiro `generation-retirement prepare` negou antes de
 intenção ou efeito porque a montagem manual da custódia copiou três controles e
 omitiu `preparation_artifact_lifecycle.py`, apesar de a dependência já integrar as
 listas do admission controller e do materializador. Essa v1 e o stderr
@@ -560,6 +582,13 @@ essa transação é terminal e não pode ser reutilizada. O aceite 911a preserva
 os 21 bytes UTF-8 e SHA `1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a`,
 mas não preserva seu comando produtor. Nova janela exige pacote sucessor e transporte
 autenticado pelo materializador versionado, ensaiado até o leitor real antes da VPS.
+Essa exigência foi satisfeita pelo pacote sucessor v3. A janela v3 materializou o
+aceite autenticado, finalizou pelo wrapper versionado e consumiu somente os três
+derivados selados. Receipt `6de66f2a73b84d43096f4d3d030f68a8f3a4ea9ee41a2585e211556b97c65708`,
+journal `27b85250c0b9cb9c11c3c3b114d014a2832d0c0010b159419ab2fbf7e03c2c6f`
+e review `a364fe7221625d034be3ad7d9c3c44acbd3a8432e5cda2cbdd53a6e3482d2140`
+preservam o fechamento. A tentativa v2 continua `ROLLED_BACK`, não foi reescrita
+nem se torna consumível pelo sucesso posterior.
 
 Historicamente, a retenção frontend-only inicial da b96 concluiu 3/3 em
 `DEPLOYED_SANITIZED` e registrou 12.402.286.592 bytes disponíveis. Esse checkpoint
