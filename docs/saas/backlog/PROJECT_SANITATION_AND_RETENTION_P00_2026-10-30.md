@@ -865,3 +865,85 @@ SHA-256 `d7cf1d3c2596891ad8208fd6fdd2c8b4ca2028738a51217bc30dfaec8fe99535`.
 Esse lote é terminal e proibido de replay. A margem de `593.371.136 bytes` sobre o
 gate remove somente o bloqueio de capacidade observado e não autoriza o build da
 campanha. A cadeia principal de seis gerações continua aberta.
+
+### Reconciliação dirigida da cadeia principal — 03/11/2026
+
+Esta classificação começou reutilizando somente documentação, histórico Git e
+evidências locais já preservadas. A busca nominal posterior da custódia ec2, descrita
+abaixo, foi a única leitura na VPS; não houve hashing de payload, inventário global,
+`prepare`, `execute` ou retirada. Os volumes individuais abaixo são medições
+históricas aproximadas de uma release típica, exceto d7de, cuja identidade e blocos
+foram observados na leitura dirigida já encerrada. O potencial agregado dos quatro
+primeiros permanece aproximadamente `3,95 GB`, condicionado; ganho qualificado é
+zero.
+
+| Geração | Evidência reutilizável | Ganho potencial | Impedimento exato | Custo/decisão |
+| --- | --- | ---: | --- | --- |
+| `immutable-d7de6453-vps-20261024T221500Z` | deploy versionado SHA `3babb512…`; sucessão a959 com receipt `3567a10a…` e journal `991d549a…`; runtimes encerrados nos ordinais 2/3 do receipt `97a121df…`; release observada com `988.606.464` bytes físicos e sem os overlays canônicos `.data` | `988.606.464 B` | o worktree está ausente, mas caminho/SHA/ordinal do receipt+journal terminal não foram localizados; o consumidor também não possui descriptor fechado d7de | **bloqueada**. Ampliar allowlist sem a prova do worktree não resolve. Não omitir o derivado conhecido nem sintetizar histórico |
+| `immutable-3630e16-vps-20261024T195842Z` | d7de fixa 3630 como predecessor imediato da API e usa seu commit como `baseCommit`; o documento histórico relata output 3630 retirado no lote ef7/3630 e worktree retirado no lote 3630/d7de | cerca de `943 MiB`, medição histórica | não há registro versionado próprio de ativação 3630 nem bindings publicados dos receipts/journals privados dos dois lotes; faltam contrato/lifecycle/review e cadeia sucessora consumível | custo **muito alto**; não priorizar antes de recuperar as custódias já relatadas |
+| `immutable-ec2a9fde-vps-20261024T162005Z` | deploy versionado SHA `84d3e9c0…`; rollback anterior a62; ef7 fixa ec2 como rollback da API; d7de fixa ec2 como predecessor do frontend; quatro runtimes output/staging encerrados em lote histórico cuja custódia de 19 arquivos foi relatada | cerca de `943 MiB`, medição histórica | caminhos e hashes do receipt/journal privado do lote ec2 não estão publicados; faltam binding terminal dos quatro efeitos, observação atual de identidade/dados privados e descriptor legado fechado | **priorização histórica, superada pela busca encerrada abaixo**; estado vigente `EC2_PRIVATE_CUSTODY_NOT_LOCATED_IN_CANONICAL_ROOTS`, sem nova busca prevista |
+| `immutable-ef7db111-vps-20261024T174000Z` | deploy API-only versionado SHA `446d727b…`, marker/dump e rollback ec2; output encerrado no lote histórico ef7/3630 cuja custódia de 69 arquivos foi relatada | cerca de `943 MiB`, medição histórica | falta a ativação autenticada de 3630 que substituiu ef7, além dos bindings privados do lote de output e do descriptor fechado | custo **alto**; permanece bloqueada pela mesma classe de bindings privados não recuperáveis; nenhuma alternância de candidata está prevista |
+| `immutable-a62da468-vps-20261024T124726Z` | deploy versionado SHA `9e3380a0…`, predecessor 5c339 e sucessão por ec2 | `0 B` no escopo atual | preservação expressa; não iniciar migração de dados nem reclassificação nesta frente | `KEEP_PROTECTED` |
+| `immutable-5c339b2e-20261022T125717Z` | deploy versionado SHA `fa2684f5…` e vínculo como predecessor de a62 | `0 B` no escopo atual | preservação expressa; cadeia mais antiga sem fechamento completo próprio nesta frente | `KEEP_PROTECTED` |
+
+A última busca local pelo worktree d7de incluiu os índices, manifests, receipts e
+journals já identificados, além do histórico Git que introduziu o relato. O commit
+`fa107152` afirma que receipt final e prova de lock existiram em custódia privada,
+mas não publica localização, SHA ou ordinal. Portanto, a custódia é narrada, não
+recuperável pelos bindings disponíveis, e d7de continua não consumível.
+
+Orientação histórica consumida: a proposta anterior era montar uma prova local de
+ec2 se a custódia de 19 arquivos pudesse ser recuperada. A busca dirigida abaixo
+encerrou esse escopo sem localizar o binding. Não há nova busca, leitor, descriptor,
+reconstrução de receipt/journal ou janela produtiva prevista para ec2. A cadeia maior
+permanece backlog bloqueado por custódias históricas não recuperáveis, sem tratar
+“não localizado nas raízes consultadas” como “inexistente”.
+
+#### Resultado da busca dirigida da custódia ec2
+
+A busca local inicial usou a cadeia versionada, o histórico Git e os metadados
+GitHub dos dois commits que registraram o lote (`29b0f3a3` e `fa107152`). Ambos são
+commits diretos, sem PR, issue ou comentário associado contendo evidência adicional.
+O nome lógico `retention-ec2a9fde-redundant-runtimes-20261025` é recuperável, mas
+esses registros não fornecem raiz de custódia, índice de 19 arquivos, SHA do receipt
+ou SHA do journal. O relato de hashes iguais aos originais não permite reabrir os
+bytes.
+
+Em `2026-11-03T16:39:35-03:00`, uma busca somente leitura na VPS procurou o basename
+literal e nomes de índice associados, sem seguir symlinks, nas raízes canônicas:
+
+- `/opt/re7online/backups/converta-persistent/preparations` (`64769:2101127`,
+  `deploy:deploy`, `0700`);
+- `/opt/re7online/backups/converta-persistent/deploy-preparations`
+  (`64769:808443`, `deploy:deploy`, `0700`);
+- `/opt/re7online/backups/converta-persistent/deploy-transactions`
+  (`64769:788289`, `deploy:deploy`, `0700`);
+- `/opt/re7online/backups/converta-persistent/retention-receipts`
+  (`64769:791951`, `deploy:deploy`, `0700`).
+
+Uma segunda passagem pesquisou o literal somente em arquivos compactos menores que
+16 MiB cujos nomes indicavam índice, manifesto, receipt, journal, review, evidência,
+JSON ou lista de hashes. Por fim, uma busca rasa cobriu os filhos imediatos da raiz
+persistente `/opt/re7online/backups/converta-persistent` (`64769:791424`,
+`deploy:deploy`, `0750`), sem atravessar outras árvores. Nenhuma passagem encontrou
+o diretório, índice nomeado ou referência compacta ao nome lógico. Isso não prova
+ausência fora das raízes consultadas nem incompatibilidade do formato privado: os
+bytes e o formato continuam desconhecidos.
+
+Sem receipt/journal, os quatro efeitos só podem ser delimitados, não autenticados:
+
+| Caminho histórico | Classe esperada pelo contrato atual | Ordinal autenticado |
+| --- | --- | --- |
+| `/opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T162005Z/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime` | `DERIVED_OUTPUT_RUNTIME` | ausente |
+| `/opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T162005Z/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime` | `DERIVED_OUTPUT_RUNTIME` | ausente |
+| `/opt/re7online/releases/.staging-immutable-ec2a9fde-vps-20261024T162005Z-20261024T164600Z/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime` | `DERIVED_STAGING` | ausente |
+| `/opt/re7online/releases/.staging-immutable-ec2a9fde-vps-20261024T162005Z-20261024T164600Z/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime` | `DERIVED_STAGING` | ausente |
+
+Não cabe concluir compatibilidade ou incompatibilidade com os leitores legados sem
+os bytes. O único resultado nominal é
+`EC2_PRIVATE_CUSTODY_NOT_LOCATED_IN_CANONICAL_ROOTS`: receipt, journal, formato e
+ordinais permanecem não autenticados. Nenhum ensaio do consumidor foi executado,
+porque fazê-lo exigiria fabricar receipt, journal ou ordinais. A ec2 permanece
+preservada e não qualificada. Não há nova busca prevista; identidade física,
+overlays privados e referências operacionais só poderiam ser retomados diante de
+um binding imutável apresentado por fonte externa a este escopo encerrado.
