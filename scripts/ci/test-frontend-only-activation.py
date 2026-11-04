@@ -476,6 +476,40 @@ class FrontendExecutorTest(unittest.TestCase):
             self.assertEqual(int(f.counter.read_text()),8)
         finally:f.close()
 
+    def test_finalize_preserves_api_and_updates_frontend_immediate_rollback(self):
+        f=ExecutorFixture()
+        try:
+            operational=json.loads(f.retirement_operational.read_text())
+            operational["rollbackReleases"]=["immutable-api-return","immutable-frontend-old"]
+            operational["immediateRollbackReleases"]={
+                "api":"immutable-api-return","frontend":"immutable-frontend-old"}
+            f.retirement_operational.write_text(json.dumps(operational,sort_keys=True)+"\n")
+            f.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(f.retirement_operational)
+            r=f.run();self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+            result=f.finalize();self.assertEqual(result.returncode,0,(result.stdout,result.stderr))
+            final=json.loads((f.tx/"generation-operational.final.private.json").read_text())
+            self.assertEqual(final["immediateRollbackReleases"],{
+                "api":"immutable-api-return","frontend":f.rollback.name})
+            self.assertIn("immutable-frontend-old",final["rollbackReleases"])
+        finally:f.close()
+
+    def test_accumulated_rollback_role_denies_before_frontend_selection(self):
+        f=ExecutorFixture()
+        try:
+            operational=json.loads(f.retirement_operational.read_text())
+            operational["rollbackReleases"]=[f.rollback.name,"immutable-api-return","historical"]
+            operational["immediateRollbackReleases"]={
+                "api":"immutable-api-return","frontend":f.rollback.name}
+            f.retirement_operational.write_text(json.dumps(operational,sort_keys=True)+"\n")
+            f.env["RE7_RETIREMENT_OPERATIONAL_STATE_SHA256"]=digest(f.retirement_operational)
+            result=f.run()
+            self.assertNotEqual(result.returncode,0,(result.stdout,result.stderr))
+            self.assertIn("ROLLBACK_ROLE_RECONCILIATION_REQUIRED",result.stderr)
+            self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
+            self.assertFalse((f.tx/"selection-intent.private.json").exists())
+            self.assertEqual(int(f.counter.read_text()),7)
+        finally:f.close()
+
     def test_finalize_retention_failure_is_deployed_incomplete(self):
         f,r=self.run_case()
         try:

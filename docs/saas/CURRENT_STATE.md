@@ -703,11 +703,27 @@ interrupção preserva dívida nominal. A custódia inclui as dependências exec
 pinadas e o teste chama o entrypoint copiado fora do checkout. Pelo procedimento
 canônico, API/frontend devem usar `deploy-preparation-admission.py
 --run-preparation`, que autentica custódia, report, contrato e input e executa o
-mesmo FD do produtor materializado. O produtor ainda aceita tecnicamente chamada
-direta; isso não constitui adoção comprovada nos fluxos produtivos. A cobertura
+mesmo FD do produtor materializado. A correção local de 04/11 faz o próprio
+produtor autenticar esse report, seu contrato e o mesmo FD; chamada direta sem a
+admissão nega antes da alocação. Isso ainda não constitui adoção comprovada nos
+fluxos produtivos. A cobertura
 permanece limitada à `reservationRoot`, não a produtores históricos ou ao
 filesystem inteiro. A implementação não foi instalada nem executada na VPS e não
 altera recuperações ou déficits históricos.
+
+O grafo sucessor passa a poder registrar `immediateRollbackReleases` por
+componente. Uma ativação completa estabelece os dois bindings; uma ativação
+parcial só atualiza o componente selecionado quando o binding anterior já existe.
+Sem prova completa, o produtor conserva o formato legado e todas as proteções. A
+lista histórica `rollbackReleases` não é reduzida pela ativação: papéis antigos só
+saem por reconciliação autenticada. Se o binding por componente já existe e a
+lista contém qualquer papel além dos dois retornos imediatos, a próxima ativação
+nega antes de efeitos com `rollback_role_reconciliation_required`. A reconciliação
+de um pai privado pode retirar somente o papel operacional antigo porque o próprio
+pai continua protegido em `privateDataParents`. Assim, o inventário não é
+confundido com o retorno imediato, a lista não cresce por ativações sucessivas e
+nenhuma referência desconhecida desaparece por omissão. Mudança local e ensaiada;
+ainda não implantada.
 
 ### Reconciliação dos papéis de releases — versionada, não operacional
 

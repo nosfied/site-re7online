@@ -1041,6 +1041,19 @@ class Driver:
             deny("generation_retirement_receipt_parent_identity")
         return binding
 
+    def _require_reconciled_component_rollbacks(self, binding: RetirementBinding) -> None:
+        raw, _ = stable_regular_bytes(binding.operational_state, required_mode=0o600)
+        value = json_object(raw, binding.operational_state.name)
+        immediate = value.get("immediateRollbackReleases")
+        if immediate is None:
+            return  # Legacy graph: a full activation may establish the first binding.
+        rollbacks = value.get("rollbackReleases")
+        if (not isinstance(immediate, dict) or set(immediate) != set(COMPONENTS) or
+                any(not isinstance(item, str) or not item for item in immediate.values()) or
+                not isinstance(rollbacks, list) or
+                set(rollbacks) != set(immediate.values())):
+            deny("rollback_role_reconciliation_required")
+
     @staticmethod
     def _closed_file_binding(value: Any, label: str) -> tuple[Path, str, bytes]:
         if (not isinstance(value, dict) or set(value) != {"path", "sha256"} or
@@ -1201,6 +1214,22 @@ class Driver:
             previous_releases.add(release_id)
         active = set(value.get("activeReleases", [])) - previous_releases
         active.add(self.inputs.release)
+        immediate = value.get("immediateRollbackReleases")
+        if immediate is not None and (not isinstance(immediate, dict) or
+                                      set(immediate) != set(COMPONENTS) or
+                                      any(not isinstance(item, str) or not item
+                                          for item in immediate.values())):
+            deny("generation_retirement_immediate_rollbacks")
+        if immediate is not None:
+            immediate = dict(immediate)
+            for component in affected:
+                immediate[component] = previous_by_component[component]
+        elif set(affected) == set(COMPONENTS):
+            # A full activation can establish the per-component binding without
+            # guessing anything from the legacy accumulated list.  Partial
+            # activations remain fail-closed until such a binding exists.
+            immediate = {component: previous_by_component[component]
+                         for component in COMPONENTS}
         rollback = set(value.get("rollbackReleases", [])) | previous_releases
         candidates = set(value.get("candidateReleases", [])); candidates.discard(self.inputs.release)
         installed = set(value.get("installedVerifiedReleases", [])); installed.add(self.inputs.release)
@@ -1208,9 +1237,13 @@ class Driver:
                      pm2DumpPaths=sorted(set(dump_paths)), activeReleases=sorted(active),
                      rollbackReleases=sorted(rollback), candidateReleases=sorted(candidates),
                      installedVerifiedReleases=sorted(installed), deploymentState={"state": "DEPLOYED"})
+        if immediate is not None:
+            value["immediateRollbackReleases"] = immediate
         graph = {key: value[key] for key in ("activeReleases", "rollbackReleases",
                  "transitiveReturnReleases", "candidateReleases", "installedVerifiedReleases",
                  "supersededCandidates")}
+        if immediate is not None:
+            graph["immediateRollbackReleases"] = immediate
         graph_path = self.inputs.transaction_root / "generation-release-graph.final.private.json"
         atomic_private(graph_path, graph, exclusive=True)
         observations["currentLinks"] = current_links
@@ -1387,7 +1420,8 @@ class Driver:
             deny("generation_retirement_binding_required")
         if self.inputs.retirement.deployment_lock != self.lock:
             deny("generation_retirement_lock_mismatch")
-        self._authenticate_retirement()
+        retirement = self._authenticate_retirement()
+        self._require_reconciled_component_rollbacks(retirement)
         if self.journal.exists():
             deny("transaction_exists")
         if self.inputs.transaction_root.exists():

@@ -603,7 +603,9 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                 "rollbackReleases", "transitiveReturnReleases", "candidateReleases",
                 "installedVerifiedReleases", "supersededCandidates", "controlPlaneArtifacts",
                 "dependencies", "deploymentState", "canonicalRoots", "observations"}
-    if set(value) != required or value.get("schemaVersion") != 2:
+    optional = {"immediateRollbackReleases"}
+    if (frozenset(value) not in {frozenset(required), frozenset(required | optional)} or
+            value.get("schemaVersion") != 2):
         deny("operational_state_schema")
     for key in ("generationId", "releaseId", "targetCommit"):
         if value.get(key) != contract[key]:
@@ -613,6 +615,14 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                 "installedVerifiedReleases", "supersededCandidates", "dependencies"):
         if not isinstance(value.get(key), list) or any(not isinstance(item, str) for item in value[key]):
             deny(f"operational_state_list:{key}")
+    immediate = value.get("immediateRollbackReleases")
+    if immediate is not None and (not isinstance(immediate, dict) or
+                                  set(immediate) != {"api", "frontend"} or
+                                  any(not isinstance(item, str) or not item
+                                      for item in immediate.values()) or
+                                  any(item not in value["rollbackReleases"]
+                                      for item in immediate.values())):
+        deny("operational_state_immediate_rollbacks")
     if not Path(str(value.get("gitRepository", ""))).is_absolute():
         deny("operational_git_repository")
     roots = value.get("canonicalRoots")
@@ -812,6 +822,8 @@ def capture_fresh_operational(operational: dict[str, Any]) -> dict[str, Any]:
             expected = {key: operational[key] for key in ("activeReleases", "rollbackReleases",
                         "transitiveReturnReleases", "candidateReleases", "installedVerifiedReleases",
                         "supersededCandidates")}
+            if "immediateRollbackReleases" in operational:
+                expected["immediateRollbackReleases"] = operational["immediateRollbackReleases"]
             if graph != expected:
                 deny("fresh_release_graph_changed")
     return captured
@@ -2781,6 +2793,7 @@ RICH_GRAPH_KEYS = {
     "activeReleases", "rollbackReleases", "transitiveReturnReleases",
     "candidateReleases", "installedVerifiedReleases", "supersededCandidates",
 }
+RICH_GRAPH_OPTIONAL_KEYS = {"immediateRollbackReleases"}
 RECONCILIATION_TERMINAL_RECEIPTS = {"SANITIZED", "DEPLOYED_SANITIZED"}
 RECONCILIATION_INCOMPLETE_RECEIPTS = {
     "QUARANTINED", "RETENTION_INCOMPLETE", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -2798,13 +2811,23 @@ def _closed_file_binding(value: Any, label: str) -> tuple[Path, str, bytes]:
     return path, value["sha256"], raw
 
 
-def _rich_graph(value: Any, label: str) -> dict[str, list[str]]:
-    if (not isinstance(value, dict) or set(value) != RICH_GRAPH_KEYS or
+def _rich_graph(value: Any, label: str) -> dict[str, Any]:
+    if (not isinstance(value, dict) or
+            frozenset(value) not in {frozenset(RICH_GRAPH_KEYS),
+                               frozenset(RICH_GRAPH_KEYS | RICH_GRAPH_OPTIONAL_KEYS)} or
             any(not isinstance(value.get(key), list) or
                 any(not isinstance(item, str) or not item for item in value[key]) or
                 len(value[key]) != len(set(value[key])) for key in RICH_GRAPH_KEYS)):
         deny(f"release_reconciliation_graph:{label}")
-    return {key: sorted(value[key]) for key in RICH_GRAPH_KEYS}
+    result = {key: sorted(value[key]) for key in RICH_GRAPH_KEYS}
+    immediate = value.get("immediateRollbackReleases")
+    if immediate is not None:
+        if (not isinstance(immediate, dict) or set(immediate) != {"api", "frontend"} or
+                any(not isinstance(item, str) or not item or
+                    item not in result["rollbackReleases"] for item in immediate.values())):
+            deny(f"release_reconciliation_graph:{label}")
+        result["immediateRollbackReleases"] = dict(sorted(immediate.items()))
+    return result
 
 
 def _release_is_live(release: str, installed: Path, operational: dict[str, Any]) -> bool:
@@ -3215,6 +3238,7 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
             if not private:
                 deny("release_reconciliation_private_data_missing")
             private_parents.add(str(installed))
+            successor[role] = [item for item in successor[role] if item != release]
             result = "PRESERVED_PRIVATE_DATA"
         else:
             successor[role] = [item for item in successor[role] if item != release]

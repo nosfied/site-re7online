@@ -1300,7 +1300,41 @@ O produtor de release `converta-release.py` continua usando `build-output` e seu
 lifecycle de geração; não deve ser alterado por suposição. Scripts e kits históricos
 que escreveram diretamente em `preparations` não são retroativamente interceptados.
 Logo a garantia cobre a rota canônica integrada, não constitui bloqueio global de
-qualquer escrita manual no filesystem. O entrypoint materializado permanece
-tecnicamente invocável de forma direta; somente o chamador autenticado é o
-procedimento obrigatório, e seu uso produtivo ainda não foi comprovado.
+qualquer escrita manual no filesystem. Desde a correção local de 04/11, o
+entrypoint API/frontend exige o report de admissão, o contrato correspondente e o
+SHA do mesmo FD materializado; invocação direta sem esse vínculo nega antes da
+alocação. O uso produtivo da rota ainda não foi comprovado.
 Instalação/adoção produtiva exige janela própria; não existe limpeza automática.
+
+### Papéis de rollback por componente e estoque observado — 04/11/2026
+
+O grafo final de `immutable-785bde80-vps-20261103T103429Z` conserva sete nomes em
+`rollbackReleases`, enquanto a evidência da ativação identifica `911a9708` como
+retorno imediato de API e frontend. A acumulação não autoriza remover os demais:
+o produtor passa a emitir opcionalmente `immediateRollbackReleases` por componente,
+sem reduzir a lista histórica. Uma ativação completa estabelece ambos os bindings;
+uma parcial preserva o componente não selecionado somente quando o binding anterior
+está autenticado. Depois que o binding existe, uma lista com papéis além dos
+retornos imediatos bloqueia a próxima ativação antes de efeitos, exigindo a
+reconciliação autenticada. Pai privado reconciliado sai do papel operacional, mas
+continua protegido pela projeção em `privateDataParents`. Formato legado ou
+ambíguo permanece fail-closed. A saída de
+`rollbackReleases`/`transitiveReturnReleases` continua exclusiva da reconciliação
+autenticada existente.
+
+A leitura dirigida, sem payload ou hashing integral, mediu os membros do grupo:
+
+| Release | Blocos físicos | Situação |
+| --- | ---: | --- |
+| `immutable-0fdec8b0-vps-20261028T224726Z` | 988.868.608 B | overlay privado presente; preservar |
+| `immutable-708f018c-vps-20261027T152109Z` | 988.770.304 B | dados privados já documentados; preservar |
+| `immutable-754281d3-vps-20261029T174145Z` | 988.798.976 B | overlay privado presente; preservar |
+| `immutable-911a9708-vps-20261102T221325Z` | 988.966.912 B | rollback imediato de ambos os componentes; preservar |
+| `immutable-aa9527cc-vps-20261029T222733Z` | 989.552.640 B | sem overlay observado, mas sem cadeia moderna completa de lifecycle/review localizada; não qualificada |
+| `immutable-b96eb779-vps-20261028T025159Z` | ausente | retirada terminal; não reabrir |
+| `immutable-fa63994a-vps-20261030T153352Z` | 988.852.224 B | overlay privado presente; preservar |
+
+Resultado: nenhum lote fechado desse grupo cobre o déficit atual com margem. A
+única release sem proteção privada observada não pode ser promovida a efeito com
+ausência de prova. Lotes terminais, cadeias com custódia não localizada e dados
+privados permanecem fora da rodada; não há autorização de retirada.

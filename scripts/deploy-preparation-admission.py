@@ -661,6 +661,8 @@ def run_materialized_preparation(args: argparse.Namespace) -> int:
         raise RuntimeError("preparation_run_producer_readback:" +
                            ",".join(sorted(set(errors))))
     fd = os.open(producer_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    launch_read = -1
+    launch_write = -1
     try:
         opened = os.fstat(fd)
         if (identity(opened) != identity(producer_observed[1]) or
@@ -672,13 +674,37 @@ def run_materialized_preparation(args: argparse.Namespace) -> int:
         if fd_digest.hexdigest() != matches[0]["sha256"]:
             raise RuntimeError("preparation_run_producer_fd_hash")
         os.lseek(fd, 0, os.SEEK_SET)
+        launch_binding = canonical({
+            "schemaVersion": 1,
+            "adapter": args.adapter,
+            "contractSha256": expected_contract["sha256"],
+            "inputSha256": args.producer_input_sha256,
+            "output": str(output),
+            "producerSha256": matches[0]["sha256"],
+            "reportSha256": args.admission_report_sha256,
+        })
+        launch_read, launch_write = os.pipe()
+        written = 0
+        while written < len(launch_binding):
+            count = os.write(launch_write, launch_binding[written:])
+            if count <= 0:
+                raise RuntimeError("preparation_run_launch_binding_write")
+            written += count
+        os.close(launch_write); launch_write = -1
         command = ["/usr/bin/python3", "-I", "-B", "-E", "-s",
                    f"/proc/self/fd/{fd}", "--adapter", args.adapter,
                    "--input", str(input_path), "--input-sha256", args.producer_input_sha256,
+                   "--admission-report", str(report_path),
+                   "--admission-report-sha256", args.admission_report_sha256,
+                   "--admission-launch-fd", str(launch_read),
                    "--output", str(output), "--local-only"]
-        completed = subprocess.run(command, pass_fds=(fd,), check=False,
+        completed = subprocess.run(command, pass_fds=(fd, launch_read), check=False,
                                    env={"PYTHONDONTWRITEBYTECODE": "1", "PATH": "/usr/bin:/bin"})
     finally:
+        if launch_write >= 0:
+            os.close(launch_write)
+        if launch_read >= 0:
+            os.close(launch_read)
         os.close(fd)
     return completed.returncode
 

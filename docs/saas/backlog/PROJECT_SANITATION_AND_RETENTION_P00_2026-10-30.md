@@ -436,6 +436,29 @@ retirável que complete esse ganho. Assim, não existe lote literal canônico de
 às preparações grandes, por artefato literal e autoridade preservada, nunca pela
 pasta inteira.
 
+### Continuidade dirigida — 04/11/2026
+
+O grafo final da geração ativa `785bde80` ainda acumula sete entradas em
+`rollbackReleases`; a prova de ativação aponta somente `911a9708` como retorno
+imediato de API e frontend. A correção local versiona essa distinção por componente
+sem retirar papéis antigos por omissão: reconciliação autenticada continua sendo a
+única saída de uma aresta histórica. Depois de estabelecido o binding, qualquer
+papel excedente bloqueia a próxima ativação antes de efeitos; portanto a lista não
+pode continuar crescendo silenciosamente entre ativações.
+
+O primeiro grupo dirigido não produziu lote destrutivo fechado. `0fdec`, `708f`,
+`754` e `fa639` têm dados privados; `911a` é rollback imediato; `b96` já foi
+retirada e não pode ser reaberta. `aa952` mede 989.552.640 bytes e não apresentou
+overlay na leitura dirigida, mas a cadeia moderna completa de lifecycle/review não
+foi localizada e o volume isolado não cobre o déficit com margem. Estado nominal:
+`NO_CLOSED_BATCH / AUTHENTICATED_CLOSURE_OR_MARGIN_MISSING`. Não executar nova
+admissão nem retirada com base nessa classificação.
+
+Em paralelo, a prevenção de `preparations` passa a negar a chamada direta do
+produtor API/frontend: somente report/contrato/FD emitidos pela admissão integrada
+habilitam `copy`/`tar`. Reuso, `OPEN`, `SANITIZED` e `RETENTION_DEBT` continuam no
+lifecycle existente. Essa prova é local; adoção produtiva permanece pendente.
+
 ## Resultado obrigatório
 
 1. Uma única fonte de estado atual; histórico não concorre como instrução.

@@ -277,6 +277,22 @@ class AdapterTests(unittest.TestCase):
         input_path.write_text(json.dumps(value)); input_path.chmod(0o600)
         copied = admitted / 'preparation-producer-root/scripts/operational_preparers_v3.py'
         admission_report = admitted / 'admission-report.private.json'
+        caller_fd = os.open(copied, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            direct = __import__('subprocess').run([
+                '/usr/bin/python3', '-I', '-B', '-E', '-s', f'/proc/self/fd/{caller_fd}',
+                '--adapter', 'api', '--input', str(input_path),
+                '--input-sha256', hashlib.sha256(input_path.read_bytes()).hexdigest(),
+                '--admission-report', str(admission_report),
+                '--admission-report-sha256', hashlib.sha256(admission_report.read_bytes()).hexdigest(),
+                '--output', str(self.parent), '--local-only'], pass_fds=(caller_fd,),
+                capture_output=True, text=True,
+                env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+        finally:
+            os.close(caller_fd)
+        self.assertNotEqual(direct.returncode, 0)
+        self.assertEqual(json.loads(direct.stdout)['result'], 'DENY')
+        self.assertFalse((self.parent / generation).exists())
         result = __import__('subprocess').run([
             __import__('sys').executable, '-B', str(HERE / 'deploy-preparation-admission.py'),
             '--run-preparation', '--materialized-root', str(admitted),
