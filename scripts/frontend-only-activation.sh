@@ -902,12 +902,13 @@ test -f "$RETIREMENT_OPERATIONAL_STATE"
 test ! -L "$RETIREMENT_OPERATIONAL_STATE"
 test "$(/usr/bin/stat -Lc '%a' "$RETIREMENT_OPERATIONAL_STATE")" = 600
 test "$(/usr/bin/sha256sum "$RETIREMENT_OPERATIONAL_STATE" | /usr/bin/awk '{print $1}')" = "$RETIREMENT_OPERATIONAL_STATE_SHA256"
+/usr/bin/jq -e 'has("immediateRollbackReleases")' "$RETIREMENT_OPERATIONAL_STATE" >/dev/null || {
+  printf 'ROLLBACK_ROLE_LEGACY_TRANSITION_REQUIRED\n' >&2; exit 2; }
 /usr/bin/jq -e '
-  if has("immediateRollbackReleases") then
-    (.immediateRollbackReleases|type)=="object" and
-    (.immediateRollbackReleases|keys|sort)==["api","frontend"] and
-    ([.immediateRollbackReleases.api,.immediateRollbackReleases.frontend]|unique|sort)==(.rollbackReleases|unique|sort)
-  else true end' "$RETIREMENT_OPERATIONAL_STATE" >/dev/null || {
+  (.immediateRollbackReleases|type)=="object" and
+  (.immediateRollbackReleases|keys|sort)==["api","frontend"] and
+  ([.immediateRollbackReleases.api,.immediateRollbackReleases.frontend]|unique|sort)==(.rollbackReleases|unique|sort)' \
+  "$RETIREMENT_OPERATIONAL_STATE" >/dev/null || {
     printf 'ROLLBACK_ROLE_RECONCILIATION_REQUIRED\n' >&2; exit 2; }
 test -x "$PM2"
 test "$("$PM2" --version)" = 6.0.14

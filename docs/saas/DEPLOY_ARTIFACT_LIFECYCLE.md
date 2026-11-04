@@ -1289,8 +1289,10 @@ fechamento. Esta implementação versionada não autoriza instalação ou retira
 Cobertura comprovada: a admissão schema 2 materializa o produtor e a ação
 `deploy-preparation-admission.py --run-preparation` é o callsite canônico de criação
 API/frontend. Ela autentica por readback o report, o contrato, o input e o SHA do
-produtor copiado, abre o produtor com `O_NOFOLLOW` e executa esse mesmo FD. O
-produtor grava `OPEN` e a reserva antes do primeiro `copy`/`tar`; o fechamento
+produtor copiado, abre-o com `O_NOFOLLOW`, carrega os bytes conferidos e chama seu
+entrypoint interno. O CLI do produtor nega API/frontend mesmo quando o chamador
+fornece FD e pipe com o binding calculável. O produtor grava `OPEN` e a reserva
+antes do primeiro `copy`/`tar`; o fechamento
 terminal usa o `generation-retirement.py review-preparation` também materializado.
 A regressão atravessa admissão → produtor fora do checkout → cópia real → lifecycle
 `OPEN` → retirada sintética → `SANITIZED`, além de negar drift do contrato e do
@@ -1300,10 +1302,10 @@ O produtor de release `converta-release.py` continua usando `build-output` e seu
 lifecycle de geração; não deve ser alterado por suposição. Scripts e kits históricos
 que escreveram diretamente em `preparations` não são retroativamente interceptados.
 Logo a garantia cobre a rota canônica integrada, não constitui bloqueio global de
-qualquer escrita manual no filesystem. Desde a correção local de 04/11, o
-entrypoint API/frontend exige o report de admissão, o contrato correspondente e o
-SHA do mesmo FD materializado; invocação direta sem esse vínculo nega antes da
-alocação. O uso produtivo da rota ainda não foi comprovado.
+qualquer escrita manual no filesystem. Desde a correção local de 04/11, o CLI do
+entrypoint API/frontend não possui caminho de mutação; somente o callsite da
+admissão, após autenticar report, contrato, input e os bytes copiados, chama sua
+função interna. O uso produtivo da rota ainda não foi comprovado.
 Instalação/adoção produtiva exige janela própria; não existe limpeza automática.
 
 ### Papéis de rollback por componente e estoque observado — 04/11/2026
@@ -1313,12 +1315,15 @@ O grafo final de `immutable-785bde80-vps-20261103T103429Z` conserva sete nomes e
 retorno imediato de API e frontend. A acumulação não autoriza remover os demais:
 o produtor passa a emitir opcionalmente `immediateRollbackReleases` por componente,
 sem reduzir a lista histórica. Uma ativação completa estabelece ambos os bindings;
-uma parcial preserva o componente não selecionado somente quando o binding anterior
-está autenticado. Depois que o binding existe, uma lista com papéis além dos
+uma parcial exige os dois bindings autenticados e preserva o componente não
+selecionado. Formato legado precisa da reconciliação não destrutiva existente e não
+pode inferir retorno pela seleção ativa. Depois que o binding existe, uma lista com papéis além dos
 retornos imediatos bloqueia a próxima ativação antes de efeitos, exigindo a
 reconciliação autenticada. Pai privado reconciliado sai do papel operacional, mas
 continua protegido pela projeção em `privateDataParents`. Formato legado ou
-ambíguo permanece fail-closed. A saída de
+ambíguo permanece fail-closed. Duas ativações parciais só avançam quando o papel
+substituído pela primeira recebeu fechamento autenticado; antes disso, a segunda
+nega sem seleção e o papel histórico permanece protegido. A saída de
 `rollbackReleases`/`transitiveReturnReleases` continua exclusiva da reconciliação
 autenticada existente.
 

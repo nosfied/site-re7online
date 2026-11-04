@@ -1046,7 +1046,9 @@ class Driver:
         value = json_object(raw, binding.operational_state.name)
         immediate = value.get("immediateRollbackReleases")
         if immediate is None:
-            return  # Legacy graph: a full activation may establish the first binding.
+            if set(self.inputs.components) != set(COMPONENTS):
+                deny("rollback_role_legacy_transition_required")
+            return  # A full activation can establish both bindings from authenticated selections.
         rollbacks = value.get("rollbackReleases")
         if (not isinstance(immediate, dict) or set(immediate) != set(COMPONENTS) or
                 any(not isinstance(item, str) or not item for item in immediate.values()) or

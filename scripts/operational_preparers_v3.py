@@ -41,7 +41,7 @@ spec.loader.exec_module(c)
 require = c.require
 
 
-def authenticate_admission_binding(value, report_path, report_sha256, launch_fd,
+def authenticate_admission_binding(value, report_path, report_sha256,
                                    input_sha256, adapter, output):
     """Bind API/frontend allocation to the admission that copied this exact producer."""
     require(isinstance(report_path, str) and Path(report_path).is_absolute(),
@@ -62,50 +62,27 @@ def authenticate_admission_binding(value, report_path, report_sha256, launch_fd,
     matches = [item for item in producers if isinstance(item, dict) and
                item.get('role') == 'preparation-producer'] if isinstance(producers, list) else []
     try:
-        source_fd = int(Path(__file__).name)
-        opened = os.fstat(source_fd)
-        digest = hashlib.sha256()
-        duplicate = os.dup(source_fd)
-        try:
-            os.lseek(duplicate, 0, os.SEEK_SET)
-            while block := os.read(duplicate, 1024 * 1024):
-                digest.update(block)
-        finally:
-            os.close(duplicate)
-        resolved = Path(os.path.realpath(__file__))
-        current = resolved.lstat()
-        identity = lambda info: (info.st_dev, info.st_ino, info.st_mode, info.st_size,
-                                 info.st_mtime_ns, info.st_ctime_ns)
-        same_inode = identity(opened) == identity(current)
-    except (OSError, ValueError):
+        resolved = Path(__file__).resolve(strict=True)
+        producer_raw, current = c.private_capture(resolved)
+    except OSError:
         require(False, 'preparation_admission_producer_fd')
     require(len(matches) == 1 and matches[0].get('copied') is True and
-            matches[0].get('path') == str(resolved) and same_inode and
-            matches[0].get('sha256') == digest.hexdigest(),
+            matches[0].get('path') == str(resolved) and
+            matches[0].get('sha256') == hashlib.sha256(producer_raw).hexdigest(),
             'preparation_admission_producer_drift')
     contract_raw, _ = c.private_capture(contract['path'])
     require(hashlib.sha256(contract_raw).hexdigest() == c.sha(contract['sha256']),
             'preparation_admission_contract_hash_drift')
-    require(type(launch_fd) is int and launch_fd >= 0,
-            'preparation_admission_launch_binding_missing')
-    try:
-        launch_raw = b''
-        while block := os.read(launch_fd, 4096):
-            launch_raw += block
-            require(len(launch_raw) <= 16384, 'preparation_admission_launch_binding_size')
-    except OSError:
-        require(False, 'preparation_admission_launch_binding_read')
-    expected_launch = (json.dumps({
-        'adapter': adapter,
-        'contractSha256': contract['sha256'],
-        'inputSha256': c.sha(input_sha256),
-        'output': os.path.abspath(output),
-        'producerSha256': matches[0]['sha256'],
-        'reportSha256': c.sha(report_sha256),
-        'schemaVersion': 1,
-    }, sort_keys=True, separators=(',', ':')) + '\n').encode()
-    require(launch_raw == expected_launch, 'preparation_admission_launch_binding_drift')
     return report
+
+
+def run_admitted_preparation(adapter, value, report_path, report_sha256,
+                             input_sha256, output):
+    """Mutation entrypoint owned by the authenticated admission controller."""
+    require(adapter in ('api', 'frontend'), 'preparation_kind_invalid')
+    authenticate_admission_binding(
+        value, report_path, report_sha256, input_sha256, adapter, output)
+    return preparation_adapter(adapter, value, output, {'copy': local_copy, 'tar': local_tar})
 
 
 def exclusive_json(directory, name, value):
@@ -443,11 +420,7 @@ def main():
     value = json.loads(raw)
     require(value.get('clockMode') != 'synthetic-test', 'synthetic_clock_not_allowed_in_cli')
     if args.adapter in ('api', 'frontend'):
-        authenticate_admission_binding(
-            value, args.admission_report, args.admission_report_sha256,
-            args.admission_launch_fd, args.input_sha256, args.adapter, args.output)
-        # Compiled artifacts are reused. No functional build runner is installed in this CLI.
-        result = preparation_adapter(args.adapter, value, args.output, {'copy': local_copy, 'tar': local_tar})
+        require(False, 'preparation_admission_direct_launch_denied')
     else: result = closure_adapter(args.adapter, value, args.output)
     print(json.dumps(result))
 
