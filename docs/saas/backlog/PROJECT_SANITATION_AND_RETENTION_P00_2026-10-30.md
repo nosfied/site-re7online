@@ -888,3 +888,47 @@ SHA-256 `d7cf1d3c2596891ad8208fd6fdd2c8b4ca2028738a51217bc30dfaec8fe99535`.
 Esse lote é terminal e proibido de replay. A margem de `593.371.136 bytes` sobre o
 gate remove somente o bloqueio de capacidade observado e não autoriza o build da
 campanha. A cadeia principal de seis gerações continua aberta.
+
+### Staging CRM inativo ea3/d41 — regra local em revisão
+
+As árvores `crm-csv-front-ea3d2788-20261016` e
+`crm-csv-front-return-d41ddd64-20261016` nunca receberam prova de seleção ou
+ativação. Permanecem staging inativo, embora residam sob `releases`. A passagem
+integral autenticou índice, receipt de staging, archives e manifests e comprovou
+igualdade de população, tipos, tamanhos lógicos, hashes e destinos dos 31 links de
+cada árvore. Não há material protegido segundo o predicado vigente.
+
+Os modos não são iguais: 854 folhas de ea3 e 58 de d41 estão `0644`, enquanto o
+manifest registra `0664`. A regra local aceita somente essa redução exata de
+escrita, vinculada aos dois caminhos e aos digests completos das relações. Uma
+folha que permaneça ou volte a `0664`, qualquer outra transição ou mudança na
+cardinalidade nega. Em d41, somente dois deltas físicos são aceitos e vinculados:
+os binários SWC GNU e MUSL ocupam 4.096 bytes menos cada que no manifest. Hash e
+tamanho lógico continuam obrigatoriamente iguais; a alocação recuperável será
+recapturada em cada fase.
+
+O consumidor local acrescenta a classe fechada `INACTIVE_STAGING_TREE`, limitada
+aos dois caminhos e às authorities preservadas. `prepare` reautentica a cadeia e
+a árvore inteira e pode selar no máximo dois comandos literais `rm -r --`.
+Drift, material protegido, referência recapturada em current/PM2/dump/grafo
+protegido, binding selado de transação/dependência ou authority divergente nega.
+O ensaio usa
+somente fixtures sintéticas; suporte implementado e ensaiado não equivale a lote
+produtivo qualificado, intenção, autorização ou retirada. O ganho qualificado
+permanece zero até integração, materialização canônica e recaptura operacional.
+
+Os locks existentes têm alcance cooperativo, não global. O writer lock serializa
+`converta-release.py` e `generation-retirement.py`; o lock canônico serializa o
+driver/finalizador de deploy e a retirada. Eles não impedem um processo arbitrário
+de abrir ou usar uma árvore, nem provam que o produtor histórico — que não adquiriu
+esses locks — permaneceu inativo. As duas capturas de `current`, PM2, dump e grafo
+também não recapturam `dependencies`/transações, que continuam seladas no request.
+
+Em particular, `generation-retirement.py` não faz a varredura completa de
+`/proc/<pid>/{cmdline,cwd,root,exe,fd,maps}` que já existe no observador privilegiado
+do `capacity-recovery.py`. Portanto este draft não comprova ausência de referências
+fora do PM2 e não qualifica os `1.299.951.616 bytes` para produção. Antes de uma
+intenção produtiva, a montagem operacional precisa demonstrar uma observação completa
+e recapturável de processos e transações sob os mesmos caminhos literais, ou o gate
+permanece fechado. Não é permitido inferir essa ausência apenas dos locks ou das
+duas fotografias iguais.

@@ -2748,6 +2748,161 @@ class GenerationRetirementTest(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.Denied, "evidence_destination_parent_identity"):
                 MODULE.evidence_destination(destination, operational)
 
+    def test_inactive_staging_closed_disposition_prepares_only_bound_trees(self):
+        fixture = Fixture(active=False, installed=False, deployed=False,
+                          release_id="inactive-staging-disposition")
+        try:
+            incoming = fixture.root / "incoming"; incoming.mkdir(mode=0o700)
+            bindings = {}
+            candidates = []
+            for index, label in enumerate(("candidate", "return"), 1):
+                candidate = fixture.releases_root / f"crm-{label}"
+                candidate.mkdir(mode=0o700)
+                payload = candidate / "payload.js"; payload.write_bytes(f"payload-{index}".encode())
+                payload.chmod(0o644)
+                os.symlink("payload.js", candidate / "payload-link")
+                archive = incoming / f"{label}.tar.gz"; archive.write_bytes(f"archive-{index}".encode())
+                archive.chmod(0o600)
+                manifest = incoming / f"{label}.manifest.private.json"
+                payload_info = payload.lstat()
+                manifest_value = {
+                    "filesCount": 1, "linksCount": 1, "tarBytes": archive.stat().st_size,
+                    "tarSha256": sha(archive), "files": [
+                        {"path": "payload.js", "sha256": sha(payload),
+                         "bytes": payload_info.st_size,
+                         "allocatedBytes": payload_info.st_blocks * 512, "mode": 0o664},
+                        {"path": "payload-link", "target": "payload.js"},
+                    ]}
+                private_json(manifest, manifest_value)
+                relation = hashlib.sha256()
+                for values in (("payload.js", "regular", oct(0o644), str(payload_info.st_size),
+                                str(payload_info.st_blocks * 512), sha(payload)),
+                               ("payload-link", "symlink", "payload.js")):
+                    for value in values: MODULE._relation_field(relation, value)
+                binding = {
+                    "authorityName": label, "allocatedBytes": MODULE.structural_metrics(candidate)["allocatedBytes"],
+                    "archiveSha256": sha(archive), "archiveBytes": archive.stat().st_size,
+                    "manifestSha256": sha(manifest), "incomingIndexSha256": "pending",
+                    "stagingReceiptSha256": "pending", "relationSha256": relation.hexdigest(),
+                    "modeTransition": {"from": 0o664, "to": 0o644, "count": 1},
+                    "blockDeltas": [],
+                }
+                bindings[str(candidate)] = binding; candidates.append(candidate)
+            index_path = incoming / "incoming-index.private.json"
+            index_value = {}
+            for binding in bindings.values():
+                name = binding["authorityName"]
+                for suffix in (".tar.gz", ".manifest.private.json"):
+                    source = incoming / f"{name}{suffix}"
+                    index_value[source.name] = {"bytes": source.stat().st_size, "sha256": sha(source)}
+            private_json(index_path, index_value)
+            receipt = incoming / "staging.receipt.private.json"
+            private_json(receipt, {"result": "CSV_INACTIVE_STAGING_COMPLETE",
+                                   "gatesAdmitted": False, "processActions": 0})
+            for binding in bindings.values():
+                binding["incomingIndexSha256"] = sha(index_path)
+                binding["stagingReceiptSha256"] = sha(receipt)
+
+            contract = json.loads(fixture.contract.read_text())
+            contract["artifacts"] = [item for item in contract["artifacts"]
+                                     if item["class"] not in MODULE.DERIVED_CLASSES]
+            contract["classes"] = sorted(set(contract["classes"]) | {MODULE.INACTIVE_STAGING_CLASS})
+            for candidate in candidates:
+                info = candidate.lstat()
+                contract["artifacts"].append({
+                    "path": str(candidate), "releaseId": fixture.release_id,
+                    "targetCommit": fixture.target, "expectedType": "directory",
+                    "initialIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                    "observedIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                    **MODULE.structural_metrics(candidate), "digest": bindings[str(candidate)],
+                    "class": MODULE.INACTIVE_STAGING_CLASS, "state": "RETIREMENT_READY",
+                    "retirableOn": "INACTIVE_STAGING_AUTHORITY_PRESERVED",
+                    "dependencies": ["authenticated_inactive_staging_authority"],
+                })
+            private_json(fixture.contract, contract)
+            operational = json.loads(fixture.operational.read_text())
+            operational["installedVerifiedReleases"] = [item.name for item in candidates]
+            graph = json.loads(fixture.graph.read_text())
+            graph["installedVerifiedReleases"] = operational["installedVerifiedReleases"]
+            private_json(fixture.graph, graph)
+            operational["observations"]["releaseGraph"]["sha256"] = sha(fixture.graph)
+            private_json(fixture.operational, operational)
+            args = MODULE.parser().parse_args([
+                "prepare", "--contract", str(fixture.contract), "--contract-sha256", sha(fixture.contract),
+                "--lifecycle", str(fixture.lifecycle), "--lifecycle-sha256", sha(fixture.lifecycle),
+                "--operational-state", str(fixture.operational), "--operational-state-sha256", sha(fixture.operational),
+                "--root-policy", str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
+                "--deployment-lock", str(fixture.deploy_lock), "--intent-output", str(fixture.intent),
+                "--commands-output", str(fixture.commands), "--review-output", str(fixture.review),
+                "--reviewer", "fixture-owner", "--reason", "inactive staging fixture"])
+            with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
+                    patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
+                    redirect_stdout(io.StringIO()):
+                MODULE.prepare(args)
+            intent = json.loads(fixture.intent.read_text())
+            self.assertEqual([item["path"] for item in intent["commands"]],
+                             [str(item) for item in candidates])
+            self.assertTrue(all(item["argv"] == ["/usr/bin/rm", "-r", "--", item["path"]]
+                                for item in intent["commands"]))
+            probe = fixture.releases_root / "crm-probe"
+            shutil.copytree(candidates[0], probe, symlinks=True)
+            probe_binding = dict(bindings[str(candidates[0])])
+            probe_binding["allocatedBytes"] = MODULE.structural_metrics(probe)["allocatedBytes"]
+            probe_bindings = {str(probe): probe_binding}
+            payload = probe / "payload.js"; payload.chmod(0o664)
+            with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
+                    patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", probe_bindings), \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "inactive_staging_(content|relation)"):
+                MODULE._authenticate_inactive_staging_tree(probe, probe_binding)
+            payload.chmod(0o644); payload.write_text("drift")
+            with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
+                    patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", probe_bindings), \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "inactive_staging_(regular_identity|content)"):
+                MODULE._authenticate_inactive_staging_tree(probe, probe_binding)
+            shutil.rmtree(probe)
+            self.assertTrue(MODULE._inactive_staging_protected(".env"))
+            self.assertTrue(MODULE._inactive_staging_protected("uploads/customer.bin"))
+            referenced = json.loads(fixture.operational.read_text())
+            referenced["dependencies"] = [str(candidates[1])]
+            with self.assertRaisesRegex(MODULE.Denied, "inactive_staging_reference"):
+                MODULE.classify(contract["artifacts"][-1], contract, referenced)
+
+            authorization = fixture.authorize("inactive-staging-once")
+            receipt_root = fixture.evidence_root / "inactive-staging-receipt"
+            execute_args = SimpleNamespace(
+                intent=fixture.intent, intent_sha256=sha(fixture.intent),
+                authorization=authorization, authorization_sha256=sha(authorization),
+                operational_state=fixture.operational,
+                operational_state_sha256=sha(fixture.operational),
+                root_policy=fixture.policy, root_policy_sha256=sha(fixture.policy),
+                deployment_lock=fixture.deploy_lock, receipt_root=receipt_root,
+                review_output=fixture.review,
+            )
+            graph_before = fixture.graph.read_bytes()
+            graph_changed = json.loads(graph_before)
+            graph_changed["candidateReleases"] = [candidates[0].name]
+            private_json(fixture.graph, graph_changed)
+            with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
+                    patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
+                    self.assertRaisesRegex(MODULE.Denied, "private_hash:release-graph"):
+                MODULE.execute(execute_args)
+            self.assertTrue(all(candidate.is_dir() for candidate in candidates))
+            fixture.graph.write_bytes(graph_before)
+            with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
+                    patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
+                    redirect_stdout(io.StringIO()):
+                MODULE.execute(execute_args)
+            self.assertTrue(all(not candidate.exists() for candidate in candidates))
+            self.assertTrue(all((incoming / f"{label}.tar.gz").is_file()
+                                for label in ("candidate", "return")))
+            saved = json.loads((receipt_root / "execution-receipt.private.json").read_text())
+            self.assertEqual(saved["attemptedCommands"], 2)
+            self.assertEqual(saved["completedCommands"], 2)
+        finally:
+            fixture.close()
+
 
 
 if __name__ == "__main__":
