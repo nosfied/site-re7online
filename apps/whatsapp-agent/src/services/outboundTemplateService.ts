@@ -41,7 +41,32 @@ export type SendTemplateResult = {
   errorBody?: string;
   blockedByUsage?: boolean;
   blockedByEligibility?: boolean;
+  failureDisposition?: "recipient_definitive" | "operation_definitive" | "submission_uncertain";
+  providerErrorCode?: number;
 };
+
+const RECIPIENT_DEFINITIVE_META_ERROR_CODES = new Set([130497, 131026]);
+
+export function classifyTemplateProviderFailure(params: { responseReceived: boolean; errorBody?: string }) {
+  if (!params.responseReceived) {
+    return { disposition: "submission_uncertain" as const, providerErrorCode: null };
+  }
+  let providerErrorCode: number | null = null;
+  try {
+    const parsed = JSON.parse(params.errorBody ?? "") as { error?: { code?: unknown } };
+    const candidate = Number(parsed?.error?.code);
+    if (Number.isSafeInteger(candidate)) providerErrorCode = candidate;
+  } catch {
+    // A concrete HTTP response is still definitive for this attempt. An
+    // unparseable body must never be promoted to a recipient-only failure.
+  }
+  return {
+    disposition: providerErrorCode !== null && RECIPIENT_DEFINITIVE_META_ERROR_CODES.has(providerErrorCode)
+      ? "recipient_definitive" as const
+      : "operation_definitive" as const,
+    providerErrorCode,
+  };
+}
 
 export async function sendTemplate(params: OutboundTemplateParams): Promise<SendTemplateResult> {
   const resolvedLang =
@@ -306,6 +331,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     }
 
     const errorText = await response.text().catch(() => "");
+    const failure = classifyTemplateProviderFailure({ responseReceived: true, errorBody: errorText });
     if (media && mediaClientId && finalGate.mediaId && isExplicitTemplateMediaRejection(response.status, errorText)) {
       await invalidateConfirmedTemplateMedia({
         clientId: mediaClientId,
@@ -357,7 +383,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       resolvedPhoneNumberId,
       credentialSource,
     });
-    return { ok: false, status: response.status, errorBody: errorText.slice(0, 500) };
+    return { ok: false, status: response.status, errorBody: errorText.slice(0, 500),
+      failureDisposition: failure.disposition, providerErrorCode: failure.providerErrorCode ?? undefined };
   } catch (error) {
     clearTimeout(timeout);
     logger.error({
@@ -378,7 +405,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       resolvedPhoneNumberId,
       credentialSource,
     });
-    return { ok: false, errorBody: (error as Error).message };
+    return { ok: false, errorBody: (error as Error).message, failureDisposition: "submission_uncertain" };
   }
 }
 

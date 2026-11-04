@@ -23,6 +23,11 @@ export type CrmWhatsappIdentity = {
   externalUserHash: string;
 };
 
+export type CrmWhatsappIdentityClassification =
+  | { status: "SUPPORTED"; identity: CrmWhatsappIdentity }
+  | { status: "UNSUPPORTED_INTERNATIONAL"; digits: string }
+  | { status: "INVALID"; digits: string };
+
 export function buildCrmWhatsappExternalUserHash(waIdCanonical: string) {
   return `whatsapp:${crypto.createHash("sha256").update(waIdCanonical).digest("hex").slice(0, 32)}`;
 }
@@ -88,6 +93,16 @@ export function normalizeCrmWhatsappIdentity(value: unknown): CrmWhatsappIdentit
       variant && variant.length > crmCanonicalPhone.length ? variant : crmCanonicalPhone,
     externalUserHash: buildCrmWhatsappExternalUserHash(crmCanonicalPhone),
   };
+}
+
+export function classifyCrmWhatsappIdentity(value: unknown): CrmWhatsappIdentityClassification {
+  const digits = normalizeWaIdDigits(String(value ?? ""));
+  const identity = normalizeCrmWhatsappIdentity(value);
+  if (identity) return { status: "SUPPORTED", identity };
+  if (!digits.startsWith(BRAZIL_COUNTRY_CODE) && /^[1-9]\d{7,14}$/.test(digits)) {
+    return { status: "UNSUPPORTED_INTERNATIONAL", digits };
+  }
+  return { status: "INVALID", digits };
 }
 
 export function buildCrmWhatsappIdentityCandidates(values: Array<string | null | undefined>) {

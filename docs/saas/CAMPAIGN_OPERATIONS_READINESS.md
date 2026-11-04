@@ -473,6 +473,64 @@ A candidata `immutable-123ba7bd-vps-20261026T200100Z` e o PR #240 ficaram
 superados pela correção desta precedência, mas permanecem preservados. Não instalar,
 mesclar, apagar ou reaproveitar seus bindings implicitamente.
 
+## Campanha teste nov.02 — suspensão global e continuidade por destinatário
+
+Diagnóstico somente leitura do Codex local em 03/11/2026 para a campanha
+`5d1e71b1-d2a4-497a-9c2d-25761d94416c`, tenant Demo. A criação persistiu os 963
+destinatários aceitos de uma audiência com 1.152 solicitações e 189 bloqueios. Isso
+comprova que o corte histórico em 25 não reapareceu nessa criação. Não autoriza
+envio, retomada ou alteração da campanha.
+
+A execução submeteu somente as posições 1–3. As posições 1 e 2 possuem resultado
+durável. A posição 3 foi aceita pelo provedor e depois reportada como falha Meta
+`130497`; a materialização CRM posterior à aceitação também falhou porque o número
+internacional aceito pela elegibilidade não satisfazia o contrato brasileiro do
+CRM. Não houve submissão da posição 4 em diante. A guarda global fechou com uma
+tarefa `provider/persisting`, e o job permaneceu enfileirado com
+`operational_suspension`. Portanto, a suspensão decorre de persistência
+pós-provedor incompleta, não apenas do código Meta.
+
+Contrato da correção proposta, ainda não implantada:
+
+1. prévia, criação e execução usam a identidade operacional brasileira do CRM;
+2. identidade inválida ou internacional não suportada é bloqueada e contabilizada
+   por destinatário antes da chamada ao provedor, sem suspender a campanha;
+3. aliases brasileiros, opt-out, deduplicação e isolamento por tenant permanecem
+   obrigatórios;
+4. falha definitiva conhecida daquele destinatário é persistida e permite o
+   próximo; falha de conta/template continua encerrando a campanha; submissão
+   incerta ou persistência incompleta continua fail-closed, sem retry automático;
+5. a posição 3 recebe reconciliação histórica própria, preservando aceitação,
+   falha e ausência de CRM, sem reenvio e sem reclassificação retroativa como
+   bloqueio pré-provedor;
+6. arquivar a tarefa reconciliada e reabrir a guarda são atos posteriores e
+   separados. Reabrir pode iniciar os 960 destinatários restantes e exige nova
+   autorização e recaptura operacional.
+
+A guarda é global: enquanto fechada, protege todos os tenants. Essa abrangência
+deve aparecer na revisão e impede tratar a retomada do Demo como mutação isolada.
+O rascunho/campanha existente permanece preservado. O reconciliador dirigido é
+dry-run por padrão e não cria CRM, não chama Meta, não altera contadores e não
+abre a guarda.
+
+Leitura dirigida de 04/11/2026 confirmou a origem da posição 3 sem nova mutação:
+o `Lead` e a conversa já haviam sido criados pelo inbound de 30/10, antes da
+campanha; não existe `Contact` nem `ContactChannelIdentity` para essa identidade.
+Na execução, `conversation_resolved` apenas vinculou a conversa existente; não há
+evento de criação ou reativação pela campanha. O telefone veio do inbound
+normalizado e foi copiado para `Lead.phone`, `waIdCanonical` e `waId`. A campanha
+então submeteu o mesmo destinatário ao provedor. Essa cronologia sustenta a
+reconciliação histórica separada, mas não autoriza retomada. O dry-run produtivo
+não foi executado: o reconciliador proposto ainda não está implantado, e as provas
+locais não substituem a recaptura dos bindings privados.
+
+A interface proposta pesquisa a lista gerada no conjunto integral no servidor,
+mantém `Carregar mais` acumulativo e deduplicado dentro de uma área com rolagem
+própria e exibe `Exibindo X de Y`. O detalhe do rascunho oferece `Limpar`, que
+retorna à primeira página sem filtro. Ao iniciar processamento, a prévia deixa de
+ser exibida e o painel de acompanhamento permanece. Essas mudanças não alteram a
+seleção autenticada nem autorizam envio.
+
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 
 Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`

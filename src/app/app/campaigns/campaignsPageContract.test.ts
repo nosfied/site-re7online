@@ -218,6 +218,13 @@ test("campaign audience and draft recipient lists search server-side and append 
   assert.ok(pageSource.includes("Exibindo {audiencePreview.items.length} de {audiencePreview.pagination.total}"));
   assert.ok(pageSource.includes("Exibindo {campaignAudienceSummaryItems.length} de {draftRecipientPage?.pagination.total"));
   assert.ok(pageSource.includes("Buscar em todos os destinatários"));
+  assert.ok(pageSource.includes("Buscar na audiência gerada"));
+  assert.ok(pageSource.includes('listQ: audiencePreviewSearchInput'));
+  assert.ok(pageSource.includes('max-h-[360px] overflow-auto'));
+  assert.ok(pageSource.includes('void loadAudiencePreview(audiencePage + 1, { listQ: audiencePreviewSearch, append: true })'));
+  assert.ok(pageSource.includes('void loadDraftRecipients(selectedCampaign.id, { q: "", page: 1 })'));
+  assert.ok(pageSource.includes('selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled"'));
+  assert.ok(pageSource.includes('&& (campaignAudienceSummaryItems.length > 0 || draftRecipientPage)'));
   assert.ok(pageSource.includes('append: true'));
   assert.ok(!pageSource.includes("void loadAudiencePreview(Math.max(audiencePage - 1, 1))"));
 });

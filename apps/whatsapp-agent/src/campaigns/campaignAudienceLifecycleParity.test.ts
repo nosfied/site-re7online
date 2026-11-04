@@ -22,7 +22,7 @@ test("dynamic NEW preview and real snapshot exclude provisional lifecycle withou
   for (const [id,key] of [[clientId,clientKey],[other,`other-${other}`]]) await db.client.create({data:{id,clientKey:key,name:"Synthetic",profile:"business",features:{campaigns:true}}});
   await db.tenantOperationalConfig.create({data:{clientId,config:{crmBusinessStatuses:statuses}}});
   const waIds = Array.from({length:11},(_,i)=>`554199210${String(i+1).padStart(4,"0")}`);
-  waIds[5] = "12025550106"; // Existing international normalizer is preserved, not expanded.
+  waIds[5] = "12025550106"; // Unsupported international identity is blocked by the shared CRM contract.
   const provisional = new Set([2,5,6,7,8,9,10]);
   for (const [i,waId] of waIds.entries()) {
     await db.lead.create({data:{tenantId:clientId,waId,waIdCanonical:waId,phone:waId,name:`Synthetic ${i}`,channel:"whatsapp",status:"NEW"}});
@@ -55,13 +55,14 @@ test("dynamic NEW preview and real snapshot exclude provisional lifecycle withou
   assert.equal(payload.matchedCount,255);assert.equal(payload.eligibleCount,4);assert.equal(payload.blockedCount,251);
   assert.deepEqual(new Set(readPrivateCampaignSeedFields(payload).recipients),new Set(expected));
   const blocked=payload.blocked as Array<{reason:string}>;
-  assert.equal(blocked.filter(x=>x.reason==="provisional_contact").length,7);
+  assert.equal(blocked.filter(x=>x.reason==="provisional_contact").length,6);
+  assert.equal(blocked.filter(x=>x.reason==="unsupported_international_identity").length,1);
   assert.equal(blocked.filter(x=>x.reason==="anonymized_contact").length,240);
   assert.equal(blocked.filter(x=>x.reason==="operationally_excluded_contact").length,1);
   assert.equal(blocked.filter(x=>x.reason==="non_whatsapp_channel").length,3);
   assert.equal(providers,0);assert.equal(await db.outboundMessage.count({where:{clientId}}),0);
   assert.equal(await db.campaignExecutionBatchCampaign.count({where:{batchId:batch.id}}),0);
-  for(const i of provisional) assert.equal(await campaignRecipientEligibility(db,clientId,[waIds[i]]),"provisional_contact","old immutable snapshot denied by shared gate");
+  for(const i of provisional) assert.equal(await campaignRecipientEligibility(db,clientId,[waIds[i]]),i===5?"unsupported_international_identity":"provisional_contact","old immutable snapshot denied by shared gate");
   assert.equal(await campaignRecipientEligibility(db,clientId,[waIds[0]]),null,"other tenant provisional cannot deny this tenant");
   await db.contact.updateMany({where:{clientId,waId:waIds[0]},data:{lifecycle:"PROVISIONAL"}});
   assert.equal(await campaignRecipientEligibility(db,clientId,[waIds[0],"554192100001"]),"provisional_contact","approved BR aliases share lifecycle exclusion");

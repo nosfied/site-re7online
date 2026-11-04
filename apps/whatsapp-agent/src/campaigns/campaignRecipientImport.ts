@@ -1,5 +1,5 @@
 import { normalizeCampaignRecipientIdentity } from "./campaignEligibility.js";
-import { isAnonymizedMarker } from "../crm/crmWhatsappIdentity.js";
+import { classifyCrmWhatsappIdentity, isAnonymizedMarker } from "../crm/crmWhatsappIdentity.js";
 import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import {
@@ -34,6 +34,7 @@ export const CAMPAIGN_IMPORT_GENERIC_FIELD_COUNT = 10;
 
 export type CampaignImportBlockedReason =
   | "invalid_whatsapp_identity"
+  | "unsupported_international_identity"
   | "duplicate_recipient"
   | "existing_campaign_recipient"
   | "active_send_blocked"
@@ -185,6 +186,8 @@ function labelForImportReason(reason: CampaignImportBlockedReason) {
       return "Contato excluído da operação";
     case "invalid_whatsapp_identity":
       return "Telefone invalido";
+    case "unsupported_international_identity":
+      return "Numero internacional nao suportado";
     case "identity_conflict":
       return "Nao foi possivel determinar a identidade com seguranca";
     case "provisional_contact":
@@ -509,6 +512,11 @@ export async function resolveCampaignRecipientImportPlan(
 
   for (const input of params.recipients.slice(0, CAMPAIGN_IMPORT_MAX_ROWS)) {
     const rowNumber = input.rowNumber ?? null;
+    const identityClassification = classifyCrmWhatsappIdentity(input.phone);
+    if (identityClassification.status === "UNSUPPORTED_INTERNATIONAL") {
+      addBlocked(blocked, blockedCounts, { rowNumber, reason: "unsupported_international_identity", phone: input.phone });
+      continue;
+    }
     if (isAnonymizedMarker(input.phone) || !normalizeCampaignRecipientIdentity(input.phone)) {
       addBlocked(blocked, blockedCounts, { rowNumber, reason: "invalid_whatsapp_identity", phone: null });
       continue;
@@ -692,6 +700,7 @@ export async function resolveCampaignRecipientImportPlan(
         valid: acceptedRows.length,
         invalid:
           (blockedCounts.get("invalid_whatsapp_identity") ?? 0) +
+          (blockedCounts.get("unsupported_international_identity") ?? 0) +
           (blockedCounts.get("identity_conflict") ?? 0),
         duplicates: blockedCounts.get("duplicate_recipient") ?? 0,
         existingDuplicates: blockedCounts.get("existing_campaign_recipient") ?? 0,

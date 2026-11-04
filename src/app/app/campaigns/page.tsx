@@ -716,6 +716,8 @@ function getAudienceBlockedReasonLabel(reason: AppCampaignAudiencePreviewItem["b
       return "Canal não WhatsApp";
     case "invalid_whatsapp_identity":
       return "Identidade WhatsApp inválida";
+    case "unsupported_international_identity":
+      return "Número internacional não suportado";
     case "missing_contact":
       return "Contato atual não localizado";
     case "unsupported_channel":
@@ -747,6 +749,8 @@ function resolveAudienceBlockedReasonFromCrmContact(
     if (!item.hasValidWhatsappIdentity) {
       return item.templateSendBlockedReason === "missing_phone"
         ? "missing_whatsapp_identity"
+        : item.templateSendBlockedReason === "unsupported_international"
+          ? "unsupported_international_identity"
         : "invalid_whatsapp_identity";
     }
     if (item.templateSendBlockedReason === "unsupported_channel") return "unsupported_channel";
@@ -829,6 +833,8 @@ export default function AppCampaignsPage() {
   const [audienceFilters, setAudienceFilters] = useState<AudiencePreviewFilters>(EMPTY_AUDIENCE_FILTERS);
   const [audiencePreview, setAudiencePreview] = useState<AppCampaignAudiencePreviewResponse | null>(null);
   const [audiencePage, setAudiencePage] = useState(1);
+  const [audiencePreviewSearch, setAudiencePreviewSearch] = useState("");
+  const [audiencePreviewSearchInput, setAudiencePreviewSearchInput] = useState("");
   const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
   const [audienceSplitPlan, setAudienceSplitPlan] = useState<AppCampaignAudienceSplitPlan | null>(null);
@@ -2302,7 +2308,7 @@ export default function AppCampaignsPage() {
   };
 
   const loadAudiencePreview = useCallback(
-    async (nextPage = audiencePage) => {
+    async (nextPage = audiencePage, options?: { listQ?: string; append?: boolean }) => {
       if (!session) return;
       const requestGeneration = audienceRequestGenerationRef.current;
       setLoadingAudiencePreview(true);
@@ -2312,7 +2318,9 @@ export default function AppCampaignsPage() {
       setCampaignReusePreviewState("idle");
       try {
         const dynamicPreview = audienceRecipientMode === "DYNAMIC_CRM_FILTER";
+        const listQ = options?.listQ ?? audiencePreviewSearch;
         const response = await fetchAppCampaignAudiencePreview(session, {
+          listQ,
           q: dynamicPreview ? "" : audienceFilters.q,
           status: audienceFilters.status,
           channel: dynamicPreview ? null : audienceFilters.channel === "all" ? null : audienceFilters.channel,
@@ -2329,9 +2337,10 @@ export default function AppCampaignsPage() {
         });
         if (requestGeneration !== audienceRequestGenerationRef.current) return;
         setAudiencePreview((previous) => {
-          if (nextPage <= 1 || !previous) return response;
+          if (!options?.append || nextPage <= 1 || !previous || previous.listQuery !== response.listQuery) return response;
           return { ...response, items: mergeCampaignRecipientPages(previous.items, response.items) };
         });
+        setAudiencePreviewSearch(listQ);
         setAudiencePage(nextPage);
       } catch (err) {
         if (requestGeneration !== audienceRequestGenerationRef.current) return;
@@ -2345,7 +2354,7 @@ export default function AppCampaignsPage() {
         if (requestGeneration === audienceRequestGenerationRef.current) setLoadingAudiencePreview(false);
       }
     },
-    [audienceFilters, audiencePage, audienceRecipientMode, handleUnauthorized, session]
+    [audienceFilters, audiencePage, audiencePreviewSearch, audienceRecipientMode, handleUnauthorized, session]
   );
 
   const loadDraftRecipients = useCallback(async (
@@ -2399,13 +2408,17 @@ export default function AppCampaignsPage() {
       showToast("warning", "Prévia incompleta", audiencePreviewDisabledReason);
       return;
     }
-    await loadAudiencePreview(1);
+    setAudiencePreviewSearch("");
+    setAudiencePreviewSearchInput("");
+    await loadAudiencePreview(1, { listQ: "" });
   };
 
   const handleClearAudienceFilters = () => {
     audienceRequestGenerationRef.current += 1;
     setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
     setAudiencePage(1);
+    setAudiencePreviewSearch("");
+    setAudiencePreviewSearchInput("");
     setAudiencePreview(null);
     setAudiencePreviewError(null);
     setAudienceSplitPlan(null);
@@ -2514,6 +2527,7 @@ export default function AppCampaignsPage() {
     const excluded = resultItems.length - items.length;
     return {
       ok: true,
+      listQuery: "",
       filters: {
         q: "",
         status: null,
@@ -2579,6 +2593,7 @@ export default function AppCampaignsPage() {
     }));
     return {
       ok: true,
+      listQuery: "",
       filters: {
         q: "",
         status: null,
@@ -4137,7 +4152,36 @@ export default function AppCampaignsPage() {
 	                  ) : null}
 	                </div>
 	              ) : null}
-	              <div className="overflow-x-auto rounded-md border border-white/10">
+              <form
+                className="flex flex-wrap gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void loadAudiencePreview(1, { listQ: audiencePreviewSearchInput });
+                }}
+              >
+                <input
+                  type="search"
+                  value={audiencePreviewSearchInput}
+                  onChange={(event) => setAudiencePreviewSearchInput(event.target.value)}
+                  placeholder="Buscar na audiência gerada"
+                  className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                />
+                <button type="submit" disabled={loadingAudiencePreview} className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:opacity-50">
+                  Buscar
+                </button>
+                <button
+                  type="button"
+                  disabled={loadingAudiencePreview || (!audiencePreviewSearch && !audiencePreviewSearchInput)}
+                  onClick={() => {
+                    setAudiencePreviewSearchInput("");
+                    void loadAudiencePreview(1, { listQ: "" });
+                  }}
+                  className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:opacity-50"
+                >
+                  Limpar
+                </button>
+              </form>
+              <div className="max-h-[360px] overflow-auto rounded-md border border-white/10">
                 <table className="w-full min-w-[860px] text-sm">
                   <thead className="bg-white/10 text-left">
                     <tr>
@@ -4202,7 +4246,7 @@ export default function AppCampaignsPage() {
                   <button
                     type="button"
                     disabled={!audiencePreview.pagination.hasNextPage || loadingAudiencePreview}
-                    onClick={() => void loadAudiencePreview(audiencePage + 1)}
+                    onClick={() => void loadAudiencePreview(audiencePage + 1, { listQ: audiencePreviewSearch, append: true })}
                     className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loadingAudiencePreview ? "Carregando..." : "Carregar mais"}
@@ -4963,7 +5007,9 @@ export default function AppCampaignsPage() {
                     </p>
                   </div>
 
-                  {(campaignAudienceSummaryItems.length > 0 || draftRecipientPage) ? (
+                  {!sendingDraft
+                  && (selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled")
+                  && (campaignAudienceSummaryItems.length > 0 || draftRecipientPage) ? (
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold">
@@ -4998,6 +5044,17 @@ export default function AppCampaignsPage() {
                           className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:opacity-50"
                         >
                           Buscar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={loadingDraftRecipients || (!draftRecipientSearch && !draftRecipientSearchInput)}
+                          onClick={() => {
+                            setDraftRecipientSearchInput("");
+                            void loadDraftRecipients(selectedCampaign.id, { q: "", page: 1 });
+                          }}
+                          className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:opacity-50"
+                        >
+                          Limpar
                         </button>
                       </form>
                       <div className="max-h-[300px] overflow-auto">
