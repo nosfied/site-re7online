@@ -24,7 +24,22 @@ Não repetir build, instalação, ativação, save ou retenção dessa geração
 terminal foi 8.925.216.768 bytes. A alocação retirada foi 2.008.825.856 bytes;
 o aumento líquido observado foi 1.984.036.864 bytes. São métricas distintas e o
 saldo é checkpoint histórico, não capacidade reservada. A validação funcional de
-um novo rascunho e a adoção do adapter de `preparations` continuam frentes separadas.
+um novo rascunho confirmou 963 destinatários persistidos; a execução dessa campanha
+é um incidente separado, descrito abaixo. A adoção do adapter de `preparations`
+continua uma frente separada.
+
+### Validação funcional posterior — criação integral e incidente de execução
+
+No tenant Demo, a campanha `5d1e71b1-d2a4-497a-9c2d-25761d94416c`
+(`Campanha teste nov.02`) foi criada com 963 destinatários persistidos. Isso valida
+a correção de criação integral desta release: não houve o corte anterior em 25.
+
+A execução posterior processou somente as três primeiras posições e ficou
+`Suspensa operacionalmente`. Esse resultado é um incidente de execução separado,
+não desfaz a validação da criação e não constitui aceite funcional do runner. A
+campanha, sua suspensão e os registros das posições 1–3 permanecem preservados;
+este fechamento não autoriza retomada, reenvio, agendamento nem reconstrução de
+destinatários.
 
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 

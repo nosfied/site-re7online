@@ -93,7 +93,17 @@
   "campaignScope": {
     "integralSearchLoadMoreAndLostResponseRecoveryActive": true,
     "historicalDraftPreserved": true,
-    "functionalDraftValidationPending": true,
+    "functionalDraftValidationPending": false,
+    "newDraftValidation": {
+      "campaignId": "5d1e71b1-d2a4-497a-9c2d-25761d94416c",
+      "persistedRecipients": 963,
+      "creationValidation": "PASS",
+      "executionValidation": "INCIDENT_SEPARATE_FROM_CREATION",
+      "processedPositionsBeforeOperationalSuspension": 3,
+      "operationalSuspensionPreserved": true,
+      "resumeExecuted": false,
+      "sendOrScheduleAuthorizedByThisRecord": false
+    },
     "sendOrScheduleAuthorized": false
   },
   "previousAttempt": {
