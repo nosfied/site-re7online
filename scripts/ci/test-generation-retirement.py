@@ -1868,6 +1868,8 @@ class GenerationRetirementTest(unittest.TestCase):
                                                immediate_api, immediate_frontend,
                                                fixture.release_id],
                 "supersededCandidates": [],
+                "immediateRollbackReleases": {
+                    "api": immediate_api, "frontend": immediate_frontend},
             }
             private_json(fixture.graph, source)
             operational_path = fixture.evidence_root / "reconciliation-operational.json"
@@ -1986,8 +1988,10 @@ class GenerationRetirementTest(unittest.TestCase):
             result = reconcile("accepted")
             self.assertEqual(result.returncode, 0, result.stderr)
             successor = fixture.evidence_root / "accepted-graph.json"
-            self.assertNotIn(fixture.release_id,
-                             json.loads(successor.read_text())["rollbackReleases"])
+            successor_value = json.loads(successor.read_text())
+            self.assertNotIn(fixture.release_id, successor_value["rollbackReleases"])
+            self.assertEqual(successor_value["immediateRollbackReleases"], {
+                "api": immediate_api, "frontend": immediate_frontend})
             accepted_receipt = json.loads(
                 (fixture.evidence_root / "accepted-receipt.json").read_text())
             self.assertEqual(accepted_receipt["activationEvidence"]["api"]["kind"],
@@ -2029,6 +2033,8 @@ class GenerationRetirementTest(unittest.TestCase):
             captured, _ = capture_projection(accepted_projection)
             self.assertIn(str(fixture.releases_root / active_frontend),
                           captured["protectedGraphPaths"])
+            self.assertIn(str(fixture.releases_root / immediate_api),
+                          captured["protectedGraphPaths"])
             self.assertIn(str(fixture.releases_root / immediate_frontend),
                           captured["protectedGraphPaths"])
 
@@ -2064,6 +2070,8 @@ class GenerationRetirementTest(unittest.TestCase):
             successor_value = json.loads(successor.read_text())
             for key in MODULE.RICH_GRAPH_KEYS:
                 operational[key] = successor_value[key]
+            operational["immediateRollbackReleases"] = (
+                successor_value["immediateRollbackReleases"])
             operational["currentPaths"] = []
             operational["observations"]["currentLinks"] = []
             operational["observations"]["releaseGraph"] = {
