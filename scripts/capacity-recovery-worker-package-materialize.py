@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CUSTODY = ROOT.parent
 CONSUMER = ROOT / "scripts/capacity-recovery.py"
-CONSUMER_SHA256 = "3d4344648b0dfff5833f471fa22519ec16277eb39424430a6587a6ad4fd1ccfe"
+CONSUMER_SHA256 = "db14e4ecf415061cab9a0e68e378a6cdb991b4d51b572cc7600014be591eecc2"
 PM2 = Path("/opt/re7online/backups/converta-persistent/preparations/p00-capacity-recovery-canonical-23315c43-20261030T030504Z/pm2-private/bin/pm2")
 PM2_SHA256 = "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d"
 NODE = Path("/usr/bin/node")

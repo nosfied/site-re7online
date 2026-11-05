@@ -553,6 +553,108 @@ class CapacityRecoveryTests(unittest.TestCase):
                 "operationalState": {"path": str(self.operational), "sha256": sha(self.operational)},
                 "candidates": candidates or [self.npm_candidate(), self.output_candidate()]}
 
+    def crm_staging_fixture(self):
+        incoming = self.base / "crm-incoming"; incoming.mkdir(mode=0o700)
+        candidates = []; bindings = {}
+        for index, name in enumerate(("frontend-candidate", "frontend-compatible-return"), 1):
+            candidate = self.releases / f"crm-staging-{index}"
+            candidate.mkdir(mode=0o700)
+            payload = candidate / "payload.js"; payload.write_bytes(f"payload-{index}".encode())
+            payload.chmod(0o644)
+            (candidate / "payload-link").symlink_to("payload.js")
+            archive = incoming / f"{name}.tar.gz"
+            archive.write_bytes(f"archive-{index}".encode()); archive.chmod(0o600)
+            manifest = incoming / f"{name}.manifest.private.json"
+            info = payload.lstat()
+            private_json(manifest, {"filesCount": 1, "linksCount": 1,
+                "tarBytes": archive.stat().st_size, "tarSha256": sha(archive), "files": [
+                    {"path": "payload.js", "sha256": sha(payload), "bytes": info.st_size,
+                     "allocatedBytes": info.st_blocks * 512, "mode": 0o664},
+                    {"path": "payload-link", "target": "payload.js"},
+                ]})
+            relation = hashlib.sha256()
+            for values in (("payload.js", "regular", oct(0o644), str(info.st_size),
+                            str(info.st_blocks * 512), sha(payload)),
+                           ("payload-link", "symlink", "payload.js")):
+                for value in values:
+                    MODULE._crm_relation_field(relation, value)
+            bindings[str(candidate)] = {
+                "authorityName": name,
+                "allocatedBytes": MODULE.physical_usage([candidate])[str(candidate)]["allocatedBytes"],
+                "archiveSha256": sha(archive), "archiveBytes": archive.stat().st_size,
+                "manifestSha256": sha(manifest), "incomingIndexSha256": "pending",
+                "stagingReceiptSha256": "pending", "relationSha256": relation.hexdigest(),
+                "modeTransition": {"from": 0o664, "to": 0o644, "count": 1},
+                "blockDeltas": [],
+            }
+            candidates.append(candidate)
+        index = incoming / "incoming-index.private.json"
+        index_value = {}
+        for binding in bindings.values():
+            for suffix in (".tar.gz", ".manifest.private.json"):
+                source = incoming / f"{binding['authorityName']}{suffix}"
+                index_value[source.name] = {"bytes": source.stat().st_size, "sha256": sha(source)}
+        private_json(index, index_value)
+        receipt = incoming / "staging.receipt.private.json"
+        private_json(receipt, {"result": "CSV_INACTIVE_STAGING_COMPLETE",
+                               "gatesAdmitted": False, "processActions": 0})
+        for binding in bindings.values():
+            binding["incomingIndexSha256"] = sha(index)
+            binding["stagingReceiptSha256"] = sha(receipt)
+        requested = [{"class": "CLOSED_INACTIVE_CRM_STAGING_TREE", "path": str(path)}
+                     for path in candidates]
+        return incoming, candidates, bindings, requested
+
+    def test_crm_staging_reuses_canonical_references_and_authenticates_authority(self):
+        incoming, candidates, bindings, requested = self.crm_staging_fixture()
+        operational = {"currentPaths": [], "pm2LivePaths": [], "pm2DumpPaths": [],
+                       "openTransactionPaths": [], "protectedGraphPaths": []}
+        with mock.patch.multiple(MODULE, CRM_STAGING_ROOT=incoming,
+                                 CRM_INACTIVE_STAGING_BINDINGS=bindings), \
+                mock.patch.object(MODULE, "deploy_identity",
+                                  return_value=(os.geteuid(), os.getegid())):
+            MODULE.validate_audit_request(self.request_value(requested))
+            observations = [MODULE.validate_candidate(item, {}, operational, scan())
+                            for item in requested]
+            self.assertEqual([item["path"] for item in observations],
+                             [str(item) for item in candidates])
+            self.assertEqual(MODULE.removal_commands(observations),
+                             [["/usr/bin/rm", "-r", "--", str(item)]
+                              for item in candidates])
+            private_json(self.request, self.request_value(requested))
+            with self.process_patch():
+                plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+            self.assertEqual(plan["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+            transaction = self.transactions / "crm-open-after-audit"
+            transaction.mkdir(mode=0o700)
+            private_json(transaction / "transaction.v1.private.json", {
+                "schemaVersion": 1, "state": "AWAITING_ACCEPTANCE",
+                "runtimePath": str(candidates[0]),
+            })
+            with self.process_patch(), self.assertRaises(SystemExit) as stopped:
+                MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
+                                    self.commands, self.seal_manifest)
+            self.assertEqual(stopped.exception.code, 2)
+            self.assertFalse(self.intent.exists())
+            self.assertTrue(all(item.is_dir() for item in candidates))
+            (transaction / "transaction.v1.private.json").unlink(); transaction.rmdir()
+            referenced = {**operational, "openTransactionPaths": [str(candidates[0] / "x")]}
+            with self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_REFERENCED_OR_PROTECTED"):
+                MODULE.validate_candidate(requested[0], {}, referenced, scan())
+            process_reference = scan(targets=[(17, 99, "fd/3", str(candidates[1] / "payload.js"))])
+            with self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_PROCESS_REFERENCE"):
+                MODULE.validate_candidate(requested[1], {}, operational, process_reference)
+            with self.assertRaisesRegex(MODULE.Denied, "PROCESS_REFERENCE_SCAN_INCOMPLETE"):
+                MODULE.validate_candidate(requested[0], {}, operational, scan(complete=False))
+            (candidates[0] / "payload.js").write_bytes(b"drift")
+            with self.assertRaisesRegex(MODULE.Denied,
+                                       "(CRM_STAGING_REGULAR_IDENTITY|FILE_SHA256)"):
+                MODULE.validate_candidate(requested[0], {}, operational, scan())
+
+        with mock.patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings):
+            with self.assertRaisesRegex(MODULE.Denied, "CRM_STAGING_EXACT_BATCH"):
+                MODULE.validate_audit_request(self.request_value(requested[:1]))
+
     def process_patch(self, *, targets=None, writers=None, complete=True):
         return mock.patch.object(MODULE, "_proc_targets",
                                  return_value=scan(targets, writers, complete))

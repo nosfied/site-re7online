@@ -901,3 +901,26 @@ consumida. Qualquer sucessão precisa ser explicitamente delimitada pelo contrat
 sem sobrescrita, replay automático ou ampliação silenciosa. Distinguir o escopo
 autorizado pelo owner do documento técnico de uso único: o documento consumido
 nunca volta a ser usado.
+
+## Staging CRM inativo — adaptação fechada em revisão (04/11/2026)
+
+As árvores literais `crm-csv-front-ea3d2788-20261016` e
+`crm-csv-front-return-d41ddd64-20261016` exigem uma prova adicional de
+equivalência com os archives, manifests, índice e receipt históricos. Essa prova
+é a única adaptação específica: ela foi incorporada como classe fechada neste
+control plane, sem criar outro leitor de `/proc`, transações ou referências.
+
+O fluxo continua sendo o canônico `audit → prepare → execute`. `current`, PM2,
+dump, grafo, transações abertas e o observador privilegiado são recapturados por
+`capture_live_operational()` e `_privileged_proc_targets()`; `execute` repete a
+recaptura sob os locks antes do primeiro `ATTEMPT`. Uma transação já aberta que
+referencie qualquer árvore, uma referência externa por CWD/FD/maps ou uma coleta
+incompleta negam antes de qualquer efeito.
+
+A relação específica exige população exata, hashes de folhas, destinos de links,
+ausência de material protegido e identidade física estável. A única transição de
+modo admitida é `0664` no manifesto para `0644` na árvore, vinculada a cada
+caminho e à contagem autenticada. Os dois deltas físicos SWC de d41 não alteram a
+prova de conteúdo e continuam vinculados nominalmente; o ganho futuro usa a
+alocação física recapturada. Esta implementação e seus ensaios não qualificam a
+VPS: o ganho permanece zero até audit produtivo próprio e revisão posterior.

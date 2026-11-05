@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import posixpath
 import pwd
 import re
 import resource
@@ -50,6 +51,7 @@ CLASSES = {
     "CLOSED_PREPARATION_DERIVED_ARCHIVE",
     "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
     "CLOSED_DEPLOY_CONTROL_DERIVED_TREE",
+    "CLOSED_INACTIVE_CRM_STAGING_TREE",
 }
 DISPOSITION_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/closed-preparation-manifest-disposition.v1.json")
@@ -72,6 +74,38 @@ DEPLOY_CONTROL_PATHS = (
     DEPLOY_CONTROL_ROOT / ".next",
     DEPLOY_CONTROL_ROOT / "apps/whatsapp-agent/dist",
 )
+CRM_STAGING_ROOT = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "csv-staging-incoming-20261016T092610Z")
+CRM_INACTIVE_STAGING_BINDINGS = {
+    "/opt/re7online/releases/crm-csv-front-ea3d2788-20261016": {
+        "authorityName": "frontend-candidate", "allocatedBytes": 642396160,
+        "archiveSha256": "ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed",
+        "archiveBytes": 174314812,
+        "manifestSha256": "5ef8ae4c1628b843bac57825742797f1fcce9835c9226c8f959da3fa0a89b176",
+        "incomingIndexSha256": "7b26f0a8718a36df233263f403424e519630fd4c99821bbc770a6023c9a6adf3",
+        "stagingReceiptSha256": "f8027069f56a032ae77820cd4453199a504ed431feed59fa5228d899bad2167d",
+        "relationSha256": "892ec66bb2926de81445a5a24ceecc495491dd2067f85459f68865e3ed34d5b9",
+        "modeTransition": {"from": 0o664, "to": 0o644, "count": 854},
+        "blockDeltas": [],
+    },
+    "/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016": {
+        "authorityName": "frontend-compatible-return", "allocatedBytes": 657555456,
+        "archiveSha256": "d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431",
+        "archiveBytes": 177450139,
+        "manifestSha256": "efe64f452db1a5575a7a688c5b57175fe3b25fdcaec91ed432df7a3a3ab853de",
+        "incomingIndexSha256": "7b26f0a8718a36df233263f403424e519630fd4c99821bbc770a6023c9a6adf3",
+        "stagingReceiptSha256": "f8027069f56a032ae77820cd4453199a504ed431feed59fa5228d899bad2167d",
+        "relationSha256": "843cf2039e0c2d6a6323ff7d48482febbd97aab5ebac6615a5321a783566f491",
+        "modeTransition": {"from": 0o664, "to": 0o644, "count": 58},
+        "blockDeltas": [
+            {"path": "node_modules/@next/swc-linux-x64-gnu/next-swc.linux-x64-gnu.node",
+             "manifest": 114851840, "observed": 114847744},
+            {"path": "node_modules/@next/swc-linux-x64-musl/next-swc.linux-x64-musl.node",
+             "manifest": 114814976, "observed": 114810880},
+        ],
+    },
+}
 GIT = Path("/usr/bin/git")
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
@@ -3329,6 +3363,193 @@ def authenticate_deploy_control(candidate: dict[str, Any], operational: dict[str
             "detail": detail, "worktree": worktree, "processScan": process_summary}
 
 
+def _crm_staging_protected(relative: str) -> None:
+    parts = tuple(part.lower() for part in PurePosixPath(relative).parts)
+    name = parts[-1] if parts else ""
+    if (any(part == ".env" or part.startswith(".env.") for part in parts) or
+            "uploads" in parts or
+            any(part in {".data", "tenant-data", "tenant-scoped", "secrets",
+                         "runtime-data"} for part in parts) or
+            (parts and parts[0] in {"content", "database", "configuration", "media",
+                                    "evidence", "receipts"}) or
+            any(name.endswith(suffix) for suffix in
+                (".pem", ".key", ".p12", ".pfx", ".sqlite", ".sqlite3", ".db",
+                 ".dump", ".session")) or name in {"credentials.json", "secrets.json"}):
+        deny("CRM_STAGING_PROTECTED_MATERIAL")
+
+
+def _crm_relation_field(relation: Any, value: str) -> None:
+    raw = value.encode("utf-8", "surrogateescape")
+    relation.update(len(raw).to_bytes(8, "big")); relation.update(raw)
+
+
+def _authenticate_crm_staging_tree(path: Path, binding: dict[str, Any]) -> dict[str, Any]:
+    """Authenticate only the CRM tree/archive relation absent from the canonical flow."""
+    if binding != CRM_INACTIVE_STAGING_BINDINGS.get(str(path)):
+        deny("CRM_STAGING_FIXED_BINDING")
+    authority_name = binding["authorityName"]
+    index_path = CRM_STAGING_ROOT / "incoming-index.private.json"
+    manifest_path = CRM_STAGING_ROOT / f"{authority_name}.manifest.private.json"
+    archive_path = CRM_STAGING_ROOT / f"{authority_name}.tar.gz"
+    receipt_path = CRM_STAGING_ROOT / "staging.receipt.private.json"
+    owner_pairs = {deploy_identity()}
+    file_options = {"private": False, "allowed_modes": {0o600, 0o640, 0o644},
+                    "allowed_owner_pairs": owner_pairs}
+    index_raw, index_identity = stable_regular(
+        index_path, binding["incomingIndexSha256"], include_nlink=True, **file_options)
+    manifest_raw, manifest_identity = stable_regular(
+        manifest_path, binding["manifestSha256"], include_nlink=True, **file_options)
+    archive_identity = stable_regular_digest(
+        archive_path, binding["archiveSha256"], expected_size=binding["archiveBytes"],
+        **file_options)
+    receipt_raw, receipt_identity = stable_regular(
+        receipt_path, binding["stagingReceiptSha256"], include_nlink=True, **file_options)
+    index = object_json(index_raw, "CRM_STAGING_INDEX_JSON")
+    receipt = object_json(receipt_raw, "CRM_STAGING_RECEIPT_JSON")
+    if (index.get(archive_path.name) != {"bytes": binding["archiveBytes"],
+                                         "sha256": binding["archiveSha256"]} or
+            index.get(manifest_path.name, {}).get("sha256") != binding["manifestSha256"] or
+            receipt.get("result") != "CSV_INACTIVE_STAGING_COMPLETE" or
+            receipt.get("gatesAdmitted") is not False or receipt.get("processActions") != 0):
+        deny("CRM_STAGING_AUTHORITY_CHAIN")
+    manifest = object_json(manifest_raw, "CRM_STAGING_MANIFEST_JSON")
+    rows = manifest.get("files")
+    if (not isinstance(rows, list) or
+            manifest.get("filesCount", 0) + manifest.get("linksCount", 0) != len(rows) or
+            manifest.get("tarSha256") != binding["archiveSha256"] or
+            manifest.get("tarBytes") != binding["archiveBytes"]):
+        deny("CRM_STAGING_MANIFEST_SCHEMA")
+    expected: dict[str, dict[str, Any]] = {}; expected_dirs: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("path"), str):
+            deny("CRM_STAGING_MANIFEST_SCHEMA")
+        relative = row["path"]; pure = PurePosixPath(relative)
+        if (not relative or pure.is_absolute() or ".." in pure.parts or
+                str(pure) != relative or relative in expected):
+            deny("CRM_STAGING_MANIFEST_PATH")
+        _crm_staging_protected(relative)
+        if set(row) == {"path", "target"}:
+            target = row["target"]
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(relative), target))
+            if (not isinstance(target, str) or not target or target.startswith("/") or
+                    resolved.startswith("../") or resolved == ".."):
+                deny("CRM_STAGING_MANIFEST_LINK")
+        elif (set(row) != {"path", "sha256", "bytes", "allocatedBytes", "mode"} or
+              not valid_sha(row.get("sha256"))):
+            deny("CRM_STAGING_MANIFEST_SCHEMA")
+        expected[relative] = row
+        parent = pure.parent
+        while str(parent) != ".":
+            expected_dirs.add(str(parent)); parent = parent.parent
+    for relative, row in expected.items():
+        if "target" in row:
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(relative), row["target"]))
+            if resolved not in expected:
+                deny("CRM_STAGING_MANIFEST_LINK")
+    try:
+        root = path.lstat()
+    except OSError:
+        deny("CRM_STAGING_ROOT")
+    if (path.is_symlink() or not stat.S_ISDIR(root.st_mode) or root.st_nlink < 2 or
+            (root.st_uid, root.st_gid) != deploy_identity() or stat.S_IMODE(root.st_mode) & 0o022):
+        deny("CRM_STAGING_ROOT")
+    actual: set[str] = set(); relation = hashlib.sha256()
+    identity_relation = FramedRelationDigest()
+    identity_relation.add({"path": ".", "identity": stat_identity(root, include_nlink=True)})
+    transition_count = 0
+    observed_deltas: list[dict[str, Any]] = []; physical_bytes = root.st_blocks * 512
+    stack = [(path, "")]
+    while stack:
+        directory, prefix = stack.pop()
+        try:
+            entries = sorted(os.scandir(directory), key=lambda item: os.fsencode(item.name),
+                             reverse=True)
+        except OSError:
+            deny("CRM_STAGING_TREE_READ")
+        for entry in entries:
+            relative = f"{prefix}/{entry.name}" if prefix else entry.name
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except OSError:
+                deny("CRM_STAGING_TREE_READ")
+            actual.add(relative); physical_bytes += info.st_blocks * 512
+            identity_relation.add({"path": relative,
+                                   "identity": stat_identity(info, include_nlink=True)})
+            if info.st_dev != root.st_dev or (info.st_uid, info.st_gid) != deploy_identity():
+                deny("CRM_STAGING_TREE_IDENTITY")
+            row = expected.get(relative)
+            if row is None:
+                if relative not in expected_dirs or not stat.S_ISDIR(info.st_mode):
+                    deny("CRM_STAGING_EXTRA")
+                if stat.S_IMODE(info.st_mode) & 0o022:
+                    deny("CRM_STAGING_DIRECTORY")
+                stack.append((Path(entry.path), relative))
+                values = [relative, "directory", oct(stat.S_IMODE(info.st_mode)),
+                          str(info.st_uid), str(info.st_gid)]
+            elif "target" in row:
+                before = Path(entry.path).lstat(); target = os.readlink(entry.path)
+                after = Path(entry.path).lstat()
+                if (not stat.S_ISLNK(info.st_mode) or target != row["target"] or
+                        stat_identity(before, include_nlink=True) !=
+                        stat_identity(after, include_nlink=True)):
+                    deny("CRM_STAGING_LINK")
+                values = [relative, "symlink", row["target"]]
+            else:
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != row["bytes"]:
+                    deny("CRM_STAGING_REGULAR_IDENTITY")
+                mode = stat.S_IMODE(info.st_mode)
+                if mode != row["mode"]:
+                    transition = binding["modeTransition"]
+                    if (row["mode"], mode) != (transition["from"], transition["to"]):
+                        deny("CRM_STAGING_MODE")
+                    transition_count += 1
+                allocated = info.st_blocks * 512
+                if allocated != row["allocatedBytes"]:
+                    observed_deltas.append({"path": relative, "manifest": row["allocatedBytes"],
+                                            "observed": allocated})
+                identity = stable_regular_digest(Path(entry.path), row["sha256"], private=False,
+                    allowed_modes={mode}, allowed_owner_pairs=owner_pairs, expected_size=row["bytes"])
+                values = [relative, "regular", oct(mode), str(identity["size"]),
+                          str(allocated), row["sha256"]]
+            for value in values:
+                _crm_relation_field(relation, value)
+    try:
+        root_after = path.lstat()
+    except OSError:
+        deny("CRM_STAGING_ROOT_CHANGED")
+    if stat_identity(root, include_nlink=True) != stat_identity(root_after, include_nlink=True):
+        deny("CRM_STAGING_ROOT_CHANGED")
+    if ((set(expected) | expected_dirs) != actual or
+            transition_count != binding["modeTransition"]["count"] or
+            observed_deltas != binding["blockDeltas"] or
+            physical_bytes != binding["allocatedBytes"] or
+            relation.hexdigest() != binding["relationSha256"]):
+        deny("CRM_STAGING_RELATION")
+    return {"authority": {
+                "archive": {"path": str(archive_path), "identity": archive_identity},
+                "manifest": {"path": str(manifest_path), "identity": manifest_identity},
+                "index": {"path": str(index_path), "identity": index_identity},
+                "receipt": {"path": str(receipt_path), "identity": receipt_identity}},
+            "relationSha256": relation.hexdigest(), "physicalBytes": physical_bytes,
+            "identityRelationSha256": identity_relation.hexdigest(),
+            "modeTransitionCount": transition_count, "blockDeltas": observed_deltas}
+
+
+def authenticate_crm_staging(candidate: dict[str, Any], operational: dict[str, Any],
+                             process_data: ProcessScan) -> dict[str, Any]:
+    if set(candidate) != COMMON_CANDIDATE_KEYS:
+        deny("CRM_STAGING_CANDIDATE_SCHEMA")
+    path = normalized_absolute(candidate.get("path"), "CRM_STAGING_CANDIDATE_PATH")
+    binding = CRM_INACTIVE_STAGING_BINDINGS.get(str(path))
+    if binding is None:
+        deny("CRM_STAGING_CANDIDATE_NOT_DECLARED")
+    process_summary = _disposition_reference_checks(path, operational, process_data)
+    detail = _authenticate_crm_staging_tree(path, binding)
+    return {"class": candidate["class"], "path": str(path), "entry": binding,
+            "identity": stat_identity(path.lstat(), include_nlink=True),
+            "detail": detail, "processScan": process_summary}
+
+
 def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict[str, Any],
                        process_data: ProcessScan, *,
                        sealed_manifest_binding: dict[str, Any] | None = None,
@@ -3345,6 +3566,8 @@ def validate_candidate(candidate: Any, policy: dict[str, Any], operational: dict
         return authenticate_deploy_control(
             candidate, operational, process_data,
             sealed_manifest_binding=sealed_manifest_binding)
+    if candidate["class"] == "CLOSED_INACTIVE_CRM_STAGING_TREE":
+        return authenticate_crm_staging(candidate, operational, process_data)
     return authenticate_manifest_disposition(
         candidate, operational, process_data,
         sealed_manifest_binding=sealed_manifest_binding)
@@ -3423,6 +3646,15 @@ def validate_audit_request(value: dict[str, Any]) -> None:
                     deploy_control[0].get("dispositionManifest")
                     for item in deploy_control)):
             deny("DEPLOY_CONTROL_EXACT_BATCH")
+    crm_staging = [item for item in value["candidates"] if isinstance(item, dict) and
+                   item.get("class") == "CLOSED_INACTIVE_CRM_STAGING_TREE"]
+    if crm_staging:
+        requested = [item.get("path") for item in crm_staging]
+        expected = set(CRM_INACTIVE_STAGING_BINDINGS)
+        if (len(crm_staging) != len(value["candidates"]) or
+                len(requested) != len(expected) or len(set(requested)) != len(expected) or
+                set(requested) != expected):
+            deny("CRM_STAGING_EXACT_BATCH")
 
 
 def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[str, Any]:

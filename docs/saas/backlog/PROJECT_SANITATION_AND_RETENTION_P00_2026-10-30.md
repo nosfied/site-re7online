@@ -888,3 +888,29 @@ SHA-256 `d7cf1d3c2596891ad8208fd6fdd2c8b4ca2028738a51217bc30dfaec8fe99535`.
 Esse lote é terminal e proibido de replay. A margem de `593.371.136 bytes` sobre o
 gate remove somente o bloqueio de capacidade observado e não autoriza o build da
 campanha. A cadeia principal de seis gerações continua aberta.
+
+## Árvores CRM ea3/d41 — prova local no fluxo canônico (04/11/2026)
+
+O grupo mede historicamente `1.299.951.616 bytes`, mas permanece com **zero bytes
+qualificados**. Os caminhos fechados são:
+
+- `/opt/re7online/releases/crm-csv-front-ea3d2788-20261016`;
+- `/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016`.
+
+Archives, manifests, índice e receipt preservados são autoridades da equivalência;
+ativações posteriores não são tratadas como prova de que essas árvores foram
+selecionadas. A adaptação indispensável autentica essa relação no
+`capacity-recovery.py`. Observação de processos, classificação de transações,
+recaptura sob locks, autorização, journal e receipt permanecem os controles
+canônicos existentes — a implementação duplicada inicialmente no
+`generation-retirement.py` foi retirada.
+
+O ensaio local autentica os dois candidatos exatos, nega drift e material
+protegido, e demonstra `audit` aprovado seguido de `prepare` negado quando uma
+transação aberta passa a referenciar a árvore. Nenhuma intenção é selada nesse
+caso. Referência externa e observação incompleta também negam pelo consumidor
+canônico. O helper aceita somente os dois caminhos literais adicionais.
+
+Nenhuma retirada na VPS foi executada ou autorizada. A qualificação produtiva
+depende de fotografia/request próprios, helper autenticado, recaptura completa e
+medição física vigente; somente então os efeitos literais poderão ser revisados.
