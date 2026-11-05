@@ -1760,6 +1760,68 @@ class CapacityRecoveryTests(unittest.TestCase):
             installer.install()
         opened.assert_not_called()
 
+    def test_crm_recovered_report_becomes_private_proof_consumed_by_binding(self):
+        source = Path(__file__).resolve().parents[1]
+        installer_path = source / "install-capacity-proc-observer-crm-staging.py"
+        materializer_path = source / "capacity-recovery-worker-package-materialize.py"
+        installer_spec = importlib.util.spec_from_file_location(
+            "recovered_report_installer", installer_path)
+        installer = importlib.util.module_from_spec(installer_spec)
+        assert installer_spec.loader is not None; installer_spec.loader.exec_module(installer)
+        materializer_spec = importlib.util.spec_from_file_location(
+            "recovered_report_materializer", materializer_path)
+        materializer = importlib.util.module_from_spec(materializer_spec)
+        assert materializer_spec.loader is not None
+        materializer_spec.loader.exec_module(materializer)
+        custody = self.base / "recovered-helper-proof"; custody.mkdir(mode=0o700)
+        control = custody / "control"; scripts = control / "scripts"; scripts.mkdir(parents=True)
+        consumer = scripts / "capacity-recovery.py"
+        shutil.copy2(source / "capacity-recovery.py", consumer); consumer.chmod(0o644)
+        helper = custody / "capacity-proc-observer.py"
+        helper.write_bytes(b"closed crm helper"); helper.chmod(0o500)
+        sudoers = custody / "re7online-capacity-proc-observer"
+        sudoers.write_bytes(b"closed sudoers\n"); sudoers.chmod(0o440)
+        report = custody / "helper-installation-report.private.txt"
+        proof = custody / "helper-installation-proof.private.json"
+        info = helper.lstat(); uid = os.geteuid(); gid = os.getegid()
+        recovered = {"installationState": "RECOVERED_ALREADY_INSTALLED",
+            "path": str(helper), "sha256": sha(helper), "previous": {},
+            "identity": {"device": info.st_dev, "inode": info.st_ino,
+                         "uid": uid, "gid": gid, "mode": "0500"}}
+        with mock.patch.multiple(installer, TARGET=helper, SUDOERS=sudoers,
+                                 SUDOERS_SHA256=materializer.SUDOERS_SHA256,
+                                 ROOT_UID=uid, ROOT_GID=gid):
+            lines = installer.result_lines(recovered)
+        report.write_text("\n".join(lines) + "\n"); report.chmod(0o600)
+        installer_sha = sha(installer_path); helper_sha = sha(helper)
+        patches = {"CUSTODY": custody, "ROOT": control, "CONSUMER": consumer,
+            "CONSUMER_SHA256": sha(consumer), "HELPER": helper, "SUDOERS": sudoers,
+            "HELPER_INSTALLATION_REPORT": report, "HELPER_PROOF": proof,
+            "CRM_INSTALLER_SHA256": installer_sha, "CRM_HELPER_SHA256": helper_sha,
+            "HELPER_UID": uid, "HELPER_GID": gid,
+            "SUDOERS_UID": uid, "SUDOERS_GID": gid}
+        stdout = io.StringIO()
+        with mock.patch.multiple(materializer, **patches), \
+                mock.patch.object(sys, "stdout", stdout):
+            self.assertEqual(materializer.main([
+                "--capture-helper-proof", "--profile", materializer.CRM_PROFILE]), 0)
+            binding, proof_sha = materializer.helper_binding(installer_sha, helper_sha)
+        captured = json.loads(stdout.getvalue())
+        self.assertEqual(binding, {"path": str(helper), "sha256": helper_sha})
+        self.assertEqual(captured["helperProofSha256"], proof_sha)
+        self.assertEqual(captured["reportSha256"], sha(report))
+        value = json.loads(proof.read_text())
+        self.assertEqual(value["installerSha256"], installer_sha)
+        self.assertEqual(value["helper"]["identity"], recovered["identity"])
+
+        proof.unlink(); report.write_text(report.read_text().replace(helper_sha, "0" * 64))
+        report.chmod(0o600)
+        with mock.patch.multiple(materializer, **patches), \
+                self.assertRaisesRegex(RuntimeError,
+                                       "HELPER_INSTALLATION_REPORT_BINDING"):
+            materializer.capture_helper_proof(materializer.CRM_PROFILE)
+        self.assertFalse(proof.exists())
+
     def test_ef7_materializer_schema3_to_real_audit_outside_checkout(self):
         fixture = self.ef7_fixture("ef7-materializer-e2e")
         custody = fixture["base"] / "custody"

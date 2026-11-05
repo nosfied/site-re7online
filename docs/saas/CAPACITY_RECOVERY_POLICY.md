@@ -939,3 +939,10 @@ Ela admite somente o helper CRM byte-exato, `root:root 0500`, sob o pai canônic
 reautentica a mesma identidade física e emite `RECOVERED` para formar a prova
 privada. SHA, owner, modo, inode instável, pai ou sudoers divergentes negam; o
 predecessor ef7 continua sendo a única origem aceita para a primeira instalação.
+O stdout completo do instalador é capturado exclusivamente em
+`helper-installation-report.private.txt`. O mesmo materializador, com
+`--capture-helper-proof --profile inactive-crm-staging`, autentica o framing e os
+bindings `INSTALLED` ou `RECOVERED`/`PRESERVED`, confronta helper e sudoers por
+`lstat`, grava `helper-installation-proof.private.json` com criação exclusiva e
+readback e o entrega imediatamente a `helper_binding()`. Relatório incompleto,
+extra, adulterado ou pertencente a outro perfil nega sem produzir prova.
