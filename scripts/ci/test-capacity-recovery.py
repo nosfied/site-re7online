@@ -1794,8 +1794,17 @@ class CapacityRecoveryTests(unittest.TestCase):
             lines = installer.result_lines(recovered)
         report.write_text("\n".join(lines) + "\n"); report.chmod(0o600)
         installer_sha = sha(installer_path); helper_sha = sha(helper)
+        class UnreadableSudoers:
+            def __str__(self):
+                return str(sudoers)
+            def lstat(self):
+                raise PermissionError("deploy cannot traverse /etc/sudoers.d")
+            def is_symlink(self):
+                raise AssertionError("materializer must not inspect sudoers directly")
+        unreadable_sudoers = UnreadableSudoers()
         patches = {"CUSTODY": custody, "ROOT": control, "CONSUMER": consumer,
-            "CONSUMER_SHA256": sha(consumer), "HELPER": helper, "SUDOERS": sudoers,
+            "CONSUMER_SHA256": sha(consumer), "HELPER": helper,
+            "SUDOERS": unreadable_sudoers,
             "HELPER_INSTALLATION_REPORT": report, "HELPER_PROOF": proof,
             "CRM_INSTALLER_SHA256": installer_sha, "CRM_HELPER_SHA256": helper_sha,
             "HELPER_UID": uid, "HELPER_GID": gid,

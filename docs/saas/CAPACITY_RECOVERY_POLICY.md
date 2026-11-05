@@ -942,7 +942,9 @@ predecessor ef7 continua sendo a única origem aceita para a primeira instalaç�
 O stdout completo do instalador é capturado exclusivamente em
 `helper-installation-report.private.txt`. O mesmo materializador, com
 `--capture-helper-proof --profile inactive-crm-staging`, autentica o framing e os
-bindings `INSTALLED` ou `RECOVERED`/`PRESERVED`, confronta helper e sudoers por
-`lstat`, grava `helper-installation-proof.private.json` com criação exclusiva e
-readback e o entrega imediatamente a `helper_binding()`. Relatório incompleto,
-extra, adulterado ou pertencente a outro perfil nega sem produzir prova.
+bindings `INSTALLED` ou `RECOVERED`/`PRESERVED`, confronta o helper acessível por
+`lstat` e conserva a autenticação byte-exata do sudoers feita pelo instalador root.
+O materializador não tenta atravessar `/etc/sudoers.d` como `deploy`; ele grava
+`helper-installation-proof.private.json` com criação exclusiva e readback e o
+entrega imediatamente a `helper_binding()`. Relatório incompleto, extra,
+adulterado ou pertencente a outro perfil nega sem produzir prova.

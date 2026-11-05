@@ -243,17 +243,12 @@ def capture_helper_proof(profile: str) -> dict[str, str]:
                  f"{SUDOERS_UID}:{SUDOERS_GID}", "0440"]
     if lines[-1].split("|") != preserved:
         raise RuntimeError("HELPER_INSTALLATION_REPORT_SUDOERS")
-    helper_info = HELPER.lstat(); sudoers_info = SUDOERS.lstat()
+    helper_info = HELPER.lstat()
     if (HELPER.is_symlink() or not stat.S_ISREG(helper_info.st_mode) or
             {"device": helper_info.st_dev, "inode": helper_info.st_ino,
              "uid": helper_info.st_uid, "gid": helper_info.st_gid,
              "mode": f"{stat.S_IMODE(helper_info.st_mode):04o}"} != identity):
         raise RuntimeError("HELPER_INSTALLATION_REPORT_HELPER_DRIFT")
-    if (SUDOERS.is_symlink() or not stat.S_ISREG(sudoers_info.st_mode) or
-            (sudoers_info.st_uid, sudoers_info.st_gid,
-             stat.S_IMODE(sudoers_info.st_mode)) !=
-            (SUDOERS_UID, SUDOERS_GID, 0o440)):
-        raise RuntimeError("HELPER_INSTALLATION_REPORT_SUDOERS_DRIFT")
     proof = {"schemaVersion": 1,
         "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
         "installerSha256": contract["installerSha256"],
