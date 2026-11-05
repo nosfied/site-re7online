@@ -30,6 +30,8 @@ WORKER_HELPER_SHA256 = "a7f1a0680d19561086923b77162ab3710fbd2c890ccf823aa517d42c
 WORKER_INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab099247395276ad04db"
 EF7_HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
 EF7_INSTALLER_SHA256 = "757dc2f20e649a985d36fa5a82b32e2273efeb9ffea9cd62f45757dcf8073785"
+CRM_HELPER_SHA256 = "fb83ba7c15fbac564a4bbe0d7d1bfd0d0a8ba2e79231d8b133e67b12a8c86d6f"
+CRM_INSTALLER_SHA256 = "f1a7a05be25b255a42e0e4d2937bb9e5ef3db5c6af23f76a8727341aefbe45f2"
 # Compatibility names retain the proven worker profile for callers/tests that
 # invoke helper_binding() without an explicit profile contract.
 HELPER_SHA256 = WORKER_HELPER_SHA256
@@ -43,6 +45,10 @@ EF7_CANDIDATES = (
     Path("/opt/re7online/deploy-control/ef7db111-prep/.next"),
     Path("/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist"),
 )
+CRM_CANDIDATES = (
+    Path("/opt/re7online/releases/crm-csv-front-ea3d2788-20261016"),
+    Path("/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016"),
+)
 CURRENT = Path("/opt/re7online/current")
 TRANSACTIONS = Path("/opt/re7online/backups/converta-persistent/deploy-transactions")
 DEPLOYMENT_LOCK = Path("/opt/re7online/backups/converta-persistent/.deployment-window.lock")
@@ -51,7 +57,9 @@ MINIMUM_RECOVERY_BYTES = 365674496
 TARGET_AVAILABLE_BYTES = 9663676416
 WORKER_PROFILE = "worker-package-audit"
 EF7_PROFILE = "ef7db111-deploy-control"
+CRM_PROFILE = "inactive-crm-staging"
 EF7_MINIMUM_RECOVERY_BYTES = 949141504
+CRM_MINIMUM_RECOVERY_BYTES = 1299951616
 
 
 def profile_contract(profile: str) -> dict[str, Any]:
@@ -68,6 +76,13 @@ def profile_contract(profile: str) -> dict[str, Any]:
                 "helperSha256": EF7_HELPER_SHA256,
                 "candidates": [{"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE",
                                 "path": str(path)} for path in EF7_CANDIDATES]}
+    if profile == CRM_PROFILE:
+        return {"manifest": None,
+                "minimumRecoveryBytes": CRM_MINIMUM_RECOVERY_BYTES,
+                "installerSha256": CRM_INSTALLER_SHA256,
+                "helperSha256": CRM_HELPER_SHA256,
+                "candidates": [{"class": "CLOSED_INACTIVE_CRM_STAGING_TREE",
+                                "path": str(path)} for path in CRM_CANDIDATES]}
     raise RuntimeError("PROFILE_DENY")
 
 
@@ -189,9 +204,11 @@ def final_readback(consumer: Any, request_path: Path, request_expected: str,
     _, operational_sha, operational_raw, _ = consumer.load_binding(
         request["operationalState"], "OPERATIONAL_STATE")
     consumer.validate_operational(operational_raw)
-    manifest_binding = request["candidates"][0]["dispositionManifest"]
-    _, manifest_sha, _, _ = consumer.load_binding(
-        manifest_binding, "DISPOSITION_MANIFEST")
+    manifest_binding = request["candidates"][0].get("dispositionManifest")
+    manifest_sha = None
+    if manifest_binding is not None:
+        _, manifest_sha, _, _ = consumer.load_binding(
+            manifest_binding, "DISPOSITION_MANIFEST")
     if request["procObserver"] != helper:
         raise RuntimeError("HELPER_READBACK")
     return {"request": request, "requestSha256": digest(request_raw),
@@ -228,7 +245,9 @@ def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
     graph_raw, _ = read_stable(GRAPH, modes={0o600})
     policy_raw, _ = read_stable(POLICY, modes={0o600})
     manifest_path = contract["manifest"]
-    manifest_raw, _ = read_stable(manifest_path, modes={0o600, 0o644})
+    manifest_raw = None
+    if manifest_path is not None:
+        manifest_raw, _ = read_stable(manifest_path, modes={0o600, 0o644})
     links = []
     for component in ("api", "frontend"):
         link = CURRENT / component
@@ -261,8 +280,9 @@ def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
         "sha256": digest(policy_raw)}, "operationalState": {
         "path": str(CUSTODY / "operational-state.schema2.private.json"),
         "sha256": operational_sha}, "procObserver": helper,
-        "candidates": [{**candidate, "dispositionManifest": {
+        "candidates": [({**candidate, "dispositionManifest": {
             "path": str(manifest_path), "sha256": digest(manifest_raw)}}
+            if manifest_path is not None and manifest_raw is not None else candidate)
             for candidate in contract["candidates"]]}
     request_path = CUSTODY / "audit-request.private.json"
     provisional_request_sha = write_exclusive(request_path, consumer.canonical(request))
@@ -285,8 +305,9 @@ def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
 if __name__ == "__main__":
     if len(os.sys.argv) == 1:
         selected_profile = WORKER_PROFILE
-    elif os.sys.argv[1:] == ["--profile", EF7_PROFILE]:
-        selected_profile = EF7_PROFILE
+    elif len(os.sys.argv) == 3 and os.sys.argv[1] == "--profile" and \
+            os.sys.argv[2] in {EF7_PROFILE, CRM_PROFILE}:
+        selected_profile = os.sys.argv[2]
     else:
         raise SystemExit("DENY|ARGUMENTS")
     print(json.dumps(materialize(selected_profile), sort_keys=True))

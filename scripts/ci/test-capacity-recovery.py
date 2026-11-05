@@ -1452,7 +1452,7 @@ class CapacityRecoveryTests(unittest.TestCase):
                 self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_IDENTITY"):
             materializer.helper_binding()
 
-    def test_materializer_profiles_preserve_worker_and_close_ef7_scope(self):
+    def test_materializer_profiles_preserve_worker_and_close_ef7_and_crm_scope(self):
         source = Path(__file__).resolve().parents[1] / (
             "capacity-recovery-worker-package-materialize.py")
         spec = importlib.util.spec_from_file_location("closed_profile_materializer", source)
@@ -1476,6 +1476,15 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(ef7["candidates"], [
             {"class": "CLOSED_DEPLOY_CONTROL_DERIVED_TREE", "path": str(path)}
             for path in materializer.EF7_CANDIDATES])
+        crm = materializer.profile_contract(materializer.CRM_PROFILE)
+        self.assertIsNone(crm["manifest"])
+        self.assertEqual(crm["minimumRecoveryBytes"],
+                         materializer.CRM_MINIMUM_RECOVERY_BYTES)
+        self.assertEqual(crm["installerSha256"], materializer.CRM_INSTALLER_SHA256)
+        self.assertEqual(crm["helperSha256"], materializer.CRM_HELPER_SHA256)
+        self.assertEqual(crm["candidates"], [
+            {"class": "CLOSED_INACTIVE_CRM_STAGING_TREE", "path": str(path)}
+            for path in materializer.CRM_CANDIDATES])
         with self.assertRaisesRegex(RuntimeError, "PROFILE_DENY"):
             materializer.profile_contract("/opt/re7online/deploy-control")
 
@@ -1497,7 +1506,24 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(installer.SUDOERS_SHA256, materializer.SUDOERS_SHA256)
         self.assertEqual(installer.TARGET, materializer.HELPER)
 
-    def test_worker_and_ef7_helper_proofs_are_not_interchangeable(self):
+        crm_installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-crm-staging.py")
+        self.assertEqual(sha(crm_installer_path), materializer.CRM_INSTALLER_SHA256)
+        crm_installer_spec = importlib.util.spec_from_file_location(
+            "crm_closed_helper_installer", crm_installer_path)
+        crm_installer = importlib.util.module_from_spec(crm_installer_spec)
+        assert crm_installer_spec.loader is not None
+        crm_installer_spec.loader.exec_module(crm_installer)
+        self.assertEqual(crm_installer.SOURCE_SHA256, materializer.CRM_HELPER_SHA256)
+        self.assertEqual(crm_installer.PREVIOUS_HELPERS, ({
+            "path": str(materializer.HELPER),
+            "sha256": materializer.EF7_HELPER_SHA256,
+            "device": 64769, "inode": 803452, "uid": 0, "gid": 0,
+            "mode": "0500",
+        },))
+        self.assertEqual(crm_installer.SUDOERS_SHA256, materializer.SUDOERS_SHA256)
+
+    def test_worker_ef7_and_crm_helper_proofs_are_not_interchangeable(self):
         source = Path(__file__).resolve().parents[1] / (
             "capacity-recovery-worker-package-materialize.py")
         spec = importlib.util.spec_from_file_location("profile_proof_materializer", source)
@@ -1535,11 +1561,105 @@ class CapacityRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
                 materializer.helper_binding(materializer.WORKER_INSTALLER_SHA256,
                                             materializer.WORKER_HELPER_SHA256)
+            with self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+                materializer.helper_binding(materializer.CRM_INSTALLER_SHA256,
+                                            materializer.CRM_HELPER_SHA256)
+        proof.unlink(); write_proof(materializer.CRM_INSTALLER_SHA256,
+                                    materializer.CRM_HELPER_SHA256)
+        with mock.patch.multiple(materializer, HELPER=helper, HELPER_PROOF=proof):
+            binding, _ = materializer.helper_binding(
+                materializer.CRM_INSTALLER_SHA256, materializer.CRM_HELPER_SHA256)
+            self.assertEqual(binding, {"path": str(helper),
+                "sha256": materializer.CRM_HELPER_SHA256})
+            with self.assertRaisesRegex(RuntimeError, "HELPER_PROOF_BINDING"):
+                materializer.helper_binding(materializer.EF7_INSTALLER_SHA256,
+                                            materializer.EF7_HELPER_SHA256)
+
+    def test_crm_materializer_emits_exact_schema3_request_without_manifest(self):
+        source = Path(__file__).resolve().parents[1]
+        materializer_path = source / "capacity-recovery-worker-package-materialize.py"
+        spec = importlib.util.spec_from_file_location("crm_profile_materializer", materializer_path)
+        materializer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(materializer)
+        custody = self.base / "crm-materializer"; custody.mkdir(mode=0o700)
+        control = custody / "control"; (control / "scripts").mkdir(parents=True)
+        consumer_copy = control / "scripts/capacity-recovery.py"
+        shutil.copy2(source / "capacity-recovery.py", consumer_copy); consumer_copy.chmod(0o644)
+        node = custody / "node"; node.write_text("#!/bin/sh\necho v20.20.0\n"); node.chmod(0o755)
+        pm2 = custody / "pm2"; pm2.write_text("#!/bin/sh\nprintf '[]\\n'\n"); pm2.chmod(0o700)
+        dump = custody / "dump.json"; private_json(dump, [])
+        graph = custody / "release-graph.private.json"
+        private_json(graph, {"schemaVersion": 1, "protectedGraphPaths": []})
+        policy = custody / "deploy-artifact-roots.json"
+        shutil.copy2(self.policy, policy); policy.chmod(0o600)
+        helper = custody / "helper"; helper.write_bytes(b"crm-helper"); helper.chmod(0o500)
+        helper_info = helper.lstat(); proof = custody / "helper-installation-proof.private.json"
+        installer_sha = "c" * 64
+        private_json(proof, {"schemaVersion": 1,
+            "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+            "installerSha256": installer_sha, "sudoersSha256": materializer.SUDOERS_SHA256,
+            "helper": {"path": str(helper), "sha256": sha(helper),
+                "identity": {"device": helper_info.st_dev, "inode": helper_info.st_ino,
+                    "uid": helper_info.st_uid, "gid": helper_info.st_gid, "mode": "0500"}}})
+        current = custody / "current"; current.mkdir()
+        for component in ("api", "frontend"):
+            target = custody / component; target.mkdir(); (current / component).symlink_to(target)
+        transactions = custody / "transactions"; transactions.mkdir(mode=0o700)
+        deployment_lock = custody / "deploy.lock"; deployment_lock.write_bytes(b"")
+        writer_lock = custody / "writer.lock"; writer_lock.write_bytes(b"")
+        original_loader = materializer.authenticated_consumer
+        def configured_consumer():
+            consumer = original_loader(); consumer.PROC_OBSERVER_PATH = helper
+            return consumer
+        with mock.patch.multiple(materializer, CUSTODY=custody,
+                CONSUMER=consumer_copy, CONSUMER_SHA256=sha(consumer_copy),
+                PM2=pm2, PM2_SHA256=sha(pm2), NODE=node, NODE_SHA256=sha(node),
+                DUMP=dump, GRAPH=graph, POLICY=policy, HELPER=helper,
+                HELPER_PROOF=proof, CRM_INSTALLER_SHA256=installer_sha,
+                CRM_HELPER_SHA256=sha(helper), CURRENT=current,
+                TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
+                WRITER_LOCK=writer_lock, authenticated_consumer=configured_consumer):
+            result = materializer.materialize(materializer.CRM_PROFILE)
+        request_path = custody / "audit-request.private.json"
+        request = json.loads(request_path.read_text())
+        self.assertEqual(result["requestSha256"], sha(request_path))
+        self.assertEqual(request["schemaVersion"], 3)
+        self.assertTrue(request["incrementalBatch"])
+        self.assertEqual(request["candidates"], [
+            {"class": "CLOSED_INACTIVE_CRM_STAGING_TREE", "path": str(path)}
+            for path in materializer.CRM_CANDIDATES])
+        self.assertTrue(all("dispositionManifest" not in item
+                            for item in request["candidates"]))
+        readback = json.loads((custody / "binding-readback.private.json").read_text())
+        self.assertIsNone(readback["manifestSha256"])
+        self.assertEqual(readback["requestSha256"], sha(request_path))
 
     def test_ef7_installer_denies_unknown_existing_helper_before_replacement(self):
         installer_path = Path(__file__).resolve().parents[1] / (
             "install-capacity-proc-observer-ef7.py")
         spec = importlib.util.spec_from_file_location("closed_ef7_installer", installer_path)
+        installer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(installer)
+        root_info = SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o600,
+            st_uid=0, st_gid=0, st_size=1, st_mtime_ns=1, st_ctime_ns=1, st_nlink=1)
+        sudoers_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 3,
+            "st_mode": stat.S_IFREG | 0o440})
+        unknown_info = SimpleNamespace(**{**root_info.__dict__, "st_dev": 64769,
+            "st_ino": 999999, "st_mode": stat.S_IFREG | 0o500})
+        with mock.patch.object(installer.os, "geteuid", return_value=0), \
+                mock.patch.object(installer.os, "getegid", return_value=0), \
+                mock.patch.object(installer, "stable_regular", side_effect=[
+                    (b"source", root_info), (b"sudoers", sudoers_info),
+                    (b"unknown helper", unknown_info)]), \
+                mock.patch.object(installer.os, "open") as opened, \
+                self.assertRaisesRegex(RuntimeError, "PREVIOUS_HELPER_NOT_ALLOWED"):
+            installer.install()
+        opened.assert_not_called()
+
+    def test_crm_installer_denies_unknown_existing_helper_before_replacement(self):
+        installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-crm-staging.py")
+        spec = importlib.util.spec_from_file_location("closed_crm_installer", installer_path)
         installer = importlib.util.module_from_spec(spec)
         assert spec.loader is not None; spec.loader.exec_module(installer)
         root_info = SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o600,
