@@ -19,6 +19,8 @@ test("Meta inbound readiness keeps connection, DB-first persistence and real Inb
   assert.match(pageSource, /seu ID ou alias não corresponde às identidades Meta conhecidas do tenant/);
   assert.match(pageSource, /Mensagem real persistida uma vez e visível na timeline humana/);
   assert.match(pageSource, /Atendimento Geral|departmentName/);
+  assert.match(pageSource, /unlinkedMetaIdentities\.length > 0/);
+  assert.match(pageSource, /draft\.provider === "meta"/);
 });
 
 test("Console action is restricted to baseConfig and does not accept operational feature values", () => {
