@@ -4108,7 +4108,7 @@ export default function AppCampaignsPage() {
                   </button>
                 </div>
 	              </div>
-	              {audiencePreview.summary.total > 1000 ? (
+	              {audiencePreview.summary.eligible > 1000 ? (
 	                <div className="rounded-md border border-amber-300/25 bg-amber-950/20 p-3 text-sm text-amber-50">
 	                  <div className="flex flex-wrap items-start justify-between gap-3">
 	                    <div className="grid gap-1">
@@ -5506,23 +5506,10 @@ export default function AppCampaignsPage() {
                         </label>
                       </div>
                     </div>
-                      <div className="overflow-x-auto">
+                      <div className="max-h-[32rem] overflow-auto">
                         {renderCampaignResultTable(filteredCampaignResultItems)}
                       </div>
                   </div>
-                  ) : null}
-
-                  {selectedCampaign.status === "sending" ? (
-                    <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end border-t border-white/10 bg-re7-navy px-4 py-3">
-                      <button
-                        type="button"
-                        disabled={cancelling}
-                        onClick={handleCancelCampaign}
-                        className="rounded-md border border-red-400/40 px-3 py-2 text-sm text-red-100 hover:bg-red-900/30 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {cancelling ? "Cancelando..." : "Cancelar campanha"}
-                      </button>
-                    </div>
                   ) : null}
                 </>
               ) : null}
