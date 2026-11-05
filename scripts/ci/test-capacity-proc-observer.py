@@ -246,6 +246,8 @@ class ProcObserverTests(unittest.TestCase):
         accepted.extend(sorted(OBSERVER.MANIFEST_DISPOSITION_PATHS))
         accepted.extend(sorted(OBSERVER.DEPLOY_CONTROL_DERIVED_PATHS))
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
+        crm_paths = sorted(OBSERVER.INACTIVE_CRM_STAGING_PATHS)
+        self.assertEqual(OBSERVER.validate_request(request(crm_paths))["candidatePaths"], crm_paths)
         worker_package_audit = (
             "/opt/re7online/backups/converta-persistent/preparations/"
             "incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/"
@@ -268,6 +270,9 @@ class ProcObserverTests(unittest.TestCase):
         with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
             OBSERVER.validate_request(request([
                 deploy_control_root + "/apps/whatsapp-agent/dist-extra"]))
+        crm_staging = next(iter(OBSERVER.INACTIVE_CRM_STAGING_PATHS))
+        with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+            OBSERVER.validate_request(request([crm_staging + "-other"]))
 
     def test_failure_detail_limit_is_explicit_and_never_implies_completeness(self):
         failures = []; truncated = [0]

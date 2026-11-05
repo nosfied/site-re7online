@@ -12,9 +12,11 @@ import os
 import posixpath
 from pathlib import Path, PurePosixPath
 import re
+import secrets
 import stat
 import subprocess
 import sys
+import time
 from typing import Any
 
 import importlib.util
@@ -50,6 +52,12 @@ ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDIN
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
 POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
 CRM_STAGING_ROOT = "/opt/re7online/backups/converta-persistent/preparations/csv-staging-incoming-20261016T092610Z"
+PROC_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
+PROC_OBSERVER_COMMAND = (
+    "/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
+    str(PROC_OBSERVER_PATH), "collect",
+)
+PROC_OBSERVER_TIMEOUT_SECONDS = 15
 CRM_INACTIVE_STAGING_BINDINGS = {
     "/opt/re7online/releases/crm-csv-front-ea3d2788-20261016": {
         "authorityName": "frontend-candidate", "allocatedBytes": 642396160,
@@ -653,6 +661,12 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                 "installedVerifiedReleases", "supersededCandidates", "controlPlaneArtifacts",
                 "dependencies", "deploymentState", "canonicalRoots", "observations"}
     optional = {"immediateRollbackReleases"}
+    has_inactive_staging = (
+        "inactiveStagingSafety" in value or
+        any(isinstance(item, dict) and item.get("class") == INACTIVE_STAGING_CLASS
+            for item in contract.get("artifacts", [])))
+    if has_inactive_staging:
+        required.add("inactiveStagingSafety")
     if (frozenset(value) not in {frozenset(required), frozenset(required | optional)} or
             value.get("schemaVersion") != 2):
         deny("operational_state_schema")
@@ -672,6 +686,17 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                                   any(item not in value["rollbackReleases"]
                                       for item in immediate.values())):
         deny("operational_state_immediate_rollbacks")
+    if has_inactive_staging:
+        safety = value.get("inactiveStagingSafety")
+        if (not isinstance(safety, dict) or
+                set(safety) != {"procObserver", "transactionsRoot"}):
+            deny("inactive_staging_safety_binding")
+        observer = safety.get("procObserver")
+        if (not isinstance(observer, dict) or set(observer) != {"path", "sha256"} or
+                observer.get("path") != str(PROC_OBSERVER_PATH) or
+                not SHA256.fullmatch(str(observer.get("sha256", "")))):
+            deny("inactive_staging_proc_observer_binding")
+        _inactive_staging_transactions_schema(safety.get("transactionsRoot"))
     if not Path(str(value.get("gitRepository", ""))).is_absolute():
         deny("operational_git_repository")
     roots = value.get("canonicalRoots")
@@ -897,7 +922,8 @@ def path_referenced(path: str, operational: dict[str, Any]) -> bool:
     return False
 
 
-def _stable_stream_sha256(path: Path, expected: str, predicate: str) -> os.stat_result:
+def _stable_stream_sha256(path: Path, expected: str | None,
+                          predicate: str) -> tuple[os.stat_result, str]:
     try:
         before = path.lstat(); fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
         opened = os.fstat(fd); digest = hashlib.sha256()
@@ -917,14 +943,168 @@ def _stable_stream_sha256(path: Path, expected: str, predicate: str) -> os.stat_
             before.st_uid != os.geteuid() or before.st_gid != os.getegid() or
             stat.S_IMODE(before.st_mode) & 0o022 or
             identity(before) != identity(opened) or identity(opened) != identity(after) or
-            digest.hexdigest() != expected):
+            (expected is not None and digest.hexdigest() != expected)):
         deny(predicate)
-    return after
+    return after, digest.hexdigest()
 
 
 def _relation_field(digest: Any, value: str) -> None:
     raw = value.encode("utf-8", "surrogateescape")
     digest.update(len(raw).to_bytes(8, "big")); digest.update(raw)
+
+
+def _proc_start_ticks(path: Path = Path("/proc/self/stat")) -> int:
+    try:
+        raw = path.read_text(errors="strict")
+        closing = raw.rfind(") ")
+        fields = raw[closing + 2:].split()
+        return int(fields[19])
+    except (OSError, ValueError, IndexError):
+        deny("inactive_staging_proc_identity")
+
+
+def _inactive_staging_process_observation(binding: dict[str, Any], paths: list[str],
+                                          phase: str) -> dict[str, Any]:
+    if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+            binding.get("path") != str(PROC_OBSERVER_PATH) or
+            not SHA256.fullmatch(str(binding.get("sha256", "")))):
+        deny("inactive_staging_proc_observer_binding")
+    consumer = {"pid": os.getpid(), "startTicks": _proc_start_ticks()}
+    request = {
+        "schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
+        "phase": phase, "nonce": secrets.token_hex(32), "deployUid": os.geteuid(),
+        "candidatePaths": sorted(paths), "consumer": consumer,
+    }
+    request_raw = canonical(request)
+    started = time.time_ns()
+    try:
+        result = subprocess.run(
+            PROC_OBSERVER_COMMAND, input=request_raw, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False, timeout=PROC_OBSERVER_TIMEOUT_SECONDS,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        deny("inactive_staging_proc_observer_invocation")
+    finished = time.time_ns()
+    if result.stderr or len(result.stdout) > 4 * 1024 * 1024:
+        deny("inactive_staging_proc_observer_output")
+    response = object_json(result.stdout, "inactive-staging-proc-observer")
+    required = {"schemaVersion", "kind", "state", "phase", "nonce", "requestSha256",
+                "candidatePaths", "deployUid", "consumer", "mechanism", "capturedAtNs",
+                "finishedAtNs", "durationMs", "observation"}
+    if (result.returncode != 0 or set(response) != required or
+            canonical(response) != result.stdout or response.get("schemaVersion") != 1 or
+            response.get("kind") != "CAPACITY_PROC_OBSERVATION" or
+            response.get("phase") != phase or
+            response.get("nonce") != request["nonce"] or
+            response.get("requestSha256") != digest_bytes(request_raw) or
+            response.get("candidatePaths") != request["candidatePaths"] or
+            response.get("deployUid") != request["deployUid"] or
+            response.get("consumer") != consumer):
+        deny("inactive_staging_proc_observer_response")
+    captured = response.get("capturedAtNs"); completed = response.get("finishedAtNs")
+    duration = response.get("durationMs")
+    if (not isinstance(captured, int) or not isinstance(completed, int) or
+            not isinstance(duration, int) or captured < started or completed > finished or
+            captured > completed or duration < 0 or duration > PROC_OBSERVER_TIMEOUT_SECONDS * 1000):
+        deny("inactive_staging_proc_observer_time")
+    mechanism = response.get("mechanism")
+    if (not isinstance(mechanism, dict) or mechanism.get("path") != binding["path"] or
+            mechanism.get("sha256") != binding["sha256"]):
+        deny("inactive_staging_proc_observer_mechanism")
+    observation = response.get("observation")
+    expected = {"complete", "references", "activeWriters", "failures",
+                "failureDetailsTruncated", "summary"}
+    if not isinstance(observation, dict) or set(observation) != expected:
+        deny("inactive_staging_proc_observer_response")
+    if (response.get("state") != "COMPLETE" or
+            observation.get("complete") is not True or
+            observation.get("failures") != [] or
+            observation.get("failureDetailsTruncated") != 0):
+        deny("inactive_staging_process_observation_incomplete")
+    if observation.get("references") != [] or observation.get("activeWriters") != []:
+        deny("inactive_staging_process_reference")
+    return {"requestSha256": digest_bytes(request_raw),
+            "responseSha256": digest_bytes(result.stdout), "capturedAtNs": captured,
+            "finishedAtNs": completed, "summary": observation["summary"]}
+
+
+def _inactive_staging_transactions_schema(definition: Any) -> None:
+    if (not isinstance(definition, dict) or
+            set(definition) != {"path", "ownerUid", "groupGid", "allowedModes"} or
+            not Path(str(definition.get("path", ""))).is_absolute() or
+            not isinstance(definition.get("ownerUid"), int) or
+            definition["ownerUid"] < 0 or
+            not isinstance(definition.get("groupGid"), int) or
+            definition["groupGid"] < 0 or
+            not isinstance(definition.get("allowedModes"), list) or
+            not definition["allowedModes"] or
+            any(not isinstance(mode, str) or not re.fullmatch(r"0[0-7]{3}", mode)
+                for mode in definition["allowedModes"])):
+        deny("inactive_staging_transactions_binding")
+    path = Path(definition["path"])
+    if Path(os.path.normpath(str(path))) != path or ".." in path.parts:
+        deny("inactive_staging_transactions_binding")
+
+
+def _inactive_staging_transactions(definition: dict[str, Any]) -> dict[str, Any]:
+    _inactive_staging_transactions_schema(definition)
+    root = Path(definition["path"])
+    try:
+        root_info = root.lstat()
+    except OSError:
+        deny("inactive_staging_transactions_root")
+    root_mode = f"0{stat.S_IMODE(root_info.st_mode):03o}"
+    if (root.is_symlink() or not stat.S_ISDIR(root_info.st_mode) or
+            (root_info.st_uid, root_info.st_gid) !=
+            (definition["ownerUid"], definition["groupGid"]) or
+            root_mode not in definition["allowedModes"] or
+            stat.S_IMODE(root_info.st_mode) & 0o022):
+        deny("inactive_staging_transactions_root")
+    relation = hashlib.sha256(); count = 0; stack = [root]
+    while stack:
+        current = stack.pop()
+        try:
+            children = sorted(os.scandir(current), key=lambda item: os.fsencode(item.name),
+                              reverse=True)
+        except OSError:
+            deny("inactive_staging_transactions_read")
+        for child in children:
+            path = Path(child.path); relative = path.relative_to(root).as_posix()
+            info = child.stat(follow_symlinks=False)
+            if (info.st_dev != root_info.st_dev or info.st_uid != root_info.st_uid or
+                    info.st_gid != root_info.st_gid or stat.S_IMODE(info.st_mode) & 0o022):
+                deny("inactive_staging_transactions_identity")
+            if stat.S_ISDIR(info.st_mode):
+                kind = "directory"; value = ""; stack.append(path)
+            elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+                kind = "regular"; _, value = _stable_stream_sha256(
+                    path, None, "inactive_staging_transactions_file")
+            else:
+                deny("inactive_staging_transactions_type")
+            for field in (relative, kind, oct(stat.S_IMODE(info.st_mode)),
+                          str(info.st_size), value):
+                _relation_field(relation, field)
+            count += 1
+    after = root.lstat()
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_uid,
+                             item.st_gid, item.st_mtime_ns, item.st_ctime_ns)
+    if identity(root_info) != identity(after):
+        deny("inactive_staging_transactions_changed")
+    return {"path": str(root), "entries": count, "relationSha256": relation.hexdigest(),
+            "identity": {"device": after.st_dev, "inode": after.st_ino,
+                         "uid": after.st_uid, "gid": after.st_gid, "mode": root_mode}}
+
+
+def _capture_inactive_staging_safety(operational: dict[str, Any], phase: str) -> dict[str, Any]:
+    safety = operational.get("inactiveStagingSafety")
+    if (not isinstance(safety, dict) or
+            set(safety) != {"procObserver", "transactionsRoot"}):
+        deny("inactive_staging_safety_binding")
+    paths = sorted(CRM_INACTIVE_STAGING_BINDINGS)
+    process = _inactive_staging_process_observation(safety["procObserver"], paths, phase)
+    transactions = _inactive_staging_transactions(safety["transactionsRoot"])
+    return {"process": process, "transactions": transactions}
 
 
 def _inactive_staging_protected(relative: str) -> bool:
@@ -1045,10 +1225,10 @@ def _authenticate_inactive_staging_tree(path: Path, binding: dict[str, Any]) -> 
                 if allocated != row["allocatedBytes"]:
                     observed_deltas.append({"path": relative, "manifest": row["allocatedBytes"],
                                             "observed": allocated})
-                digest = _stable_stream_sha256(Path(entry.path), row["sha256"],
-                                                "inactive_staging_content")
-                values = [relative, "regular", oct(mode), str(digest.st_size),
-                          str(digest.st_blocks * 512), row["sha256"]]
+                identity, _ = _stable_stream_sha256(
+                    Path(entry.path), row["sha256"], "inactive_staging_content")
+                values = [relative, "regular", oct(mode), str(identity.st_size),
+                          str(identity.st_blocks * 512), row["sha256"]]
             for value in values: _relation_field(relation, value)
     if ((set(expected) | expected_dirs) != actual or
             transition_count != binding["modeTransition"]["count"] or
@@ -2687,6 +2867,12 @@ def prepare(args: argparse.Namespace) -> None:
     writer_fd = acquire_existing_lock(Path(contract["writerLockPath"]))
     try:
         fresh = capture_fresh_operational(operational)
+        has_inactive_staging = any(
+            artifact["class"] == INACTIVE_STAGING_CLASS
+            for artifact in contract["artifacts"])
+        inactive_staging_safety = (
+            _capture_inactive_staging_safety(operational, "prepare")
+            if has_inactive_staging else None)
         classified = []
         commands = []
         for artifact in contract["artifacts"]:
@@ -2731,6 +2917,8 @@ def prepare(args: argparse.Namespace) -> None:
             "canonicalRoots": operational["canonicalRoots"],
             "controlPlaneArtifacts": operational["controlPlaneArtifacts"],
             "freshObservation": fresh,
+            **({"inactiveStagingSafety": inactive_staging_safety}
+               if inactive_staging_safety is not None else {}),
             "legacyMigration": legacy_migration,
             "reconciliation": reconciliation,
             "artifacts": classified, "commands": commands,
@@ -2793,6 +2981,13 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation",
                 "rootPolicySha256", "reviewOutput", "reconciliation"}
     required.add("legacyMigration")
+    artifacts_value = intent.get("artifacts")
+    has_inactive_staging = (
+        isinstance(artifacts_value, list) and
+        any(isinstance(item, dict) and item.get("class") == INACTIVE_STAGING_CLASS
+            for item in artifacts_value))
+    if has_inactive_staging:
+        required.add("inactiveStagingSafety")
     if (set(intent) != required or intent.get("schemaVersion") != 3 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
             intent.get("authorizationGranted") is not False):
@@ -2820,6 +3015,12 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
     commands = intent.get("commands")
     if not isinstance(artifacts, list) or not isinstance(commands, list):
         deny("intent_content")
+    if has_inactive_staging:
+        safety = intent.get("inactiveStagingSafety")
+        if (not isinstance(safety, dict) or set(safety) != {"process", "transactions"} or
+                not isinstance(safety.get("process"), dict) or
+                not isinstance(safety.get("transactions"), dict)):
+            deny("intent_inactive_staging_safety")
     by_path = {item.get("path"): item for item in artifacts if isinstance(item, dict)}
     if len(by_path) != len(artifacts):
         deny("intent_artifacts")
@@ -2871,6 +3072,8 @@ def execute(args: argparse.Namespace) -> None:
             not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
         deny("authorization_invalid")
     commands = validate_intent(intent, operational, args.root_policy_sha256)
+    if intent.get("operationalStateSha256") != args.operational_state_sha256:
+        deny("intent_operational_state")
     if not isinstance(commands, list) or authorization.get("approvedPaths") != [item["path"] for item in commands]:
         deny("authorization_scope")
     validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
@@ -2896,6 +3099,16 @@ def execute(args: argparse.Namespace) -> None:
         # ATTEMPT. A stale prepare snapshot cannot authorize a deletion.
         validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
         fresh = capture_fresh_operational(operational)
+        has_inactive_staging = any(
+            artifact["class"] == INACTIVE_STAGING_CLASS
+            for artifact in intent["artifacts"])
+        inactive_staging_safety = (
+            _capture_inactive_staging_safety(operational, "execute")
+            if has_inactive_staging else None)
+        if (inactive_staging_safety is not None and
+                inactive_staging_safety["transactions"] !=
+                intent["inactiveStagingSafety"]["transactions"]):
+            deny("inactive_staging_transactions_changed_after_prepare")
         if operational["deploymentState"]["state"] == "DEPLOYED":
             release = intent["releaseId"]
             if (release not in operational["activeReleases"] or
@@ -2922,6 +3135,18 @@ def execute(args: argparse.Namespace) -> None:
             fresh_before_attempt = capture_fresh_operational(operational)
             if fresh_before_attempt != fresh:
                 deny("fresh_operational_changed_before_attempt")
+            # Recapture the complete process view immediately before the first
+            # possible ATTEMPT.  Transaction writers are excluded by the two
+            # canonical locks; their authenticated root must nevertheless remain
+            # byte/identity-equivalent to prepare and to the first execute capture.
+            if has_inactive_staging:
+                final_safety = _capture_inactive_staging_safety(
+                    operational, "execute-before-attempt")
+                if (final_safety["transactions"] !=
+                        intent["inactiveStagingSafety"]["transactions"] or
+                        final_safety["transactions"] !=
+                        inactive_staging_safety["transactions"]):
+                    deny("inactive_staging_transactions_changed_before_attempt")
             by_path = {item["path"]: item for item in intent["artifacts"]}
             execution_contract = {**contract_identity, "artifacts": intent["artifacts"]}
             executable = []
