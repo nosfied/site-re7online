@@ -30,7 +30,9 @@ try {
   if (mode === "dry-run") {
     const result = await dryRunAcceptedCrmFailure(db, bindings);
     console.log(JSON.stringify(result.alreadyApplied ? result : { alreadyApplied: false, planHash: result.planHash,
-      providerCalls: 0, campaignContinuationAuthorized: false }));
+      providerCalls: 0, campaignStatusPreserved: result.plan.campaignStatusPreserved,
+      sentCountPreserved: result.plan.sentCountPreserved, remainingRecipients: result.plan.remainingRecipients,
+      campaignContinuationAuthorized: false }));
   } else if (mode === "apply-sql") {
     const planHash = value("--plan-hash");
     if (!planHash || !/^[a-f0-9]{64}$/.test(planHash)) throw new Error("crm_failure_plan_hash_required");
