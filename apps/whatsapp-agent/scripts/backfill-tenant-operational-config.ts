@@ -10,10 +10,12 @@ import { readAuthenticatedTenantJsonSource } from "../src/config/authenticatedTe
 import { readAuthenticatedPrivateJsonSource } from "../src/config/authenticatedPrivateJsonSource.js";
 import { classifyTenantMetaParticipation } from "../src/config/tenantMetaParticipation.js";
 import {
+  normalizeTenantOperationalConfigFieldSelection,
   normalizeTenantOperationalConfigSelection,
   selectedTenantOperationalConfigKeys,
   validateTenantOperationalConfigPlan,
   type OwnerAuthorizedBaseConfig,
+  type TenantOperationalConfigFieldSelection,
   type TenantOperationalConfigPlanDocument,
 } from "../src/config/tenantOperationalConfigMigrationPlan.js";
 import {
@@ -31,6 +33,7 @@ type Options = {
   expectedSourceSha256: string;
   plan?: string;
   expectedPlanSha256?: string;
+  fields?: TenantOperationalConfigFieldSelection[];
 };
 
 type BackfillItem = {
@@ -59,6 +62,7 @@ function parseArgs(argv: string[]): Options {
     expectedSourceSha256: "",
   };
   const tenantValues: string[] = [];
+  const fieldValues: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     const current = argv[index];
     const next = argv[index + 1];
@@ -73,6 +77,11 @@ function parseArgs(argv: string[]): Options {
       case "--client-key":
         if (!next || next.startsWith("--")) throw new Error(`${current} exige um valor`);
         tenantValues.push(next);
+        index += 1;
+        break;
+      case "--field":
+        if (!next || next.startsWith("--")) throw new Error("--field exige um valor");
+        fieldValues.push(next);
         index += 1;
         break;
       case "--source":
@@ -109,6 +118,10 @@ function parseArgs(argv: string[]): Options {
   if (options.plan && !path.isAbsolute(options.plan)) throw new Error("plan_must_be_absolute");
   if (options.plan && tenantValues.length === 0) throw new Error("plan_requires_tenant_selection");
   if (tenantValues.length > 0) options.tenants = normalizeTenantOperationalConfigSelection(tenantValues);
+  if (fieldValues.length > 0) {
+    options.fields = normalizeTenantOperationalConfigFieldSelection(fieldValues);
+    if (options.tenants?.length !== 1) throw new Error("field_selection_requires_exactly_one_tenant");
+  }
   return options;
 }
 
@@ -421,6 +434,22 @@ function changedManagedFields(current: unknown, next: unknown) {
   return MANAGED_CONFIG_FIELDS.filter((field) => !isDeepStrictEqual(currentRecord[field], nextRecord[field]));
 }
 
+function selectManagedFields(
+  current: unknown,
+  next: Prisma.InputJsonValue,
+  fields?: readonly TenantOperationalConfigFieldSelection[]
+): Prisma.InputJsonValue {
+  if (!fields) return next;
+  const currentRecord = current && typeof current === "object" && !Array.isArray(current)
+    ? { ...(current as Record<string, unknown>) }
+    : {};
+  const nextRecord = next && typeof next === "object" && !Array.isArray(next)
+    ? next as Record<string, unknown>
+    : {};
+  for (const field of fields) currentRecord[field] = nextRecord[field];
+  return currentRecord as Prisma.InputJsonValue;
+}
+
 function normalizedManagedValues(tenant: Record<string, unknown>) {
   return {
     baseConfig: normalizeBaseConfig(tenant),
@@ -596,7 +625,11 @@ async function main() {
             current,
             baseConfig,
             provenance: "OWNER_AUTHORIZED_DB_IDENTITY" as const,
-            next: mergedOwnerAuthorizedConfig(current, baseConfig),
+            next: selectManagedFields(
+              current,
+              mergedOwnerAuthorizedConfig(current, baseConfig),
+              options.fields
+            ),
           };
         }
         const sourcePhoneNumberId = typeof tenant.metaPhoneNumberId === "string" ? tenant.metaPhoneNumberId.trim() : "";
@@ -625,7 +658,7 @@ async function main() {
           values,
           baseConfig: values.baseConfig,
           provenance: "HISTORICAL_SOURCE" as const,
-          next: mergedManagedConfig(current, values),
+          next: selectManagedFields(current, mergedManagedConfig(current, values), options.fields),
         };
       }).sort((left, right) => left.client.id.localeCompare(right.client.id));
 
@@ -675,6 +708,7 @@ async function main() {
         planSha256: options.expectedPlanSha256 ?? null,
         tenant: options.tenants.length === 1 ? options.tenants[0] : null,
         selectedTenants: options.tenants,
+        selectedFields: options.fields ?? null,
       } : { tenant: null }),
       durationMs: Date.now() - startedAt,
       processed: items.length,

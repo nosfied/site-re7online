@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  normalizeTenantOperationalConfigFieldSelection,
   normalizeTenantOperationalConfigSelection,
   selectedTenantOperationalConfigKeys,
   validateTenantOperationalConfigPlan,
@@ -36,6 +37,19 @@ test("selection is ordered and rejects empty or duplicate selectors", () => {
   );
   assert.throws(() => normalizeTenantOperationalConfigSelection([""]), /SELECTOR_EMPTY/);
   assert.throws(() => normalizeTenantOperationalConfigSelection(["cra-pr", "cra-pr"]), /SELECTOR_DUPLICATE:cra-pr/);
+});
+
+test("field selection is explicit, closed and rejects duplicates", () => {
+  assert.deepEqual(normalizeTenantOperationalConfigFieldSelection(["baseConfig"]), ["baseConfig"]);
+  assert.throws(() => normalizeTenantOperationalConfigFieldSelection([""]), /FIELD_SELECTOR_EMPTY/);
+  assert.throws(
+    () => normalizeTenantOperationalConfigFieldSelection(["baseConfig", "baseConfig"]),
+    /FIELD_SELECTOR_DUPLICATE:baseConfig/
+  );
+  assert.throws(
+    () => normalizeTenantOperationalConfigFieldSelection(["crmBusinessStatuses"]),
+    /FIELD_SELECTOR_UNSUPPORTED:crmBusinessStatuses/
+  );
 });
 
 test("owner-authorized CRA plan is closed and linked to the historical source", () => {
