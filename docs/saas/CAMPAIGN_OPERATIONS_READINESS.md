@@ -568,6 +568,43 @@ retorna à primeira página sem filtro. Ao iniciar processamento, a prévia deix
 ser exibida e o painel de acompanhamento permanece. Essas mudanças não alteram a
 seleção autenticada nem autorizam envio.
 
+## Campanha teste nov.03 — resultado de submissão desconhecido
+
+A leitura produtiva preservada em 05/11/2026 confirmou que a campanha chegou ao
+ordinal 588 e fechou a guarda global na geração 45. Existe a intenção durável
+`campaign.message.submit_started`, mas não existe `provider_accepted`, identificador
+Meta, `OutboundMessage` nem resultado terminal para esse ordinal. Os retornos Meta
+`131048` anteriores ocorreram depois de aceitações síncronas e não demonstram a
+causa do fechamento. A evidência disponível também não comprova o limite inicial
+de destinatários da Meta. Portanto, o ordinal 588 permanece **desconhecido**: não
+pode ser reenviado nem convertido em falha definitiva.
+
+Os reconciliadores anteriores só aceitam resultados conhecidos e não são aplicáveis
+a este incidente. A disposição versionada específica deve:
+
+1. reabrir seed, intenção de submissão, campanha, job e a única tarefa
+   `provider/persisting`, vinculando tenant, run, ordinal e geração da guarda;
+2. negar se surgir aceitação, outbound, resultado terminal ou qualquer drift;
+3. registrar `providerAcceptance=unknown`, `definitiveFailure=false`,
+   `retryAllowed=false`, `outboundMaterialized=false` e `providerCalls=0`;
+4. preservar status e contadores da campanha e o job suspenso;
+5. permitir arquivar somente a tarefa autenticada após verificação do receipt,
+   usando o motivo `durable_submission_uncertain_no_retry`;
+6. manter a guarda fechada. Reabertura e disposição dos destinatários restantes
+   continuam decisões posteriores e separadas.
+
+O fluxo é `dry-run` por padrão. `apply-sql` e `ack-task` exigem autorizações
+distintas; nenhuma fase chama o provedor. Nesta entrega não há aplicação produtiva,
+arquivamento de tarefa, reabertura da guarda ou retomada de campanha.
+
+As correções de audiência e apresentação associadas permanecem independentes da
+reconciliação: anonimizados ficam fora da prévia, criação estática e materialização
+dinâmica pelo mesmo read model canônico; o aviso de divisão usa mais de 1.000
+**elegíveis**, não o total bruto; há uma única ação de cancelamento; e a tabela
+“Situação real por mensagem” possui rolagem vertical e horizontal própria. A
+alternância visual posterior a um estado realmente incerto continua sem causa
+comprovada e não é declarada corrigida por essas mudanças.
+
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 
 Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`

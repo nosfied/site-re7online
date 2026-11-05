@@ -389,6 +389,14 @@ test("campaign audience split is explicit and creates only static numbered draft
   assert.ok(pageSource.includes("audienceSignature: audienceSplitPlan.audienceSignature"));
   assert.ok(pageSource.includes("requestId: audienceSplitRequestId"));
   assert.ok(pageSource.includes("Nenhuma mensagem será enviada ou agendada."));
+  assert.ok(pageSource.includes("audiencePreview.summary.eligible > 1000"));
+  assert.ok(!pageSource.includes("audiencePreview.summary.total > 1000"));
+});
+
+test("campaign execution keeps one cancel action and an independently scrollable result table", () => {
+  assert.equal((pageSource.match(/Cancelar campanha/g) ?? []).length, 1);
+  assert.ok(pageSource.includes('className="max-h-[32rem] overflow-auto"'));
+  assert.ok(pageSource.includes("renderCampaignResultTable(filteredCampaignResultItems)"));
 });
 
 test("campaign detail exposes batch group progress without bypassing tenant queue", () => {

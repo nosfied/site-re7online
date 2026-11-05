@@ -209,7 +209,7 @@ function archiveReconciledCampaignTask(params: {
   generation: number; taskId: string; reference: NonNullable<Task["reference"]>;
   expectedTaskHash: string; receiptId: string; actor: string;
 }, reason: "durable_failed_result_no_retry" | "durable_accepted_delivered_historical_crm_disposition_no_retry" |
-  "durable_accepted_failed_without_crm_no_retry") {
+  "durable_accepted_failed_without_crm_no_retry" | "durable_submission_uncertain_no_retry") {
   if (!params.actor.trim() || !params.receiptId.trim()) throw new Error("reconciliation_actor_receipt_required");
   locked(s => {
     const prior = s.audit.find(a => a.action === "provider_reconciled" && a.receiptId === params.receiptId);
@@ -250,6 +250,9 @@ export function acknowledgeAcceptedDeliveredCampaignTask(params: Parameters<type
 }
 export function acknowledgeAcceptedFailedWithoutCrmCampaignTask(params: Parameters<typeof archiveReconciledCampaignTask>[0]) {
   return archiveReconciledCampaignTask(params, "durable_accepted_failed_without_crm_no_retry");
+}
+export function acknowledgeSubmissionUncertainCampaignTask(params: Parameters<typeof archiveReconciledCampaignTask>[0]) {
+  return archiveReconciledCampaignTask(params, "durable_submission_uncertain_no_retry");
 }
 // Observation only: no mkdir/lock/write, no masked-open defaults. Used by the
 // offline recovery verifier, not by runtime admissions or drain certification.
