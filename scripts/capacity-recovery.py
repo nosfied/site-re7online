@@ -106,6 +106,12 @@ CRM_INACTIVE_STAGING_BINDINGS = {
         ],
     },
 }
+CRM_RELEASE_GRAPH_SOURCE_PATH = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-785bde80-vps-20261103T103429Z-api-frontend-ccb8f00c-v3-once/"
+    "generation-release-graph.final.private.json")
+CRM_RELEASE_GRAPH_SOURCE_SHA256 = (
+    "1e9623e4bae272074a73615dfc897f1b268de42fa262583d46dcc701eb4aee59")
 GIT = Path("/usr/bin/git")
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
@@ -1663,7 +1669,22 @@ def direct_release_graph_projection(source_path: Path, source_sha256: str) -> di
             "protectedGraphPaths": protected, "inventoryPaths": inventory}
 
 
-def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def crm_release_graph_source(candidates: Any) -> dict[str, str] | None:
+    if (not isinstance(candidates, list) or
+            len(candidates) != len(CRM_INACTIVE_STAGING_BINDINGS) or
+            any(not isinstance(item, dict) or
+                item.get("class") != "CLOSED_INACTIVE_CRM_STAGING_TREE" or
+                not isinstance(item.get("path"), str) for item in candidates) or
+            {item["path"] for item in candidates} != set(CRM_INACTIVE_STAGING_BINDINGS)):
+        return None
+    return {"path": str(CRM_RELEASE_GRAPH_SOURCE_PATH),
+            "sha256": CRM_RELEASE_GRAPH_SOURCE_SHA256}
+
+
+def capture_live_operational(
+        operational: dict[str, Any], *,
+        expected_direct_graph_source: dict[str, str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recapture mutable operational references while both canonical locks are held."""
     observations = operational["liveObservations"]
     current_paths: list[str] = []
@@ -1906,6 +1927,9 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
                 not isinstance(source_binding.get("path"), str) or
                 not SHA256.fullmatch(str(source_binding.get("sha256", "")))):
             deny("LIVE_RELEASE_GRAPH_SCHEMA")
+        if (expected_direct_graph_source is None or
+                source_binding != expected_direct_graph_source):
+            deny("LIVE_RELEASE_GRAPH_SOURCE_BINDING")
         expected_projection = direct_release_graph_projection(
             Path(source_binding["path"]), source_binding["sha256"])
         if graph_value != expected_projection:
@@ -3732,7 +3756,9 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     op_path, op_sha, op_raw, _ = load_binding(value["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
     telemetry("before_live_recapture")
-    operational, live_recapture = capture_live_operational(operational)
+    operational, live_recapture = capture_live_operational(
+        operational,
+        expected_direct_graph_source=crm_release_graph_source(value["candidates"]))
     telemetry("after_live_recapture")
     candidate_paths = [str(normalized_absolute(item.get("path"), "CANDIDATE_PATH"))
                        for item in value["candidates"] if isinstance(item, dict)]
@@ -3848,7 +3874,11 @@ def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
     priors: list[dict[str, Any]] = []
     telemetry("before_live_recapture")
     try:
-        operational, live_recapture = capture_live_operational(operational)
+        operational, live_recapture = capture_live_operational(
+            operational,
+            expected_direct_graph_source=crm_release_graph_source(
+                [item.get("source") for item in plan.get("candidates", [])
+                 if isinstance(item, dict)]))
     except Denied as exc:
         errors.append(str(exc))
     telemetry("after_live_recapture")

@@ -929,3 +929,9 @@ adicionados, binding divergente e drift negam. Regressões atravessam o audit CR
 comprovam que entradas apenas inventariadas chegam à autenticação, enquanto a
 omissão de um ativo nega antes de chamar o autenticador das árvores. Isso ainda
 não qualifica bytes na VPS nem autoriza outra janela.
+
+O binding também é autoridade no executor: schema 3 direto só é aceito para o
+lote literal `ea3/d41` e para o caminho/SHA canônicos do grafo final `785bde80`.
+Uma fonte substituta com SHA válido e projeção coerente é negada antes da
+autenticação dos candidatos. O ganho qualificado permanece em zero até um audit
+produtivo próprio.

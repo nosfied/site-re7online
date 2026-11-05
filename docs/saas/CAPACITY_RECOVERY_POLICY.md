@@ -966,3 +966,10 @@ antes de recapturar processos ou avaliar candidatos. Omissão, acréscimo, fonte
 divergente ou SHA incorreto negam. Current, PM2, dump, transações e referências
 por processo continuam sendo gates frescos separados; inventário não equivale a
 proteção operacional.
+
+Schema 3 direto não é uma entrada de grafo livre. O executor o admite somente
+quando o request e as recapturas contêm exatamente os candidatos literais `ea3`
+e `d41`, e exige o caminho e o SHA canônicos do grafo final `785bde80` fixados no
+próprio consumidor. Uma fonte alternativa, ainda que tenha SHA válido e uma
+projeção internamente coerente, termina em
+`LIVE_RELEASE_GRAPH_SOURCE_BINDING` antes da autenticação dos candidatos.

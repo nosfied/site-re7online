@@ -630,6 +630,8 @@ class CapacityRecoveryTests(unittest.TestCase):
                        "protectedGraphPaths": projection["protectedGraphPaths"]}
         with mock.patch.multiple(MODULE, CRM_STAGING_ROOT=incoming,
                                  CRM_INACTIVE_STAGING_BINDINGS=bindings,
+                                 CRM_RELEASE_GRAPH_SOURCE_PATH=source_graph,
+                                 CRM_RELEASE_GRAPH_SOURCE_SHA256=sha(source_graph),
                                  RELEASES_ROOT=self.releases), \
                 mock.patch.object(MODULE, "deploy_identity",
                                   return_value=(os.geteuid(), os.getegid())):
@@ -682,6 +684,25 @@ class CapacityRecoveryTests(unittest.TestCase):
                     self.process_patch(), \
                     self.assertRaisesRegex(MODULE.Denied,
                                            "LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE"):
+                MODULE.audit_request(self.request, sha(self.request), self.plan)
+            authenticate.assert_not_called()
+
+            alternate_graph = self.base / "alternate-crm-source-rich-graph.private.json"
+            alternate_value = json.loads(source_graph.read_text())
+            alternate_value["activeReleases"] = []
+            alternate_value["rollbackReleases"] = []
+            alternate_value.pop("immediateRollbackReleases")
+            private_json(alternate_graph, alternate_value)
+            with mock.patch.object(MODULE, "RELEASES_ROOT", self.releases):
+                alternate_projection = MODULE.direct_release_graph_projection(
+                    alternate_graph, sha(alternate_graph))
+            private_json(self.release_graph, alternate_projection)
+            self.write_operational()
+            private_json(self.request, self.request_value(requested))
+            with mock.patch.object(MODULE, "_authenticate_crm_staging_tree") as authenticate, \
+                    self.process_patch(), \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "LIVE_RELEASE_GRAPH_SOURCE_BINDING"):
                 MODULE.audit_request(self.request, sha(self.request), self.plan)
             authenticate.assert_not_called()
 
