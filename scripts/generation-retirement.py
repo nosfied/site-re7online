@@ -3072,7 +3072,10 @@ def execute(args: argparse.Namespace) -> None:
             not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
         deny("authorization_invalid")
     commands = validate_intent(intent, operational, args.root_policy_sha256)
-    if intent.get("operationalStateSha256") != args.operational_state_sha256:
+    if (any(isinstance(artifact, dict) and
+            artifact.get("class") == INACTIVE_STAGING_CLASS
+            for artifact in intent.get("artifacts", [])) and
+            intent.get("operationalStateSha256") != args.operational_state_sha256):
         deny("intent_operational_state")
     if not isinstance(commands, list) or authorization.get("approvedPaths") != [item["path"] for item in commands]:
         deny("authorization_scope")
