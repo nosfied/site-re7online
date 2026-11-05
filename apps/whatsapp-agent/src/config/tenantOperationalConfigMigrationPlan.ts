@@ -1,4 +1,6 @@
 export const OWNER_AUTHORIZED_DB_IDENTITY = "OWNER_AUTHORIZED_DB_IDENTITY" as const;
+export const TENANT_OPERATIONAL_CONFIG_FIELD_SELECTION = ["baseConfig"] as const;
+export type TenantOperationalConfigFieldSelection = typeof TENANT_OPERATIONAL_CONFIG_FIELD_SELECTION[number];
 
 export type OwnerAuthorizedBaseConfig = {
   allowlist: string[];
@@ -38,6 +40,24 @@ export function normalizeTenantOperationalConfigSelection(values: readonly strin
     throw new Error(`TENANT_OPERATIONAL_CONFIG_SELECTOR_DUPLICATE:${[...new Set(duplicates)].sort().join(",")}`);
   }
   return [...normalized].sort();
+}
+
+export function normalizeTenantOperationalConfigFieldSelection(
+  values: readonly string[]
+): TenantOperationalConfigFieldSelection[] {
+  if (values.length === 0) throw new Error("TENANT_OPERATIONAL_CONFIG_FIELD_SELECTOR_EMPTY");
+  const normalized = values.map((value) => value.trim());
+  if (normalized.some((value) => !value)) throw new Error("TENANT_OPERATIONAL_CONFIG_FIELD_SELECTOR_EMPTY");
+  const duplicates = normalized.filter((value, index) => normalized.indexOf(value) !== index);
+  if (duplicates.length > 0) {
+    throw new Error(`TENANT_OPERATIONAL_CONFIG_FIELD_SELECTOR_DUPLICATE:${[...new Set(duplicates)].sort().join(",")}`);
+  }
+  const allowed = new Set<string>(TENANT_OPERATIONAL_CONFIG_FIELD_SELECTION);
+  const unsupported = normalized.filter((value) => !allowed.has(value));
+  if (unsupported.length > 0) {
+    throw new Error(`TENANT_OPERATIONAL_CONFIG_FIELD_SELECTOR_UNSUPPORTED:${unsupported.sort().join(",")}`);
+  }
+  return normalized as TenantOperationalConfigFieldSelection[];
 }
 
 export function validateTenantOperationalConfigPlan(params: {

@@ -136,6 +136,16 @@ A ordem obrigatória para uma futura intervenção produtiva é:
    tenant inexistente, e limita readiness, dívidas e warnings ao lote;
 9. somente então produzir build e ativar após autorização explícita.
 
+O comportamento padrão do backfill funcional continua atualizando o conjunto
+integral de campos gerenciados. Quando uma revisão comprovar que somente a
+configuração base pode mudar, o comando admite exclusivamente
+`--tenant <tenant> --field baseConfig`. O seletor de campo exige exatamente um
+tenant, rejeita campo vazio, duplicado ou diferente de `baseConfig`, mantém a
+autenticação da fonte e todos os gates de identidade Meta, e publica
+`selectedFields=["baseConfig"]` no relatório. O `dry-run` precisa retornar
+`fieldsChanged=["baseConfig"]` antes de qualquer aplicação. O seletor ausente
+preserva integralmente o comportamento anterior.
+
 Sem `--tenant`, o retirement check preserva o gate global integral. Com seleção,
 uma dívida de configuração de tenant fora do lote não torna o resultado falso,
 mas a varredura de usos `runtime_critical`/`onboarding` de `tenants.json` continua
