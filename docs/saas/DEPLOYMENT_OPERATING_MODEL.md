@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API+FRONTEND 785BDE80 DEPLOYED_SANITIZED EM 03/11/2026 / WORKER E2E7 PRESERVADO**
+**Status: CANÔNICO / API+FRONTEND 17CC77A8 DEPLOYED_SANITIZED EM 05/11/2026 / WORKER E2E7 PRESERVADO**
 
 Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação. Os comandos executáveis estão
@@ -326,9 +326,9 @@ A release 911a9708 substituiu API e frontend, preservou o worker e terminou com
 retenção 3/3; agora é o retorno autenticado da geração 785bde80.
 
 O estado ativo está autenticado por
-[`CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json).
-A release 785bde80 ativou API+frontend, preservou worker e retorno 911a, executou
-um único `pm2 save` e encerrou retenção 3/3. O registro não comprova adoção do
-adapter de `preparations`; essa frente permanece separada. A validação funcional
-de novo rascunho não inclui envio, agendamento ou reparo silencioso do rascunho
-histórico.
+[`CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
+A release 17cc77a8 ativou API+frontend, preservou worker e retorno 785bde80,
+executou um único `pm2 save` e encerrou retenção 3/3. O registro não comprova
+adoção do adapter de `preparations`; essa frente permanece separada. A posição 3
+da campanha nov.02 possui somente dry-run: aplicar a reconciliação, arquivar a
+tarefa e reabrir a guarda continuam atos independentes e não autorizados.

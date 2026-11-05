@@ -520,9 +520,19 @@ Na execução, `conversation_resolved` apenas vinculou a conversa existente; nã
 evento de criação ou reativação pela campanha. O telefone veio do inbound
 normalizado e foi copiado para `Lead.phone`, `waIdCanonical` e `waId`. A campanha
 então submeteu o mesmo destinatário ao provedor. Essa cronologia sustenta a
-reconciliação histórica separada, mas não autoriza retomada. O dry-run produtivo
-não foi executado: o reconciliador proposto ainda não está implantado, e as provas
-locais não substituem a recaptura dos bindings privados.
+reconciliação histórica separada, mas não autoriza retomada.
+
+Em 05/11/2026, já sob a release integrada `17cc77a8`, o Codex local recapturou os
+bindings privados e executou somente o `dry-run` do reconciliador real. A guarda
+permaneceu fechada na geração 42, com uma tarefa; `providerCalls=0`, os dois
+resultados anteriores foram preservados e 960 destinatários permaneceram
+pendentes. Bindings SHA-256
+`dc67b3ebb9fb188d382c83b12dc5cdf44e7031dea9b87365aeb2658924fa1ad3`;
+plano SHA-256
+`bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde`.
+Não houve `apply-sql`, arquivamento da tarefa, abertura da guarda, chamada ao
+provedor ou continuidade da campanha. Cada ato posterior exige revisão e
+autorização próprias.
 
 A interface proposta pesquisa a lista gerada no conjunto integral no servidor,
 mantém `Carregar mais` acumulativo e deduplicado dentro de uma área com rolagem

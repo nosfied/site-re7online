@@ -1,32 +1,32 @@
 # Estado canônico do Converta
 
-**DEPLOYED_SANITIZED / CAMPAIGN DRAFT RECOVERY ACTIVE / PRODUCTION HEALTHY**
+**DEPLOYED_SANITIZED / CAMPAIGN RECIPIENT CONTINUITY ACTIVE / PRODUCTION HEALTHY**
 
-## Estado vigente — recuperação de rascunhos 785bde80 concluída
+## Estado vigente — continuidade de campanhas 17cc77a8 concluída
 
-Fonte: execução e verificação canônicas do Codex local em 03/11/2026.
+Fonte: execução canônica e recaptura somente leitura do Codex local em 05/11/2026.
 
-A release API+frontend `immutable-785bde80-vps-20261103T103429Z`, target
-`785bde80cb8bacbbf6375337dd169247738ab0f9`, está `DEPLOYED_SANITIZED`.
+A release API+frontend `immutable-17cc77a8-vps-20261104T141039Z`, target
+`17cc77a8f1200ed970097c9c83444e4cad874a1a`, está `DEPLOYED_SANITIZED`.
 API e frontend apontam para a release, health local/público passou, e o worker
-`e2e7f17a` foi preservado sem restart. A release anterior `911a9708` permanece
+`e2e7f17a` foi preservado sem restart. A release anterior `785bde80` permanece
 como retorno autenticado.
 Os caminhos estáveis são `/opt/re7online/current/api` e
 `/opt/re7online/current/frontend`; o frontend permanece `fork_mode`, BUILD_ID
-`k1SJGEhHYRXzqEZOLjlpA`.
+`t7OOSSjRAmYSuPobO3mQA`.
 
 A finalização executou um único `pm2 save`, validou o dump
-`748ee3baf55e50d5746dfe88932384383dde18cc4ea1d8bcd813c2434c42733c`,
+`b44f2a81926072508f7d56670d9a538629935fa26afb1280dcb6b8f6450c52cb`,
 criou o marker, retirou 3/3 derivados e encerrou o lock canônico. Registro:
-[CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json).
+[CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
 
 Não repetir build, instalação, ativação, save ou retenção dessa geração. O saldo
-terminal foi 8.925.216.768 bytes. A alocação retirada foi 2.008.825.856 bytes;
-o aumento líquido observado foi 1.984.036.864 bytes. São métricas distintas e o
-saldo é checkpoint histórico, não capacidade reservada. A validação funcional de
-um novo rascunho confirmou 963 destinatários persistidos; a execução dessa campanha
-é um incidente separado, descrito abaixo. A adoção do adapter de `preparations`
-continua uma frente separada.
+do pós-check somente leitura foi 8.448.696.320 bytes e 8.760.179 inodes. A alocação
+retirada foi 2.009.059.328 bytes; o aumento líquido observado na janela foi
+1.994.584.064 bytes. São métricas distintas, tomadas em checkpoints distintos, e
+o saldo não é capacidade reservada. O índice autenticado contém 34.374 entradas:
+30.947 arquivos, 3.386 diretórios e 41 symlinks. A adoção do adapter de
+`preparations` continua uma frente separada.
 
 ### Validação funcional posterior — criação integral e incidente de execução
 
@@ -40,6 +40,17 @@ não desfaz a validação da criação e não constitui aceite funcional do runn
 campanha, sua suspensão e os registros das posições 1–3 permanecem preservados;
 este fechamento não autoriza retomada, reenvio, agendamento nem reconstrução de
 destinatários.
+
+Em 05/11/2026, o reconciliador integrado executou somente o `dry-run` da posição
+3. Os bindings recapturados têm SHA-256
+`dc67b3ebb9fb188d382c83b12dc5cdf44e7031dea9b87365aeb2658924fa1ad3` e o
+plano resultante tem SHA-256
+`bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde`.
+A guarda permaneceu fechada na geração 42, com uma tarefa; o plano preserva os
+dois resultados anteriores, registra 960 destinatários restantes e realizou zero
+chamadas ao provedor. Nenhuma reconciliação foi aplicada, a tarefa não foi
+arquivada e a guarda não foi reaberta. Esses três atos continuam separados e
+dependem de revisão/autorização próprias.
 
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 
