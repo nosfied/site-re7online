@@ -2753,7 +2753,6 @@ class GenerationRetirementTest(unittest.TestCase):
                           release_id="inactive-staging-disposition")
         try:
             incoming = fixture.root / "incoming"; incoming.mkdir(mode=0o700)
-            transactions = fixture.root / "transactions"; transactions.mkdir(mode=0o700)
             bindings = {}
             candidates = []
             for index, label in enumerate(("candidate", "return"), 1):
@@ -2823,13 +2822,6 @@ class GenerationRetirementTest(unittest.TestCase):
             private_json(fixture.contract, contract)
             operational = json.loads(fixture.operational.read_text())
             operational["installedVerifiedReleases"] = [item.name for item in candidates]
-            operational["inactiveStagingSafety"] = {
-                "procObserver": {"path": str(MODULE.PROC_OBSERVER_PATH),
-                                 "sha256": "a" * 64},
-                "transactionsRoot": {"path": str(transactions),
-                                     "ownerUid": os.geteuid(), "groupGid": os.getegid(),
-                                     "allowedModes": ["0700"]},
-            }
             graph = json.loads(fixture.graph.read_text())
             graph["installedVerifiedReleases"] = operational["installedVerifiedReleases"]
             private_json(fixture.graph, graph)
@@ -2843,60 +2835,8 @@ class GenerationRetirementTest(unittest.TestCase):
                 "--deployment-lock", str(fixture.deploy_lock), "--intent-output", str(fixture.intent),
                 "--commands-output", str(fixture.commands), "--review-output", str(fixture.review),
                 "--reviewer", "fixture-owner", "--reason", "inactive staging fixture"])
-            def process_ok(_binding, _paths, phase):
-                return {"requestSha256": "b" * 64, "responseSha256": "c" * 64,
-                        "capturedAtNs": 1, "finishedAtNs": 2,
-                        "summary": {"phase": phase, "complete": True}}
-            def observer_result(observation, state="COMPLETE"):
-                def runner(_argv, **kwargs):
-                    request = json.loads(kwargs["input"]); now = MODULE.time.time_ns()
-                    response = {
-                        "schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION",
-                        "state": state, "phase": request["phase"],
-                        "nonce": request["nonce"],
-                        "requestSha256": hashlib.sha256(kwargs["input"]).hexdigest(),
-                        "candidatePaths": request["candidatePaths"],
-                        "deployUid": request["deployUid"], "consumer": request["consumer"],
-                        "mechanism": {"path": str(MODULE.PROC_OBSERVER_PATH),
-                                      "sha256": "a" * 64},
-                        "capturedAtNs": now, "finishedAtNs": now, "durationMs": 0,
-                        "observation": observation,
-                    }
-                    return subprocess.CompletedProcess(_argv, 0, MODULE.canonical(response), b"")
-                return runner
-            clean_observation = {
-                "complete": True, "references": [], "activeWriters": [], "failures": [],
-                "failureDetailsTruncated": 0, "summary": {"processesObserved": 2},
-            }
-            with patch.object(MODULE, "_proc_start_ticks", return_value=1), \
-                    patch.object(MODULE.subprocess, "run",
-                                 side_effect=observer_result(
-                                     {**clean_observation, "complete": False,
-                                      "failures": [{"predicate": "unreadable"}]},
-                                     "INCOMPLETE")), \
-                    self.assertRaisesRegex(
-                        MODULE.Denied, "inactive_staging_process_observation_incomplete"):
-                MODULE._inactive_staging_process_observation(
-                    operational["inactiveStagingSafety"]["procObserver"],
-                    [str(item) for item in candidates], "prepare")
-            outside_reference = {
-                "candidatePath": str(candidates[0]), "pid": 99, "startTicks": 3,
-                "source": "fd/7", "target": str(candidates[0] / "payload.js"),
-            }
-            with patch.object(MODULE, "_proc_start_ticks", return_value=1), \
-                    patch.object(MODULE.subprocess, "run",
-                                 side_effect=observer_result(
-                                     {**clean_observation,
-                                      "references": [outside_reference]})), \
-                    self.assertRaisesRegex(MODULE.Denied,
-                                           "inactive_staging_process_reference"):
-                MODULE._inactive_staging_process_observation(
-                    operational["inactiveStagingSafety"]["procObserver"],
-                    [str(item) for item in candidates], "prepare")
             with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
                     patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
-                    patch.object(MODULE, "_inactive_staging_process_observation",
-                                 side_effect=process_ok), \
                     redirect_stdout(io.StringIO()):
                 MODULE.prepare(args)
             intent = json.loads(fixture.intent.read_text())
@@ -2946,51 +2886,12 @@ class GenerationRetirementTest(unittest.TestCase):
             private_json(fixture.graph, graph_changed)
             with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
                     patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
-                    patch.object(MODULE, "_inactive_staging_process_observation",
-                                 side_effect=process_ok), \
                     self.assertRaisesRegex(MODULE.Denied, "private_hash:release-graph"):
                 MODULE.execute(execute_args)
             self.assertTrue(all(candidate.is_dir() for candidate in candidates))
             fixture.graph.write_bytes(graph_before)
-
-            for predicate in ("inactive_staging_process_observation_incomplete",
-                              "inactive_staging_process_reference"):
-                receipt_root.mkdir(mode=0o700)
-                shutil.rmtree(receipt_root)
-                with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
-                        patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
-                        patch.object(MODULE, "_inactive_staging_process_observation",
-                                     side_effect=MODULE.Denied(predicate)), \
-                        self.assertRaisesRegex(MODULE.Denied, predicate):
-                    MODULE.execute(execute_args)
-                self.assertTrue(all(candidate.is_dir() for candidate in candidates))
-                if receipt_root.exists():
-                    journal = receipt_root / "command-results.private.jsonl"
-                    self.assertNotIn(b'"event":"ATTEMPT"',
-                                     journal.read_bytes() if journal.exists() else b"")
-
-            original_transactions = MODULE._inactive_staging_transactions
-            prepared_transactions = intent["inactiveStagingSafety"]["transactions"]
-            def transaction_appeared(definition):
-                value = original_transactions(definition)
-                return {**value, "entries": value["entries"] + 1,
-                        "relationSha256": "d" * 64}
             with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
                     patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
-                    patch.object(MODULE, "_inactive_staging_process_observation",
-                                 side_effect=process_ok), \
-                    patch.object(MODULE, "_inactive_staging_transactions",
-                                 side_effect=transaction_appeared), \
-                    self.assertRaisesRegex(
-                        MODULE.Denied,
-                        "inactive_staging_transactions_changed_after_prepare"):
-                MODULE.execute(execute_args)
-            self.assertEqual(prepared_transactions["entries"], 0)
-            self.assertTrue(all(candidate.is_dir() for candidate in candidates))
-            with patch.object(MODULE, "CRM_STAGING_ROOT", str(incoming)), \
-                    patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings), \
-                    patch.object(MODULE, "_inactive_staging_process_observation",
-                                 side_effect=process_ok), \
                     redirect_stdout(io.StringIO()):
                 MODULE.execute(execute_args)
             self.assertTrue(all(not candidate.exists() for candidate in candidates))

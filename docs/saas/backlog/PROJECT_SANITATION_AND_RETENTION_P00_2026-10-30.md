@@ -912,13 +912,6 @@ aos dois caminhos e às authorities preservadas. `prepare` reautentica a cadeia 
 a árvore inteira e pode selar no máximo dois comandos literais `rm -r --`.
 Drift, material protegido, referência recapturada em current/PM2/dump/grafo
 protegido, binding selado de transação/dependência ou authority divergente nega.
-Além disso, o contrato exige o observador `/proc` privilegiado autenticado e uma
-raiz de transações física autenticada. O `prepare`, sob o writer lock, exige
-observação completa sem referência ou writer e sela a relação integral da raiz de
-transações. O `execute`, sob writer lock e lock canônico, repete ambas as provas e
-faz uma segunda observação imediatamente antes do primeiro `ATTEMPT`; observação
-incompleta, referência fora do PM2 ou qualquer drift da relação de transações
-nega com zero comandos executados.
 O ensaio usa
 somente fixtures sintéticas; suporte implementado e ensaiado não equivale a lote
 produtivo qualificado, intenção, autorização ou retirada. O ganho qualificado
@@ -927,16 +920,15 @@ permanece zero até integração, materialização canônica e recaptura operaci
 Os locks existentes têm alcance cooperativo, não global. O writer lock serializa
 `converta-release.py` e `generation-retirement.py`; o lock canônico serializa o
 driver/finalizador de deploy e a retirada. Eles não impedem um processo arbitrário
-de abrir ou usar uma árvore e o produtor histórico não adquiriu esses locks. Essa
-lacuna não é inferida como ausente: a nova prova reutiliza a varredura completa de
-`/proc/<pid>/{cmdline,cwd,root,exe,fd,maps}` do observador privilegiado, limitada aos
-dois caminhos literais. Os produtores canônicos de deploy/transação ficam excluídos
-pelos locks; mudanças na raiz autenticada são detectadas pela relação recapturada.
-Processos não cooperativos continuam cobertos pela observação completa imediatamente
-anterior ao efeito.
+de abrir ou usar uma árvore, nem provam que o produtor histórico — que não adquiriu
+esses locks — permaneceu inativo. As duas capturas de `current`, PM2, dump e grafo
+também não recapturam `dependencies`/transações, que continuam seladas no request.
 
-O suporte está implementado e ensaiado localmente, mas os `1.299.951.616 bytes`
-continuam com ganho qualificado zero: ainda faltam integração, instalação autenticada
-do helper sucessor, materialização do binding real da raiz de transações e observação
-produtiva completa. Nenhuma dessas provas pode ser substituída pelas duas fotografias
-iguais ou pelos locks isoladamente.
+Em particular, `generation-retirement.py` não faz a varredura completa de
+`/proc/<pid>/{cmdline,cwd,root,exe,fd,maps}` que já existe no observador privilegiado
+do `capacity-recovery.py`. Portanto este draft não comprova ausência de referências
+fora do PM2 e não qualifica os `1.299.951.616 bytes` para produção. Antes de uma
+intenção produtiva, a montagem operacional precisa demonstrar uma observação completa
+e recapturável de processos e transações sob os mesmos caminhos literais, ou o gate
+permanece fechado. Não é permitido inferir essa ausência apenas dos locks ou das
+duas fotografias iguais.

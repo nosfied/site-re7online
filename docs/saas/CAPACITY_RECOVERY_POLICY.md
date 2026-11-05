@@ -498,10 +498,6 @@ runtimes `api-runtime`/`frontend-runtime` no layout fechado
 fechados da classe `CLOSED_PREPARATION_DERIVED_ARCHIVE` e os três caminhos
 literais do manifesto versionado
 `config/capacity-recovery/closed-preparation-manifest-disposition.v1.json`.
-Para a disposição fechada `INACTIVE_STAGING_TREE`, aceita ainda somente as árvores
-literais `/opt/re7online/releases/crm-csv-front-ea3d2788-20261016` e
-`/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016`; nenhum outro
-descendente de `releases` é admitido por essa classe.
 `/`, raízes, ancestrais genéricos, outros descendentes e caminhos externos são
 negados antes da varredura.
 

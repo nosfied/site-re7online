@@ -57,10 +57,6 @@ DEPLOY_CONTROL_DERIVED_PATHS = {
     "/opt/re7online/deploy-control/ef7db111-prep/.next",
     "/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist",
 }
-INACTIVE_CRM_STAGING_PATHS = {
-    "/opt/re7online/releases/crm-csv-front-ea3d2788-20261016",
-    "/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016",
-}
 PF_KTHREAD = 0x00200000
 
 
@@ -147,8 +143,6 @@ def canonical_candidate(value: Any) -> str:
     if candidate in MANIFEST_DISPOSITION_PATHS:
         return candidate
     if candidate in DEPLOY_CONTROL_DERIVED_PATHS:
-        return candidate
-    if candidate in INACTIVE_CRM_STAGING_PATHS:
         return candidate
     path = Path(candidate)
     try:
