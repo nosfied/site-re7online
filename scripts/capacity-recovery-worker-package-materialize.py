@@ -31,7 +31,7 @@ WORKER_INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab0992473
 EF7_HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
 EF7_INSTALLER_SHA256 = "757dc2f20e649a985d36fa5a82b32e2273efeb9ffea9cd62f45757dcf8073785"
 CRM_HELPER_SHA256 = "fb83ba7c15fbac564a4bbe0d7d1bfd0d0a8ba2e79231d8b133e67b12a8c86d6f"
-CRM_INSTALLER_SHA256 = "f1a7a05be25b255a42e0e4d2937bb9e5ef3db5c6af23f76a8727341aefbe45f2"
+CRM_INSTALLER_SHA256 = "5da1b6457b6cc8ad70f272fb673922dbdc89040b306b85278e43ce74455ccbb5"
 # Compatibility names retain the proven worker profile for callers/tests that
 # invoke helper_binding() without an explicit profile contract.
 HELPER_SHA256 = WORKER_HELPER_SHA256

@@ -1678,6 +1678,88 @@ class CapacityRecoveryTests(unittest.TestCase):
             installer.install()
         opened.assert_not_called()
 
+    def test_crm_installer_recovers_exact_successor_without_replacement(self):
+        installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-crm-staging.py")
+        spec = importlib.util.spec_from_file_location("recoverable_crm_installer",
+                                                      installer_path)
+        installer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(installer)
+        source_raw = b"closed crm helper"
+        source_sha = hashlib.sha256(source_raw).hexdigest()
+        root_info = SimpleNamespace(st_dev=1, st_ino=2,
+            st_mode=stat.S_IFREG | 0o600, st_uid=0, st_gid=0, st_size=1,
+            st_mtime_ns=1, st_ctime_ns=1, st_nlink=1)
+        sudoers_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 3,
+            "st_mode": stat.S_IFREG | 0o440})
+        successor_info = SimpleNamespace(**{**root_info.__dict__, "st_dev": 64769,
+            "st_ino": 900001, "st_mode": stat.S_IFREG | 0o500,
+            "st_size": len(source_raw)})
+        parent_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 4,
+            "st_mode": stat.S_IFDIR | 0o755})
+        with mock.patch.multiple(installer, SOURCE_SHA256=source_sha), \
+                mock.patch.object(installer.os, "geteuid", return_value=0), \
+                mock.patch.object(installer.os, "getegid", return_value=0), \
+                mock.patch.object(installer, "stable_regular", side_effect=[
+                    (source_raw, root_info), (b"sudoers", sudoers_info),
+                    (source_raw, successor_info), (source_raw, successor_info)]), \
+                mock.patch.object(Path, "lstat", return_value=parent_info), \
+                mock.patch.object(installer.os, "open") as opened, \
+                mock.patch.object(installer.os, "replace") as replaced:
+            result = installer.install()
+        opened.assert_not_called(); replaced.assert_not_called()
+        self.assertEqual(result["installationState"], "RECOVERED_ALREADY_INSTALLED")
+        self.assertEqual(result["sha256"], source_sha)
+        self.assertEqual(result["identity"], {"device": 64769, "inode": 900001,
+            "uid": 0, "gid": 0, "mode": "0500"})
+        lines = installer.result_lines(result)
+        self.assertEqual(lines[0],
+            f"RECOVERED|{installer.TARGET}|{source_sha}|0:0|0500|64769:900001")
+        self.assertTrue(lines[1].startswith("PRESERVED|"))
+        self.assertFalse(any(line.startswith(("BEFORE|", "INSTALLED|")) for line in lines))
+        changed_inode = SimpleNamespace(**{**successor_info.__dict__, "st_ino": 900003})
+        with mock.patch.multiple(installer, SOURCE_SHA256=source_sha), \
+                mock.patch.object(installer.os, "geteuid", return_value=0), \
+                mock.patch.object(installer.os, "getegid", return_value=0), \
+                mock.patch.object(installer, "stable_regular", side_effect=[
+                    (source_raw, root_info), (b"sudoers", sudoers_info),
+                    (source_raw, successor_info), (source_raw, changed_inode)]), \
+                mock.patch.object(Path, "lstat", return_value=parent_info), \
+                mock.patch.object(installer.os, "open") as opened, \
+                self.assertRaisesRegex(RuntimeError, "TARGET_IDENTITY"):
+            installer.install()
+        opened.assert_not_called()
+
+    def test_crm_installer_does_not_recover_successor_with_identity_drift(self):
+        installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-crm-staging.py")
+        spec = importlib.util.spec_from_file_location("drifted_crm_installer", installer_path)
+        installer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None; spec.loader.exec_module(installer)
+        source_raw = b"closed crm helper"
+        source_sha = hashlib.sha256(source_raw).hexdigest()
+        root_info = SimpleNamespace(st_dev=1, st_ino=2,
+            st_mode=stat.S_IFREG | 0o600, st_uid=0, st_gid=0, st_size=1,
+            st_mtime_ns=1, st_ctime_ns=1, st_nlink=1)
+        sudoers_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 3,
+            "st_mode": stat.S_IFREG | 0o440})
+        drifted = SimpleNamespace(**{**root_info.__dict__, "st_dev": 64769,
+            "st_ino": 900002, "st_mode": stat.S_IFREG | 0o500,
+            "st_uid": 1000, "st_gid": 1000, "st_size": len(source_raw)})
+        parent_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 4,
+            "st_mode": stat.S_IFDIR | 0o755})
+        with mock.patch.multiple(installer, SOURCE_SHA256=source_sha), \
+                mock.patch.object(installer.os, "geteuid", return_value=0), \
+                mock.patch.object(installer.os, "getegid", return_value=0), \
+                mock.patch.object(installer, "stable_regular", side_effect=[
+                    (source_raw, root_info), (b"sudoers", sudoers_info),
+                    (source_raw, drifted)]), \
+                mock.patch.object(Path, "lstat", return_value=parent_info), \
+                mock.patch.object(installer.os, "open") as opened, \
+                self.assertRaisesRegex(RuntimeError, "PREVIOUS_HELPER_NOT_ALLOWED"):
+            installer.install()
+        opened.assert_not_called()
+
     def test_ef7_materializer_schema3_to_real_audit_outside_checkout(self):
         fixture = self.ef7_fixture("ef7-materializer-e2e")
         custody = fixture["base"] / "custody"
