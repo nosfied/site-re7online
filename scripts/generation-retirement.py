@@ -9,8 +9,7 @@ import fcntl
 import hashlib
 import json
 import os
-import posixpath
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 import stat
 import subprocess
@@ -43,42 +42,11 @@ TERMINAL_RELEASE_JOURNAL = {
 PRESERVE_CLASSES = {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "PRIVATE_DATA_NEVER_RETIRE"}
 F160_CACHE_CLASS = "EPHEMERAL_RUNTIME_CACHE"
 DERIVED_CLASSES = {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING"}
-INACTIVE_STAGING_CLASS = "INACTIVE_STAGING_TREE"
-RETIRABLE_CLASSES = DERIVED_CLASSES | {"RELEASE_RUNTIME", INACTIVE_STAGING_CLASS}
+RETIRABLE_CLASSES = DERIVED_CLASSES | {"RELEASE_RUNTIME"}
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
 POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
-CRM_STAGING_ROOT = "/opt/re7online/backups/converta-persistent/preparations/csv-staging-incoming-20261016T092610Z"
-CRM_INACTIVE_STAGING_BINDINGS = {
-    "/opt/re7online/releases/crm-csv-front-ea3d2788-20261016": {
-        "authorityName": "frontend-candidate", "allocatedBytes": 642396160,
-        "archiveSha256": "ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed",
-        "archiveBytes": 174314812,
-        "manifestSha256": "5ef8ae4c1628b843bac57825742797f1fcce9835c9226c8f959da3fa0a89b176",
-        "incomingIndexSha256": "7b26f0a8718a36df233263f403424e519630fd4c99821bbc770a6023c9a6adf3",
-        "stagingReceiptSha256": "f8027069f56a032ae77820cd4453199a504ed431feed59fa5228d899bad2167d",
-        "relationSha256": "892ec66bb2926de81445a5a24ceecc495491dd2067f85459f68865e3ed34d5b9",
-        "modeTransition": {"from": 0o664, "to": 0o644, "count": 854},
-        "blockDeltas": [],
-    },
-    "/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016": {
-        "authorityName": "frontend-compatible-return", "allocatedBytes": 657555456,
-        "archiveSha256": "d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431",
-        "archiveBytes": 177450139,
-        "manifestSha256": "efe64f452db1a5575a7a688c5b57175fe3b25fdcaec91ed432df7a3a3ab853de",
-        "incomingIndexSha256": "7b26f0a8718a36df233263f403424e519630fd4c99821bbc770a6023c9a6adf3",
-        "stagingReceiptSha256": "f8027069f56a032ae77820cd4453199a504ed431feed59fa5228d899bad2167d",
-        "relationSha256": "843cf2039e0c2d6a6323ff7d48482febbd97aab5ebac6615a5321a783566f491",
-        "modeTransition": {"from": 0o664, "to": 0o644, "count": 58},
-        "blockDeltas": [
-            {"path": "node_modules/@next/swc-linux-x64-gnu/next-swc.linux-x64-gnu.node",
-             "manifest": 114851840, "observed": 114847744},
-            {"path": "node_modules/@next/swc-linux-x64-musl/next-swc.linux-x64-musl.node",
-             "manifest": 114814976, "observed": 114810880},
-        ],
-    },
-}
 A959_RETENTION_EVENT_SCHEMAS = {
     "ATTEMPT": frozenset({"event", "kind", "ordinal", "path", "result"}),
     "RESULT": frozenset({"event", "exitCode", "inspectionPath", "inspectionSha256", "kind",
@@ -422,12 +390,7 @@ def validate_contract(value: dict[str, Any]) -> None:
     is_f160 = (value["releaseId"] == "immutable-f1602787-vps-20261026T174702Z" and
                value["targetCommit"] ==
                LEGACY_D436_F160_BINDINGS[value["releaseId"]]["targetCommit"])
-    has_inactive_staging = any(isinstance(item, dict) and
-                               item.get("class") == INACTIVE_STAGING_CLASS
-                               for item in value.get("artifacts", []))
     expected_classes = PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"}
-    if has_inactive_staging:
-        expected_classes.add(INACTIVE_STAGING_CLASS)
     if is_f160:
         expected_classes.add(F160_CACHE_CLASS)
     if value.get("classes") != sorted(expected_classes):
@@ -440,7 +403,6 @@ def validate_contract(value: dict[str, Any]) -> None:
     authenticated_retention_paths: set[str] = set()
     a959_overlay_paths: set[str] = set()
     f160_cache_paths: set[str] = set()
-    inactive_staging_paths: set[str] = set()
     retention_binding = None
     if (value["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
             value["targetCommit"] == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"]):
@@ -469,15 +431,6 @@ def validate_contract(value: dict[str, Any]) -> None:
         paths.add(str(path))
         if artifact.get("class") not in expected_classes:
             deny("artifact_contract_class")
-        if artifact.get("class") == INACTIVE_STAGING_CLASS:
-            binding = CRM_INACTIVE_STAGING_BINDINGS.get(str(path))
-            if (binding is None or artifact.get("digest") != binding or
-                    artifact.get("state") != "RETIREMENT_READY" or
-                    artifact.get("retirableOn") != "INACTIVE_STAGING_AUTHORITY_PRESERVED" or
-                    artifact.get("dependencies") != ["authenticated_inactive_staging_authority"] or
-                    artifact.get("expectedType") != "directory"):
-                deny("artifact_contract_inactive_staging")
-            inactive_staging_paths.add(str(path))
         if (value["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
                 value["targetCommit"] == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] and
                 (str(path) == LEGACY_A959_V1_PRESERVE_BINDING["privateDataOverlay"]["path"] or
@@ -547,8 +500,6 @@ def validate_contract(value: dict[str, Any]) -> None:
             value["targetCommit"] == LEGACY_D436_F160_BINDINGS[value["releaseId"]]["targetCommit"] and
             f160_cache_paths != {LEGACY_D436_F160_BINDINGS[value["releaseId"]]["overlayPath"]}):
         deny("artifact_contract_f160_runtime_cache_overlay")
-    if has_inactive_staging and inactive_staging_paths != set(CRM_INACTIVE_STAGING_BINDINGS):
-        deny("artifact_contract_inactive_staging_scope")
 
 
 def _strict_child(path: Path, root: Path, predicate: str) -> None:
@@ -764,7 +715,6 @@ def validate_artifact_roots(contract: dict[str, Any], operational: dict[str, Any
         "DERIVED_OUTPUT_RUNTIME": roots["outputs"],
         "DERIVED_STAGING": roots["staging"],
         "RELEASE_RUNTIME": roots["releases"],
-        INACTIVE_STAGING_CLASS: roots["releases"],
     }
     staging_root_required = any(
         artifact.get("class") == "DERIVED_STAGING" and not (
@@ -897,167 +847,6 @@ def path_referenced(path: str, operational: dict[str, Any]) -> bool:
     return False
 
 
-def _stable_stream_sha256(path: Path, expected: str, predicate: str) -> os.stat_result:
-    try:
-        before = path.lstat(); fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-        opened = os.fstat(fd); digest = hashlib.sha256()
-        while True:
-            block = os.read(fd, 1024 * 1024)
-            if not block: break
-            digest.update(block)
-        after = os.fstat(fd)
-    except OSError:
-        deny(predicate)
-    finally:
-        if "fd" in locals(): os.close(fd)
-    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_uid,
-                             item.st_gid, item.st_nlink, item.st_size,
-                             item.st_mtime_ns, item.st_ctime_ns)
-    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or
-            before.st_uid != os.geteuid() or before.st_gid != os.getegid() or
-            stat.S_IMODE(before.st_mode) & 0o022 or
-            identity(before) != identity(opened) or identity(opened) != identity(after) or
-            digest.hexdigest() != expected):
-        deny(predicate)
-    return after
-
-
-def _relation_field(digest: Any, value: str) -> None:
-    raw = value.encode("utf-8", "surrogateescape")
-    digest.update(len(raw).to_bytes(8, "big")); digest.update(raw)
-
-
-def _inactive_staging_protected(relative: str) -> bool:
-    parts = tuple(part.lower() for part in PurePosixPath(relative).parts)
-    name = parts[-1] if parts else ""
-    return (any(part == ".env" or part.startswith(".env.") for part in parts) or
-            "uploads" in parts or
-            any(part in {".data", "tenant-data", "tenant-scoped", "secrets",
-                         "runtime-data"} for part in parts) or
-            (parts and parts[0] in {"content", "database", "configuration", "media",
-                                    "evidence", "receipts"}) or
-            any(name.endswith(suffix) for suffix in
-                (".pem", ".key", ".p12", ".pfx", ".sqlite", ".sqlite3", ".db",
-                 ".dump", ".session")) or name in {"credentials.json", "secrets.json"})
-
-
-def _authenticate_inactive_staging_tree(path: Path, binding: dict[str, Any]) -> None:
-    if binding != CRM_INACTIVE_STAGING_BINDINGS.get(str(path)):
-        deny("inactive_staging_binding")
-    incoming = Path(CRM_STAGING_ROOT)
-    name = binding["authorityName"]
-    index_path = incoming / "incoming-index.private.json"
-    manifest_path = incoming / f"{name}.manifest.private.json"
-    archive_path = incoming / f"{name}.tar.gz"
-    receipt_path = incoming / "staging.receipt.private.json"
-    index_raw, _ = stable_regular_hash(index_path, binding["incomingIndexSha256"],
-                                       "inactive_staging_index")
-    manifest_raw, _ = stable_regular_hash(manifest_path, binding["manifestSha256"],
-                                          "inactive_staging_manifest")
-    _stable_stream_sha256(archive_path, binding["archiveSha256"],
-                          "inactive_staging_archive")
-    receipt_raw, _ = stable_regular_hash(receipt_path, binding["stagingReceiptSha256"],
-                                         "inactive_staging_receipt")
-    index = object_json(index_raw, "inactive-staging-index")
-    receipt = object_json(receipt_raw, "inactive-staging-receipt")
-    if (index.get(archive_path.name) != {"bytes": binding["archiveBytes"],
-                                         "sha256": binding["archiveSha256"]} or
-            index.get(manifest_path.name, {}).get("sha256") != binding["manifestSha256"] or
-            receipt.get("result") != "CSV_INACTIVE_STAGING_COMPLETE" or
-            receipt.get("gatesAdmitted") is not False or receipt.get("processActions") != 0):
-        deny("inactive_staging_authority_chain")
-    manifest = object_json(manifest_raw, "inactive-staging-manifest")
-    rows = manifest.get("files")
-    if (not isinstance(rows, list) or
-            manifest.get("filesCount", 0) + manifest.get("linksCount", 0) != len(rows) or
-            manifest.get("tarSha256") != binding["archiveSha256"] or
-            manifest.get("tarBytes") != binding["archiveBytes"]):
-        deny("inactive_staging_manifest_schema")
-    expected = {}
-    expected_dirs = set()
-    for row in rows:
-        if not isinstance(row, dict) or not isinstance(row.get("path"), str):
-            deny("inactive_staging_manifest_schema")
-        relative = row["path"]; pure = PurePosixPath(relative)
-        if (not relative or pure.is_absolute() or ".." in pure.parts or
-                str(pure) != relative or relative in expected or _inactive_staging_protected(relative)):
-            deny("inactive_staging_manifest_path")
-        if set(row) == {"path", "target"}:
-            target = row["target"]
-            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(relative), target))
-            if (not isinstance(target, str) or not target or target.startswith("/") or
-                    resolved.startswith("../") or resolved == ".."):
-                deny("inactive_staging_manifest_link")
-        elif set(row) != {"path", "sha256", "bytes", "allocatedBytes", "mode"}:
-            deny("inactive_staging_manifest_schema")
-        expected[relative] = row
-        parent = pure.parent
-        while str(parent) != ".": expected_dirs.add(str(parent)); parent = parent.parent
-    for relative, row in expected.items():
-        if "target" in row:
-            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(relative), row["target"]))
-            if resolved not in expected:
-                deny("inactive_staging_manifest_link")
-    root = path.lstat()
-    if (path.is_symlink() or not stat.S_ISDIR(root.st_mode) or root.st_nlink < 2 or
-            root.st_uid != os.geteuid() or root.st_gid != os.getegid() or
-            stat.S_IMODE(root.st_mode) & 0o022):
-        deny("inactive_staging_root")
-    actual = set(); relation = hashlib.sha256(); transition_count = 0; observed_deltas = []
-    physical_bytes = root.st_blocks * 512
-    stack = [(path, "")]
-    while stack:
-        directory, prefix = stack.pop()
-        try:
-            entries = sorted(os.scandir(directory), key=lambda item: os.fsencode(item.name),
-                             reverse=True)
-        except OSError:
-            deny("inactive_staging_tree_read")
-        for entry in entries:
-            relative = f"{prefix}/{entry.name}" if prefix else entry.name
-            info = entry.stat(follow_symlinks=False); actual.add(relative)
-            physical_bytes += info.st_blocks * 512
-            if info.st_uid != root.st_uid or info.st_gid != root.st_gid:
-                deny("inactive_staging_owner")
-            row = expected.get(relative)
-            if row is None:
-                if relative not in expected_dirs or not stat.S_ISDIR(info.st_mode):
-                    deny("inactive_staging_extra")
-                if info.st_dev != root.st_dev or stat.S_IMODE(info.st_mode) & 0o022:
-                    deny("inactive_staging_directory")
-                stack.append((Path(entry.path), relative))
-                values = [relative, "directory", oct(stat.S_IMODE(info.st_mode)),
-                          str(info.st_uid), str(info.st_gid)]
-            elif "target" in row:
-                if not stat.S_ISLNK(info.st_mode) or os.readlink(entry.path) != row["target"]:
-                    deny("inactive_staging_link")
-                values = [relative, "symlink", row["target"]]
-            else:
-                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != row["bytes"]:
-                    deny("inactive_staging_regular_identity")
-                mode = stat.S_IMODE(info.st_mode)
-                if mode != row["mode"]:
-                    transition = binding["modeTransition"]
-                    if (row["mode"], mode) != (transition["from"], transition["to"]):
-                        deny("inactive_staging_mode")
-                    transition_count += 1
-                allocated = info.st_blocks * 512
-                if allocated != row["allocatedBytes"]:
-                    observed_deltas.append({"path": relative, "manifest": row["allocatedBytes"],
-                                            "observed": allocated})
-                digest = _stable_stream_sha256(Path(entry.path), row["sha256"],
-                                                "inactive_staging_content")
-                values = [relative, "regular", oct(mode), str(digest.st_size),
-                          str(digest.st_blocks * 512), row["sha256"]]
-            for value in values: _relation_field(relation, value)
-    if ((set(expected) | expected_dirs) != actual or
-            transition_count != binding["modeTransition"]["count"] or
-            observed_deltas != binding["blockDeltas"] or
-            physical_bytes != binding["allocatedBytes"] or
-            relation.hexdigest() != binding["relationSha256"]):
-        deny("inactive_staging_relation")
-
-
 def authenticate_artifact(artifact: dict[str, Any]) -> None:
     path = Path(artifact["path"])
     if not path.exists() and not path.is_symlink():
@@ -1101,8 +890,6 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
             if observed[field] != artifact.get(field):
                 deny(f"artifact_drift:{path}:{field}")
     digest = artifact.get("digest")
-    if artifact["class"] == INACTIVE_STAGING_CLASS:
-        _authenticate_inactive_staging_tree(path, digest)
     if artifact["class"] == "PRIVATE_DATA_NEVER_RETIRE":
         expected_digest = {"policy", "scope", "ownerUid", "groupGid", "mode"}
         if (not isinstance(digest, dict) or set(digest) != expected_digest or
@@ -1271,14 +1058,6 @@ def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: di
         return "ACTIVE_DEPENDENCY"
     if kind == F160_CACHE_CLASS:
         return "ACTIVE_DEPENDENCY"
-    if kind == INACTIVE_STAGING_CLASS:
-        release = Path(path).name
-        protected = (operational["activeReleases"] + operational["rollbackReleases"] +
-                     operational["transitiveReturnReleases"] + operational["candidateReleases"])
-        if (release in protected or release not in operational["installedVerifiedReleases"] or
-                path_referenced(path, operational)):
-            deny("inactive_staging_reference")
-        return "RETIREMENT_READY"
     if kind == "RELEASE_RUNTIME":
         if release_runtime_private_dependency(artifact, contract):
             return "ACTIVE_DEPENDENCY"
@@ -2707,8 +2486,6 @@ def prepare(args: argparse.Namespace) -> None:
                 artifact["class"] in DERIVED_CLASSES and state != "SANITIZED"
             ) or (
                 artifact["class"] == "RELEASE_RUNTIME" and state == "RETIREMENT_READY"
-            ) or (
-                artifact["class"] == INACTIVE_STAGING_CLASS and state == "RETIREMENT_READY"
             )
             if command_required and artifact["path"] not in reconciled_paths:
                 command, text = command_for(artifact, operational)
@@ -2836,9 +2613,9 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
         previous_ordinal = item["ordinal"]
         if item.get("eligibilityAtPrepare") != artifact.get("retentionState"):
             deny("intent_command_eligibility")
-        if (item["class"] in {"RELEASE_RUNTIME", INACTIVE_STAGING_CLASS} and
+        if (item["class"] == "RELEASE_RUNTIME" and
                 item.get("eligibilityAtPrepare") != "RETIREMENT_READY"):
-            deny("intent_retirement_not_ready")
+            deny("intent_release_runtime_not_retirement_ready")
         expected, literal = command_for(artifact, operational)
         if item["argv"] != expected or item["literal"] != literal:
             deny("intent_command_literal")
