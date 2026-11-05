@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CUSTODY = ROOT.parent
 CONSUMER = ROOT / "scripts/capacity-recovery.py"
-CONSUMER_SHA256 = "db14e4ecf415061cab9a0e68e378a6cdb991b4d51b572cc7600014be591eecc2"
+CONSUMER_SHA256 = "dc7e659dbb245824557cb7984ba13d43660635117107616def5f8ccff620d58f"
 PM2 = Path("/opt/re7online/backups/converta-persistent/preparations/p00-capacity-recovery-canonical-23315c43-20261030T030504Z/pm2-private/bin/pm2")
 PM2_SHA256 = "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d"
 NODE = Path("/usr/bin/node")
@@ -52,6 +52,11 @@ CRM_CANDIDATES = (
     Path("/opt/re7online/releases/crm-csv-front-ea3d2788-20261016"),
     Path("/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016"),
 )
+CRM_SOURCE_GRAPH = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-785bde80-vps-20261103T103429Z-api-frontend-ccb8f00c-v3-once/"
+    "generation-release-graph.final.private.json")
+CRM_SOURCE_GRAPH_SHA256 = "1e9623e4bae272074a73615dfc897f1b268de42fa262583d46dcc701eb4aee59"
 CURRENT = Path("/opt/re7online/current")
 TRANSACTIONS = Path("/opt/re7online/backups/converta-persistent/deploy-transactions")
 DEPLOYMENT_LOCK = Path("/opt/re7online/backups/converta-persistent/.deployment-window.lock")
@@ -84,6 +89,8 @@ def profile_contract(profile: str) -> dict[str, Any]:
                 "minimumRecoveryBytes": CRM_MINIMUM_RECOVERY_BYTES,
                 "installerSha256": CRM_INSTALLER_SHA256,
                 "helperSha256": CRM_HELPER_SHA256,
+                "sourceGraph": {"path": CRM_SOURCE_GRAPH,
+                                "sha256": CRM_SOURCE_GRAPH_SHA256},
                 "candidates": [{"class": "CLOSED_INACTIVE_CRM_STAGING_TREE",
                                 "path": str(path)} for path in CRM_CANDIDATES]}
     raise RuntimeError("PROFILE_DENY")
@@ -273,7 +280,18 @@ def final_readback(consumer: Any, request_path: Path, request_expected: str,
     _, policy_sha, _, _ = consumer.load_binding(request["rootPolicy"], "ROOT_POLICY")
     _, operational_sha, operational_raw, _ = consumer.load_binding(
         request["operationalState"], "OPERATIONAL_STATE")
-    consumer.validate_operational(operational_raw)
+    operational = consumer.validate_operational(operational_raw)
+    graph_binding = operational["liveObservations"]["releaseGraph"]
+    graph_raw, _ = consumer.stable_regular(
+        Path(graph_binding["path"]), graph_binding["sha256"],
+        allowed_modes={0o600, 0o644})
+    graph = consumer.object_json(graph_raw, "LIVE_RELEASE_GRAPH_JSON")
+    if graph.get("schemaVersion") == 3:
+        source = graph.get("sourceGraph")
+        if (not isinstance(source, dict) or set(source) != {"path", "sha256"} or
+                graph != consumer.direct_release_graph_projection(
+                    Path(str(source.get("path", ""))), str(source.get("sha256", "")))):
+            consumer.deny("LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE")
     manifest_binding = request["candidates"][0].get("dispositionManifest")
     manifest_sha = None
     if manifest_binding is not None:
@@ -287,11 +305,14 @@ def final_readback(consumer: Any, request_path: Path, request_expected: str,
 
 
 def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
-    for name in ("operational-state.schema2.private.json", "audit-request.private.json",
-                 "binding-readback.private.json", "node-proof.private.json"):
+    contract = profile_contract(profile)
+    output_names = ["operational-state.schema2.private.json", "audit-request.private.json",
+                    "binding-readback.private.json", "node-proof.private.json"]
+    if contract.get("sourceGraph") is not None:
+        output_names.append("release-graph.private.json")
+    for name in output_names:
         if (CUSTODY / name).exists() or (CUSTODY / name).is_symlink():
             raise RuntimeError("OUTPUT_EXISTS:" + name)
-    contract = profile_contract(profile)
     consumer = authenticated_consumer()
     helper, helper_proof_sha = helper_binding(
         contract["installerSha256"], contract["helperSha256"])
@@ -312,6 +333,11 @@ def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
     fingerprint = consumer.digest_bytes(
         consumer.canonical(consumer._pm2_projection(json.loads(proc.stdout))))
     dump_raw, _ = read_stable(DUMP, modes={0o600, 0o644})
+    source_graph = contract.get("sourceGraph")
+    if source_graph is not None:
+        projection = consumer.direct_release_graph_projection(
+            Path(source_graph["path"]), source_graph["sha256"])
+        write_exclusive(GRAPH, consumer.canonical(projection))
     graph_raw, _ = read_stable(GRAPH, modes={0o600})
     policy_raw, _ = read_stable(POLICY, modes={0o600})
     manifest_path = contract["manifest"]
@@ -361,6 +387,10 @@ def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
     readback = {"schemaVersion": 1, "operationalStateSha256": operational_sha,
                 "requestSha256": request_sha, "nodeProofSha256": node_sha,
                 "helper": helper, "helperProofSha256": helper_proof_sha,
+                "releaseGraphSha256": digest(graph_raw),
+                "sourceGraph": ({"path": str(source_graph["path"]),
+                                 "sha256": source_graph["sha256"]}
+                                if source_graph is not None else None),
                 "manifestSha256": checked["manifestSha256"],
                 "rootPolicySha256": checked["rootPolicySha256"],
                 "pm2FingerprintSha256": fingerprint}

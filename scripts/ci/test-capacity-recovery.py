@@ -607,10 +607,30 @@ class CapacityRecoveryTests(unittest.TestCase):
 
     def test_crm_staging_reuses_canonical_references_and_authenticates_authority(self):
         incoming, candidates, bindings, requested = self.crm_staging_fixture()
+        source_graph = self.base / "crm-source-rich-graph.private.json"
+        active = "immutable-active"
+        rollback = "immutable-rollback"
+        private_json(source_graph, {
+            "activeReleases": [active], "rollbackReleases": [rollback],
+            "transitiveReturnReleases": [], "candidateReleases": [],
+            "installedVerifiedReleases": [active, rollback] +
+                [path.name for path in candidates],
+            "supersededCandidates": [],
+            "immediateRollbackReleases": {"api": rollback, "frontend": rollback},
+        })
+        with mock.patch.object(MODULE, "RELEASES_ROOT", self.releases):
+            projection = MODULE.direct_release_graph_projection(source_graph, sha(source_graph))
+        private_json(self.release_graph, projection)
+        self.write_operational()
+        self.assertTrue(all(str(path) in projection["inventoryPaths"] for path in candidates))
+        self.assertTrue(all(str(path) not in projection["protectedGraphPaths"]
+                            for path in candidates))
         operational = {"currentPaths": [], "pm2LivePaths": [], "pm2DumpPaths": [],
-                       "openTransactionPaths": [], "protectedGraphPaths": []}
+                       "openTransactionPaths": [],
+                       "protectedGraphPaths": projection["protectedGraphPaths"]}
         with mock.patch.multiple(MODULE, CRM_STAGING_ROOT=incoming,
-                                 CRM_INACTIVE_STAGING_BINDINGS=bindings), \
+                                 CRM_INACTIVE_STAGING_BINDINGS=bindings,
+                                 RELEASES_ROOT=self.releases), \
                 mock.patch.object(MODULE, "deploy_identity",
                                   return_value=(os.geteuid(), os.getegid())):
             MODULE.validate_audit_request(self.request_value(requested))
@@ -650,6 +670,20 @@ class CapacityRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.Denied,
                                        "(CRM_STAGING_REGULAR_IDENTITY|FILE_SHA256)"):
                 MODULE.validate_candidate(requested[0], {}, operational, scan())
+
+            bad_projection = dict(projection)
+            bad_projection["protectedGraphPaths"] = [
+                item for item in projection["protectedGraphPaths"]
+                if item != str(self.releases / active)]
+            private_json(self.release_graph, bad_projection)
+            self.write_operational()
+            private_json(self.request, self.request_value(requested))
+            with mock.patch.object(MODULE, "_authenticate_crm_staging_tree") as authenticate, \
+                    self.process_patch(), \
+                    self.assertRaisesRegex(MODULE.Denied,
+                                           "LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE"):
+                MODULE.audit_request(self.request, sha(self.request), self.plan)
+            authenticate.assert_not_called()
 
         with mock.patch.object(MODULE, "CRM_INACTIVE_STAGING_BINDINGS", bindings):
             with self.assertRaisesRegex(MODULE.Denied, "CRM_STAGING_EXACT_BATCH"):
@@ -1482,6 +1516,10 @@ class CapacityRecoveryTests(unittest.TestCase):
                          materializer.CRM_MINIMUM_RECOVERY_BYTES)
         self.assertEqual(crm["installerSha256"], materializer.CRM_INSTALLER_SHA256)
         self.assertEqual(crm["helperSha256"], materializer.CRM_HELPER_SHA256)
+        self.assertEqual(crm["sourceGraph"], {
+            "path": materializer.CRM_SOURCE_GRAPH,
+            "sha256": materializer.CRM_SOURCE_GRAPH_SHA256,
+        })
         self.assertEqual(crm["candidates"], [
             {"class": "CLOSED_INACTIVE_CRM_STAGING_TREE", "path": str(path)}
             for path in materializer.CRM_CANDIDATES])
@@ -1589,7 +1627,15 @@ class CapacityRecoveryTests(unittest.TestCase):
         pm2 = custody / "pm2"; pm2.write_text("#!/bin/sh\nprintf '[]\\n'\n"); pm2.chmod(0o700)
         dump = custody / "dump.json"; private_json(dump, [])
         graph = custody / "release-graph.private.json"
-        private_json(graph, {"schemaVersion": 1, "protectedGraphPaths": []})
+        source_graph = custody / "generation-release-graph.final.private.json"
+        installed = [path.name for path in materializer.CRM_CANDIDATES]
+        private_json(source_graph, {
+            "activeReleases": ["immutable-active"],
+            "rollbackReleases": ["immutable-return"],
+            "transitiveReturnReleases": [], "candidateReleases": [],
+            "installedVerifiedReleases": ["immutable-active", "immutable-return", *installed],
+            "supersededCandidates": [],
+        })
         policy = custody / "deploy-artifact-roots.json"
         shutil.copy2(self.policy, policy); policy.chmod(0o600)
         helper = custody / "helper"; helper.write_bytes(b"crm-helper"); helper.chmod(0o500)
@@ -1616,10 +1662,12 @@ class CapacityRecoveryTests(unittest.TestCase):
                 PM2=pm2, PM2_SHA256=sha(pm2), NODE=node, NODE_SHA256=sha(node),
                 DUMP=dump, GRAPH=graph, POLICY=policy, HELPER=helper,
                 HELPER_PROOF=proof, CRM_INSTALLER_SHA256=installer_sha,
-                CRM_HELPER_SHA256=sha(helper), CURRENT=current,
+                CRM_HELPER_SHA256=sha(helper), CRM_SOURCE_GRAPH=source_graph,
+                CRM_SOURCE_GRAPH_SHA256=sha(source_graph), CURRENT=current,
                 TRANSACTIONS=transactions, DEPLOYMENT_LOCK=deployment_lock,
                 WRITER_LOCK=writer_lock, authenticated_consumer=configured_consumer):
             result = materializer.materialize(materializer.CRM_PROFILE)
+            consumer = configured_consumer()
         request_path = custody / "audit-request.private.json"
         request = json.loads(request_path.read_text())
         self.assertEqual(result["requestSha256"], sha(request_path))
@@ -1630,9 +1678,41 @@ class CapacityRecoveryTests(unittest.TestCase):
             for path in materializer.CRM_CANDIDATES])
         self.assertTrue(all("dispositionManifest" not in item
                             for item in request["candidates"]))
+        projection = json.loads(graph.read_text())
+        self.assertEqual(projection["schemaVersion"], 3)
+        self.assertEqual(projection["sourceGraph"], {
+            "path": str(source_graph), "sha256": sha(source_graph)})
+        self.assertEqual(projection["inventoryPaths"], sorted(
+            str(Path("/opt/re7online/releases") / item)
+            for item in ["immutable-active", "immutable-return", *installed]))
+        self.assertTrue(all(str(path) not in projection["protectedGraphPaths"]
+                            for path in materializer.CRM_CANDIDATES))
         readback = json.loads((custody / "binding-readback.private.json").read_text())
         self.assertIsNone(readback["manifestSha256"])
         self.assertEqual(readback["requestSha256"], sha(request_path))
+        self.assertEqual(readback["releaseGraphSha256"], sha(graph))
+        self.assertEqual(readback["sourceGraph"], projection["sourceGraph"])
+
+        source_raw = source_graph.read_bytes()
+        source_graph.write_bytes(source_raw + b"\n")
+        with self.assertRaisesRegex(consumer.Denied, "FILE_SHA256"):
+            materializer.final_readback(consumer, request_path,
+                                        sha(request_path), request["procObserver"])
+        source_graph.write_bytes(source_raw)
+
+        graph_value = json.loads(graph.read_text())
+        graph_value["protectedGraphPaths"] = []
+        graph.write_bytes(consumer.canonical(graph_value))
+        operational_path = custody / "operational-state.schema2.private.json"
+        operational = json.loads(operational_path.read_text())
+        operational["liveObservations"]["releaseGraph"]["sha256"] = sha(graph)
+        operational_path.write_bytes(consumer.canonical(operational))
+        request["operationalState"]["sha256"] = sha(operational_path)
+        request_path.write_bytes(consumer.canonical(request))
+        with self.assertRaisesRegex(consumer.Denied,
+                                    "LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE"):
+            materializer.final_readback(consumer, request_path,
+                                        sha(request_path), request["procObserver"])
 
     def test_ef7_installer_denies_unknown_existing_helper_before_replacement(self):
         installer_path = Path(__file__).resolve().parents[1] / (

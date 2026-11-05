@@ -914,3 +914,18 @@ canônico. O helper aceita somente os dois caminhos literais adicionais.
 Nenhuma retirada na VPS foi executada ou autorizada. A qualificação produtiva
 depende de fotografia/request próprios, helper autenticado, recaptura completa e
 medição física vigente; somente então os efeitos literais poderão ser revisados.
+
+O primeiro audit produtivo não chegou a essa avaliação: a custódia recebeu o
+grafo rico `785bde80` no caminho reservado à projeção e terminou
+`LIVE_RELEASE_GRAPH_SCHEMA`, sem plano ou efeito. Helper e prova privada
+permaneceram válidos; request e fotografia são terminais. A projeção schema 1
+usada por lotes antigos também não é reaproveitável, pois classificava todo o
+inventário instalado como protegido e bloquearia nominalmente `ea3` e `d41`.
+
+A correção local versionada mantém as árvores no inventário e vincula uma nova
+projeção schema 3 ao caminho/SHA do grafo rico. O consumidor real reabre a fonte e
+rederiva inventário e proteção antes da avaliação: papéis operacionais omitidos ou
+adicionados, binding divergente e drift negam. Regressões atravessam o audit CRM e
+comprovam que entradas apenas inventariadas chegam à autenticação, enquanto a
+omissão de um ativo nega antes de chamar o autenticador das árvores. Isso ainda
+não qualifica bytes na VPS nem autoriza outra janela.
