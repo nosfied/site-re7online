@@ -6276,6 +6276,13 @@ test("admin Meta inbound readiness separates binding, baseConfig and real human 
       tokenStatus: "configured",
     },
   });
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId,
+      phoneNumberId,
+      display: "+55 11 90000-0000",
+    },
+  });
   await prisma.tenantOperationalConfig.upsert({
     where: { clientId },
     create: { clientId, config: { supportChannel: { mode: "human" } } },

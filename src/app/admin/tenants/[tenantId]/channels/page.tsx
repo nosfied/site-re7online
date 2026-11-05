@@ -1840,9 +1840,9 @@ export default function TenantChannelsPage() {
           <section className="rounded-xl border border-amber-300/25 bg-amber-500/10 p-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-semibold text-amber-100">Identidades Meta sem ChannelAccount</h2>
+                <h2 className="text-sm font-semibold text-amber-100">Bindings Meta pendentes</h2>
                 <p className="mt-1 text-sm text-amber-50/75">
-                  O onboarding conhece o binding, mas a persistência ainda não está vinculada a uma conta whatsapp/meta.
+                  Falta uma ChannelAccount whatsapp/meta ou a conta existente não corresponde a uma identidade Meta conhecida do tenant.
                 </p>
               </div>
               <StatusBadge label={`${unlinkedMetaIdentities.length} pendente(s)`} tone="warning" />
@@ -1992,7 +1992,9 @@ export default function TenantChannelsPage() {
                       </div>
                       <p className="mt-2 text-xs text-white/65">
                         {metaReadinessAccount
-                          ? "ChannelAccount whatsapp/meta encontrada para este binding."
+                          ? metaReadinessAccount.identityLinked
+                            ? "ChannelAccount whatsapp/meta corresponde a uma identidade Meta conhecida do tenant."
+                            : "A conta existe, mas seu ID ou alias não corresponde às identidades Meta conhecidas do tenant."
                           : "Salve esta conta antes de validar o binding."}
                       </p>
                     </div>

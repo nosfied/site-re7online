@@ -3,7 +3,12 @@ import test from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import { readMetaInboundReadiness } from "./metaInboundReadiness.js";
 
-function fakePrisma(params?: { managementOnly?: boolean }) {
+function fakePrisma(params?: {
+  managementOnly?: boolean;
+  accountBinding?: string;
+  leadingManagementOnly?: boolean;
+  humanMessageCount?: number;
+}) {
   const openedAt = new Date("2026-11-05T20:00:00.000Z");
   const receivedAt = new Date("2026-11-05T21:11:05.982Z");
   return {
@@ -11,7 +16,7 @@ function fakePrisma(params?: { managementOnly?: boolean }) {
       findMany: async () => [{
         id: "account-1",
         displayName: "Meta principal",
-        channelAccountId: "meta-phone-1",
+        channelAccountId: params?.accountBinding ?? "meta-phone-1",
         enabled: true,
         runtimeEnabled: true,
         inboundPersistenceEnabled: true,
@@ -32,14 +37,26 @@ function fakePrisma(params?: { managementOnly?: boolean }) {
       }),
     },
     inboundMessage: {
-      findMany: async () => [{
-        id: "inbound-1",
-        messageId: "wamid-1",
-        waId: "5511999999999",
-        waIdCanonical: "5511999999999",
-        rawPayload: params?.managementOnly ? { inboxVisibility: "management_only" } : { inboxVisibility: "human_timeline" },
-        createdAt: receivedAt,
-      }],
+      findMany: async () => [
+        ...(params?.leadingManagementOnly ? [{
+          id: "inbound-management",
+          messageId: "wamid-management",
+          waId: "5511999999999",
+          waIdCanonical: "5511999999999",
+          rawPayload: { inboxVisibility: "management_only" },
+          createdAt: new Date(receivedAt.getTime() + 1_000),
+        }] : []),
+        {
+          id: "inbound-1",
+          messageId: "wamid-1",
+          waId: "5511999999999",
+          waIdCanonical: "5511999999999",
+          rawPayload: params?.managementOnly ? { inboxVisibility: "management_only" } : { inboxVisibility: "human_timeline" },
+          createdAt: receivedAt,
+        },
+      ],
+      count: async (args: { where: { messageId: string } }) =>
+        args.where.messageId === "wamid-1" ? params?.humanMessageCount ?? 1 : 0,
     },
     conversation: {
       findMany: async () => [{
@@ -101,6 +118,40 @@ test("known Meta identity without ChannelAccount remains visibly unlinked", asyn
   assert.equal(readiness.accounts[0]?.inboundValidation.validated, false);
 });
 
+test("ChannelAccount without a known tenant Meta identity remains unlinked", async () => {
+  const readiness = await readMetaInboundReadiness({
+    prisma: fakePrisma({ accountBinding: "unmapped-meta-phone" }),
+    clientId: "tenant-1",
+    hasCanonicalTenantSource: true,
+  });
+  const account = readiness.accounts.find((item) => item.accountId === "account-1");
+  assert.equal(account?.identityLinked, false);
+  assert.equal(account?.connected, true);
+  assert.equal(account?.inboundValidation.validated, false);
+});
+
+test("persistence uniqueness is checked for the same human message used by the timeline", async () => {
+  const readiness = await readMetaInboundReadiness({
+    prisma: fakePrisma({ leadingManagementOnly: true, humanMessageCount: 1 }),
+    clientId: "tenant-1",
+    hasCanonicalTenantSource: true,
+  });
+  assert.equal(readiness.accounts[0]?.inboundValidation.receivedAt, "2026-11-05T21:11:05.982Z");
+  assert.equal(readiness.accounts[0]?.inboundValidation.persistedOnce, true);
+  assert.equal(readiness.accounts[0]?.inboundValidation.validated, true);
+});
+
+test("an unproven unique persistence does not validate the timeline message", async () => {
+  const readiness = await readMetaInboundReadiness({
+    prisma: fakePrisma({ humanMessageCount: 2 }),
+    clientId: "tenant-1",
+    hasCanonicalTenantSource: true,
+  });
+  assert.equal(readiness.accounts[0]?.inboundValidation.persistedOnce, false);
+  assert.equal(readiness.accounts[0]?.inboundValidation.visibleInHumanTimeline, true);
+  assert.equal(readiness.accounts[0]?.inboundValidation.validated, false);
+});
+
 test("management-only inbound does not certify human Inbox readiness", async () => {
   const readiness = await readMetaInboundReadiness({
     prisma: fakePrisma({ managementOnly: true }),
@@ -108,6 +159,6 @@ test("management-only inbound does not certify human Inbox readiness", async () 
     hasCanonicalTenantSource: true,
   });
   assert.equal(readiness.accounts[0]?.inboundValidation.validated, false);
-  assert.equal(readiness.accounts[0]?.inboundValidation.persistedOnce, true);
+  assert.equal(readiness.accounts[0]?.inboundValidation.persistedOnce, false);
   assert.equal(readiness.accounts[0]?.inboundValidation.visibleInHumanTimeline, false);
 });

@@ -55,8 +55,10 @@ resposta com predicado nominal tenant-scoped; ela nunca seleciona outro tenant.
 `Console Interno → Tenant → Canais → WhatsApp/Meta` apresenta três verificações
 independentes por identidade Meta:
 
-1. **Identidade vinculada** confirma a presença da `ChannelAccount`
-   `whatsapp/meta` e mostra separadamente se seu estado é `connected`;
+1. **Identidade vinculada** exige uma `ChannelAccount` `whatsapp/meta` cujo
+   `channelAccountId` ou alias corresponda a uma identidade Meta conhecida do
+   tenant (`WaPhoneNumber` ou `TenantMetaConfig`) e mostra separadamente se seu
+   estado é `connected`;
 2. **Persistência configurada** lê `enabled`, `runtimeEnabled`,
    `inboundPersistenceEnabled` e a presença de `baseConfig` em
    `TenantOperationalConfig`. Quando somente `baseConfig` estiver ausente e a

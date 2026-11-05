@@ -131,8 +131,12 @@ export async function readMetaInboundReadiness(params: {
         createdAt: true,
       },
     });
-    const persistedInbound = inboundCandidates[0] ?? null;
     const inbound = inboundCandidates.find((item) => !isManagementOnlyInboxMessage(item.rawPayload)) ?? null;
+    const persistedExactlyOnce = inbound
+      ? await params.prisma.inboundMessage.count({
+          where: { clientId: params.clientId, messageId: inbound.messageId },
+        }) === 1
+      : false;
     const identities = inbound
       ? Array.from(new Set([inbound.waId, inbound.waIdCanonical].filter(isNonEmptyString)))
       : [];
@@ -183,11 +187,14 @@ export async function readMetaInboundReadiness(params: {
         })
       : null;
 
+    const identityLinked = Boolean(
+      account && bindingIds.some((bindingId) => knownMetaBindings.includes(bindingId))
+    );
     readinessAccounts.push({
       accountId: account?.id ?? null,
       channelAccountId: entry.channelAccountId,
       displayName: account?.displayName ?? null,
-      identityLinked: Boolean(account),
+      identityLinked,
       connected: Boolean(account?.enabled && account.status === "connected"),
       permissions: {
         enabled: account?.enabled ?? false,
@@ -195,8 +202,8 @@ export async function readMetaInboundReadiness(params: {
         inboundPersistenceEnabled: account?.inboundPersistenceEnabled ?? false,
       },
       inboundValidation: {
-        validated: Boolean(account && inbound && visibleInHumanTimeline),
-        persistedOnce: Boolean(persistedInbound),
+        validated: Boolean(identityLinked && inbound && persistedExactlyOnce && visibleInHumanTimeline),
+        persistedOnce: persistedExactlyOnce,
         visibleInHumanTimeline,
         receivedAt: inbound?.createdAt.toISOString() ?? null,
         departmentName: runtime?.department?.name ?? null,

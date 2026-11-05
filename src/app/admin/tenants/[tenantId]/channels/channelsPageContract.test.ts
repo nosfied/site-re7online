@@ -15,7 +15,8 @@ test("Meta inbound readiness keeps connection, DB-first persistence and real Inb
   assert.match(pageSource, /3\. Recebimento na Inbox/);
   assert.match(pageSource, /Conectado/);
   assert.match(pageSource, /Inbound validado/);
-  assert.match(pageSource, /Identidades Meta sem ChannelAccount/);
+  assert.match(pageSource, /Bindings Meta pendentes/);
+  assert.match(pageSource, /seu ID ou alias não corresponde às identidades Meta conhecidas do tenant/);
   assert.match(pageSource, /Mensagem real persistida uma vez e visível na timeline humana/);
   assert.match(pageSource, /Atendimento Geral|departmentName/);
 });
