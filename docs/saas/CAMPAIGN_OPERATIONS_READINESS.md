@@ -524,6 +524,33 @@ reconciliação histórica separada, mas não autoriza retomada. O dry-run produ
 não foi executado: o reconciliador proposto ainda não está implantado, e as provas
 locais não substituem a recaptura dos bindings privados.
 
+Continuidade pós-cancelamento em 05/11/2026: a campanha permaneceu `cancelled`,
+com `sentCount=2`, três submissões históricas e nenhuma submissão, aceitação ou
+outbound da posição 4 em diante. O job continuou `queued` por
+`operational_suspension`, sem lease; a guarda global continuou fechada na geração
+42, com a mesma tarefa `provider/persisting`. Os bindings recapturados conservaram
+o SHA-256
+`dc67b3ebb9fb188d382c83b12dc5cdf44e7031dea9b87365aeb2658924fa1ad3`.
+
+O plano anterior a esse cancelamento não é consumível no estado novo. O candidato
+versionado `a1ee1154b5cfc1ee1cbd10437729cabc4c06f925` passou localmente pelo percurso
+`sending -> cancelled`: o estado observado integra o hash do plano, o plano antigo
+nega por drift e o receipt sucessor preserva `cancelled`. O `dry-run` dirigido do
+candidato serializou o plano SHA-256
+`0ba2823978c148ad6d144a7cc311cd00858a8660a36734b4edbf28431bac933a`,
+com `providerCalls=0`, dois resultados preservados, 960 destinatários restantes e
+continuidade não autorizada. A saída privada possui SHA-256
+`4a0826260ff35551712fb51d09057117a470de4edae8143aa02b49feec5551cb`.
+
+O processo offline terminou depois da serialização com `-6` (`SIGABRT`), sem stderr
+ou evento no journal do usuário. A leitura independente pós-execução reproduziu o
+mesmo término após serializar sua fotografia, confirmou que campanha, job, tarefa,
+guarda e conjunto de efeitos permaneceram inalterados e gerou evidência SHA-256
+`2bf7536c91a933a317c4dea90b7fcfc3c65c31750c7afe467fe0cfa112ef9106`.
+Portanto, a prova semântica é revisável, mas a execução não é declarada `PASS` e o
+plano não autoriza `apply-sql`. Aplicação, arquivamento da tarefa e abertura da
+guarda continuam atos separados e proibidos nesta etapa.
+
 A interface proposta pesquisa a lista gerada no conjunto integral no servidor,
 mantém `Carregar mais` acumulativo e deduplicado dentro de uma área com rolagem
 própria e exibe `Exibindo X de Y`. O detalhe do rascunho oferece `Limpar`, que
