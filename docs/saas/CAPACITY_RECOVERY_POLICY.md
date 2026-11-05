@@ -948,3 +948,28 @@ O materializador não tenta atravessar `/etc/sudoers.d` como `deploy`; ele grava
 `helper-installation-proof.private.json` com criação exclusiva e readback e o
 entrega imediatamente a `helper_binding()`. Relatório incompleto, extra,
 adulterado ou pertencente a outro perfil nega sem produzir prova.
+
+O primeiro request CRM encerrou antes dos candidatos com
+`LIVE_RELEASE_GRAPH_SCHEMA`: a montagem entregou o grafo rico de `785bde80`
+diretamente onde o consumidor exige uma projeção. A custódia é terminal e não
+deve ser reutilizada. Projeções schema 1 antigas eram snapshots conservadores de
+todo `installedVerifiedReleases`; aplicá-las ao lote CRM protegeria as próprias
+árvores e produziria `DISPOSITION_REFERENCED_OR_PROTECTED`.
+
+O perfil CRM agora produz uma projeção schema 3 vinculada ao caminho e ao SHA do
+grafo rico vigente. `inventoryPaths` continua contendo todas as releases
+instaladas, inclusive `ea3` e `d41`; `protectedGraphPaths` deriva somente papéis
+operacionais (`active`, rollback, retorno transitivo, candidate e rollback
+imediato por componente, quando presente). O consumidor reabre o grafo-fonte,
+valida seu schema, rederiva ambos os conjuntos e exige igualdade byte-semântica
+antes de recapturar processos ou avaliar candidatos. Omissão, acréscimo, fonte
+divergente ou SHA incorreto negam. Current, PM2, dump, transações e referências
+por processo continuam sendo gates frescos separados; inventário não equivale a
+proteção operacional.
+
+Schema 3 direto não é uma entrada de grafo livre. O executor o admite somente
+quando o request e as recapturas contêm exatamente os candidatos literais `ea3`
+e `d41`, e exige o caminho e o SHA canônicos do grafo final `785bde80` fixados no
+próprio consumidor. Uma fonte alternativa, ainda que tenha SHA válido e uma
+projeção internamente coerente, termina em
+`LIVE_RELEASE_GRAPH_SOURCE_BINDING` antes da autenticação dos candidatos.

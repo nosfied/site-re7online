@@ -106,6 +106,12 @@ CRM_INACTIVE_STAGING_BINDINGS = {
         ],
     },
 }
+CRM_RELEASE_GRAPH_SOURCE_PATH = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-785bde80-vps-20261103T103429Z-api-frontend-ccb8f00c-v3-once/"
+    "generation-release-graph.final.private.json")
+CRM_RELEASE_GRAPH_SOURCE_SHA256 = (
+    "1e9623e4bae272074a73615dfc897f1b268de42fa262583d46dcc701eb4aee59")
 GIT = Path("/usr/bin/git")
 AUDIT_REQUEST_KEYS = {
     "schemaVersion", "kind", "minimumRecoveryBytes", "targetAvailableBytes",
@@ -137,6 +143,11 @@ OPERATIONAL_KEYS = {
     "liveObservations",
 }
 LIVE_OBSERVATION_KEYS = {"currentLinks", "pm2", "dump", "transactionsRoot", "releaseGraph"}
+RICH_RELEASE_GRAPH_KEYS = {
+    "activeReleases", "rollbackReleases", "transitiveReturnReleases",
+    "candidateReleases", "installedVerifiedReleases", "supersededCandidates",
+}
+RICH_RELEASE_GRAPH_OPTIONAL_KEYS = {"immediateRollbackReleases"}
 TERMINAL_TRANSACTION_STATES = {
     "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE", "ROLLED_BACK",
 }
@@ -1610,7 +1621,70 @@ def _frontend_only_receipt_activation(
     return selected, rollback
 
 
-def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _rich_release_graph(value: Any, predicate: str) -> dict[str, Any]:
+    if (not isinstance(value, dict) or
+            frozenset(value) not in {
+                frozenset(RICH_RELEASE_GRAPH_KEYS),
+                frozenset(RICH_RELEASE_GRAPH_KEYS | RICH_RELEASE_GRAPH_OPTIONAL_KEYS),
+            } or
+            any(not isinstance(value.get(key), list) or
+                any(not isinstance(item, str) or not item for item in value[key]) or
+                len(value[key]) != len(set(value[key]))
+                for key in RICH_RELEASE_GRAPH_KEYS)):
+        deny(predicate)
+    installed = set(value["installedVerifiedReleases"])
+    if any(item in {".", ".."} or Path(item).name != item for item in installed):
+        deny(predicate)
+    if any(item not in installed for key in (
+            "activeReleases", "rollbackReleases", "transitiveReturnReleases",
+            "candidateReleases", "supersededCandidates") for item in value[key]):
+        deny(predicate)
+    immediate = value.get("immediateRollbackReleases")
+    if immediate is not None and (not isinstance(immediate, dict) or
+            set(immediate) != {"api", "frontend"} or
+            any(not isinstance(item, str) or item not in value["rollbackReleases"]
+                for item in immediate.values())):
+        deny(predicate)
+    return value
+
+
+def direct_release_graph_projection(source_path: Path, source_sha256: str) -> dict[str, Any]:
+    source_path = normalized_absolute(str(source_path), "LIVE_RELEASE_GRAPH_SOURCE_PATH")
+    source_raw, _ = stable_regular(source_path, source_sha256,
+                                   allowed_modes={0o600, 0o644})
+    source = _rich_release_graph(
+        object_json(source_raw, "LIVE_RELEASE_GRAPH_SOURCE_JSON"),
+        "LIVE_RELEASE_GRAPH_SOURCE_SCHEMA")
+    inventory = sorted(str(RELEASES_ROOT / item)
+                       for item in source["installedVerifiedReleases"])
+    protected_releases = set(
+        source["activeReleases"] + source["rollbackReleases"] +
+        source["transitiveReturnReleases"] + source["candidateReleases"])
+    immediate = source.get("immediateRollbackReleases")
+    if immediate is not None:
+        protected_releases.update(immediate.values())
+    protected = sorted(str(RELEASES_ROOT / item) for item in protected_releases)
+    return {"schemaVersion": 3,
+            "sourceGraph": {"path": str(source_path), "sha256": source_sha256},
+            "protectedGraphPaths": protected, "inventoryPaths": inventory}
+
+
+def crm_release_graph_source(candidates: Any) -> dict[str, str] | None:
+    if (not isinstance(candidates, list) or
+            len(candidates) != len(CRM_INACTIVE_STAGING_BINDINGS) or
+            any(not isinstance(item, dict) or
+                item.get("class") != "CLOSED_INACTIVE_CRM_STAGING_TREE" or
+                not isinstance(item.get("path"), str) for item in candidates) or
+            {item["path"] for item in candidates} != set(CRM_INACTIVE_STAGING_BINDINGS)):
+        return None
+    return {"path": str(CRM_RELEASE_GRAPH_SOURCE_PATH),
+            "sha256": CRM_RELEASE_GRAPH_SOURCE_SHA256}
+
+
+def capture_live_operational(
+        operational: dict[str, Any], *,
+        expected_direct_graph_source: dict[str, str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recapture mutable operational references while both canonical locks are held."""
     observations = operational["liveObservations"]
     current_paths: list[str] = []
@@ -1843,6 +1917,23 @@ def capture_live_operational(operational: dict[str, Any]) -> tuple[dict[str, Any
             if not any(protected == parent or parent in protected.parents
                        for parent in normalized_inventory):
                 deny("LIVE_RELEASE_GRAPH_PROTECTION_OUTSIDE_INVENTORY")
+    elif graph_value.get("schemaVersion") == 3:
+        expected_keys = {"schemaVersion", "sourceGraph", "protectedGraphPaths",
+                         "inventoryPaths"}
+        source_binding = graph_value.get("sourceGraph")
+        if (set(graph_value) != expected_keys or
+                not isinstance(source_binding, dict) or
+                set(source_binding) != {"path", "sha256"} or
+                not isinstance(source_binding.get("path"), str) or
+                not SHA256.fullmatch(str(source_binding.get("sha256", "")))):
+            deny("LIVE_RELEASE_GRAPH_SCHEMA")
+        if (expected_direct_graph_source is None or
+                source_binding != expected_direct_graph_source):
+            deny("LIVE_RELEASE_GRAPH_SOURCE_BINDING")
+        expected_projection = direct_release_graph_projection(
+            Path(source_binding["path"]), source_binding["sha256"])
+        if graph_value != expected_projection:
+            deny("LIVE_RELEASE_GRAPH_PROJECTION_DIVERGENCE")
     else:
         deny("LIVE_RELEASE_GRAPH_SCHEMA")
     if (not isinstance(graph_value.get("protectedGraphPaths"), list) or
@@ -3665,7 +3756,9 @@ def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[st
     op_path, op_sha, op_raw, _ = load_binding(value["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
     telemetry("before_live_recapture")
-    operational, live_recapture = capture_live_operational(operational)
+    operational, live_recapture = capture_live_operational(
+        operational,
+        expected_direct_graph_source=crm_release_graph_source(value["candidates"]))
     telemetry("after_live_recapture")
     candidate_paths = [str(normalized_absolute(item.get("path"), "CANDIDATE_PATH"))
                        for item in value["candidates"] if isinstance(item, dict)]
@@ -3781,7 +3874,11 @@ def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
     priors: list[dict[str, Any]] = []
     telemetry("before_live_recapture")
     try:
-        operational, live_recapture = capture_live_operational(operational)
+        operational, live_recapture = capture_live_operational(
+            operational,
+            expected_direct_graph_source=crm_release_graph_source(
+                [item.get("source") for item in plan.get("candidates", [])
+                 if isinstance(item, dict)]))
     except Denied as exc:
         errors.append(str(exc))
     telemetry("after_live_recapture")
