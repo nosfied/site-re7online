@@ -827,6 +827,36 @@ export type TenantChannelAccount = {
   updatedAt?: string;
 };
 
+export type MetaInboundReadiness = {
+  baseConfig: {
+    configured: boolean;
+    source: "db" | "json_fallback";
+    canMaterialize: boolean;
+    updatedAt: string | null;
+  };
+  accounts: Array<{
+    accountId: string | null;
+    channelAccountId: string;
+    displayName: string | null;
+    identityLinked: boolean;
+    connected: boolean;
+    permissions: {
+      enabled: boolean;
+      runtimeEnabled: boolean;
+      inboundPersistenceEnabled: boolean;
+    };
+    inboundValidation: {
+      validated: boolean;
+      persistedOnce: boolean;
+      visibleInHumanTimeline: boolean;
+      receivedAt: string | null;
+      departmentName: string | null;
+      queueName: string | null;
+      status: string | null;
+    };
+  }>;
+};
+
 export type TenantWebSessionStatus = {
   configured: boolean;
   featureEnabled: boolean;
@@ -1812,6 +1842,36 @@ export async function updateTenantChannelAccounts(
     {
       method: "PUT",
       body: JSON.stringify(accounts),
+    }
+  );
+}
+
+export async function getTenantMetaInboundReadiness(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{ ok: true; tenantId: string; readiness: MetaInboundReadiness }> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/channel-accounts/meta-inbound-readiness`
+  );
+}
+
+export async function materializeTenantMetaInboundBaseConfig(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  action: "saved" | "unchanged";
+  fieldsChanged: string[];
+  readiness: MetaInboundReadiness;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/channel-accounts/meta-inbound-readiness/base-config`,
+    {
+      method: "POST",
+      body: JSON.stringify({ field: "baseConfig" }),
     }
   );
 }

@@ -995,15 +995,19 @@ export async function saveTenantBaseConfigSettings(params: {
   clientId: string;
   settings: Partial<TenantBaseConfigSettings>;
   tenant?: Pick<TenantConfig, "allowlist" | "handoffAttendantWaid" | "defaultLanguage" | "disableAutoReply"> | null;
+  onlyIfMissing?: boolean;
 }) {
   return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
     const existing = await tx.tenantOperationalConfig.findUnique({
       where: { clientId: params.clientId },
-      select: { config: true },
+      select: { id: true, config: true, schemaVersion: true, updatedAt: true },
     });
     const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-    const current = parseOperationalConfig(existing?.config).baseConfig
-      ?? normalizeTenantBaseConfigSettingsFromTenant(params.tenant);
+    const stored = parseOperationalConfig(existing?.config).baseConfig;
+    if (params.onlyIfMissing && stored && existing) {
+      return { record: existing, settings: stored, action: "unchanged" as const };
+    }
+    const current = stored ?? normalizeTenantBaseConfigSettingsFromTenant(params.tenant);
     const settings = normalizeTenantBaseConfigSettings({ ...current, ...params.settings });
     const config = { ...existingConfig, baseConfig: settings } as Prisma.InputJsonValue;
     const record = await tx.tenantOperationalConfig.upsert({
@@ -1012,7 +1016,7 @@ export async function saveTenantBaseConfigSettings(params: {
       create: { clientId: params.clientId, config, schemaVersion: 1 },
       select: { id: true, schemaVersion: true, updatedAt: true },
     });
-    return { record, settings };
+    return { record, settings, action: "saved" as const };
   });
 }
 
