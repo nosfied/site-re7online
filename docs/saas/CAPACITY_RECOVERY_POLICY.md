@@ -924,3 +924,11 @@ caminho e à contagem autenticada. Os dois deltas físicos SWC de d41 não alter
 prova de conteúdo e continuam vinculados nominalmente; o ganho futuro usa a
 alocação física recapturada. Esta implementação e seus ensaios não qualificam a
 VPS: o ganho permanece zero até audit produtivo próprio e revisão posterior.
+
+O pacote operacional usa o perfil fechado `inactive-crm-staging` do materializador
+existente. Ele vincula o instalador e o helper por perfil, produz request schema 3
+com os dois caminhos exatos e não fabrica um manifesto alternativo. O instalador
+aceita somente o helper ef7 anteriormente autenticado por caminho, SHA,
+device/inode, owner e modo; sudoers permanece byte-exato. Prova ausente,
+identidade divergente ou cruzamento de perfil negam antes da materialização. Esse
+suporte versionado continua sem constituir autorização de instalação ou audit.
