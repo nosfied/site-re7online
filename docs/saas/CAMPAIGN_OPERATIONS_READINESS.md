@@ -542,14 +542,24 @@ com `providerCalls=0`, dois resultados preservados, 960 destinatários restantes
 continuidade não autorizada. A saída privada possui SHA-256
 `4a0826260ff35551712fb51d09057117a470de4edae8143aa02b49feec5551cb`.
 
-O processo offline terminou depois da serialização com `-6` (`SIGABRT`), sem stderr
-ou evento no journal do usuário. A leitura independente pós-execução reproduziu o
-mesmo término após serializar sua fotografia, confirmou que campanha, job, tarefa,
-guarda e conjunto de efeitos permaneceram inalterados e gerou evidência SHA-256
-`2bf7536c91a933a317c4dea90b7fcfc3c65c31750c7afe467fe0cfa112ef9106`.
-Portanto, a prova semântica é revisável, mas a execução não é declarada `PASS` e o
-plano não autoriza `apply-sql`. Aplicação, arquivamento da tarefa e abertura da
-guarda continuam atos separados e proibidos nesta etapa.
+O primeiro lançador offline terminou depois da serialização com `-6` (`SIGABRT`),
+sem stderr ou evento no journal do usuário. A causa foi reproduzida isoladamente:
+o ambiente copiado do processo PM2 continha `NODE_CHANNEL_FD` e
+`NODE_CHANNEL_SERIALIZATION_MODE`, mas o subprocesso Node não herdava esse canal
+IPC. Uma sonda somente leitura concluiu `SELECT 1` e `$disconnect()`, abortou com o
+ambiente integral e terminou `0` ao retirar exclusivamente as variáveis de
+transporte IPC (`NODE_CHANNEL_FD`, `NODE_CHANNEL_SERIALIZATION_MODE` e o legado
+`NODE_UNIQUE_ID`).
+
+Com esse filtro, a repetição única do mesmo `dry-run`, usando os mesmos bindings e
+bytes candidatos, terminou com código `0` e reproduziu exatamente o plano e a saída
+privada SHA-256 já registrados. A fotografia independente posterior também terminou
+`0`, gerou evidência SHA-256
+`2bf7536c91a933a317c4dea90b7fcfc3c65c31750c7afe467fe0cfa112ef9106`
+e confirmou campanha, job, tarefa, guarda e conjunto de efeitos inalterados. O
+`dry-run` pós-cancelamento está concluído; seu plano continua sendo evidência para
+revisão, não autorização de `apply-sql`. Aplicação, arquivamento da tarefa e abertura
+da guarda permanecem atos separados e proibidos nesta etapa.
 
 A interface proposta pesquisa a lista gerada no conjunto integral no servidor,
 mantém `Carregar mais` acumulativo e deduplicado dentro de uma área com rolagem
