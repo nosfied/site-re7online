@@ -31,13 +31,16 @@ WORKER_INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab0992473
 EF7_HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
 EF7_INSTALLER_SHA256 = "757dc2f20e649a985d36fa5a82b32e2273efeb9ffea9cd62f45757dcf8073785"
 CRM_HELPER_SHA256 = "fb83ba7c15fbac564a4bbe0d7d1bfd0d0a8ba2e79231d8b133e67b12a8c86d6f"
-CRM_INSTALLER_SHA256 = "f1a7a05be25b255a42e0e4d2937bb9e5ef3db5c6af23f76a8727341aefbe45f2"
+CRM_INSTALLER_SHA256 = "4618d34dc0192048a7631d930c03684804daf03cd60fa65d97e8258a3da6ba97"
 # Compatibility names retain the proven worker profile for callers/tests that
 # invoke helper_binding() without an explicit profile contract.
 HELPER_SHA256 = WORKER_HELPER_SHA256
 INSTALLER_SHA256 = WORKER_INSTALLER_SHA256
 SUDOERS_SHA256 = "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"
+SUDOERS = Path("/etc/sudoers.d/re7online-capacity-proc-observer")
 HELPER_PROOF = CUSTODY / "helper-installation-proof.private.json"
+HELPER_INSTALLATION_REPORT = CUSTODY / "helper-installation-report.private.txt"
+HELPER_UID = HELPER_GID = SUDOERS_UID = SUDOERS_GID = 0
 CANDIDATE = Path("/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit")
 EF7_CANDIDATES = (
     Path("/opt/re7online/deploy-control/ef7db111-prep/node_modules"),
@@ -195,6 +198,78 @@ def helper_binding(installer_sha256: str | None = None,
     return {"path": str(HELPER), "sha256": helper_sha256}, digest(raw)
 
 
+def _installation_record(line: str, label: str, path: Path, sha256: str,
+                         uid: int, gid: int, mode: str) -> dict[str, int]:
+    fields = line.split("|")
+    if (len(fields) != 6 or fields[:5] !=
+            [label, str(path), sha256, f"{uid}:{gid}", mode]):
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_BINDING")
+    identity = fields[5].split(":")
+    if (len(identity) != 2 or any(not value.isdecimal() for value in identity) or
+            any(str(int(value)) != value for value in identity)):
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_IDENTITY")
+    return {"device": int(identity[0]), "inode": int(identity[1]),
+            "uid": uid, "gid": gid, "mode": mode}
+
+
+def capture_helper_proof(profile: str) -> dict[str, str]:
+    if profile != CRM_PROFILE:
+        raise RuntimeError("HELPER_PROOF_CAPTURE_PROFILE")
+    contract = profile_contract(profile)
+    report_raw, report_info = read_stable(HELPER_INSTALLATION_REPORT, modes={0o600})
+    if (report_info.st_uid, report_info.st_gid) != (os.geteuid(), os.getegid()):
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_OWNER")
+    try:
+        report = report_raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_ENCODING") from exc
+    lines = report.splitlines()
+    if report != "\n".join(lines) + "\n":
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_FRAMING")
+    if len(lines) == 2 and lines[0].startswith("RECOVERED|"):
+        installed_line = lines[0]
+    elif len(lines) == 3 and lines[0] == (
+            "BEFORE|{path}|{sha256}|{uid}:{gid}|0500|64769:803452".format(
+                path=HELPER, sha256=EF7_HELPER_SHA256,
+                uid=HELPER_UID, gid=HELPER_GID)) and \
+            lines[1].startswith("INSTALLED|"):
+        installed_line = lines[1]
+    else:
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_STATE")
+    identity = _installation_record(
+        installed_line, installed_line.split("|", 1)[0], HELPER,
+        contract["helperSha256"], HELPER_UID, HELPER_GID, "0500")
+    preserved = ["PRESERVED", str(SUDOERS), SUDOERS_SHA256,
+                 f"{SUDOERS_UID}:{SUDOERS_GID}", "0440"]
+    if lines[-1].split("|") != preserved:
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_SUDOERS")
+    helper_info = HELPER.lstat(); sudoers_info = SUDOERS.lstat()
+    if (HELPER.is_symlink() or not stat.S_ISREG(helper_info.st_mode) or
+            {"device": helper_info.st_dev, "inode": helper_info.st_ino,
+             "uid": helper_info.st_uid, "gid": helper_info.st_gid,
+             "mode": f"{stat.S_IMODE(helper_info.st_mode):04o}"} != identity):
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_HELPER_DRIFT")
+    if (SUDOERS.is_symlink() or not stat.S_ISREG(sudoers_info.st_mode) or
+            (sudoers_info.st_uid, sudoers_info.st_gid,
+             stat.S_IMODE(sudoers_info.st_mode)) !=
+            (SUDOERS_UID, SUDOERS_GID, 0o440)):
+        raise RuntimeError("HELPER_INSTALLATION_REPORT_SUDOERS_DRIFT")
+    proof = {"schemaVersion": 1,
+        "kind": "CAPACITY_PROC_OBSERVER_INSTALLATION_PROOF",
+        "installerSha256": contract["installerSha256"],
+        "sudoersSha256": SUDOERS_SHA256,
+        "helper": {"path": str(HELPER), "sha256": contract["helperSha256"],
+                   "identity": identity}}
+    consumer = authenticated_consumer()
+    proof_sha = write_exclusive(HELPER_PROOF, consumer.canonical(proof))
+    binding, checked_sha = helper_binding(
+        contract["installerSha256"], contract["helperSha256"])
+    if checked_sha != proof_sha:
+        raise RuntimeError("HELPER_PROOF_CAPTURE_READBACK")
+    return {"helperProofSha256": proof_sha, "reportSha256": digest(report_raw),
+            "helperPath": binding["path"], "helperSha256": binding["sha256"]}
+
+
 def final_readback(consumer: Any, request_path: Path, request_expected: str,
                    helper: dict[str, str]) -> dict[str, Any]:
     request_raw, _ = consumer.stable_regular(request_path, request_expected)
@@ -302,12 +377,25 @@ def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
             "nodeProofSha256": node_sha, "pm2FingerprintSha256": fingerprint}
 
 
-if __name__ == "__main__":
-    if len(os.sys.argv) == 1:
+def main(argv: list[str]) -> int:
+    if len(argv) == 0:
         selected_profile = WORKER_PROFILE
-    elif len(os.sys.argv) == 3 and os.sys.argv[1] == "--profile" and \
-            os.sys.argv[2] in {EF7_PROFILE, CRM_PROFILE}:
-        selected_profile = os.sys.argv[2]
+        action = "materialize"
+    elif len(argv) == 2 and argv[0] == "--profile" and \
+            argv[1] in {EF7_PROFILE, CRM_PROFILE}:
+        selected_profile = argv[1]
+        action = "materialize"
+    elif len(argv) == 3 and argv[0] == "--capture-helper-proof" and \
+            argv[1] == "--profile" and argv[2] == CRM_PROFILE:
+        selected_profile = argv[2]
+        action = "capture-helper-proof"
     else:
         raise SystemExit("DENY|ARGUMENTS")
-    print(json.dumps(materialize(selected_profile), sort_keys=True))
+    result = (capture_helper_proof(selected_profile)
+              if action == "capture-helper-proof" else materialize(selected_profile))
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(os.sys.argv[1:]))

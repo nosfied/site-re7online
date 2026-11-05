@@ -12,6 +12,7 @@ SOURCE_SHA256 = "fb83ba7c15fbac564a4bbe0d7d1bfd0d0a8ba2e79231d8b133e67b12a8c86d6
 TARGET = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 SUDOERS = Path("/etc/sudoers.d/re7online-capacity-proc-observer")
 SUDOERS_SHA256 = "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"
+ROOT_UID = ROOT_GID = 0
 PREVIOUS_HELPERS = ({
     "path": str(TARGET),
     "sha256": "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387",
@@ -52,20 +53,39 @@ def install() -> dict[str, object]:
         raise RuntimeError("ROOT_REQUIRED")
     source_raw, _ = stable_regular(SOURCE, SOURCE_SHA256, {0o600})
     _sudoers_raw, sudoers_info = stable_regular(SUDOERS, SUDOERS_SHA256, {0o440})
-    if (sudoers_info.st_uid, sudoers_info.st_gid) != (0, 0):
+    if (sudoers_info.st_uid, sudoers_info.st_gid) != (ROOT_UID, ROOT_GID):
         raise RuntimeError("SUDOERS_IDENTITY")
     previous_raw, previous_info = stable_regular(TARGET, None, {0o500})
     previous = {"path": str(TARGET), "sha256": hashlib.sha256(previous_raw).hexdigest(),
                 "device": previous_info.st_dev, "inode": previous_info.st_ino,
                 "uid": previous_info.st_uid, "gid": previous_info.st_gid,
                 "mode": f"{stat.S_IMODE(previous_info.st_mode):04o}"}
-    if previous not in PREVIOUS_HELPERS:
+    successor_present = (previous["sha256"] == SOURCE_SHA256 and
+                         (previous["uid"], previous["gid"], previous["mode"]) ==
+                         (ROOT_UID, ROOT_GID, "0500"))
+    if not successor_present and previous not in PREVIOUS_HELPERS:
         raise RuntimeError("PREVIOUS_HELPER_NOT_ALLOWED")
     parent = TARGET.parent; parent_info = parent.lstat()
     if (parent.is_symlink() or not stat.S_ISDIR(parent_info.st_mode) or
             (parent_info.st_uid, parent_info.st_gid,
-             stat.S_IMODE(parent_info.st_mode)) != (0, 0, 0o755)):
+             stat.S_IMODE(parent_info.st_mode)) != (ROOT_UID, ROOT_GID, 0o755)):
         raise RuntimeError("TARGET_PARENT_IDENTITY")
+    if successor_present:
+        # A process may die after the durable os.replace()/directory fsync and
+        # before its stdout is captured as the private installation proof.  In
+        # that state, authenticate the exact successor twice and emit a new
+        # consumable observation without replacing it or changing its inode.
+        _installed_raw, installed = stable_regular(TARGET, SOURCE_SHA256, {0o500})
+        if ((installed.st_uid, installed.st_gid) != (ROOT_UID, ROOT_GID) or
+                (installed.st_dev, installed.st_ino) !=
+                (previous_info.st_dev, previous_info.st_ino)):
+            raise RuntimeError("TARGET_IDENTITY")
+        return {"path": str(TARGET), "sha256": SOURCE_SHA256,
+                "installationState": "RECOVERED_ALREADY_INSTALLED",
+                "previous": previous,
+                "identity": {"device": installed.st_dev, "inode": installed.st_ino,
+                             "uid": installed.st_uid, "gid": installed.st_gid,
+                             "mode": "0500"}, "sudoersSha256": SUDOERS_SHA256}
     temporary = parent / ".capacity-proc-observer.py.crm-staging.installing"
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                  os.O_NOFOLLOW | os.O_CLOEXEC, 0o500)
@@ -73,7 +93,7 @@ def install() -> dict[str, object]:
         view = memoryview(source_raw)
         while view:
             view = view[os.write(fd, view):]
-        os.fchmod(fd, 0o500); os.fchown(fd, 0, 0); os.fsync(fd)
+        os.fchmod(fd, 0o500); os.fchown(fd, ROOT_UID, ROOT_GID); os.fsync(fd)
     finally:
         os.close(fd)
     os.replace(temporary, TARGET)
@@ -83,18 +103,30 @@ def install() -> dict[str, object]:
     finally:
         os.close(directory)
     _installed_raw, installed = stable_regular(TARGET, SOURCE_SHA256, {0o500})
-    if (installed.st_uid, installed.st_gid) != (0, 0):
+    if (installed.st_uid, installed.st_gid) != (ROOT_UID, ROOT_GID):
         raise RuntimeError("TARGET_IDENTITY")
-    return {"path": str(TARGET), "sha256": SOURCE_SHA256, "previous": previous,
+    return {"path": str(TARGET), "sha256": SOURCE_SHA256,
+            "installationState": "INSTALLED", "previous": previous,
             "identity": {"device": installed.st_dev, "inode": installed.st_ino,
                          "uid": installed.st_uid, "gid": installed.st_gid,
                          "mode": "0500"}, "sudoersSha256": SUDOERS_SHA256}
 
 
-if __name__ == "__main__":
-    result = install()
-    print("BEFORE|{path}|{sha256}|{uid}:{gid}|{mode}|{device}:{inode}".format(
-        **result["previous"]))
-    print("INSTALLED|{path}|{sha256}|{uid}:{gid}|{mode}|{device}:{inode}".format(
+def result_lines(result: dict[str, object]) -> tuple[str, ...]:
+    lines = []
+    if result["installationState"] == "INSTALLED":
+        lines.append("BEFORE|{path}|{sha256}|{uid}:{gid}|{mode}|{device}:{inode}".format(
+            **result["previous"]))
+        label = "INSTALLED"
+    else:
+        label = "RECOVERED"
+    lines.append((label + "|{path}|{sha256}|{uid}:{gid}|{mode}|{device}:{inode}").format(
         **result, **result["identity"]))
-    print(f"PRESERVED|{SUDOERS}|{SUDOERS_SHA256}|0:0|0440")
+    lines.append(
+        f"PRESERVED|{SUDOERS}|{SUDOERS_SHA256}|{ROOT_UID}:{ROOT_GID}|0440")
+    return tuple(lines)
+
+
+if __name__ == "__main__":
+    for line in result_lines(install()):
+        print(line)

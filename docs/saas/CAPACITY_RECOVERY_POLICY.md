@@ -932,3 +932,17 @@ aceita somente o helper ef7 anteriormente autenticado por caminho, SHA,
 device/inode, owner e modo; sudoers permanece byte-exato. Prova ausente,
 identidade divergente ou cruzamento de perfil negam antes da materialização. Esse
 suporte versionado continua sem constituir autorização de instalação ou audit.
+
+Se a troca atômica já tiver sido sincronizada, mas a captura da prova for
+interrompida, uma nova invocação do mesmo instalador não repete a substituição.
+Ela admite somente o helper CRM byte-exato, `root:root 0500`, sob o pai canônico,
+reautentica a mesma identidade física e emite `RECOVERED` para formar a prova
+privada. SHA, owner, modo, inode instável, pai ou sudoers divergentes negam; o
+predecessor ef7 continua sendo a única origem aceita para a primeira instalação.
+O stdout completo do instalador é capturado exclusivamente em
+`helper-installation-report.private.txt`. O mesmo materializador, com
+`--capture-helper-proof --profile inactive-crm-staging`, autentica o framing e os
+bindings `INSTALLED` ou `RECOVERED`/`PRESERVED`, confronta helper e sudoers por
+`lstat`, grava `helper-installation-proof.private.json` com criação exclusiva e
+readback e o entrega imediatamente a `helper_binding()`. Relatório incompleto,
+extra, adulterado ou pertencente a outro perfil nega sem produzir prova.
