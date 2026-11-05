@@ -50,6 +50,30 @@ Os gates são independentes fora desse predicado composto:
 Configuração DB incompleta com persistência habilitada mantém o inbound e bloqueia
 resposta com predicado nominal tenant-scoped; ela nunca seleciona outro tenant.
 
+## Prontidão no Console Interno
+
+`Console Interno → Tenant → Canais → WhatsApp/Meta` apresenta três verificações
+independentes por identidade Meta:
+
+1. **Identidade vinculada** confirma a presença da `ChannelAccount`
+   `whatsapp/meta` e mostra separadamente se seu estado é `connected`;
+2. **Persistência configurada** lê `enabled`, `runtimeEnabled`,
+   `inboundPersistenceEnabled` e a presença de `baseConfig` em
+   `TenantOperationalConfig`. Quando somente `baseConfig` estiver ausente e a
+   fonte canônica do tenant existir, a ação explícita grava apenas esse campo,
+   sob o lock existente, preservando todos os demais blocos. O endpoint não
+   aceita valores de automação, outbound, IA ou handoff;
+3. **Recebimento na Inbox** só fica validado quando existe um `InboundMessage`
+   real do binding, persistido pela identidade correta e selecionável pela
+   timeline humana depois do limite de visibilidade da conversa. O Console
+   mostra o horário e o destino operacional observado, sem conteúdo ou
+   identidade do contato.
+
+`Conectado` não equivale a `Inbound validado`. A prontidão é observacional e não
+introduz um gate novo no webhook: as flags continuam governando a persistência
+pelo contrato vigente. Automação, outbound, IA e handoff permanecem
+independentes e podem continuar desligados durante a validação inbound.
+
 ## Consentimento e visibilidade da automação
 
 `chatbotConsentRuntime` é a autoridade da classificação de interações de

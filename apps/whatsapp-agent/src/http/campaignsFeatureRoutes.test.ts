@@ -6240,6 +6240,193 @@ test("admin tenant without channel can receive web session channel later", async
   assert.equal(await prisma.waPhoneNumber.count({ where: { clientId: client.id } }), 0);
 });
 
+test("admin Meta inbound readiness separates binding, baseConfig and real human timeline validation", async () => {
+  const tenantKey = `${prefix}-meta-inbound-readiness`;
+  const phoneNumberId = `meta-inbound-phone-${safeTemplatePrefix}`;
+  const waId = `551199${String(process.pid).padStart(6, "0").slice(-6)}`;
+  const created = await requestSuperadmin<{ client: { id: string } }>("POST", "/admin/tenants", {
+    clientKey: tenantKey,
+    name: "Meta Inbound Readiness Tenant",
+    profile: "business",
+    status: "ACTIVE",
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const clientId = created.body.client.id;
+  const department = await prisma.department.create({
+    data: { clientId, name: "Atendimento Geral", slug: `atendimento-geral-${safeTemplatePrefix}` },
+  });
+  const queue = await prisma.queue.create({
+    data: { clientId, departmentId: department.id, name: "Fila Geral" },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: phoneNumberId,
+      displayName: "Meta inbound",
+      enabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: false,
+      automationEnabled: false,
+      aiEnabled: false,
+      handoffEnabled: false,
+      status: "connected",
+      tokenStatus: "configured",
+    },
+  });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId },
+    create: { clientId, config: { supportChannel: { mode: "human" } } },
+    update: { config: { supportChannel: { mode: "human" } } },
+  });
+
+  const before = await requestSuperadmin<{
+    readiness: { baseConfig: { configured: boolean; canMaterialize: boolean }; accounts: unknown[] };
+  }>("GET", `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts/meta-inbound-readiness`);
+  assert.equal(before.status, 200);
+  assert.equal(before.body.readiness.baseConfig.configured, false);
+  assert.equal(before.body.readiness.baseConfig.canMaterialize, true);
+
+  const wrongField = await requestSuperadmin<ErrorPayload>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts/meta-inbound-readiness/base-config`,
+    { field: "crmBusinessStatuses" },
+  );
+  assert.equal(wrongField.status, 400);
+  assert.equal(getErrorCode(wrongField.body), "base_config_field_confirmation_required");
+
+  const extraField = await requestSuperadmin<ErrorPayload>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts/meta-inbound-readiness/base-config`,
+    { field: "baseConfig", outboundEnabled: true },
+  );
+  assert.equal(extraField.status, 400);
+  assert.equal(getErrorCode(extraField.body), "base_config_field_confirmation_required");
+  const configAfterRejectedPayload = await prisma.tenantOperationalConfig.findUniqueOrThrow({
+    where: { clientId },
+    select: { config: true },
+  });
+  assert.equal((configAfterRejectedPayload.config as Record<string, unknown>).baseConfig, undefined);
+
+  const materialized = await requestSuperadmin<{
+    action: string;
+    fieldsChanged: string[];
+    readiness: { baseConfig: { configured: boolean; source: string } };
+  }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts/meta-inbound-readiness/base-config`,
+    { field: "baseConfig" },
+  );
+  assert.equal(materialized.status, 200, JSON.stringify(materialized.body));
+  assert.equal(materialized.body.action, "saved");
+  assert.deepEqual(materialized.body.fieldsChanged, ["baseConfig"]);
+  assert.equal(materialized.body.readiness.baseConfig.configured, true);
+  assert.equal(materialized.body.readiness.baseConfig.source, "db");
+  const storedConfig = await prisma.tenantOperationalConfig.findUniqueOrThrow({
+    where: { clientId },
+    select: { config: true },
+  });
+  assert.deepEqual((storedConfig.config as Record<string, unknown>).supportChannel, { mode: "human" });
+  assert.deepEqual((storedConfig.config as Record<string, unknown>).baseConfig, {
+    allowlist: [],
+    handoffAttendantWaid: "",
+    defaultLanguage: "pt_BR",
+    disableAutoReply: false,
+  });
+
+  const receivedAt = new Date();
+  const conversationOpenedAt = new Date(receivedAt.getTime() - 1_000);
+  await prisma.conversation.create({
+    data: {
+      clientId,
+      departmentId: department.id,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: phoneNumberId,
+      lastInboundAt: receivedAt,
+      createdAt: conversationOpenedAt,
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: phoneNumberId,
+      status: "WAITING",
+      departmentId: department.id,
+      queueId: queue.id,
+      lastInboundAt: receivedAt,
+      lastInboundMessageId: `wamid.readiness.${safeTemplatePrefix}`,
+    },
+  });
+  await prisma.inboundMessage.create({
+    data: {
+      clientId,
+      phoneNumberId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `wamid.readiness.${safeTemplatePrefix}`,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: phoneNumberId,
+      type: "TEXT",
+      bodyText: "readiness test",
+      allowlistHit: true,
+      rawPayload: { inboxVisibility: "human_timeline" },
+      createdAt: receivedAt,
+    },
+  });
+
+  const after = await requestSuperadmin<{
+    readiness: {
+      accounts: Array<{
+        connected: boolean;
+        permissions: Record<string, boolean>;
+        inboundValidation: {
+          validated: boolean;
+          persistedOnce: boolean;
+          visibleInHumanTimeline: boolean;
+          departmentName: string | null;
+          queueName: string | null;
+        };
+      }>;
+    };
+  }>("GET", `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts/meta-inbound-readiness`);
+  assert.equal(after.status, 200, JSON.stringify(after.body));
+  assert.equal(after.body.readiness.accounts.length, 1);
+  assert.equal(after.body.readiness.accounts[0]?.connected, true);
+  assert.deepEqual(after.body.readiness.accounts[0]?.permissions, {
+    enabled: true,
+    runtimeEnabled: true,
+    inboundPersistenceEnabled: true,
+  });
+  assert.deepEqual(after.body.readiness.accounts[0]?.inboundValidation, {
+    validated: true,
+    persistedOnce: true,
+    visibleInHumanTimeline: true,
+    receivedAt: receivedAt.toISOString(),
+    departmentName: "Atendimento Geral",
+    queueName: "Fila Geral",
+    status: "WAITING",
+  });
+
+  const repeated = await requestSuperadmin<{ action: string; fieldsChanged: string[] }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts/meta-inbound-readiness/base-config`,
+    { field: "baseConfig" },
+  );
+  assert.equal(repeated.status, 200);
+  assert.equal(repeated.body.action, "unchanged");
+  assert.deepEqual(repeated.body.fieldsChanged, []);
+});
+
 test("admin channel removal clears operational Meta identity but preserves historical config", async () => {
   const tenantKey = `${prefix}-meta-teardown`;
   const teardownMetaPhoneNumberId = `meta-phone-teardown-${safeTemplatePrefix}`;
