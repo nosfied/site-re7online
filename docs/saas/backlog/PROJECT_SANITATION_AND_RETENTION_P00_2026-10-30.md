@@ -1005,7 +1005,10 @@ administrativos e cópias parciais criados por procedimentos operacionais distin
 Novos worktrees passam a usar `deploy-control-worktree-materialize.py`, que reutiliza
 `preparation_artifact_lifecycle.py`: grava `OPEN` antes de `git worktree add`, fixa
 repositório/commit/tree/caminho/orçamento e mantém a disposição
-`SANITIZE_AFTER_USE`. A rota não remove dados. Após uma retirada autenticada,
-`SANITIZED` exige ausência e receipt terminal ligado ao receipt de materialização;
-falha com caminho presente grava `RETENTION_DEBT`. Estado aberto ou dívida bloqueia
-uma alocação equivalente antes do próximo worktree volumoso.
+`SANITIZE_AFTER_USE`. O consumidor fechado `consume` copia somente controles
+rastreados e pinados para custódia privada, grava o receipt da operação, executa
+`git worktree remove` sem força e, após comprovar ausência física e no registro
+Git, emite o receipt terminal que fecha `SANITIZED`. Drift, conteúdo único ou
+falha com a árvore presente fecham `RETENTION_DEBT`; estado aberto ou dívida
+bloqueiam uma alocação equivalente antes do próximo worktree volumoso. Essa prova
+não altera a classificação de zero bytes do estoque histórico.

@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,8 +25,10 @@ class DeployControlWorktreeTests(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "init", "-q"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "fixture@example.test"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Fixture"], check=True)
-        (self.repo / "tracked.txt").write_text("authority\n")
-        subprocess.run(["git", "-C", str(self.repo), "add", "tracked.txt"], check=True)
+        (self.repo / "scripts").mkdir()
+        for name in ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py"):
+            shutil.copyfile(SCRIPTS / name, self.repo / "scripts" / name)
+        subprocess.run(["git", "-C", str(self.repo), "add", "scripts"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "fixture"], check=True)
         self.commit = self.git("rev-parse", "HEAD"); self.tree = self.git("rev-parse", "HEAD^{tree}")
         self.destination = self.controls / self.commit[:12]
@@ -91,6 +94,87 @@ class DeployControlWorktreeTests(unittest.TestCase):
             "--terminal-receipt", receipt,
             "--terminal-receipt-sha256", self.sha(receipt),
             "--owner", "fixture", "--reason", "terminal fixture")
+
+    def consume_request(self, materialized):
+        output = self.base / "private-custody"; output.mkdir(mode=0o700)
+        request = self.base / "consume-request.private.json"
+        controls = []
+        for name in ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py"):
+            source = "scripts/" + name
+            controls.append({"source": source, "destination": source,
+                "sha256": hashlib.sha256((self.repo / source).read_bytes()).hexdigest()})
+        self.write_private(request, {"schemaVersion": 1,
+            "kind": "DEPLOY_CONTROL_MATERIALIZE_CONTROLS",
+            "operationId": self.value["generationId"],
+            "controlPath": str(self.destination), "controlCommit": self.commit,
+            "materializationReceiptSha256": materialized["materializationReceiptSha256"],
+            "outputRoot": str(output), "controls": controls})
+        return output, request
+
+    def consume(self, materialized, request):
+        lifecycle_path = Path(materialized["lifecyclePath"])
+        materialization = lifecycle_path.parent / "materialization-receipt.private.json"
+        return self.run_tool("consume", "--lifecycle", lifecycle_path,
+            "--lifecycle-sha256", self.sha(lifecycle_path),
+            "--materialization-receipt", materialization,
+            "--materialization-receipt-sha256", self.sha(materialization),
+            "--request", request, "--request-sha256", self.sha(request),
+            "--owner", "fixture", "--reason", "controls materialized")
+
+    def test_real_control_materialization_closes_worktree_end_to_end(self):
+        materialized = self.materialize()
+        output, request = self.consume_request(materialized)
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["state"], "SANITIZED")
+        self.assertFalse(self.destination.exists())
+        copied = output / "scripts/deploy-preparation-admission.py"
+        self.assertEqual(copied.read_bytes(), (SCRIPTS / copied.name).read_bytes())
+        self.assertEqual(copied.stat().st_mode & 0o777, 0o600)
+        self.assertTrue((output / "deploy-control-operation-receipt.private.json").exists())
+        self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
+        lifecycle_path = Path(materialized["lifecyclePath"])
+        self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "SANITIZED")
+        self.assertEqual(lifecycle.validate_existing_lifecycles(self.controls, self.value)
+                         ["reservedBytes"], 0)
+
+    def test_control_operation_failure_records_debt_before_next_allocation(self):
+        materialized = self.materialize()
+        output, request = self.consume_request(materialized)
+        (self.destination / "unique-private.txt").write_text("must not disappear\n")
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_consume_drift", result.stderr)
+        self.assertTrue(self.destination.exists())
+        terminal = json.loads((output / "deploy-control-terminal-receipt.private.json").read_text())
+        self.assertEqual(terminal["outcome"], "TERMINAL_FAILURE")
+        lifecycle_path = Path(materialized["lifecyclePath"])
+        self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "RETENTION_DEBT")
+        with self.assertRaisesRegex(ValueError, "equivalent_preparation_pending"):
+            lifecycle.validate_existing_lifecycles(self.controls, self.value)
+
+    def test_resume_after_operation_receipt_finishes_git_disposition_once(self):
+        materialized = self.materialize()
+        output, request = self.consume_request(materialized)
+        request_value = json.loads(request.read_text())
+        for item in request_value["controls"]:
+            destination = output / item["destination"]
+            destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            destination.write_bytes((self.destination / item["source"]).read_bytes())
+            destination.chmod(0o600)
+        operation = {"schemaVersion": 1,
+            "kind": "DEPLOY_CONTROL_CONTROLS_MATERIALIZED",
+            "operationId": self.value["generationId"],
+            "controlPath": str(self.destination), "controlCommit": self.commit,
+            "materializationReceiptSha256": materialized["materializationReceiptSha256"],
+            "requestSha256": self.sha(request), "controls": request_value["controls"]}
+        self.write_private(output / "deploy-control-operation-receipt.private.json", operation)
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.destination.exists())
+        self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
+                         "SANITIZED")
 
     def test_success_closes_only_after_external_removal(self):
         materialized = self.materialize()

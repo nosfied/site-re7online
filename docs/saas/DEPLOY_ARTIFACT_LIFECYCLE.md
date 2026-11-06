@@ -1288,12 +1288,21 @@ O mesmo protocolo cobre novos worktrees isolados de control plane por
 `deploy-control-worktree-materialize.py`. A operação `git-worktree` mede diretório
 sem seguir symlinks e deduplica hardlinks por device/inode. Repositório, commit,
 tree, destino literal, orçamento e equivalência são autenticados antes de
-`git worktree add`; `OPEN` é durável antes da alocação. A rota de fechamento não
-remove o worktree: ela exige receipt terminal da operação que fez a disposição e
-registra `SANITIZED` somente após ausência, ou `RETENTION_DEBT` com resíduo. Os
-controles históricos sem esse binding não são migrados por presunção.
-Os testes cobrem materialização, produtor, duplicação, orçamento, resíduo e
-fechamento. Esta implementação versionada não autoriza instalação ou retirada.
+`git worktree add`; `OPEN` é durável antes da alocação. O consumidor fechado
+`consume` materializa em custódia privada somente controles rastreados, com
+caminho e SHA enumerados no request, confere a árvore limpa, grava receipt
+determinístico, executa `git worktree remove` sem `--force`, comprova ausência e
+registro Git removido, emite receipt terminal e então fecha `SANITIZED`. Falha ou
+conteúdo único mantém a árvore e fecha `RETENTION_DEBT`; esse scope bloqueia nova
+alocação equivalente. Interrupção depois do receipt da operação pode retomar a
+disposição pelos mesmos bytes determinísticos, sem repetir a cópia.
+
+Essa ligação cobre a operação real de extrair controles autenticados de um
+worktree transitório para uma custódia operacional. Não é executor livre e não
+remove worktrees históricos. Os testes atravessam materialização, consumo, cópia,
+receipt, disposição Git e closure; também comprovam dívida com resíduo. O estoque
+sem esse binding continua não qualificado, e o lifecycle comprovado das releases
+permanece independente.
 
 Cobertura comprovada: a admissão schema 2 materializa o produtor e a ação
 `deploy-preparation-admission.py --run-preparation` é o callsite canônico de criação
