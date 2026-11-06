@@ -260,7 +260,8 @@ def validate_control_worktree(repo: Path, control: Path, commit: str,
             "deploy_control_consume_worktree")
     require(worktree_registered(repo, control), "deploy_control_consume_registration")
     require(git(control, "rev-parse", "HEAD") == commit and
-            git(control, "status", "--porcelain=v1", "--untracked-files=all") == "",
+            git(control, "status", "--porcelain=v1", "--untracked-files=all",
+                "--ignored=matching") == "",
             "deploy_control_consume_drift")
     result = []
     for item in controls:

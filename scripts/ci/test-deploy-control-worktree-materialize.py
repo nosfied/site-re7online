@@ -28,7 +28,9 @@ class DeployControlWorktreeTests(unittest.TestCase):
         (self.repo / "scripts").mkdir()
         for name in ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py"):
             shutil.copyfile(SCRIPTS / name, self.repo / "scripts" / name)
-        subprocess.run(["git", "-C", str(self.repo), "add", "scripts"], check=True)
+        (self.repo / ".gitignore").write_text("private-*.txt\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "scripts", ".gitignore"],
+                       check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "fixture"], check=True)
         self.commit = self.git("rev-parse", "HEAD"); self.tree = self.git("rev-parse", "HEAD^{tree}")
         self.destination = self.controls / self.commit[:12]
@@ -151,6 +153,26 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertEqual(terminal["outcome"], "TERMINAL_FAILURE")
         lifecycle_path = Path(materialized["lifecyclePath"])
         self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "RETENTION_DEBT")
+        with self.assertRaisesRegex(ValueError, "equivalent_preparation_pending"):
+            lifecycle.validate_existing_lifecycles(self.controls, self.value)
+
+    def test_ignored_private_content_preserves_registered_worktree_as_debt(self):
+        materialized = self.materialize()
+        output, request = self.consume_request(materialized)
+        private = self.destination / "private-customer-evidence.txt"
+        private.write_text("unique ignored evidence\n")
+        self.assertEqual(self.git("-C", str(self.destination), "status", "--porcelain=v1",
+                                  "--untracked-files=all"), "")
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_consume_drift", result.stderr)
+        self.assertEqual(private.read_text(), "unique ignored evidence\n")
+        self.assertIn(f"worktree {self.destination}",
+                      self.git("worktree", "list", "--porcelain").splitlines())
+        lifecycle_path = Path(materialized["lifecyclePath"])
+        self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "RETENTION_DEBT")
+        terminal = json.loads((output / "deploy-control-terminal-receipt.private.json").read_text())
+        self.assertEqual(terminal["outcome"], "TERMINAL_FAILURE")
         with self.assertRaisesRegex(ValueError, "equivalent_preparation_pending"):
             lifecycle.validate_existing_lifecycles(self.controls, self.value)
 

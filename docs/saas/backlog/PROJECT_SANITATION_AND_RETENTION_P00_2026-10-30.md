@@ -1006,7 +1006,8 @@ Novos worktrees passam a usar `deploy-control-worktree-materialize.py`, que reut
 `preparation_artifact_lifecycle.py`: grava `OPEN` antes de `git worktree add`, fixa
 repositório/commit/tree/caminho/orçamento e mantém a disposição
 `SANITIZE_AFTER_USE`. O consumidor fechado `consume` copia somente controles
-rastreados e pinados para custódia privada, grava o receipt da operação, executa
+rastreados e pinados para custódia privada, nega conteúdo não rastreado ou ignorado,
+grava o receipt da operação, executa
 `git worktree remove` sem força e, após comprovar ausência física e no registro
 Git, emite o receipt terminal que fecha `SANITIZED`. Drift, conteúdo único ou
 falha com a árvore presente fecham `RETENTION_DEBT`; estado aberto ou dívida

@@ -1290,10 +1290,12 @@ sem seguir symlinks e deduplica hardlinks por device/inode. Repositório, commit
 tree, destino literal, orçamento e equivalência são autenticados antes de
 `git worktree add`; `OPEN` é durável antes da alocação. O consumidor fechado
 `consume` materializa em custódia privada somente controles rastreados, com
-caminho e SHA enumerados no request, confere a árvore limpa, grava receipt
+caminho e SHA enumerados no request, confere a árvore sem alterações rastreadas,
+não rastreadas ou ignoradas, grava receipt
 determinístico, executa `git worktree remove` sem `--force`, comprova ausência e
 registro Git removido, emite receipt terminal e então fecha `SANITIZED`. Falha ou
-conteúdo único mantém a árvore e fecha `RETENTION_DEBT`; esse scope bloqueia nova
+conteúdo único — inclusive coberto por `.gitignore` — mantém a árvore e fecha
+`RETENTION_DEBT`; esse scope bloqueia nova
 alocação equivalente. Interrupção depois do receipt da operação pode retomar a
 disposição pelos mesmos bytes determinísticos, sem repetir a cópia.
 
