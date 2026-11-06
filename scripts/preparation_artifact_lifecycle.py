@@ -16,6 +16,7 @@ ARTIFACT_KEYS = {"path", "scope", "owner", "budgetBytes", "budgetInodes",
                  "protection", "authority", "terminalDisposition", "equivalenceSha256",
                  "operation"}
 OPERATION_KEYS = {"name", "kind", "artifactIndex", "predictedBytes", "predictedInodes"}
+OPERATION_KINDS = {"copy", "tar", "git-worktree"}
 
 
 def _require(condition: bool, predicate: str) -> None:
@@ -62,7 +63,7 @@ def validate_artifacts(items: Any) -> list[dict[str, Any]]:
         operation = item["operation"]
         _require(isinstance(operation, dict) and set(operation) == OPERATION_KEYS and
                  isinstance(operation["name"], str) and operation["name"] and
-                 operation["kind"] in {"copy", "tar"} and
+                 operation["kind"] in OPERATION_KINDS and
                  type(operation["artifactIndex"]) is int and operation["artifactIndex"] >= 0 and
                  type(operation["predictedBytes"]) is int and operation["predictedBytes"] > 0 and
                  type(operation["predictedInodes"]) is int and operation["predictedInodes"] > 0 and
@@ -202,10 +203,32 @@ def measure_realized(contract: dict[str, Any], require_all: bool = True,
             _require(not require_all, "preparation_realized_missing")
             continue
         info = path.lstat()
-        _require(not path.is_symlink() and stat.S_ISREG(info.st_mode),
-                 "preparation_realized_type")
-        observed = {"path": str(path), "allocatedBytes": info.st_blocks * 512,
-                    "allocatedInodes": 1}
+        operation_kind = item["operation"]["kind"]
+        if operation_kind == "git-worktree":
+            _require(not path.is_symlink() and stat.S_ISDIR(info.st_mode),
+                     "preparation_realized_type")
+            allocated_bytes = allocated_inodes = 0
+            seen: set[tuple[int, int]] = set()
+            pending = [path]
+            while pending:
+                current = pending.pop()
+                current_info = current.lstat()
+                identity = (current_info.st_dev, current_info.st_ino)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                allocated_bytes += current_info.st_blocks * 512
+                allocated_inodes += 1
+                if stat.S_ISDIR(current_info.st_mode):
+                    with os.scandir(current) as entries:
+                        pending.extend(Path(entry.path) for entry in entries)
+            observed = {"path": str(path), "allocatedBytes": allocated_bytes,
+                        "allocatedInodes": allocated_inodes}
+        else:
+            _require(not path.is_symlink() and stat.S_ISREG(info.st_mode),
+                     "preparation_realized_type")
+            observed = {"path": str(path), "allocatedBytes": info.st_blocks * 512,
+                        "allocatedInodes": 1}
         result.append(observed)
         if enforce_budget:
             _require(observed["allocatedBytes"] <= item["budgetBytes"] and

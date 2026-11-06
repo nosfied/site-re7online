@@ -18,7 +18,7 @@ from typing import Any
 
 import importlib.util
 
-PREPARATION_LIFECYCLE_SHA256 = "a67fb3361c17372896241469683104cb2e3bab3e892b8bf32127882612ad0f2a"
+PREPARATION_LIFECYCLE_SHA256 = "36669ef654cb2f136d2072bd40f7ec96c7f9020a280c6402001d6dd0269178e9"
 _preparation_path = Path(__file__).resolve().parent / "preparation_artifact_lifecycle.py"
 try:
     _preparation_raw = _preparation_path.read_bytes()

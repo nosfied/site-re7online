@@ -1283,8 +1283,28 @@ O produtor grava `OPEN` antes do primeiro efeito; falha ou interrupção posteri
 grava `RETENTION_DEBT`. `SANITIZED` só é aceito pelo consumidor terminal quando os
 caminhos literais já estão ausentes; o consumidor não remove nada. Histórico sem
 registro continua histórico não classificado, nunca `SANITIZED` por inferência.
-Os testes cobrem materialização, produtor, duplicação, orçamento, resíduo e
-fechamento. Esta implementação versionada não autoriza instalação ou retirada.
+
+O mesmo protocolo cobre novos worktrees isolados de control plane por
+`deploy-control-worktree-materialize.py`. A operação `git-worktree` mede diretório
+sem seguir symlinks e deduplica hardlinks por device/inode. Repositório, commit,
+tree, destino literal, orçamento e equivalência são autenticados antes de
+`git worktree add`; `OPEN` é durável antes da alocação. O consumidor fechado
+`consume` materializa em custódia privada somente controles rastreados, com
+caminho e SHA enumerados no request, confere a árvore sem alterações rastreadas,
+não rastreadas ou ignoradas, grava receipt
+determinístico, executa `git worktree remove` sem `--force`, comprova ausência e
+registro Git removido, emite receipt terminal e então fecha `SANITIZED`. Falha ou
+conteúdo único — inclusive coberto por `.gitignore` — mantém a árvore e fecha
+`RETENTION_DEBT`; esse scope bloqueia nova
+alocação equivalente. Interrupção depois do receipt da operação pode retomar a
+disposição pelos mesmos bytes determinísticos, sem repetir a cópia.
+
+Essa ligação cobre a operação real de extrair controles autenticados de um
+worktree transitório para uma custódia operacional. Não é executor livre e não
+remove worktrees históricos. Os testes atravessam materialização, consumo, cópia,
+receipt, disposição Git e closure; também comprovam dívida com resíduo. O estoque
+sem esse binding continua não qualificado, e o lifecycle comprovado das releases
+permanece independente.
 
 Cobertura comprovada: a admissão schema 2 materializa o produtor e a ação
 `deploy-preparation-admission.py --run-preparation` é o callsite canônico de criação
