@@ -636,6 +636,23 @@ sobre o fallback derivado de `sentCount`. A campanha pode concluir o processamen
 dos demais destinatários sem transformar essa posição em sucesso ou autorizar seu
 reenvio.
 
+Na recuperação de uma queda entre o commit SQL do marcador e a baixa da tarefa no
+ledger, as duas transições de lease são distintas. Primeiro, a classificação
+operacional existente move o job `running` para `needs_review`, expira o lease do
+job e invalida o token para execução, mas preserva os campos de identidade e a
+linha de lease do tenant para revisão. Ela não significa suspensão consumível.
+Depois, a transição administrativa versionada do reconciliador exige a guarda
+efetivamente fechada, o par abandonado `runner -> provider`, o marcador SQL
+autenticado e a correspondência exata entre tenant, campanha, job, token, owner e
+ambos os prazos expirados. Na mesma transação PostgreSQL, ela muda somente esse job
+para `queued/operational_suspension`, limpa seus campos de lease, libera somente a
+linha do tenant ainda vinculada ao job/token antigos e grava receipt schema 1. Se a
+linha já apontar para outra execução, a operação nega sem mudança. A guarda fechada
+continua bloqueando claims; essa transição não reabre a guarda nem autoriza retry.
+Ela é consumida pelo modo administrativo explícito `recover-job` do mesmo CLI de
+reconciliação e exige `--execute-authorized`; `dry-run`, `apply-sql`,
+`verify-receipt` e `ack-task` mantêm seus papéis separados.
+
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 
 Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`

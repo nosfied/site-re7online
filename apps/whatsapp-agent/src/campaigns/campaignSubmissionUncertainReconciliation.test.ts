@@ -1,6 +1,7 @@
 import "./campaignOperationsTestSupport.js";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -12,10 +13,15 @@ import {
   acknowledgeSubmissionUncertain,
   applySubmissionUncertain,
   dryRunSubmissionUncertain,
+  recoverSubmissionUncertainExecutionJob,
   verifySubmissionUncertain,
   type SubmissionUncertainBindings,
 } from "./campaignSubmissionUncertainReconciliation.js";
-import { suspendCampaignExecutionJob } from "./campaignExecutionQueue.js";
+import {
+  assertCampaignExecutionLease,
+  claimNextCampaignExecutionJob,
+  markCampaignExecutionJobNeedsReview,
+} from "./campaignExecutionQueue.js";
 
 process.env.APP_AUTH_SECRET = "synthetic-submission-uncertain";
 
@@ -176,11 +182,14 @@ test("a new process recovers a real execution job killed after a second SQL mark
       CRASH_FIXTURE_RECIPIENTS: JSON.stringify(recipients), CRASH_FIXTURE_CRASH_POSITION: "2" },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  let childStdout = "", childStderr = "";
+  child.stdout.on("data", chunk => { childStdout += String(chunk); });
+  child.stderr.on("data", chunk => { childStderr += String(chunk); });
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve({ code, signal }));
   });
-  assert.deepEqual(exit, { code: null, signal: "SIGKILL" });
+  assert.deepEqual(exit, { code: null, signal: "SIGKILL" }, `${childStderr}\n${childStdout}`);
   assert.equal(await db.event.count({ where: { clientId, eventName: "synthetic.provider.call",
     messageId: { startsWith: `campaign.${campaign.id}.` } } }), 2);
   const firstMarker = await db.event.findFirstOrThrow({ where: { clientId, messageId: `campaign.${campaign.id}.1`,
@@ -191,11 +200,21 @@ test("a new process recovers a real execution job killed after a second SQL mark
   assert.equal(runningJob.status, "running");
   assert.equal(runningJob.attempt, 1, "the normal queue claim owns the real execution job");
   assert.ok(runningJob.leaseToken);
-  await suspendCampaignExecutionJob({ id: job.id, clientId, campaignId: campaign.id, batchId: null,
-    chunkIndex: null, kind: "campaign", leaseToken: runningJob.leaseToken! });
-  assert.deepEqual(await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id }, select: {
-    status: true, failureReason: true, leaseToken: true,
-  } }), { status: "queued", failureReason: "operational_suspension", leaseToken: null });
+  const expiredAt = new Date(Date.now() - 1);
+  await db.$transaction([
+    db.campaignExecutionJob.update({ where: { id: job.id }, data: { leaseExpiresAt: expiredAt } }),
+    db.tenantCampaignExecutionLease.update({ where: { clientId }, data: { expiresAt: expiredAt } }),
+  ]);
+  const recoveryNow = new Date();
+  assert.equal(await markCampaignExecutionJobNeedsReview({ clientId, jobId: job.id,
+    reason: "provider_result_uncertain_after_restart", now: recoveryNow }), true);
+  assert.equal(await assertCampaignExecutionLease({ clientId, jobId: job.id,
+    leaseToken: runningJob.leaseToken! }), false, "the killed runner token cannot continue");
+  assert.equal(campaignOperationsStatus().open, false, "the abandoned ledger tasks close the guard");
+  assert.equal(await claimNextCampaignExecutionJob({ now: recoveryNow }), null,
+    "the closed guard blocks the queue before administrative recovery");
+  const originalLease = await db.tenantCampaignExecutionLease.findUniqueOrThrow({ where: { clientId } });
+  await db.tenantCampaignExecutionLease.update({ where: { clientId }, data: { jobId: "different-execution" } });
   const rawFence = readCampaignReconciliationFence();
   const providerEntry = Object.entries(rawFence.tasks).find(([, task]) => task.kind === "provider");
   assert.ok(providerEntry); assert.equal(rawFence.open, true); assert.equal(Object.keys(rawFence.tasks).length, 2);
@@ -203,6 +222,46 @@ test("a new process recovers a real execution job killed after a second SQL mark
   const bindings: SubmissionUncertainBindings = { clientId, campaignId: campaign.id, jobId: job.id, runId,
     seedEventId: seed.id, submitStartedEventId: submitStarted.id, taskId: providerEntry[0],
     guardGeneration: rawFence.generation, position: 2 };
+  await assert.rejects(recoverSubmissionUncertainExecutionJob(db, bindings, { now: recoveryNow }),
+    /post_crash_lease_binding_drift/);
+  await db.tenantCampaignExecutionLease.update({ where: { clientId }, data: {
+    jobId: originalLease.jobId, leaseToken: originalLease.leaseToken, ownerId: originalLease.ownerId,
+    expiresAt: originalLease.expiresAt, heartbeatAt: originalLease.heartbeatAt,
+  } });
+  const bindingsFile = `${file}.post-crash-bindings.json`;
+  fs.writeFileSync(bindingsFile, `${JSON.stringify(bindings)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  t.after(() => fs.rmSync(bindingsFile, { force: true }));
+  const recoveryProcess = spawn(process.execPath, ["--import", import.meta.resolve("tsx"),
+    fileURLToPath(new URL("../../scripts/reconcile-campaign-submission-uncertain.ts", import.meta.url)),
+    `--bindings=${bindingsFile}`, "--mode=recover-job", "--execute-authorized"], {
+    env: { ...process.env, CAMPAIGN_OPERATIONS_FILE: file, CAMPAIGN_OPERATIONS_TOPOLOGY: "single-host",
+      CAMPAIGN_OPERATIONS_HOST_ID: process.env.CAMPAIGN_OPERATIONS_HOST_ID!,
+      APP_AUTH_SECRET: "synthetic-submission-uncertain" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let recoveryStdout = "", recoveryStderr = "";
+  recoveryProcess.stdout.on("data", chunk => { recoveryStdout += String(chunk); });
+  recoveryProcess.stderr.on("data", chunk => { recoveryStderr += String(chunk); });
+  const recoveryExit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    recoveryProcess.once("error", reject);
+    recoveryProcess.once("exit", (code, signal) => resolve({ code, signal }));
+  });
+  assert.deepEqual(recoveryExit, { code: 0, signal: null }, recoveryStderr);
+  const recovery = JSON.parse(recoveryStdout.trim()) as { alreadyRecovered: boolean; receiptId: string };
+  assert.equal(recovery.alreadyRecovered, false);
+  assert.deepEqual(await recoverSubmissionUncertainExecutionJob(db, bindings, { now: recoveryNow }),
+    { alreadyRecovered: true, receiptId: recovery.receiptId });
+  assert.equal(await db.event.count({ where: { clientId,
+    eventName: "campaign.execution_job.post_crash_suspended" } }), 1);
+  assert.deepEqual(await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id }, select: {
+    status: true, failureReason: true, finishedAt: true, leaseToken: true, leaseOwner: true, leaseExpiresAt: true,
+  } }), { status: "queued", failureReason: "operational_suspension", finishedAt: null,
+    leaseToken: null, leaseOwner: null, leaseExpiresAt: null });
+  assert.deepEqual(await db.tenantCampaignExecutionLease.findUniqueOrThrow({ where: { clientId }, select: {
+    jobId: true, leaseToken: true, ownerId: true,
+  } }), { jobId: null, leaseToken: originalLease.leaseToken, ownerId: originalLease.ownerId });
+  assert.equal(await claimNextCampaignExecutionJob({ now: recoveryNow }), null,
+    "administrative suspension does not bypass the closed guard");
   const reconciler = spawn(process.execPath, ["--import", import.meta.resolve("tsx"),
     fileURLToPath(new URL("./fixtures/submissionUncertainCrashReconciler.ts", import.meta.url))], {
     env: { ...process.env, CAMPAIGN_OPERATIONS_FILE: file, CAMPAIGN_OPERATIONS_TOPOLOGY: "single-host",

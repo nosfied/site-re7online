@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
-import { acknowledgeSubmissionUncertainCampaignTask, readCampaignReconciliationFence } from "./campaignOperations.js";
+import {
+  acknowledgeSubmissionUncertainCampaignTask,
+  campaignOperationsStatus,
+  readCampaignReconciliationFence,
+} from "./campaignOperations.js";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 export type SubmissionUncertainBindings = {
@@ -26,6 +30,8 @@ const record = (value: unknown): Record<string, unknown> =>
 function requireThat(value: unknown, reason: string): asserts value { if (!value) throw new Error(reason); }
 const messageIdFor = (bindings: SubmissionUncertainBindings) => `campaign.${bindings.campaignId}.${bindings.position}`;
 const receiptRequestId = (bindings: SubmissionUncertainBindings) => `submission-uncertain:${bindings.submitStartedEventId}`;
+const recoveryRequestId = (bindings: SubmissionUncertainBindings) =>
+  `submission-uncertain-post-crash-suspension:${bindings.submitStartedEventId}`;
 type PreservedCampaignStatus = "sending" | "cancelled";
 
 function preservedCampaignStatus(value: unknown): PreservedCampaignStatus {
@@ -72,6 +78,104 @@ async function authenticateNoProviderResult(db: Db, bindings: SubmissionUncertai
   ]);
   requireThat(accepted === 0 && outbounds === 0 && terminalResults === 0,
     "submission_uncertain_provider_result_present");
+}
+
+async function authenticateCommittedRunnerDisposition(db: Db, bindings: SubmissionUncertainBindings) {
+  const [submitStarted, dispositions] = await Promise.all([
+    db.event.findFirst({ where: { id: bindings.submitStartedEventId, clientId: bindings.clientId,
+      messageId: messageIdFor(bindings), eventName: "campaign.message.submit_started" } }),
+    db.event.findMany({ where: { clientId: bindings.clientId, messageId: messageIdFor(bindings),
+      eventName: "campaign.message.submission_uncertain_preserved" }, orderBy: { createdAt: "desc" }, take: 2 }),
+  ]);
+  requireThat(submitStarted && dispositions.length === 1,
+    "submission_uncertain_post_crash_evidence_missing");
+  const submitPayload = record(submitStarted.payloadJson);
+  const disposition = dispositions[0];
+  const payload = record(disposition.payloadJson);
+  requireThat(submitPayload.campaignId === bindings.campaignId &&
+    submitPayload.campaignRunId === bindings.runId && disposition.waId === submitStarted.waId &&
+    disposition.requestId === `campaign-message-submission-uncertain:${bindings.campaignId}:${bindings.position}` &&
+    payload.campaignId === bindings.campaignId && payload.campaignRunId === bindings.runId &&
+    payload.position === bindings.position && payload.providerAcceptance === "unknown" &&
+    payload.outboundMaterialized === false && payload.definitiveFailure === false &&
+    payload.retryAllowed === false && payload.providerCalls === 1,
+  "submission_uncertain_post_crash_evidence_drift");
+  return disposition;
+}
+
+export async function recoverSubmissionUncertainExecutionJob(
+  db: PrismaClient,
+  bindings: SubmissionUncertainBindings,
+  params: { now?: Date } = {}
+) {
+  const now = params.now ?? new Date();
+  requireThat(Number.isSafeInteger(bindings.position) && bindings.position > 0,
+    "submission_uncertain_scope_invalid");
+  const status = campaignOperationsStatus();
+  requireThat(status.available && status.open === false && status.generation === bindings.guardGeneration,
+    "submission_uncertain_post_crash_guard_not_closed");
+  const { taskHash, interruptedParent } = authenticateFence(bindings);
+  requireThat(interruptedParent, "submission_uncertain_post_crash_tasks_not_abandoned");
+
+  return db.$transaction(async tx => {
+    await tx.$executeRaw`SELECT id FROM "Client" WHERE id=${bindings.clientId}::uuid FOR UPDATE`;
+    await tx.$executeRaw`SELECT id FROM "Campaign" WHERE id=${bindings.campaignId} FOR UPDATE`;
+    await tx.$executeRaw`SELECT id FROM "CampaignExecutionJob" WHERE id=${bindings.jobId} FOR UPDATE`;
+    await authenticateNoProviderResult(tx, bindings);
+    await authenticateCommittedRunnerDisposition(tx, bindings);
+    const [campaign, job, lease, prior] = await Promise.all([
+      tx.campaign.findFirst({ where: { id: bindings.campaignId, clientId: bindings.clientId } }),
+      tx.campaignExecutionJob.findFirst({ where: { id: bindings.jobId, clientId: bindings.clientId,
+        campaignId: bindings.campaignId } }),
+      tx.tenantCampaignExecutionLease.findUnique({ where: { clientId: bindings.clientId } }),
+      tx.event.findUnique({ where: { clientId_eventName_requestId: { clientId: bindings.clientId,
+        eventName: "campaign.execution_job.post_crash_suspended", requestId: recoveryRequestId(bindings) } } }),
+    ]);
+    requireThat(campaign && job && lease, "submission_uncertain_post_crash_binding_missing");
+    preservedCampaignStatus(campaign.status);
+    if (prior) {
+      const payload = record(prior.payloadJson);
+      requireThat(payload.version === 1 && hash(payload.bindings) === hash(bindings) &&
+        payload.taskHash === taskHash && typeof payload.leaseBindingHash === "string" &&
+        /^[a-f0-9]{64}$/.test(payload.leaseBindingHash) &&
+        payload.leaseTokenHash === hash(lease.leaseToken) && payload.leaseOwner === lease.ownerId &&
+        job.status === "queued" && job.failureReason === "operational_suspension" &&
+        !job.leaseToken && !job.leaseOwner && !job.leaseExpiresAt && lease.jobId === null,
+      "submission_uncertain_post_crash_receipt_drift");
+      return { alreadyRecovered: true as const, receiptId: prior.id };
+    }
+    requireThat(job.kind === "campaign" && job.batchId === null && job.status === "needs_review" &&
+      job.failureReason === "provider_result_uncertain_after_restart" && typeof job.leaseToken === "string" &&
+      job.leaseToken.length > 0 && typeof job.leaseOwner === "string" && job.leaseOwner.length > 0 &&
+      job.leaseExpiresAt instanceof Date && job.leaseExpiresAt <= now,
+    "submission_uncertain_post_crash_job_drift");
+    requireThat(lease.jobId === job.id && lease.leaseToken === job.leaseToken &&
+      lease.ownerId === job.leaseOwner && lease.expiresAt <= now,
+    "submission_uncertain_post_crash_lease_binding_drift");
+    const leaseBindingHash = hash({ clientId: bindings.clientId, jobId: job.id,
+      leaseToken: lease.leaseToken, ownerId: lease.ownerId, expiresAt: lease.expiresAt.toISOString() });
+    const recovered = await tx.campaignExecutionJob.updateMany({ where: {
+      id: job.id, clientId: bindings.clientId, campaignId: bindings.campaignId,
+      status: "needs_review", failureReason: "provider_result_uncertain_after_restart",
+      leaseToken: job.leaseToken, leaseOwner: job.leaseOwner, leaseExpiresAt: { lte: now },
+    }, data: { status: "queued", failureReason: "operational_suspension", finishedAt: null,
+      leaseToken: null, leaseOwner: null, leaseExpiresAt: null } });
+    requireThat(recovered.count === 1, "submission_uncertain_post_crash_job_drift");
+    const released = await tx.tenantCampaignExecutionLease.updateMany({ where: {
+      id: lease.id, clientId: bindings.clientId, jobId: job.id, leaseToken: job.leaseToken,
+      ownerId: job.leaseOwner, expiresAt: { lte: now },
+    }, data: { jobId: null, expiresAt: now, heartbeatAt: now } });
+    requireThat(released.count === 1, "submission_uncertain_post_crash_lease_binding_drift");
+    const receipt = await tx.event.create({ data: { clientId: bindings.clientId,
+      messageId: bindings.campaignId, requestId: recoveryRequestId(bindings),
+      eventName: "campaign.execution_job.post_crash_suspended", payloadJson: {
+        version: 1, bindings, taskHash, interruptedParent, leaseBindingHash,
+        leaseTokenHash: hash(lease.leaseToken), leaseOwner: lease.ownerId,
+        from: "needs_review", to: "queued", failureReason: "operational_suspension",
+        providerCalls: 0,
+      } } });
+    return { alreadyRecovered: false as const, receiptId: receipt.id };
+  }, { isolationLevel: "Serializable", timeout: 15000 });
 }
 
 async function authenticatePriorEffects(db: Db, bindings: SubmissionUncertainBindings) {

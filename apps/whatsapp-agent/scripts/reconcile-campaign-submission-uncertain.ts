@@ -1,11 +1,12 @@
-// Administrative recovery only. Read-only by default; SQL reconciliation and
-// ledger acknowledgement require distinct explicit authorizations.
+// Administrative recovery only. Read-only by default; job recovery, SQL
+// reconciliation and ledger acknowledgement require distinct explicit authorizations.
 import fs from "node:fs";
 import { getPrisma } from "../src/db.js";
 import {
   acknowledgeSubmissionUncertain,
   applySubmissionUncertain,
   dryRunSubmissionUncertain,
+  recoverSubmissionUncertainExecutionJob,
   verifySubmissionUncertain,
   type SubmissionUncertainBindings,
 } from "../src/campaigns/campaignSubmissionUncertainReconciliation.js";
@@ -26,7 +27,7 @@ if (!Number.isInteger(bindings.guardGeneration) || bindings.guardGeneration < 0 
   throw new Error("submission_uncertain_binding_invalid:ordinal");
 }
 const mode = value("--mode") ?? "dry-run";
-if (!["dry-run", "apply-sql", "verify-receipt", "ack-task"].includes(mode)) {
+if (!["dry-run", "recover-job", "apply-sql", "verify-receipt", "ack-task"].includes(mode)) {
   throw new Error("submission_uncertain_mode_invalid");
 }
 if (!["dry-run", "verify-receipt"].includes(mode) && !args.includes("--execute-authorized")) {
@@ -41,6 +42,8 @@ try {
       campaignStatusPreserved: result.plan.campaignStatusPreserved,
       sentCountPreserved: result.plan.sentCountPreserved, remainingRecipients: result.plan.remainingRecipients,
       retryAllowed: false, campaignContinuationAuthorized: false }));
+  } else if (mode === "recover-job") {
+    console.log(JSON.stringify(await recoverSubmissionUncertainExecutionJob(db, bindings)));
   } else if (mode === "apply-sql") {
     const planHash = value("--plan-hash");
     if (!planHash || !/^[a-f0-9]{64}$/.test(planHash)) throw new Error("submission_uncertain_plan_hash_required");
