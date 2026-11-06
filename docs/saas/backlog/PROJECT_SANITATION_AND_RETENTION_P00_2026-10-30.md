@@ -935,3 +935,28 @@ lote literal `ea3/d41` e para o caminho/SHA canônicos do grafo final `785bde80`
 Uma fonte substituta com SHA válido e projeção coerente é negada antes da
 autenticação dos candidatos. O ganho qualificado permanece em zero até um audit
 produtivo próprio.
+
+### Fechamento produtivo do lote CRM (05/11/2026)
+
+O lote literal `ea3/d41` concluiu `audit → prepare → execute` na custódia
+`p00-capacity-crm-staging-audit-dc0405e3-v2`, com autorização por fase.
+O plano `84c3d53a9b19fd62c4ab2d835eb7a45eb4ca803db7f124287fe4e08bb76236bf`
+qualificou 1.299.951.616 bytes e 52.358 inodes. A execução terminou
+`COMPLETED_RECONCILED`, exit 0, com dois comandos concluídos, sem retry.
+
+- Receipt SHA-256 `301786a3de76f8061d66f705e408a7db30d504a4848e753ca02861d8abf7fe53`.
+- Journal SHA-256 `d440b319412322d8944b4602d2ca478d246737aface4ee5b114c0f6aa9d19b9a`.
+- O journal confirma `ATTEMPT → RESULT(0) → VERIFIED(ABSENT)` para cada árvore.
+  Os links ativos de API e frontend permaneceram intactos e os locks ficaram livres.
+- Ganho físico medido de 1.299.939.328 bytes. Pós-check de 10.066.833.408 bytes
+  e 2.461.819 inodes disponíveis, com folga observada de 403.156.992 bytes
+  sobre o gate de 9.663.676.416 bytes.
+
+A autorização foi consumida e o lote é irrepetível. A folga é uma medição
+histórica, sujeita a nova captura na admissão de `17cc77a8`. Essa campanha
+segue o runbook integrado, com contrato vinculado ao target, orçamento de
+bytes e inodes, entrada autenticada pela admissão e lifecycle aberto antes
+da alocação. O fechamento de sucesso passa pelo finalizador canônico e abrange
+somente os derivados selados da geração. Falha ou interrupção registra
+`RETENTION_DEBT` e preserva a evidência. A retirada CRM não equivale a uma
+admissão, build ou ativação da campanha.
