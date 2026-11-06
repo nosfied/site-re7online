@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 // mkdir + fsync + rename serialize processes on a single local filesystem. Never
 // expire a lock or task: a crashed writer requires operator investigation.
 type Task = { parent?: string; reference?: { clientId: string; campaignId: string; messageId: string }; instance: string; build: string; generation: number; kind: string; phase: string; startedAt: string };
-type State = { hostId?: string; version: 1; open: boolean; generation: number; tasks: Record<string, Task>; audit: Array<{ action: string; actor: string; reason: string; at: string; generation: number; receiptId?: string; resolvedTask?: { id: string; task: Task } }> };
+type State = { hostId?: string; version: 1; open: boolean; generation: number; tasks: Record<string, Task>; audit: Array<{ action: string; actor: string; reason: string; at: string; generation: number; receiptId?: string; resolvedTask?: { id: string; task: Task }; resolvedParentTask?: { id: string; task: Task } }> };
 function executorIdentity(pid: number) {
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -208,6 +208,7 @@ export function isCampaignMutation(method: string | undefined, pathname: string)
 function archiveReconciledCampaignTask(params: {
   generation: number; taskId: string; reference: NonNullable<Task["reference"]>;
   expectedTaskHash: string; receiptId: string; actor: string;
+  interruptedParent?: { taskId: string; expectedTaskHash: string };
 }, reason: "durable_failed_result_no_retry" | "durable_accepted_delivered_historical_crm_disposition_no_retry" |
   "durable_accepted_failed_without_crm_no_retry" | "durable_submission_uncertain_no_retry") {
   if (!params.actor.trim() || !params.receiptId.trim()) throw new Error("reconciliation_actor_receipt_required");
@@ -220,22 +221,36 @@ function archiveReconciledCampaignTask(params: {
           prior.reason !== reason || !archived || JSON.stringify(archived.reference) !== JSON.stringify(params.reference) ||
           crypto.createHash("sha256").update(JSON.stringify(archived, (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex") !== params.expectedTaskHash) throw new Error("reconciliation_archived_result_drift");
       }
-      if (prior.resolvedTask?.id !== params.taskId) throw new Error("reconciliation_receipt_conflict");
+      if (prior.resolvedTask?.id !== params.taskId ||
+        (params.interruptedParent && prior.resolvedParentTask?.id !== params.interruptedParent.taskId))
+        throw new Error("reconciliation_receipt_conflict");
       return;
     }
     if (s.open || s.generation !== params.generation || pendingFault(filename())) throw new Error("reconciliation_guard_drift");
-    if (Object.keys(s.tasks).length !== 1) throw new Error("reconciliation_other_tasks_present");
+    if (Object.keys(s.tasks).length !== (params.interruptedParent ? 2 : 1)) throw new Error("reconciliation_other_tasks_present");
     const task = s.tasks[params.taskId];
     if (!task || task.kind !== "provider" || task.phase !== "persisting" ||
       JSON.stringify(task.reference) !== JSON.stringify(params.reference)) throw new Error("reconciliation_task_mismatch");
     const taskHash = crypto.createHash("sha256").update(JSON.stringify(task, (_key, item) =>
       item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex");
     if (taskHash !== params.expectedTaskHash) throw new Error("reconciliation_task_drift");
+    let parentTask: Task | undefined;
+    if (params.interruptedParent) {
+      parentTask = s.tasks[params.interruptedParent.taskId];
+      if (!parentTask || task.parent !== params.interruptedParent.taskId || parentTask.kind !== "runner" ||
+        parentTask.instance !== task.instance || parentTask.build !== task.build || parentTask.generation !== task.generation)
+        throw new Error("reconciliation_parent_task_mismatch");
+      const parentHash = crypto.createHash("sha256").update(JSON.stringify(parentTask, (_key, item) =>
+        item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex");
+      if (parentHash !== params.interruptedParent.expectedTaskHash) throw new Error("reconciliation_parent_task_drift");
+    }
     s.generation++;
     s.audit.push({ action: "provider_reconciled", actor: params.actor, reason,
       at: new Date().toISOString(), generation: s.generation, receiptId: params.receiptId,
-      resolvedTask: { id: params.taskId, task } });
+      resolvedTask: { id: params.taskId, task },
+      ...(parentTask ? { resolvedParentTask: { id: params.interruptedParent!.taskId, task: parentTask } } : {}) });
     delete s.tasks[params.taskId]; // Resolved task survives in audit; pending tasks are never discarded.
+    if (params.interruptedParent) delete s.tasks[params.interruptedParent.taskId];
   });
   return campaignOperationsStatus();
 }

@@ -645,6 +645,54 @@ dinâmica pelo mesmo read model canônico; o aviso de divisão usa mais de 1.000
 alternância visual posterior a um estado realmente incerto continua sem causa
 comprovada e não é declarada corrigida por essas mudanças.
 
+### Escopo mínimo para novas submissões incertas
+
+O fechamento global observado no ordinal 588 é histórico e permanece sujeito à
+reconciliação acima. Para novas execuções, uma resposta de transporte inconclusiva
+é isolada no menor escopo autenticável: o runner grava, ainda sob a tarefa do
+provider, `campaign.message.submission_uncertain_preserved` com aceitação
+`unknown`, zero outbound materializado e retry proibido. Somente depois da escrita
+durável e do readback integral desse marcador ele encerra essa tarefa e continua os
+demais destinatários, respeitando o mesmo intervalo entre submissões. Uma retomada
+reconhece a mesma evidência e pula a posição, sem nova chamada ao provider.
+
+A guarda global permanece fail-closed se a intenção, a evidência SQL ou o ledger
+não puderem ser persistidos/reconciliados com segurança. Uma falha isolada de
+transporte, depois de preservada, não fecha outros tenants. Restrições do remetente
+continuam sendo outro domínio: um `131048` isolado não autoriza inferir bloqueio do
+número ou do portfólio. A pausa por remetente exige estado autenticado do binding e
+evidência própria; ampliar ao portfólio exige prova de alcance compartilhado.
+
+Se o processo cair depois do commit desse marcador e antes de liberar a tarefa no
+ledger, o reconciliador autentica o par abandonado `runner -> provider`, reutiliza o
+mesmo evento e distingue `originalProviderCalls=1` de `providerCalls=0` do próprio
+reconciliador. Ele não cria uma segunda disposição nem chama o provider. O formato
+histórico sem esse marcador não recebe campos novos; isso preserva os inputs e o
+hash do plano pós-cancelamento `afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041`.
+
+O read model projeta o marcador autenticado como `Resultado incerto`, com contador
+próprio. Ele não entra em enviados, entregues ou falhas definitivas e prevalece
+sobre o fallback derivado de `sentCount`. A campanha pode concluir o processamento
+dos demais destinatários sem transformar essa posição em sucesso ou autorizar seu
+reenvio.
+
+Na recuperação de uma queda entre o commit SQL do marcador e a baixa da tarefa no
+ledger, as duas transições de lease são distintas. Primeiro, a classificação
+operacional existente move o job `running` para `needs_review`, expira o lease do
+job e invalida o token para execução, mas preserva os campos de identidade e a
+linha de lease do tenant para revisão. Ela não significa suspensão consumível.
+Depois, a transição administrativa versionada do reconciliador exige a guarda
+efetivamente fechada, o par abandonado `runner -> provider`, o marcador SQL
+autenticado e a correspondência exata entre tenant, campanha, job, token, owner e
+ambos os prazos expirados. Na mesma transação PostgreSQL, ela muda somente esse job
+para `queued/operational_suspension`, limpa seus campos de lease, libera somente a
+linha do tenant ainda vinculada ao job/token antigos e grava receipt schema 1. Se a
+linha já apontar para outra execução, a operação nega sem mudança. A guarda fechada
+continua bloqueando claims; essa transição não reabre a guarda nem autoriza retry.
+Ela é consumida pelo modo administrativo explícito `recover-job` do mesmo CLI de
+reconciliação e exige `--execute-authorized`; `dry-run`, `apply-sql`,
+`verify-receipt` e `ack-task` mantêm seus papéis separados.
+
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 
 Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`

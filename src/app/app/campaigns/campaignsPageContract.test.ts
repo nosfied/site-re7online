@@ -112,6 +112,14 @@ test("campaign result renders explicit blocked and skipped recipient states", ()
   assert.ok(pageSource.includes('return "Ignorada"'));
 });
 
+test("campaign result exposes uncertain provider acceptance without presenting it as sent", () => {
+  assert.ok(pageSource.includes('case "unknown":'));
+  assert.ok(pageSource.includes('return "Resultado incerto"'));
+  assert.ok(pageSource.includes("selectedCampaign.metaSummary?.totalUncertain ?? 0"));
+  assert.ok(pageSource.includes('{ id: "unknown" as const, label: "Resultados incertos" }'));
+  assert.ok(pageSource.includes("campaign.progress.uncertainCount ?? 0"));
+});
+
 test("campaign detail result shows full recipient phone for authorized users", () => {
   assert.ok(pageSource.includes('return digits || value || "-";'));
   assert.ok(!pageSource.includes('`${digits.slice(0, 4)}****${digits.slice(-4)}`'));

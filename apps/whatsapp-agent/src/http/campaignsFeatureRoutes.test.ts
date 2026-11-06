@@ -19099,6 +19099,7 @@ test("campaign detail reconciles real 13-digit seed with historical 12-digit out
     totalOptOut: 0,
     totalSkipped: 0,
     totalPending: 0,
+    totalUncertain: 0,
   });
   assert.equal(
     await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
@@ -19114,6 +19115,44 @@ test("campaign detail reconciles real 13-digit seed with historical 12-digit out
   );
   assert.equal(crossTenant.status, 404);
   assert.equal(getErrorCode(crossTenant.body), "campaign_not_found");
+});
+
+test("campaign detail projects valid, uncertain, valid without counting uncertainty as sent or failed", async () => {
+  const recipients = ["5541999987101", "5541999987102", "5541999987103"];
+  const campaign = await prisma.campaign.create({ data: {
+    clientId: businessClientId, name: "Campanha resultado incerto", templateName: "lembrete_vencimento_anuidade",
+    status: "completed", totalRecipients: 3, sentCount: 3, blockedCount: 0,
+  } });
+  await prisma.event.createMany({ data: [
+    { clientId: businessClientId, messageId: campaign.id, requestId: `campaign-seed:${campaign.id}:uncertain`,
+      eventName: "campaign.seed.saved", payloadJson: { campaignId: campaign.id, name: campaign.name,
+        templateName: campaign.templateName, recipients, templateParams: [] } },
+    { clientId: businessClientId, waId: recipients[1], messageId: `campaign.${campaign.id}.2`,
+      requestId: `campaign-message-submission-uncertain:${campaign.id}:2`,
+      eventName: "campaign.message.submission_uncertain_preserved", payloadJson: {
+        campaignId: campaign.id, campaignRunId: crypto.randomUUID(), position: 2,
+        providerAcceptance: "unknown", outboundMaterialized: false, definitiveFailure: false,
+        retryAllowed: false, providerCalls: 1,
+      } },
+  ] });
+  await prisma.outboundMessage.createMany({ data: [0, 2].map(index => ({
+    clientId: businessClientId, waId: recipients[index], waIdCanonical: recipients[index],
+    messageId: `campaign.${campaign.id}.${index + 1}`, type: "TEMPLATE" as const, status: "SENT" as const,
+    templateName: campaign.templateName, rawPayload: { campaignId: campaign.id, metaStatus: { lastStatus: "sent" } },
+  })) });
+
+  const detail = await request<{ campaign: { sentCount: number; progress: { uncertainCount: number; pendingCount: number };
+    metaSummary: { totalSent: number; totalFailed: number; totalUncertain: number };
+    messagesMetaStatus: Array<{ status: string; nonBillingReason: string | null }> } }>(
+    "GET", `/app/campaigns/${campaign.id}`, businessAdmin);
+  assert.equal(detail.status, 200);
+  assert.deepEqual(detail.body.campaign.messagesMetaStatus.map(item => item.status), ["sent", "unknown", "sent"]);
+  assert.deepEqual(detail.body.campaign.metaSummary, { ...detail.body.campaign.metaSummary,
+    totalSent: 2, totalFailed: 0, totalUncertain: 1 });
+  assert.equal(detail.body.campaign.sentCount, 2, "persisted sentCount fallback must not hide uncertainty");
+  assert.equal(detail.body.campaign.progress.uncertainCount, 1);
+  assert.equal(detail.body.campaign.progress.pendingCount, 0);
+  assert.equal(detail.body.campaign.messagesMetaStatus[1]?.nonBillingReason, "provider_acceptance_unknown");
 });
 
 test("campaign detail reconciles reverse 12-digit seed with 13-digit outbound", async () => {

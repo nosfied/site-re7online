@@ -69,9 +69,23 @@ const campaignSubmitStartedRequestId = (campaignId: string, position: number) =>
   `campaign-message-submit-started:${campaignId}:${position}`;
 const campaignProviderAcceptedRequestId = (campaignId: string, position: number) =>
   `campaign-message-provider-accepted:${campaignId}:${position}`;
+const campaignSubmissionUncertainRequestId = (campaignId: string, position: number) =>
+  `campaign-message-submission-uncertain:${campaignId}:${position}`;
+function isPreservedSubmissionUncertainty(value: unknown, campaignId: string, position: number) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  return payload.campaignId === campaignId &&
+    payload.position === position &&
+    payload.providerAcceptance === "unknown" &&
+    payload.outboundMaterialized === false &&
+    payload.definitiveFailure === false &&
+    payload.retryAllowed === false &&
+    payload.providerCalls === 1;
+}
 const runningCampaigns = new Map<string, Promise<void>>();
 let scheduleTimer: NodeJS.Timeout | null = null;
 let campaignRunnerSleepForTests: ((ms: number) => Promise<void>) | null = null;
+let campaignRunnerAfterUncertaintyCommitForTests: (() => Promise<void>) | null = null;
 const CAMPAIGN_TERMINAL_STATUSES = new Set(["completed", "failed", "blocked", "cancelled"]);
 
 export type StartCampaignRunParams = {
@@ -237,6 +251,16 @@ export function setCampaignRunnerSleepForTests(fn: ((ms: number) => Promise<void
   campaignRunnerSleepForTests = fn;
   return () => {
     campaignRunnerSleepForTests = null;
+  };
+}
+
+export function setCampaignRunnerAfterUncertaintyCommitForTests(fn: (() => Promise<void>) | null) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("campaign_runner_test_hook_unavailable");
+  }
+  campaignRunnerAfterUncertaintyCommitForTests = fn;
+  return () => {
+    campaignRunnerAfterUncertaintyCommitForTests = null;
   };
 }
 
@@ -1604,6 +1628,30 @@ async function runCampaignInBackground(
             select: { id: true },
           });
           if (previousSubmitStarted) {
+            const preservedUncertaintyEvent = await prisma.event.findFirst({
+              where: {
+                clientId: params.clientId,
+                messageId,
+                eventName: "campaign.message.submission_uncertain_preserved",
+                requestId: campaignSubmissionUncertainRequestId(params.campaignId, index + 1),
+              },
+              select: { payloadJson: true },
+            });
+            const preservedUncertainty = isPreservedSubmissionUncertainty(
+              preservedUncertaintyEvent?.payloadJson,
+              params.campaignId,
+              index + 1
+            );
+            if (preservedUncertainty) {
+              logger.warn({
+                event: "campaign.message.submission_uncertain_skipped",
+                campaignId: params.campaignId,
+                campaignRunId,
+                messageId,
+                retryAllowed: false,
+              });
+              continue;
+            }
             await persistEvent({
               clientId: params.clientId,
               conversationId: resolvedRecipient.conversationId ?? null,
@@ -1726,7 +1774,58 @@ async function runCampaignInBackground(
           submissionUncertain = result.failureDisposition === "submission_uncertain";
           pendingAcceptance = providerAccepted || submissionUncertain;
           persistenceStage = "provider_result_persistence";
-          if (submissionUncertain) throw new Error("provider_submission_uncertain");
+          if (submissionUncertain) {
+            await persistEvent({
+              clientId: params.clientId,
+              conversationId: resolvedRecipient.conversationId ?? null,
+              waId,
+              waIdCanonical,
+              messageId,
+              requestId: campaignSubmissionUncertainRequestId(params.campaignId, index + 1),
+              eventName: "campaign.message.submission_uncertain_preserved",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                position: index + 1,
+                providerAcceptance: "unknown",
+                outboundMaterialized: false,
+                definitiveFailure: false,
+                retryAllowed: false,
+                providerCalls: 1,
+              },
+            });
+            const uncertaintyReadback = await prisma.event.findFirst({
+              where: {
+                clientId: params.clientId,
+                messageId,
+                eventName: "campaign.message.submission_uncertain_preserved",
+                requestId: campaignSubmissionUncertainRequestId(params.campaignId, index + 1),
+              },
+              select: { payloadJson: true },
+            });
+            if (!isPreservedSubmissionUncertainty(uncertaintyReadback?.payloadJson, params.campaignId, index + 1)) {
+              throw new Error("submission_uncertain_evidence_conflict");
+            }
+            if (campaignRunnerAfterUncertaintyCommitForTests) {
+              await campaignRunnerAfterUncertaintyCommitForTests();
+            }
+            if (!attempt.persisted()) throw new Error("submission_uncertain_ledger_persistence_failed");
+            pendingAcceptance = false;
+            logger.warn({
+              event: "campaign.message.submission_uncertain_preserved",
+              campaignId: params.campaignId,
+              campaignRunId,
+              messageId,
+              position: index + 1,
+              providerAcceptance: "unknown",
+              retryAllowed: false,
+            });
+            if (index < waIds.length - 1) {
+              await sleep(CAMPAIGN_THROTTLE_MS);
+            }
+            continue;
+          }
           if (result.blockedByEligibility) {
             blockedCount += 1;
             await persistEvent({ clientId: params.clientId, messageId: params.campaignId,

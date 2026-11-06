@@ -549,6 +549,7 @@ export type CampaignItem = {
     sentCount: number;
     blockedCount: number;
     pendingCount: number;
+    uncertainCount?: number;
     notSubmittedCount?: number;
   };
   executionQueue?: {
@@ -588,6 +589,7 @@ export type CampaignItem = {
       sentCount: number;
       blockedCount: number;
       pendingCount: number;
+      uncertainCount?: number;
       notSubmittedCount?: number;
       completedChunks: number;
       runningChunks: number;
@@ -624,6 +626,7 @@ export type CampaignItem = {
     totalOptOut: number;
     totalSkipped: number;
     totalPending: number;
+    totalUncertain: number;
     totalNotSubmitted?: number;
   };
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
@@ -639,7 +642,7 @@ export type CampaignItem = {
     crmStatus?: string | null;
     crmStatusLabel?: string | null;
     templateName: string | null;
-    status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out" | "not_submitted";
+    status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "unknown" | "opt_out" | "not_submitted";
     sentAt: string | null;
     deliveredAt: string | null;
     billable: boolean;
