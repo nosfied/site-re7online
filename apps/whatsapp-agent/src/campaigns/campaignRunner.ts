@@ -1604,6 +1604,35 @@ async function runCampaignInBackground(
             select: { id: true },
           });
           if (previousSubmitStarted) {
+            const preservedUncertaintyEvent = await prisma.event.findFirst({
+              where: {
+                clientId: params.clientId,
+                messageId,
+                eventName: "campaign.message.submission_uncertain_preserved",
+                requestId: `campaign-message-submission-uncertain:${params.campaignId}:${index + 1}`,
+              },
+              select: { payloadJson: true },
+            });
+            const preservedUncertaintyPayload = preservedUncertaintyEvent?.payloadJson;
+            const preservedUncertainty = preservedUncertaintyPayload !== null &&
+              typeof preservedUncertaintyPayload === "object" && !Array.isArray(preservedUncertaintyPayload) &&
+              preservedUncertaintyPayload.campaignId === params.campaignId &&
+              preservedUncertaintyPayload.position === index + 1 &&
+              preservedUncertaintyPayload.providerAcceptance === "unknown" &&
+              preservedUncertaintyPayload.outboundMaterialized === false &&
+              preservedUncertaintyPayload.definitiveFailure === false &&
+              preservedUncertaintyPayload.retryAllowed === false &&
+              preservedUncertaintyPayload.providerCalls === 1;
+            if (preservedUncertainty) {
+              logger.warn({
+                event: "campaign.message.submission_uncertain_skipped",
+                campaignId: params.campaignId,
+                campaignRunId,
+                messageId,
+                retryAllowed: false,
+              });
+              continue;
+            }
             await persistEvent({
               clientId: params.clientId,
               conversationId: resolvedRecipient.conversationId ?? null,
@@ -1726,7 +1755,40 @@ async function runCampaignInBackground(
           submissionUncertain = result.failureDisposition === "submission_uncertain";
           pendingAcceptance = providerAccepted || submissionUncertain;
           persistenceStage = "provider_result_persistence";
-          if (submissionUncertain) throw new Error("provider_submission_uncertain");
+          if (submissionUncertain) {
+            await persistEvent({
+              clientId: params.clientId,
+              conversationId: resolvedRecipient.conversationId ?? null,
+              waId,
+              waIdCanonical,
+              messageId,
+              requestId: `campaign-message-submission-uncertain:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.message.submission_uncertain_preserved",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                position: index + 1,
+                providerAcceptance: "unknown",
+                outboundMaterialized: false,
+                definitiveFailure: false,
+                retryAllowed: false,
+                providerCalls: 1,
+              },
+            });
+            if (!attempt.persisted()) throw new Error("submission_uncertain_ledger_persistence_failed");
+            pendingAcceptance = false;
+            logger.warn({
+              event: "campaign.message.submission_uncertain_preserved",
+              campaignId: params.campaignId,
+              campaignRunId,
+              messageId,
+              position: index + 1,
+              providerAcceptance: "unknown",
+              retryAllowed: false,
+            });
+            continue;
+          }
           if (result.blockedByEligibility) {
             blockedCount += 1;
             await persistEvent({ clientId: params.clientId, messageId: params.campaignId,

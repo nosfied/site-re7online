@@ -605,6 +605,23 @@ dinâmica pelo mesmo read model canônico; o aviso de divisão usa mais de 1.000
 alternância visual posterior a um estado realmente incerto continua sem causa
 comprovada e não é declarada corrigida por essas mudanças.
 
+### Escopo mínimo para novas submissões incertas
+
+O fechamento global observado no ordinal 588 é histórico e permanece sujeito à
+reconciliação acima. Para novas execuções, uma resposta de transporte inconclusiva
+é isolada no menor escopo autenticável: o runner grava, ainda sob a tarefa do
+provider, `campaign.message.submission_uncertain_preserved` com aceitação
+`unknown`, zero outbound materializado e retry proibido. Somente depois da escrita
+durável ele encerra essa tarefa e continua os demais destinatários. Uma retomada
+reconhece a mesma evidência e pula a posição, sem nova chamada ao provider.
+
+A guarda global permanece fail-closed se a intenção, a evidência SQL ou o ledger
+não puderem ser persistidos/reconciliados com segurança. Uma falha isolada de
+transporte, depois de preservada, não fecha outros tenants. Restrições do remetente
+continuam sendo outro domínio: um `131048` isolado não autoriza inferir bloqueio do
+número ou do portfólio. A pausa por remetente exige estado autenticado do binding e
+evidência própria; ampliar ao portfólio exige prova de alcance compartilhado.
+
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 
 Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`
