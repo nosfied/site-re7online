@@ -15,6 +15,7 @@ import {
   verifySubmissionUncertain,
   type SubmissionUncertainBindings,
 } from "./campaignSubmissionUncertainReconciliation.js";
+import { suspendCampaignExecutionJob } from "./campaignExecutionQueue.js";
 
 process.env.APP_AUTH_SECRET = "synthetic-submission-uncertain";
 
@@ -73,6 +74,8 @@ test("uncertain submission is preserved without provider replay, Outbound fabric
   assert.equal("originalProviderCalls" in dryRun.plan, false);
   assert.equal("interruptedParent" in dryRun.plan, false,
     "historical plans such as the sealed afaf9831 plan retain their original schema and hash inputs");
+  assert.equal("priorUncertainPositions" in dryRun.plan, false,
+    "the historical afaf9831 plan shape is unchanged when every prior effect is an Outbound");
   await assert.rejects(dryRunSubmissionUncertain(db, { ...bindings, clientId: otherClientId }), /task_binding_mismatch/);
   await assert.rejects(applySubmissionUncertain(db, bindings, "0".repeat(64)), /plan_drift/);
   const applied = await applySubmissionUncertain(db, bindings, dryRun.planHash);
@@ -141,11 +144,11 @@ test("uncertain submission reconciliation denies provider evidence, drift and ch
   await assert.rejects(dryRunSubmissionUncertain(db, bindings), /campaign_state_drift/);
 });
 
-test("a new process reconciles a runner killed after the SQL marker commit without replaying the provider", async t => {
+test("a new process recovers a real execution job killed after a second SQL marker without replaying either uncertainty", async t => {
   const { file } = createOpenCampaignOperationsTestLedger("campaign-submission-uncertain-real-crash");
   const db = getPrisma();
   const clientId = crypto.randomUUID(), clientKey = `uncertain-crash-${clientId}`;
-  const recipient = "5541993300101", templateName = `uncertain_crash_${Date.now()}`;
+  const recipients = ["5541993300101", "5541993300102"], templateName = `uncertain_crash_${Date.now()}`;
   t.after(async () => {
     await db.event.deleteMany({ where: { clientId } });
     await db.outboundMessage.deleteMany({ where: { clientId } });
@@ -158,11 +161,11 @@ test("a new process reconciles a runner killed after the SQL marker commit witho
   await db.client.create({ data: { id: clientId, clientKey, name: "Synthetic crash", profile: "business", features: { campaigns: true } } });
   await db.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
   const campaign = await db.campaign.create({ data: { clientId, name: "Crash recovery", templateName,
-    status: "sending", totalRecipients: 1, sentCount: 0 } });
+    status: "sending", totalRecipients: recipients.length, sentCount: 0 } });
   const job = await db.campaignExecutionJob.create({ data: { clientId, campaignId: campaign.id, kind: "campaign",
     status: "queued", eligibleAt: new Date(), idempotencyKey: crypto.randomUUID(), failureReason: "operational_suspension" } });
   const seed = await db.event.create({ data: { clientId, messageId: campaign.id, eventName: "campaign.seed.saved",
-    payloadJson: buildPrivateCampaignSeedFields({ clientId, waIds: [recipient] }) } });
+    payloadJson: buildPrivateCampaignSeedFields({ clientId, waIds: recipients }) } });
   const child = spawn(process.execPath, ["--import", import.meta.resolve("tsx"),
     fileURLToPath(new URL("./fixtures/submissionUncertainCrashRunner.ts", import.meta.url))], {
     env: { ...process.env, CAMPAIGN_OPERATIONS_FILE: file, CAMPAIGN_OPERATIONS_TOPOLOGY: "single-host",
@@ -170,7 +173,7 @@ test("a new process reconciles a runner killed after the SQL marker commit witho
       WHATSAPP_ACCESS_TOKEN: "synthetic-token", WHATSAPP_PHONE_NUMBER_ID: "synthetic-phone",
       CRASH_FIXTURE_CLIENT_ID: clientId, CRASH_FIXTURE_CLIENT_KEY: clientKey,
       CRASH_FIXTURE_CAMPAIGN_ID: campaign.id, CRASH_FIXTURE_TEMPLATE_NAME: templateName,
-      CRASH_FIXTURE_RECIPIENT: recipient },
+      CRASH_FIXTURE_RECIPIENTS: JSON.stringify(recipients), CRASH_FIXTURE_CRASH_POSITION: "2" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
@@ -178,16 +181,28 @@ test("a new process reconciles a runner killed after the SQL marker commit witho
     child.once("exit", (code, signal) => resolve({ code, signal }));
   });
   assert.deepEqual(exit, { code: null, signal: "SIGKILL" });
-  assert.equal(await db.event.count({ where: { clientId, messageId: `campaign.${campaign.id}.1`, eventName: "synthetic.provider.call" } }), 1);
-  const submitStarted = await db.event.findFirstOrThrow({ where: { clientId, messageId: `campaign.${campaign.id}.1`, eventName: "campaign.message.submit_started" } });
-  const marker = await db.event.findFirstOrThrow({ where: { clientId, messageId: `campaign.${campaign.id}.1`, eventName: "campaign.message.submission_uncertain_preserved" } });
+  assert.equal(await db.event.count({ where: { clientId, eventName: "synthetic.provider.call",
+    messageId: { startsWith: `campaign.${campaign.id}.` } } }), 2);
+  const firstMarker = await db.event.findFirstOrThrow({ where: { clientId, messageId: `campaign.${campaign.id}.1`,
+    eventName: "campaign.message.submission_uncertain_preserved" } });
+  const submitStarted = await db.event.findFirstOrThrow({ where: { clientId, messageId: `campaign.${campaign.id}.2`, eventName: "campaign.message.submit_started" } });
+  const marker = await db.event.findFirstOrThrow({ where: { clientId, messageId: `campaign.${campaign.id}.2`, eventName: "campaign.message.submission_uncertain_preserved" } });
+  const runningJob = await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id } });
+  assert.equal(runningJob.status, "running");
+  assert.equal(runningJob.attempt, 1, "the normal queue claim owns the real execution job");
+  assert.ok(runningJob.leaseToken);
+  await suspendCampaignExecutionJob({ id: job.id, clientId, campaignId: campaign.id, batchId: null,
+    chunkIndex: null, kind: "campaign", leaseToken: runningJob.leaseToken! });
+  assert.deepEqual(await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id }, select: {
+    status: true, failureReason: true, leaseToken: true,
+  } }), { status: "queued", failureReason: "operational_suspension", leaseToken: null });
   const rawFence = readCampaignReconciliationFence();
   const providerEntry = Object.entries(rawFence.tasks).find(([, task]) => task.kind === "provider");
   assert.ok(providerEntry); assert.equal(rawFence.open, true); assert.equal(Object.keys(rawFence.tasks).length, 2);
   const runId = String((submitStarted.payloadJson as Record<string, unknown>).campaignRunId);
   const bindings: SubmissionUncertainBindings = { clientId, campaignId: campaign.id, jobId: job.id, runId,
     seedEventId: seed.id, submitStartedEventId: submitStarted.id, taskId: providerEntry[0],
-    guardGeneration: rawFence.generation, position: 1 };
+    guardGeneration: rawFence.generation, position: 2 };
   const reconciler = spawn(process.execPath, ["--import", import.meta.resolve("tsx"),
     fileURLToPath(new URL("./fixtures/submissionUncertainCrashReconciler.ts", import.meta.url))], {
     env: { ...process.env, CAMPAIGN_OPERATIONS_FILE: file, CAMPAIGN_OPERATIONS_TOPOLOGY: "single-host",
@@ -216,8 +231,12 @@ test("a new process reconciles a runner killed after the SQL marker commit witho
   const receipt = await db.event.findUniqueOrThrow({ where: { id: reconciled.receiptId } });
   assert.equal((receipt.payloadJson as Record<string, unknown>).providerCalls, 0);
   assert.equal((receipt.payloadJson as Record<string, unknown>).originalProviderCalls, 1);
-  assert.equal(await db.event.count({ where: { clientId, messageId: `campaign.${campaign.id}.1`, eventName: "campaign.message.submission_uncertain_preserved" } }), 1);
-  assert.equal(await db.event.count({ where: { clientId, messageId: `campaign.${campaign.id}.1`, eventName: "synthetic.provider.call" } }), 1);
+  assert.equal(await db.event.count({ where: { clientId, eventName: "campaign.message.submission_uncertain_preserved",
+    messageId: { startsWith: `campaign.${campaign.id}.` } } }), 2);
+  assert.deepEqual(await db.event.findUniqueOrThrow({ where: { id: firstMarker.id } }), firstMarker,
+    "the first preserved uncertainty remains unchanged");
+  assert.equal(await db.event.count({ where: { clientId, eventName: "synthetic.provider.call",
+    messageId: { startsWith: `campaign.${campaign.id}.` } } }), 2);
   const verified = await verifySubmissionUncertain(db, bindings);
   assert.ok(verified.interruptedParent);
   const acknowledged = await acknowledgeSubmissionUncertain(db, bindings, "synthetic-crash-reviewer");
