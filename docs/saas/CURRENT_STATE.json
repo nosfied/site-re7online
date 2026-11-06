@@ -1,6 +1,6 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-11-05T13:38:34Z",
+  "updatedAtUtc": "2026-11-06T11:45:03Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json",
@@ -694,7 +694,7 @@
       }
     },
     "campaignOperations": {
-      "state": "POSITION_3_RECONCILIATION_DRY_RUN_ONLY_GUARD_CLOSED",
+      "state": "NOV02_RECONCILED_TERMINAL_NOV03_CANCELLED_UNCERTAIN_GUARD_CLOSED",
       "reportedOpen": false,
       "reportedTasks": 1,
       "reopeningInventory": "SNAPSHOT_REPORTED_ZERO_AUTOMATICALLY_ELIGIBLE_20261026T111404Z",
@@ -716,15 +716,45 @@
         "authorizationFieldScope": "AT_INVENTORY_BEFORE_LATER_OWNER_AUTHORIZATION"
       },
       "previousGuardSha256Scope": "PRE_HOMOLOGATION_ONLY",
-      "reportedGeneration": 42,
+      "reportedGeneration": 45,
       "reportedLedgerFault": null,
-      "position3ReconciliationDryRun": {
+      "nov02Position3Reconciliation": {
         "campaignId": "5d1e71b1-d2a4-497a-9c2d-25761d94416c",
         "bindingsSha256": "dc67b3ebb9fb188d382c83b12dc5cdf44e7031dea9b87365aeb2658924fa1ad3",
-        "planSha256": "bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde",
+        "supersededPreCancellationPlanSha256": "bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde",
+        "planSha256": "0ba2823978c148ad6d144a7cc311cd00858a8660a36734b4edbf28431bac933a",
+        "privateOutputSha256": "4a0826260ff35551712fb51d09057117a470de4edae8143aa02b49feec5551cb",
+        "postCheckSha256": "2bf7536c91a933a317c4dea90b7fcfc3c65c31750c7afe467fe0cfa112ef9106",
+        "receiptId": "272cb403-94cd-42ef-9187-e31e09d73246",
+        "taskSha256": "ffbfc9afc11515d45ff7bba6453dbde822bd084b67688e0193612edc9a898040",
         "providerCalls": 0,
         "sentCountPreserved": 2,
         "remainingRecipients": 960,
+        "campaignStatusPreserved": "cancelled",
+        "applyExecuted": true,
+        "receiptVerified": true,
+        "taskArchived": true,
+        "guardReopenedBySeparateAuthorizedOperation": true,
+        "campaignContinuationAuthorized": false
+      },
+      "nov03Ordinal588": {
+        "campaignStatus": "cancelled",
+        "sentCountPreserved": 587,
+        "totalRecipients": 962,
+        "remainingRecipients": 374,
+        "guardGeneration": 45,
+        "guardOpen": false,
+        "guardTaskCount": 1,
+        "guardTaskKind": "provider",
+        "guardTaskPhase": "persisting",
+        "bindingsSha256": "00297e653ddb7dc1870662d82731e936205a08e314bf82ed57f2dc341893113b",
+        "supersededSendingPlanSha256": "3f96d2baaaf3731089d26d5a30242f86d367515b12a33f4941a8b8da21fcb2df",
+        "pendingCancelledPlanSha256": "afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041",
+        "captureSha256": "c2251de346fd4e6ec0fb1c3d638293cf71f4deb66247d2274bc33e2d51a49477",
+        "sanitizedOutputSha256": "16e7be19b6b4ea6a483f11b15e55cc2b30eedfc0dd781dad1e927657a55b2654",
+        "providerAcceptance": "unknown",
+        "providerCallsByReconciler": 0,
+        "retryAllowed": false,
         "applyExecuted": false,
         "taskArchived": false,
         "guardReopened": false,
@@ -1605,14 +1635,18 @@
     "deploymentLockAbsent": true,
     "canonicalRetirementClosure": "PASS",
     "buildInstallActivationRetirementRepeatPermitted": false,
-    "position3DryRunPlanSha256": "bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde",
-    "position3ReconciliationApplied": false,
+    "nov02Position3PlanSha256": "0ba2823978c148ad6d144a7cc311cd00858a8660a36734b4edbf28431bac933a",
+    "nov02Position3ReconciliationApplied": true,
+    "nov02Position3ReceiptVerified": true,
+    "nov02Position3TaskArchived": true,
+    "nov03Ordinal588PendingPlanSha256": "afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041",
+    "nov03Ordinal588ReconciliationApplied": false,
     "campaignContinuationAuthorized": false,
     "sendOrScheduleAuthorized": false,
     "preparationsAdapterAdoption": "SEPARATE_PENDING_FRONT"
   },
   "updatedAtDate": "2026-11-05",
-  "updatedAtUtcScope": "CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_DEPLOYED_SANITIZED_AND_POSITION3_DRY_RUN",
+  "updatedAtUtcScope": "CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_DEPLOYED_SANITIZED_NOV02_RECONCILED_NOV03_PENDING",
   "lastOperationalChange": {
     "state": "DEPLOYED_SANITIZED",
     "front": "CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8",
@@ -1620,6 +1654,6 @@
     "releaseId": "immutable-17cc77a8-vps-20261104T141039Z",
     "targetCommit": "17cc77a8f1200ed970097c9c83444e4cad874a1a",
     "repeatBuildInstallActivationOrRetirement": false,
-    "nextFront": "POSITION3_RECONCILIATION_REVIEW_WITHOUT_CAMPAIGN_CONTINUATION"
+    "nextFront": "NOV03_ORDINAL588_POST_CANCEL_RECONCILIATION_REVIEW_WITHOUT_CAMPAIGN_CONTINUATION"
   }
 }

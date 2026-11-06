@@ -31,8 +31,10 @@
 - [Release API-only fixed-current 0fdec implantada e sanitizada](releases/FIXED_CURRENT_0FDEC_2026-10-29_DEPLOYED_SANITIZED.json)
   — API histórica substituída por 754281d3; registro preservado da promoção API-only.
 - [Continuidade de campanhas 17cc77a8 implantada e sanitizada](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json)
-  — API+frontend ativos, worker preservado, save único e retenção 3/3. O dry-run
-  da posição 3 preservou a guarda fechada e não autoriza reconciliação ou retomada.
+  — API+frontend ativos, worker preservado, save único e retenção 3/3. O escopo
+  de campanha contido no registro é a fotografia histórica do fechamento; a
+  continuidade vigente está em `CAMPAIGN_OPERATIONS_READINESS.md`: nov.02
+  reconciliada e nov.03 cancelada com ordinal 588 ainda incerto.
 - [Recuperação de rascunhos 785bde80 implantada e sanitizada](releases/CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json)
   — registro histórico da release anterior, agora retorno autenticado de 17cc77a8.
 - [Campanha integral 911a9708 implantada e sanitizada](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json)

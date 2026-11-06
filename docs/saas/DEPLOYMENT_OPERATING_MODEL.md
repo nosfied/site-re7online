@@ -5,7 +5,7 @@
 Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação. Os comandos executáveis estão
 somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
-[registro aa9527 implantado e sanitizado](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json).
+[registro 17cc77a8 implantado e sanitizado](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
 Preparações e executores anteriores são evidência e não autorizam repetição.
 
 ## Topologia canônica
@@ -262,9 +262,9 @@ Os itens abaixo são históricos e **não utilizáveis**:
 
 ## Histórico de produção — observação de 28/10/2026 (superada)
 
-Naquela observação histórica, a produção usava a topologia abaixo. A seleção
-vigente relatada é API 754281d3 / frontend aa9527cc / worker e2e7; consulte
-CURRENT_STATE.json e o registro ativo para as identidades atuais.
+Naquela observação histórica, a produção usava a topologia abaixo. Outra fotografia
+histórica posterior registrou API 754281d3 / frontend aa9527cc / worker e2e7;
+consulte CURRENT_STATE.json e o registro ativo para as identidades atuais.
 
 - API: target `708f018cb853a06fd6f0f1d5d920b8b35d8fb06a`, release
   `immutable-708f018c-vps-20261027T152109Z`;
@@ -330,5 +330,8 @@ O estado ativo está autenticado por
 A release 17cc77a8 ativou API+frontend, preservou worker e retorno 785bde80,
 executou um único `pm2 save` e encerrou retenção 3/3. O registro não comprova
 adoção do adapter de `preparations`; essa frente permanece separada. A posição 3
-da campanha nov.02 possui somente dry-run: aplicar a reconciliação, arquivar a
-tarefa e reabrir a guarda continuam atos independentes e não autorizados.
+da campanha nov.02 foi reconciliada pelo plano pós-cancelamento `0ba28239…`, o
+receipt foi verificado e a tarefa arquivada sem reenvio. A campanha nov.03 está
+cancelada; o ordinal 588 permanece `unknown`, e o plano pós-cancelamento
+`afaf9831…` ainda não foi aplicado. A guarda continua fechada, e aplicação,
+arquivamento e reabertura permanecem atos independentes.
