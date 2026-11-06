@@ -25522,6 +25522,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             totalOptOut: 0,
             totalSkipped: 0,
             totalPending: 0,
+            totalUncertain: 0,
           };
           switch (nextItem.status) {
             case "read":
@@ -25554,6 +25555,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
               totalOptOut: 0,
               totalSkipped: 0,
               totalPending: 0,
+              totalUncertain: 0,
             },
           })),
         });
@@ -37697,7 +37699,7 @@ async function buildContactTimelinePayload(
 type CampaignReadSources = {
   outboundMessages: Array<{ waId: string; messageId: string | null; templateName: string | null;
     status: string; metaMessageId: string | null; errorBody: string | null; rawPayload: Prisma.JsonValue | null; createdAt: Date }>;
-  events: Array<{ messageId: string | null; waId: string | null; eventName: string;
+  events: Array<{ messageId: string | null; requestId: string | null; waId: string | null; eventName: string;
     payloadJson: Prisma.JsonValue | null; createdAt: Date }>;
 };
 
@@ -37726,11 +37728,15 @@ async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, cli
       const page: Array<CampaignReadSources["events"][number] & { id: string }> = await prisma.event.findMany({
         where: { clientId, eventName: { in: [
           "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked", "campaign.message.provider_accepted",
+          "campaign.message.submission_uncertain_preserved",
           "campaign.draft.discarded", "campaign.cancelled",
-        ] }, OR: [{ messageId: { in: group } }, ...group.map(id => ({ eventName: "campaign.message.provider_accepted", payloadJson: { path: ["campaignId"], equals: id } }))] },
+        ] }, OR: [{ messageId: { in: group } }, ...group.flatMap(id => [
+          { eventName: "campaign.message.provider_accepted", payloadJson: { path: ["campaignId"], equals: id } },
+          { eventName: "campaign.message.submission_uncertain_preserved", messageId: { startsWith: `campaign.${id}.` } },
+        ])] },
         orderBy: { id: "asc" }, take: 1000,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        select: { id: true, messageId: true, waId: true, eventName: true, payloadJson: true, createdAt: true },
+        select: { id: true, messageId: true, requestId: true, waId: true, eventName: true, payloadJson: true, createdAt: true },
       });
       sources.events.push(...page);
       cursor = page.length === 1000 ? page[page.length - 1].id : undefined;
@@ -37748,15 +37754,16 @@ function campaignResultProjection(
   const knownSuccesses = summary.totalSent + summary.totalDelivered + summary.totalRead;
   const explicitBlocked = summary.totalBlocked + summary.totalOptOut + summary.totalSkipped;
   const notSubmittedCount = summary.totalNotSubmitted ?? 0;
-  const hasResults = knownSuccesses + explicitBlocked + summary.totalFailed + summary.totalPending + notSubmittedCount > 0;
+  const hasResults = knownSuccesses + explicitBlocked + summary.totalFailed + summary.totalPending + summary.totalUncertain + notSubmittedCount > 0;
   const sentCount = hasResults ? knownSuccesses : campaign.sentCount;
   const blockedCount = Math.max(campaign.blockedCount, explicitBlocked);
   const totalRecipients = Math.max(campaign.totalRecipients,
-    sentCount + explicitBlocked + summary.totalFailed + summary.totalPending + notSubmittedCount);
+    sentCount + explicitBlocked + summary.totalFailed + summary.totalPending + summary.totalUncertain + notSubmittedCount);
   return {
     totalRecipients, sentCount, blockedCount, plannedRecipientCount, materializedRecipientCount,
-    progress: { totalRecipients, sentCount, blockedCount, failedCount: summary.totalFailed, notSubmittedCount,
-      pendingCount: Math.max(summary.totalPending, totalRecipients - sentCount - blockedCount - summary.totalFailed - notSubmittedCount, 0) },
+    progress: { totalRecipients, sentCount, blockedCount, failedCount: summary.totalFailed,
+      uncertainCount: summary.totalUncertain, notSubmittedCount,
+      pendingCount: Math.max(summary.totalPending, totalRecipients - sentCount - blockedCount - summary.totalFailed - summary.totalUncertain - notSubmittedCount, 0) },
   };
 }
 
@@ -37777,7 +37784,7 @@ function campaignSetResultProjection(
   const sentCount = sum("sentCount"), blockedCount = sum("blockedCount");
   return { totalRecipients, sentCount, blockedCount, plannedRecipientCount,
     materializedRecipientCount: projections.reduce((total, item) => total + item.materializedRecipientCount, 0),
-    progress: { totalRecipients, sentCount, blockedCount, failedCount: sum("failedCount"),
+    progress: { totalRecipients, sentCount, blockedCount, failedCount: sum("failedCount"), uncertainCount: sum("uncertainCount"),
       pendingCount: projections.length ? sum("pendingCount") : plannedRecipientCount, notSubmittedCount: sum("notSubmittedCount") },
   };
 }
@@ -38079,7 +38086,28 @@ async function buildCampaignRecipientReadModel(
       error: String(payload.label ?? "Destinatário bloqueado antes do envio."),
     };
   });
-  const resultItems = [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus];
+  const uncertainMetaStatus: CampaignMetaStatus[] = loaded.events.flatMap((event) => {
+    if (event.eventName !== "campaign.message.submission_uncertain_preserved") return [];
+    const payload = event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
+      ? event.payloadJson as Record<string, unknown> : {};
+    const position = Number(payload.position);
+    const providerCalls = Number(payload.providerCalls);
+    const expectedWaId = Number.isInteger(position) && position > 0 ? draftSeed.recipients[position - 1] : null;
+    if (!expectedWaId || event.messageId !== `campaign.${campaign.id}.${position}` ||
+      payload.campaignId !== campaign.id || payload.providerAcceptance !== "unknown" ||
+      payload.outboundMaterialized !== false || payload.definitiveFailure !== false ||
+      payload.retryAllowed !== false || ![0, 1].includes(providerCalls) ||
+      (providerCalls === 1 && event.requestId !== `campaign-message-submission-uncertain:${campaign.id}:${position}`) ||
+      (providerCalls === 0 && !event.requestId?.startsWith("submission-uncertain-disposition:"))) return [];
+    return [{
+      waId: expectedWaId, templateName: campaign.templateName, status: "unknown" as const,
+      sentAt: event.createdAt.toISOString(), deliveredAt: null, billable: false,
+      nonBillingReason: "provider_acceptance_unknown", pricingCategory: null,
+      pricingBillable: null, pricingModel: null, conversationId: null,
+      error: "Resultado da submissão ao provedor incerto; reenvio bloqueado.",
+    }];
+  });
+  const resultItems = [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus, ...uncertainMetaStatus];
   const resultIdentityCandidates = resultItems.map((item) =>
     campaignRecipientIdentityCandidates(item.waId)
   );

@@ -136,7 +136,7 @@ type CampaignStatusFilter =
 type CampaignCenterTab = "create" | "drafts" | "sending" | "scheduled" | "completed" | "blocked" | "all";
 type CampaignCreationPanel = "audience" | "csv" | "manual";
 type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
-type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending" | "not_submitted";
+type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending" | "unknown" | "not_submitted";
 type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
 type CsvGenericFieldKey = `field${number}`;
 
@@ -530,7 +530,7 @@ function getStatusLabel(status: string) {
 
 function getProgressPct(campaign: CampaignItem) {
   if (!campaign.totalRecipients || campaign.totalRecipients <= 0) return 0;
-  const completed = campaign.sentCount + campaign.blockedCount;
+  const completed = campaign.sentCount + campaign.blockedCount + (campaign.progress.uncertainCount ?? 0);
   return Math.max(0, Math.min(Math.round((completed / campaign.totalRecipients) * 100), 100));
 }
 
@@ -568,6 +568,8 @@ function getMetaStatusClasses(status: string) {
       return "bg-orange-600 text-white";
     case "pending":
       return "bg-indigo-600 text-white";
+    case "unknown":
+      return "bg-fuchsia-700 text-white";
     case "sent":
     default:
       return "bg-slate-500 text-white";
@@ -592,6 +594,8 @@ function getMetaStatusLabel(status: string) {
       return "Ignorada";
     case "pending":
       return "Pendente";
+    case "unknown":
+      return "Resultado incerto";
     case "sent":
     default:
       return "Enviada";
@@ -2033,6 +2037,7 @@ export default function AppCampaignsPage() {
       { id: "blocked" as const, label: "Bloqueadas" },
       { id: "failed" as const, label: "Falhas" },
       { id: "pending" as const, label: "Pendentes" },
+      { id: "unknown" as const, label: "Resultados incertos" },
       { id: "not_submitted" as const, label: "Não enviados" },
     ]) {
       if (
@@ -5124,6 +5129,10 @@ export default function AppCampaignsPage() {
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Falhas técnicas</p>
                       <p className="mt-1 font-semibold text-red-200">{selectedCampaign.metaSummary?.totalFailed ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                      <p className="text-xs uppercase tracking-wide text-white/60">Resultados incertos</p>
+                      <p className="mt-1 font-semibold text-fuchsia-200">{selectedCampaign.metaSummary?.totalUncertain ?? 0}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Bloqueadas</p>

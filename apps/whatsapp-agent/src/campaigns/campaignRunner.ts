@@ -85,6 +85,7 @@ function isPreservedSubmissionUncertainty(value: unknown, campaignId: string, po
 const runningCampaigns = new Map<string, Promise<void>>();
 let scheduleTimer: NodeJS.Timeout | null = null;
 let campaignRunnerSleepForTests: ((ms: number) => Promise<void>) | null = null;
+let campaignRunnerAfterUncertaintyCommitForTests: (() => Promise<void>) | null = null;
 const CAMPAIGN_TERMINAL_STATUSES = new Set(["completed", "failed", "blocked", "cancelled"]);
 
 export type StartCampaignRunParams = {
@@ -250,6 +251,16 @@ export function setCampaignRunnerSleepForTests(fn: ((ms: number) => Promise<void
   campaignRunnerSleepForTests = fn;
   return () => {
     campaignRunnerSleepForTests = null;
+  };
+}
+
+export function setCampaignRunnerAfterUncertaintyCommitForTests(fn: (() => Promise<void>) | null) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("campaign_runner_test_hook_unavailable");
+  }
+  campaignRunnerAfterUncertaintyCommitForTests = fn;
+  return () => {
+    campaignRunnerAfterUncertaintyCommitForTests = null;
   };
 }
 
@@ -1795,6 +1806,9 @@ async function runCampaignInBackground(
             });
             if (!isPreservedSubmissionUncertainty(uncertaintyReadback?.payloadJson, params.campaignId, index + 1)) {
               throw new Error("submission_uncertain_evidence_conflict");
+            }
+            if (campaignRunnerAfterUncertaintyCommitForTests) {
+              await campaignRunnerAfterUncertaintyCommitForTests();
             }
             if (!attempt.persisted()) throw new Error("submission_uncertain_ledger_persistence_failed");
             pendingAcceptance = false;

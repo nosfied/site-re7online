@@ -35,14 +35,31 @@ function preservedCampaignStatus(value: unknown): PreservedCampaignStatus {
 
 function authenticateFence(bindings: SubmissionUncertainBindings) {
   const fence = readCampaignReconciliationFence();
-  requireThat(!fence.open && fence.generation === bindings.guardGeneration, "submission_uncertain_guard_drift");
+  requireThat(fence.generation === bindings.guardGeneration, "submission_uncertain_guard_drift");
   const entries = Object.entries(fence.tasks);
-  requireThat(entries.length === 1 && entries[0][0] === bindings.taskId, "submission_uncertain_task_set_drift");
-  const task = entries[0][1];
-  requireThat(task.kind === "provider" && task.phase === "persisting" && task.generation === bindings.guardGeneration - 1 &&
+  const task = fence.tasks[bindings.taskId];
+  requireThat(task && task.kind === "provider" && task.phase === "persisting" &&
     canonical(task.reference) === canonical({ clientId: bindings.clientId, campaignId: bindings.campaignId, messageId: messageIdFor(bindings) }),
   "submission_uncertain_task_binding_mismatch");
-  return { taskHash: hash(task) };
+  if (!fence.open) {
+    requireThat(entries.length === 1 && task.generation === bindings.guardGeneration - 1,
+      "submission_uncertain_task_set_drift");
+    return { taskHash: hash(task) };
+  }
+  const parentEntry = entries.find(([id]) => id === task.parent);
+  requireThat(entries.length === 2 && parentEntry && parentEntry[1].kind === "runner" &&
+    parentEntry[1].generation === bindings.guardGeneration && task.generation === bindings.guardGeneration &&
+    parentEntry[1].instance === task.instance && parentEntry[1].build === task.build,
+  "submission_uncertain_interrupted_task_set_drift");
+  const pid = Number(task.instance.split(":")[0]);
+  let live = Number.isInteger(pid) && pid > 0;
+  if (live) {
+    try { process.kill(pid, 0); } catch (error) {
+      live = (error as NodeJS.ErrnoException).code !== "ESRCH";
+    }
+  }
+  requireThat(!live, "submission_uncertain_interrupted_process_still_live");
+  return { taskHash: hash(task), interruptedParent: { taskId: parentEntry[0], taskHash: hash(parentEntry[1]) } };
 }
 
 async function authenticateNoProviderResult(db: Db, bindings: SubmissionUncertainBindings) {
@@ -59,7 +76,7 @@ async function authenticateNoProviderResult(db: Db, bindings: SubmissionUncertai
 
 async function inspect(db: Db, bindings: SubmissionUncertainBindings) {
   requireThat(Number.isSafeInteger(bindings.position) && bindings.position > 0, "submission_uncertain_scope_invalid");
-  const { taskHash } = authenticateFence(bindings);
+  const { taskHash, interruptedParent } = authenticateFence(bindings);
   const [campaign, job, seed, submitStarted] = await Promise.all([
     db.campaign.findFirst({ where: { id: bindings.campaignId, clientId: bindings.clientId } }),
     db.campaignExecutionJob.findFirst({ where: { id: bindings.jobId, clientId: bindings.clientId, campaignId: bindings.campaignId } }),
@@ -90,13 +107,37 @@ async function inspect(db: Db, bindings: SubmissionUncertainBindings) {
   requireThat(submitted === bindings.position && priorOutbounds === bindings.position - 1,
     "submission_uncertain_effect_set_mismatch");
   await authenticateNoProviderResult(db, bindings);
+  const existingDispositions = await db.event.findMany({ where: {
+    clientId: bindings.clientId, messageId: messageIdFor(bindings),
+    eventName: "campaign.message.submission_uncertain_preserved",
+  }, orderBy: { createdAt: "desc" }, take: 2 });
+  requireThat(existingDispositions.length <= 1, "submission_uncertain_existing_disposition_ambiguous");
+  const existingDisposition = existingDispositions[0];
+  if (existingDisposition) {
+    const payload = record(existingDisposition.payloadJson);
+    requireThat(payload.campaignId === bindings.campaignId && payload.campaignRunId === bindings.runId &&
+      payload.position === bindings.position && payload.providerAcceptance === "unknown" &&
+      payload.outboundMaterialized === false && payload.definitiveFailure === false &&
+      payload.retryAllowed === false && payload.providerCalls === 1,
+    "submission_uncertain_existing_disposition_drift");
+  }
   const evidence = { campaign, job, seed, submitStarted, taskHash, submitted, priorOutbounds };
-  const plan = {
+  const planBase = {
     bindings, messageId: messageIdFor(bindings), taskHash, evidenceHash: hash(evidence),
     disposition: "provider_submission_result_unknown", providerAcceptance: "unknown", providerCalls: 0,
     retryAllowed: false, outboundMaterialized: false, campaignStatusPreserved,
     sentCountPreserved: campaign.sentCount, remainingRecipients: campaign.totalRecipients - bindings.position,
   };
+  const plan: typeof planBase & {
+    existingDispositionEventId?: string;
+    originalProviderCalls?: number;
+    interruptedParent?: { taskId: string; taskHash: string };
+  } = planBase;
+  if (existingDisposition) {
+    plan.existingDispositionEventId = existingDisposition.id;
+    plan.originalProviderCalls = 1;
+  }
+  if (interruptedParent) plan.interruptedParent = interruptedParent;
   return { plan, planHash: hash(plan), targetWaId };
 }
 
@@ -128,14 +169,21 @@ export async function applySubmissionUncertain(db: PrismaClient, bindings: Submi
     }
     const inspected = await inspect(tx, bindings);
     requireThat(inspected.planHash === expectedPlanHash, "submission_uncertain_plan_drift");
-    const disposition = await tx.event.create({ data: {
-      clientId: bindings.clientId, waId: inspected.targetWaId, messageId: messageIdFor(bindings),
-      requestId: `submission-uncertain-disposition:${bindings.submitStartedEventId}`,
-      eventName: "campaign.message.submission_uncertain_preserved",
-      payloadJson: { campaignId: bindings.campaignId, campaignRunId: bindings.runId,
-        position: bindings.position, providerAcceptance: "unknown", outboundMaterialized: false,
-        definitiveFailure: false, retryAllowed: false, providerCalls: 0 },
-    } });
+    const existingDispositionEventId = inspected.plan.existingDispositionEventId;
+    const disposition = typeof existingDispositionEventId === "string"
+      ? await tx.event.findUniqueOrThrow({ where: { id: existingDispositionEventId } })
+      : await tx.event.create({ data: {
+        clientId: bindings.clientId, waId: inspected.targetWaId, messageId: messageIdFor(bindings),
+        requestId: `submission-uncertain-disposition:${bindings.submitStartedEventId}`,
+        eventName: "campaign.message.submission_uncertain_preserved",
+        payloadJson: { campaignId: bindings.campaignId, campaignRunId: bindings.runId,
+          position: bindings.position, providerAcceptance: "unknown", outboundMaterialized: false,
+          definitiveFailure: false, retryAllowed: false, providerCalls: 0 },
+      } });
+    const sourceFields = typeof existingDispositionEventId === "string"
+      ? { dispositionSource: "runner_committed_before_ledger_release", originalProviderCalls: 1,
+        interruptedParent: inspected.plan.interruptedParent ?? null }
+      : {};
     const receipt = await tx.event.create({ data: {
       clientId: bindings.clientId, messageId: bindings.campaignId, requestId: receiptRequestId(bindings),
       eventName: "campaign.submission_uncertain.reconciled",
@@ -144,7 +192,7 @@ export async function applySubmissionUncertain(db: PrismaClient, bindings: Submi
         definitiveFailure: false, retryAllowed: false, providerCalls: 0,
         campaignStatusPreserved: inspected.plan.campaignStatusPreserved,
         sentCountPreserved: inspected.plan.sentCountPreserved,
-        guardRemainsClosed: true, jobContinuationAuthorized: false },
+        guardRemainsClosed: true, jobContinuationAuthorized: false, ...sourceFields },
     } });
     return { alreadyApplied: false as const, receiptId: receipt.id };
   }, { isolationLevel: "Serializable", timeout: 15000 });
@@ -168,11 +216,18 @@ export async function verifySubmissionUncertain(db: PrismaClient, bindings: Subm
     eventName: "campaign.message.submission_uncertain_preserved" } });
   requireThat(disposition, "submission_uncertain_disposition_missing");
   const dispositionPayload = record(disposition.payloadJson);
+  const expectedDispositionProviderCalls = payload.dispositionSource === "runner_committed_before_ledger_release" ? 1 : 0;
   requireThat(dispositionPayload.campaignId === bindings.campaignId && dispositionPayload.campaignRunId === bindings.runId &&
     dispositionPayload.position === bindings.position && dispositionPayload.providerAcceptance === "unknown" &&
     dispositionPayload.outboundMaterialized === false && dispositionPayload.definitiveFailure === false &&
-    dispositionPayload.retryAllowed === false && dispositionPayload.providerCalls === 0,
+    dispositionPayload.retryAllowed === false && dispositionPayload.providerCalls === expectedDispositionProviderCalls,
   "submission_uncertain_disposition_drift");
+  if (expectedDispositionProviderCalls === 1) {
+    const interruptedParent = record(payload.interruptedParent);
+    requireThat(payload.originalProviderCalls === 1 && typeof interruptedParent.taskId === "string" &&
+      typeof interruptedParent.taskHash === "string" && /^[a-f0-9]{64}$/.test(interruptedParent.taskHash),
+      "submission_uncertain_interrupted_binding_missing");
+  }
   await authenticateNoProviderResult(db, bindings);
   const [campaign, job] = await Promise.all([
     db.campaign.findFirstOrThrow({ where: { id: bindings.campaignId, clientId: bindings.clientId } }),
@@ -184,7 +239,11 @@ export async function verifySubmissionUncertain(db: PrismaClient, bindings: Subm
   requireThat(job.kind === "campaign" && job.status === "queued" && job.batchId === null &&
     job.failureReason === "operational_suspension" && !job.leaseToken && !job.leaseOwner && !job.leaseExpiresAt,
   "submission_uncertain_job_state_drift");
-  return { receiptId: receipt.id, taskHash: payload.taskHash as string,
+  const interruptedParentPayload = record(payload.interruptedParent);
+  const interruptedParent = typeof interruptedParentPayload.taskId === "string" &&
+    typeof interruptedParentPayload.taskHash === "string"
+    ? { taskId: interruptedParentPayload.taskId, taskHash: interruptedParentPayload.taskHash } : undefined;
+  return { receiptId: receipt.id, taskHash: payload.taskHash as string, interruptedParent,
     providerAcceptance: "unknown" as const, retryAllowed: false as const,
     campaignStatusPreserved,
     campaignContinuationAuthorized: false as const };
@@ -195,6 +254,9 @@ export async function acknowledgeSubmissionUncertain(db: PrismaClient, bindings:
   const verified = await verifySubmissionUncertain(db, bindings);
   const status = acknowledgeSubmissionUncertainCampaignTask({ generation: bindings.guardGeneration,
     taskId: bindings.taskId, reference: { clientId: bindings.clientId, campaignId: bindings.campaignId,
-      messageId: messageIdFor(bindings) }, expectedTaskHash: verified.taskHash, receiptId: verified.receiptId, actor });
+      messageId: messageIdFor(bindings) }, expectedTaskHash: verified.taskHash, receiptId: verified.receiptId, actor,
+    ...(verified.interruptedParent ? { interruptedParent: {
+      taskId: verified.interruptedParent.taskId, expectedTaskHash: verified.interruptedParent.taskHash,
+    } } : {}) });
   return { ...verified, status };
 }

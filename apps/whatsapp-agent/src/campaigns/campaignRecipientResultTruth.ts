@@ -10,7 +10,7 @@ export type CampaignMetaStatus = {
   crmStatus?: string | null;
   crmStatusLabel?: string | null;
   templateName: string | null;
-  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out" | "not_submitted";
+  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "unknown" | "opt_out" | "not_submitted";
   sentAt: string | null;
   deliveredAt: string | null;
   billable: boolean;
@@ -31,6 +31,7 @@ export type CampaignMetaSummary = {
   totalOptOut: number;
   totalSkipped: number;
   totalPending: number;
+  totalUncertain: number;
   totalNotSubmitted?: number;
 };
 
@@ -241,6 +242,9 @@ export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): Camp
         case "pending":
           acc.totalPending += 1;
           break;
+        case "unknown":
+          acc.totalUncertain += 1;
+          break;
         case "sent":
         default:
           acc.totalSent += 1;
@@ -257,6 +261,7 @@ export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): Camp
       totalOptOut: 0,
       totalSkipped: 0,
       totalPending: 0,
+      totalUncertain: 0,
       totalNotSubmitted: 0,
     }
   );
@@ -284,6 +289,8 @@ export function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
     case "blocked":
       return 5;
     case "failed":
+      return 5;
+    case "unknown":
       return 4;
     case "skipped":
       return 3;

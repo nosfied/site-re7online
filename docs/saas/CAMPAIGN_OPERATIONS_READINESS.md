@@ -623,6 +623,19 @@ continuam sendo outro domínio: um `131048` isolado não autoriza inferir bloque
 número ou do portfólio. A pausa por remetente exige estado autenticado do binding e
 evidência própria; ampliar ao portfólio exige prova de alcance compartilhado.
 
+Se o processo cair depois do commit desse marcador e antes de liberar a tarefa no
+ledger, o reconciliador autentica o par abandonado `runner -> provider`, reutiliza o
+mesmo evento e distingue `originalProviderCalls=1` de `providerCalls=0` do próprio
+reconciliador. Ele não cria uma segunda disposição nem chama o provider. O formato
+histórico sem esse marcador não recebe campos novos; isso preserva os inputs e o
+hash do plano pós-cancelamento `afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041`.
+
+O read model projeta o marcador autenticado como `Resultado incerto`, com contador
+próprio. Ele não entra em enviados, entregues ou falhas definitivas e prevalece
+sobre o fallback derivado de `sentCount`. A campanha pode concluir o processamento
+dos demais destinatários sem transformar essa posição em sucesso ou autorizar seu
+reenvio.
+
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 
 Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`
