@@ -77,6 +77,15 @@ Um staging já `SANITIZED` e comprovadamente removido pelo produtor também não
 reativa essa exigência histórica.
 
 O build publica `generation-artifacts.private.json`; antes de `generation-retirement.py prepare`, `deploy-preparation-admission.py` autentica pedido/provas privados, inclusive `installation-route-qualified`, agrega negativas e só materializa atomicamente `0700`/`0600` com `copied=true`; execute com `-B`/`PYTHONDONTWRITEBYTECODE=1`, instale inertemente apenas por `converta-release.py install` (recuperação somente por manifesto privado vinculado), permita reuso byte-exato e negue extração manual, ausência, lock, symlink, owner/mode/hash ou prova divergente. No adapter versionado de preparação volumosa, admissão schema 2 copia a árvore executável pinada e o contrato `preparationArtifacts`; a criação API/frontend deve passar por `deploy-preparation-admission.py --run-preparation`, que autentica report, contrato, input e o produtor copiado, abre-o com `O_NOFOLLOW` e carrega os bytes conferidos no próprio callsite. O CLI do produtor deve negar API/frontend mesmo com FD/pipe fornecidos pelo chamador; sem a invocação interna da admissão, negar antes de criar a geração. Custo previsto não zero é vinculado à operação, o lifecycle `OPEN` precede o primeiro `copy`/`tar` e extrapolação vira `RETENTION_DEBT`. Equivalente aberto bloqueia o mesmo scope; reservas são somadas somente na `reservationRoot` autenticada/serializada, não globalmente. `generation-retirement.py review-preparation` registra `SANITIZED` apenas com caminhos ausentes ou dívida, sem limpar. Escritores históricos ou manuais fora dessa rota não são cobertos implicitamente e continuam proibidos como produtores canônicos.
+
+Antes de criar novo worktree sob `/opt/re7online/deploy-control`, use somente
+`deploy-control-worktree-materialize.py materialize` com contrato privado e
+operação `git-worktree`. O lifecycle `OPEN` deve existir antes de `git worktree add`.
+O procedimento que consumir o controle produz receipt terminal vinculado ao
+commit, caminho e receipt de materialização; depois da disposição Git, `close`
+registra `SANITIZED` se o caminho estiver ausente ou `RETENTION_DEBT` se restar.
+Não reutilize caminho histórico sem lifecycle, não marque ausência por inferência
+e não admita nova alocação equivalente enquanto houver `OPEN` ou dívida.
 Depois da verificação do pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
 lifecycle e fotografia operacional autenticados. A intenção resultante e seu
 hash integram a autorização de ativação; o executor frontend-only autentica ambos

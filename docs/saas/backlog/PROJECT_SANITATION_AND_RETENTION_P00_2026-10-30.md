@@ -935,3 +935,77 @@ lote literal `ea3/d41` e para o caminho/SHA canônicos do grafo final `785bde80`
 Uma fonte substituta com SHA válido e projeção coerente é negada antes da
 autenticação dos candidatos. O ganho qualificado permanece em zero até um audit
 produtivo próprio.
+
+## Reconciliação dirigida de `deploy-control` — 06/11/2026
+
+Esta rodada exclui integralmente `ef7db111-prep` e preserva seu manifesto, plano
+DENY e resultado terminal. A enumeração física dos demais filhos literais de
+`/opt/re7online/deploy-control` totalizou **2.142.552.064 bytes**: os 34 filhos
+literais somam `2.142.547.968` bytes e o diretório-pai, que deve permanecer, ocupa
+`4.096` bytes. Nenhum processo
+visível tinha CWD, executable ou FD nessa raiz; `current` selecionava somente a
+release `17cc77a8`, e o dump PM2 não continha a raiz. Isso não transforma uma
+referência histórica em ausência de obrigação de custódia.
+
+O resultado da qualificação é **0 bytes**. Vinte e um worktrees Git limpos somam
+`1.344.856.064` bytes e são reproduzíveis pelos commits abaixo, mas nenhum receipt
+terminal preservado vincula simultaneamente operação, raiz do controle e commit.
+Dez worktrees somando `796.655.616` bytes contêm cache Python ou controles privados
+não rastreados. Três cópias parciais sem registro Git somam `1.036.288` bytes. A
+mera limpeza Git, o receipt terminal da operação principal ou uma referência a
+`driver-commands` não substituem o binding ausente.
+
+| Caminho literal | Bytes | Operação/autoridade | Conteúdo único ou evidência | Receipt terminal e referências | Decisão |
+| --- | ---: | --- | --- | --- | --- |
+| `/opt/re7online/deploy-control` | 4.096 | raiz canônica compartilhada | namespace dos controles | não é candidato | preservar |
+| `/opt/re7online/deploy-control/059ea95aaf73` | 75.571.200 | worktree limpo `059ea95aaf73f3e143774d60a8fef4df88c7c0ba`; API-only 059 | nenhum untracked | comandos referenciam a raiz; receipt não a vincula | bloqueado |
+| `/opt/re7online/deploy-control/0d532f0b33ed` | 74.960.896 | worktree limpo `0d532f0b33edef1612477fdc1ccedf6879aae74f`; bootstrap a959 | nenhum untracked | três fotografias referenciam a raiz; sem closure da raiz | bloqueado |
+| `/opt/re7online/deploy-control/17cc77a8f120` | 76.976.128 | worktree limpo `17cc77a8f1200ed970097c9c83444e4cad874a1a`; target ativo | fontes reproduzíveis, mas commit ainda é autoridade da release ativa | sem receipt de disposição da raiz | preservar |
+| `/opt/re7online/deploy-control/35c583cb942d` | 74.530.816 | worktree limpo `35c583cb942d1c9aca7c0ed9fcaf214da8f23dde` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/3870e6d140af` | 73.252.864 | worktree limpo `3870e6d140afbeb510403b5cf7806751c4f7abb7` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/3a87c7e095fa` | 73.768.960 | worktree limpo `3a87c7e095fa72c2aee1ba26649a5376610d0370` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/411a17be2a5d` | 74.559.488 | worktree limpo `411a17be2a5de67156392eb223de3988b9ac106c` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/436ef22b4a1a` | 75.026.432 | worktree `436ef22b4a1a5fb61c770f04f9b9fa73234d3f77`; bootstrap 123ba | `scripts/__pycache__` não rastreado, derivado mas não reconciliado | intenção/fotografia referenciam a raiz; sem closure | bloqueado |
+| `/opt/re7online/deploy-control/4ddecdeb3950` | 536.576 | worktree limpo `4ddecdeb395033c6166f85ee4c935673500c17b5`; prepare d436/f160 | subconjunto rastreado reproduzível | request referencia a raiz; receipt terminal não a vincula | bloqueado |
+| `/opt/re7online/deploy-control/4fc959814794` | 77.017.088 | worktree `4fc9598147946ee29a3bd4d6564516383e1bfc9a`; finalização 785 | `private-control/converta-deploy.py` | finalização terminal da release não dispõe a raiz | preservar evidência |
+| `/opt/re7online/deploy-control/5ea7fa45a369` | 74.121.216 | worktree `5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad`; Meta app-id/template media | `scripts/__pycache__` | deploy documentado, sem receipt da raiz | bloqueado |
+| `/opt/re7online/deploy-control/5fc17306be9e` | 557.056 | worktree limpo `5fc17306be9e77c8ecf10bc9d4a5705d1a377509`; prepare b96 | subconjunto rastreado reproduzível | request referencia a raiz; closure b96 não a vincula | bloqueado |
+| `/opt/re7online/deploy-control/6e10975e5f28` | 73.252.864 | worktree limpo `6e10975e5f289cb4fedee98d7366f526be6e799c` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/6f0d741581da` | 73.248.768 | worktree limpo `6f0d741581da17130c848c06a7c4c20d9b7e6848` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/7e968da706c3` | 74.027.008 | worktree limpo `7e968da706c39560b4c42673f21aae57833dc4e0` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/8af6ba2659e1` | 74.559.488 | worktree limpo `8af6ba2659e19171220d26d2f69790c4b89b9025` | nenhum untracked | apenas inventário histórico do registro Git | bloqueado |
+| `/opt/re7online/deploy-control/90f04d8f2e47` | 73.850.880 | worktree limpo `90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d`; template-media UX | nenhum untracked | deploy documentado, sem receipt da raiz | bloqueado |
+| `/opt/re7online/deploy-control/9441de5a5692` | 376.832 | cópia parcial sem `.git`; admissão frontend-only | `scripts`/`config` sem autoridade integral registrada | request de admissão referencia a raiz | preservar |
+| `/opt/re7online/deploy-control/9e2510466064` | 76.017.664 | worktree limpo `9e25104660642ce72bfe289e41320a6d12c804bd`; archives 3/3 | nenhum untracked | operação 3/3 terminal, mas receipt `6662af79…` não vincula a raiz | bloqueado |
+| `/opt/re7online/deploy-control/a23aded85dba` | 114.069.504 | repositório isolado `a23aded85dba52aef2679a02adf19451c02f48ed`; 0fdec finalize | dois drivers privados não rastreados | requests referenciam a raiz; sem disposição própria | preservar evidência |
+| `/opt/re7online/deploy-control/aa9527cc39ae` | 266.240 | cópia parcial sem `.git`; admissão aa952 | `scripts`/`config` sem autoridade integral registrada | request referencia a raiz | preservar |
+| `/opt/re7online/deploy-control/b1689394feb2` | 74.559.488 | worktree limpo `b1689394feb27bb92487896dbee21f34e70b53d5`; frontend-only | nenhum untracked | múltiplas ativações e inventários referenciam a raiz; sem closure própria | bloqueado |
+| `/opt/re7online/deploy-control/b61e42035c0d` | 73.891.840 | worktree `b61e42035c0d32b988ea89e481db8a76a6b0047f`; PM2 control | dois `__pycache__` não rastreados | apenas registro histórico; sem receipt da raiz | bloqueado |
+| `/opt/re7online/deploy-control/bd83b8b537ed` | 75.075.584 | worktree limpo `bd83b8b537ed8363ddbdceaeb31447972e6e315a`; fixed-current 708f | nenhum untracked | manifests referenciam a raiz; sem closure própria | bloqueado |
+| `/opt/re7online/deploy-control/c206959c131f` | 77.131.776 | worktree `c206959c131fee6131ab1afe0b3c0b85b51a8f9b`; finalização 17cc | `private-control/converta-deploy.py` | release terminal, mas controle privado continua evidência | preservar evidência |
+| `/opt/re7online/deploy-control/ccb8f00ca785` | 77.029.376 | worktree `ccb8f00ca7850a5f6cfc6c6ee8aaac7fd7e51fac`; finalização 785 v3 | `private-control/converta-deploy.py` | release terminal, sem disposição da raiz | preservar evidência |
+| `/opt/re7online/deploy-control/cff6ca956bb1` | 75.563.008 | worktree `cff6ca956bb190cc6b5cd7fc60b03ffa58006494`; finalização 754 | driver privado de finalize | requests referenciam a raiz; sem closure própria | preservar evidência |
+| `/opt/re7online/deploy-control/d2ae1395b701` | 76.890.112 | worktree `d2ae1395b701a4a6b0756a2c58c6e03e33561860`; finalização 911a | `private-control/converta-deploy.py` | release terminal, sem disposição da raiz | preservar evidência |
+| `/opt/re7online/deploy-control/d662e503ffff` | 557.056 | worktree limpo `d662e503ffffc2d49a67721349a25609aa820cc6`; prepare b96 v3 | subconjunto rastreado reproduzível | request referencia tentativa DENY; sem closure da raiz | bloqueado |
+| `/opt/re7online/deploy-control/da2cd8fbb8b6` | 74.559.488 | worktree limpo `da2cd8fbb8b67b7021b64c9b5467b9166adf129c` | nenhum untracked | somente inventário histórico | bloqueado |
+| `/opt/re7online/deploy-control/f5b056cd9cbb` | 393.216 | cópia parcial sem `.git`; tentativas archives | `apps`/`scripts`/`docs`/`config` sem autoridade integral registrada | requests terminais/negados não dispõem a raiz | preservar |
+| `/opt/re7online/deploy-control/f8a6f948a1da` | 74.469.376 | worktree limpo `f8a6f948a1daeef5d38e9c97445fcf9e9e647a1c` | nenhum untracked | somente inventário histórico | bloqueado |
+| `/opt/re7online/deploy-control/fa63994acd56` | 75.915.264 | worktree `fa63994acd5655bd499a328679a0f8c11e0740e2`; finalização fa639 | driver privado de finalize | release terminal, sem disposição da raiz | preservar evidência |
+| `/opt/re7online/deploy-control/fe40c54e5d55` | 75.964.416 | worktree limpo `fe40c54e5d5504fe51dd27c22455f15eca2a9ea3`; manifesto de archives | nenhum untracked | requests referenciam a raiz; receipt 3/3 não a vincula | bloqueado |
+
+Não foi publicado perfil `CLOSED_DEPLOY_CONTROL_DERIVED_TREE` para esse estoque:
+o contrato atual continua fechado aos quatro derivados ef7, e ampliar a allowlist
+sem receipts vinculados fabricaria a prova ausente. O déficit conservador do build
+permanece `1.601.449.984` bytes.
+
+### Prevenção para novos controles isolados
+
+Os diretórios históricos não nasceram de um materializador único: há worktrees
+administrativos e cópias parciais criados por procedimentos operacionais distintos.
+Novos worktrees passam a usar `deploy-control-worktree-materialize.py`, que reutiliza
+`preparation_artifact_lifecycle.py`: grava `OPEN` antes de `git worktree add`, fixa
+repositório/commit/tree/caminho/orçamento e mantém a disposição
+`SANITIZE_AFTER_USE`. A rota não remove dados. Após uma retirada autenticada,
+`SANITIZED` exige ausência e receipt terminal ligado ao receipt de materialização;
+falha com caminho presente grava `RETENTION_DEBT`. Estado aberto ou dívida bloqueia
+uma alocação equivalente antes do próximo worktree volumoso.

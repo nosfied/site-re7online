@@ -1283,6 +1283,15 @@ O produtor grava `OPEN` antes do primeiro efeito; falha ou interrupção posteri
 grava `RETENTION_DEBT`. `SANITIZED` só é aceito pelo consumidor terminal quando os
 caminhos literais já estão ausentes; o consumidor não remove nada. Histórico sem
 registro continua histórico não classificado, nunca `SANITIZED` por inferência.
+
+O mesmo protocolo cobre novos worktrees isolados de control plane por
+`deploy-control-worktree-materialize.py`. A operação `git-worktree` mede diretório
+sem seguir symlinks e deduplica hardlinks por device/inode. Repositório, commit,
+tree, destino literal, orçamento e equivalência são autenticados antes de
+`git worktree add`; `OPEN` é durável antes da alocação. A rota de fechamento não
+remove o worktree: ela exige receipt terminal da operação que fez a disposição e
+registra `SANITIZED` somente após ausência, ou `RETENTION_DEBT` com resíduo. Os
+controles históricos sem esse binding não são migrados por presunção.
 Os testes cobrem materialização, produtor, duplicação, orçamento, resíduo e
 fechamento. Esta implementação versionada não autoriza instalação ou retirada.
 

@@ -17,7 +17,7 @@ import tarfile
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 RUNTIME_DEPENDENCIES = {
-    'scripts/preparation_artifact_lifecycle.py': 'a67fb3361c17372896241469683104cb2e3bab3e892b8bf32127882612ad0f2a',
+    'scripts/preparation_artifact_lifecycle.py': '36669ef654cb2f136d2072bd40f7ec96c7f9020a280c6402001d6dd0269178e9',
     'scripts/operational_preparation_review.py': 'cbcb7896adeb9a90504c78c4c043644486a311a4d0c7daa9b9bcfd3b1e7a2cbc',
     'scripts/operational-retention-report.py': '7d76a567b35c006bca53f45300f8543164095fb3b373414b6889a013a298a9fb',
     'docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/capacity_budget.py': '58d621121124481b9d3040321a131511b8e88918f49c16175dad716fb4b10a83',
