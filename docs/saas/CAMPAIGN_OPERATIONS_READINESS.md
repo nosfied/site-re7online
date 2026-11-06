@@ -520,9 +520,19 @@ Na execução, `conversation_resolved` apenas vinculou a conversa existente; nã
 evento de criação ou reativação pela campanha. O telefone veio do inbound
 normalizado e foi copiado para `Lead.phone`, `waIdCanonical` e `waId`. A campanha
 então submeteu o mesmo destinatário ao provedor. Essa cronologia sustenta a
-reconciliação histórica separada, mas não autoriza retomada. O dry-run produtivo
-não foi executado: o reconciliador proposto ainda não está implantado, e as provas
-locais não substituem a recaptura dos bindings privados.
+reconciliação histórica separada, mas não autoriza retomada.
+
+Em 05/11/2026, já sob a release integrada `17cc77a8`, o Codex local recapturou os
+bindings privados e executou somente o `dry-run` do reconciliador real. A guarda
+permaneceu fechada na geração 42, com uma tarefa; `providerCalls=0`, os dois
+resultados anteriores foram preservados e 960 destinatários permaneceram
+pendentes. Bindings SHA-256
+`dc67b3ebb9fb188d382c83b12dc5cdf44e7031dea9b87365aeb2658924fa1ad3`;
+plano SHA-256
+`bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde`.
+Não houve `apply-sql`, arquivamento da tarefa, abertura da guarda, chamada ao
+provedor ou continuidade da campanha. Cada ato posterior exige revisão e
+autorização próprias.
 
 Continuidade pós-cancelamento em 05/11/2026: a campanha permaneceu `cancelled`,
 com `sentCount=2`, três submissões históricas e nenhuma submissão, aceitação ou
@@ -561,6 +571,18 @@ e confirmou campanha, job, tarefa, guarda e conjunto de efeitos inalterados. O
 revisão, não autorização de `apply-sql`. Aplicação, arquivamento da tarefa e abertura
 da guarda permanecem atos separados e proibidos nesta etapa.
 
+Fechamento posterior autenticado: o plano pós-cancelamento
+`0ba2823978c148ad6d144a7cc311cd00858a8660a36734b4edbf28431bac933a`
+foi aplicado uma única vez; o receipt
+`272cb403-94cd-42ef-9187-e31e09d73246` passou no `verify-receipt`; e a tarefa de
+hash `ffbfc9afc11515d45ff7bba6453dbde822bd084b67688e0193612edc9a898040`
+foi arquivada por uma única execução de `ack-task`. A campanha permaneceu
+`cancelled`, com `sentCount=2`, e nenhuma posição a partir da quarta foi submetida.
+A guarda foi posteriormente reaberta por autorização própria, sem converter esse
+fechamento em autorização para retomar a campanha. O plano anterior
+`bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde`
+permanece histórico e é incompatível com o estado pós-cancelamento.
+
 A interface proposta pesquisa a lista gerada no conjunto integral no servidor,
 mantém `Carregar mais` acumulativo e deduplicado dentro de uma área com rolagem
 própria e exibe `Exibindo X de Y`. O detalhe do rascunho oferece `Limpar`, que
@@ -596,6 +618,24 @@ a este incidente. A disposição versionada específica deve:
 O fluxo é `dry-run` por padrão. `apply-sql` e `ack-task` exigem autorizações
 distintas; nenhuma fase chama o provedor. Nesta entrega não há aplicação produtiva,
 arquivamento de tarefa, reabertura da guarda ou retomada de campanha.
+
+Fotografia pós-cancelamento de 06/11/2026: a campanha está `cancelled`, com
+`sentCount=587`, job `queued/operational_suspension`, 374 destinatários posteriores
+fora de execução e guarda fechada na geração 45 com uma tarefa
+`provider/persisting`. O binding privado das custódias v2/v3 possui SHA-256
+`00297e653ddb7dc1870662d82731e936205a08e314bf82ed57f2dc341893113b`.
+O dry-run v2, ainda em `sending`, produziu o plano
+`3f96d2baaaf3731089d26d5a30242f86d367515b12a33f4941a8b8da21fcb2df`
+e não é consumível depois do cancelamento. O dry-run v3 terminou com código `0` e
+produziu o plano pós-cancelamento
+`afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041`;
+captura sanitizada SHA-256
+`c2251de346fd4e6ec0fb1c3d638293cf71f4deb66247d2274bc33e2d51a49477`
+e saída sanitizada SHA-256
+`16e7be19b6b4ea6a483f11b15e55cc2b30eedfc0dd781dad1e927657a55b2654`.
+Ele preserva `providerAcceptance=unknown`, `providerCalls=0`, `retryAllowed=false`
+e continuidade não autorizada. O plano ainda não foi aplicado; receipt, `ack-task`
+e reabertura da guarda permanecem pendentes e separados.
 
 As correções de audiência e apresentação associadas permanecem independentes da
 reconciliação: anonimizados ficam fora da prévia, criação estática e materialização

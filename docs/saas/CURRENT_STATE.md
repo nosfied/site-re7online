@@ -1,32 +1,39 @@
 # Estado canônico do Converta
 
-**DEPLOYED_SANITIZED / CAMPAIGN DRAFT RECOVERY ACTIVE / PRODUCTION HEALTHY**
+**DEPLOYED_SANITIZED / CAMPAIGN RECIPIENT CONTINUITY ACTIVE / PRODUCTION HEALTHY**
 
-## Estado vigente — recuperação de rascunhos 785bde80 concluída
+## Estado vigente — continuidade de campanhas 17cc77a8 concluída
 
-Fonte: execução e verificação canônicas do Codex local em 03/11/2026.
+Fonte: execução canônica de 05/11/2026 e recaptura somente leitura do Codex
+local em 06/11/2026.
 
-A release API+frontend `immutable-785bde80-vps-20261103T103429Z`, target
-`785bde80cb8bacbbf6375337dd169247738ab0f9`, está `DEPLOYED_SANITIZED`.
+A release API+frontend `immutable-17cc77a8-vps-20261104T141039Z`, target
+`17cc77a8f1200ed970097c9c83444e4cad874a1a`, está `DEPLOYED_SANITIZED`.
 API e frontend apontam para a release, health local/público passou, e o worker
-`e2e7f17a` foi preservado sem restart. A release anterior `911a9708` permanece
+`e2e7f17a` foi preservado sem restart. A release anterior `785bde80` permanece
 como retorno autenticado.
 Os caminhos estáveis são `/opt/re7online/current/api` e
 `/opt/re7online/current/frontend`; o frontend permanece `fork_mode`, BUILD_ID
-`k1SJGEhHYRXzqEZOLjlpA`.
+`t7OOSSjRAmYSuPobO3mQA`.
 
 A finalização executou um único `pm2 save`, validou o dump
-`748ee3baf55e50d5746dfe88932384383dde18cc4ea1d8bcd813c2434c42733c`,
+`b44f2a81926072508f7d56670d9a538629935fa26afb1280dcb6b8f6450c52cb`,
 criou o marker, retirou 3/3 derivados e encerrou o lock canônico. Registro:
-[CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json).
+[CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
 
 Não repetir build, instalação, ativação, save ou retenção dessa geração. O saldo
-terminal foi 8.925.216.768 bytes. A alocação retirada foi 2.008.825.856 bytes;
-o aumento líquido observado foi 1.984.036.864 bytes. São métricas distintas e o
-saldo é checkpoint histórico, não capacidade reservada. A validação funcional de
-um novo rascunho confirmou 963 destinatários persistidos; a execução dessa campanha
-é um incidente separado, descrito abaixo. A adoção do adapter de `preparations`
-continua uma frente separada.
+do pós-check somente leitura foi 8.448.696.320 bytes e 8.760.179 inodes. A alocação
+retirada foi 2.009.059.328 bytes; o aumento líquido observado na janela foi
+1.994.584.064 bytes. São métricas distintas, tomadas em checkpoints distintos, e
+o saldo não é capacidade reservada. O índice autenticado contém 34.374 entradas:
+30.947 arquivos, 3.386 diretórios e 41 symlinks. A adoção do adapter de
+`preparations` continua uma frente separada.
+
+A fotografia de 06/11 confirmou novamente API e frontend físicos em `17cc77a8`,
+worker `e2e7f17a`, retorno `785bde80` presente e autenticado pelo runtime manifest,
+health local `ok=true/db=ok`, health público HTTP 200 e dump PM2
+`b44f2a81926072508f7d56670d9a538629935fa26afb1280dcb6b8f6450c52cb`.
+O lock canônico de deploy estava ausente, como exige o fechamento terminal.
 
 ### Validação funcional posterior — criação integral e incidente de execução
 
@@ -34,12 +41,27 @@ No tenant Demo, a campanha `5d1e71b1-d2a4-497a-9c2d-25761d94416c`
 (`Campanha teste nov.02`) foi criada com 963 destinatários persistidos. Isso valida
 a correção de criação integral desta release: não houve o corte anterior em 25.
 
-A execução posterior processou somente as três primeiras posições e ficou
-`Suspensa operacionalmente`. Esse resultado é um incidente de execução separado,
-não desfaz a validação da criação e não constitui aceite funcional do runner. A
-campanha, sua suspensão e os registros das posições 1–3 permanecem preservados;
-este fechamento não autoriza retomada, reenvio, agendamento nem reconstrução de
-destinatários.
+A execução posterior processou somente as três primeiras posições. Depois do
+cancelamento, o plano pós-cancelamento
+`0ba2823978c148ad6d144a7cc311cd00858a8660a36734b4edbf28431bac933a`
+foi aplicado uma única vez, o receipt
+`272cb403-94cd-42ef-9187-e31e09d73246` foi verificado e a tarefa vinculada ao hash
+`ffbfc9afc11515d45ff7bba6453dbde822bd084b67688e0193612edc9a898040`
+foi arquivada. A campanha permaneceu `cancelled`, com `sentCount=2`, sem reenvio;
+o plano anterior `bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837fde`
+é histórico e não consumível após a mudança de estado.
+
+### Continuidade posterior — campanha teste nov.03
+
+A fotografia de 06/11 confirmou a campanha `cancelled`, `sentCount=587`, job
+`queued/operational_suspension` e guarda global fechada na geração 45 com uma
+tarefa `provider/persisting`. No ordinal 588 existe somente
+`campaign.message.submit_started`: não há `provider_accepted`, `metaMessageId`,
+`OutboundMessage` ou resultado terminal. O plano pós-cancelamento
+`afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041`
+preserva `providerAcceptance=unknown`, realiza zero chamadas ao provedor e ainda
+não foi aplicado. Os 374 destinatários posteriores permanecem fora de execução;
+aplicação, arquivamento e reabertura da guarda continuam atos separados.
 
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 
@@ -53,7 +75,8 @@ instalação inerte verificada. A retenção prepare negou por fingerprint PM2 a
 não houve preflight/ativação. Reutilizar o pacote e a release, renovar somente a
 fotografia operacional e validar o contrato do consumidor. Identidades, hashes e
 retomada estão na [frente Tendência](backlog/TENDENCIA_HANDOFF_PERSISTENCE_P00_2026-10-30.md).
-Produção relatada permanece API 754281d3 / frontend aa9527cc / worker e2e7.
+Naquela fotografia histórica, a produção relatada era API 754281d3 / frontend
+aa9527cc / worker e2e7. Ela não descreve a seleção vigente.
 
 A revisão de prevenção e a lacuna da admissão estão no
 [plano de convergência P00-D](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md).
@@ -294,11 +317,11 @@ limita toda espera e publica `RECOVERY_PENDING` se não confirmar escopo vazio e
 launcher encerrado. O ensaio afetado confirmou timeout com descendente resistente
 e sentinela externo preservado; isso continua sem autorizar operação produtiva.
 
-Esta é a entrada vigente de continuidade. A topologia operacional está no
-[modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e o fechamento ativo está
-no [registro aa9527](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json).
-Registros anteriores permanecem no [índice documental](DOCUMENTATION_INDEX.md) como
-histórico e retorno; eles não substituem este estado.
+Esta seção preserva uma entrada histórica de continuidade. A topologia operacional
+está no [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e o fechamento
+ativo está no [registro 17cc77a8](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
+O [registro aa9527](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json)
+permanece histórico; não substitui o estado vigente.
 
 ## Fechamento frontend aa9527 — 29/10/2026
 

@@ -848,12 +848,20 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
         require(bool(SHA256.fullmatch(release.get(field, ""))),
                 f"fixed-current {field}")
     index_entry_types = release.get("indexEntryTypes", {})
-    require(release.get("indexEntries") == 34372 and
-            index_entry_types == {
-                "files": 30945,
-                "directories": 3386,
-                "symlinks": 41,
-            } and
+    expected_indexes = {
+        "785bde80cb8bacbbf6375337dd169247738ab0f9": {
+            "total": 34372,
+            "types": {"files": 30945, "directories": 3386, "symlinks": 41},
+        },
+        "17cc77a8f1200ed970097c9c83444e4cad874a1a": {
+            "total": 34374,
+            "types": {"files": 30947, "directories": 3386, "symlinks": 41},
+        },
+    }
+    expected_index = expected_indexes.get(release.get("target"))
+    require(expected_index is not None and
+            release.get("indexEntries") == expected_index["total"] and
+            index_entry_types == expected_index["types"] and
             sum(index_entry_types.values()) == release.get("indexEntries") and
             release.get("buildCount") == 1 and
             release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
