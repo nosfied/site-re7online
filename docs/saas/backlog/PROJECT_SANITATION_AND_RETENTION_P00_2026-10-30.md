@@ -645,7 +645,9 @@ recuperação comprovada. Não há hoje um conjunto comprovadamente retirável q
 cubra o déficit integral; isso não cria uma nova exigência de tamanho mínimo
 igual ao déficit para cada lote.
 
-### Plano fechado para a futura qualificação de `worker-package-audit`
+### Plano histórico de qualificação de `worker-package-audit`
+
+O audit posterior encerrou em DENY. Consulte a decisão de 06/11 abaixo.
 
 Escopo único: candidato
 `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit`
@@ -936,6 +938,25 @@ Uma fonte substituta com SHA válido e projeção coerente é negada antes da
 autenticação dos candidatos. O ganho qualificado permanece em zero até um audit
 produtivo próprio.
 
+### Fechamento produtivo do lote CRM (05/11/2026)
+
+O lote literal `ea3/d41` concluiu `audit → prepare → execute` na custódia
+`p00-capacity-crm-staging-audit-dc0405e3-v2`, com autorização por fase.
+O plano `84c3d53a9b19fd62c4ab2d835eb7a45eb4ca803db7f124287fe4e08bb76236bf`
+qualificou 1.299.951.616 bytes e 52.358 inodes. A execução terminou
+`COMPLETED_RECONCILED`, exit 0, com dois comandos concluídos, sem retry.
+
+- Receipt SHA-256 `301786a3de76f8061d66f705e408a7db30d504a4848e753ca02861d8abf7fe53`.
+- Journal SHA-256 `d440b319412322d8944b4602d2ca478d246737aface4ee5b114c0f6aa9d19b9a`.
+- O journal confirma `ATTEMPT → RESULT(0) → VERIFIED(ABSENT)` para cada árvore.
+  Os links ativos de API e frontend permaneceram intactos e os locks ficaram livres.
+- Ganho físico medido de 1.299.939.328 bytes. Pós-check de 10.066.833.408 bytes
+  e 2.461.819 inodes disponíveis, com folga observada de 403.156.992 bytes
+  sobre o gate de 9.663.676.416 bytes.
+
+A autorização foi consumida e o lote é irrepetível. O saldo é histórico.
+Fonte documental: [PR #344](https://github.com/nosfied/site-re7online/pull/344).
+
 ## Reconciliação dirigida de `deploy-control` — 06/11/2026
 
 Esta rodada exclui integralmente `ef7db111-prep` e preserva seu manifesto, plano
@@ -1013,3 +1034,26 @@ Git, emite o receipt terminal que fecha `SANITIZED`. Drift, conteúdo único ou
 falha com a árvore presente fecham `RETENTION_DEBT`; estado aberto ou dívida
 bloqueiam uma alocação equivalente antes do próximo worktree volumoso. Essa prova
 não altera a classificação de zero bytes do estoque histórico.
+
+## Decisão operacional vigente — 06/11/2026
+
+O relatório operacional encerrou a seleção em
+`DENY_BEFORE_AUDIT / NO_ADMISSIBLE_NONTERMINAL_BATCH`, com 0 B qualificados.
+O inventário de origem foi reaberto pelo SHA-256
+`f9acb9a9c51aa78f76d6c9820dbc18b8f5ba853980a916427d62d540da65b728`.
+Nenhum request, plano ou intenção novos foi produzido.
+
+| Escopo | Disposição |
+| --- | --- |
+| CRM `ea3/d41` e lote de três archives | Terminais e irrepetíveis, com receipts preservados. |
+| `worker-package-audit` | Audit v5 terminal `DENY` por `DISPOSITION_TREE_DIRECTORY_IDENTITY`, plano `57eda79930ec4f24dcc56bccd6f46e9996f3855386264267d80b8071d18302ea`. |
+| `ef7db111-prep` | Audit terminal `DENY`; resultado parcial sem autorização de retirada. |
+| Worktrees históricos de `deploy-control` | 0 B qualificados; #352 cobre somente novos worktrees. |
+| `build-output` | Runtimes derivados ausentes na enumeração dirigida; pacotes, manifestos, índices e evidências protegidos pelos contratos vigentes. |
+
+As seis gerações com análise aberta na seção de 03/11 são escopo de
+reconciliação documental. Reaproveitar inventários, contratos e receipts para
+identificar um artefato literal ainda presente, sua autoridade preservada,
+a lacuna de evidência resolúvel e a classe admitida pelo executor vigente.
+Sem candidato qualificado, o build de `36b94c6d` continua bloqueado pelo gate
+de capacidade.
