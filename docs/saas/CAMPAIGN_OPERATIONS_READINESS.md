@@ -534,12 +534,86 @@ Não houve `apply-sql`, arquivamento da tarefa, abertura da guarda, chamada ao
 provedor ou continuidade da campanha. Cada ato posterior exige revisão e
 autorização próprias.
 
+Continuidade pós-cancelamento em 05/11/2026: a campanha permaneceu `cancelled`,
+com `sentCount=2`, três submissões históricas e nenhuma submissão, aceitação ou
+outbound da posição 4 em diante. O job continuou `queued` por
+`operational_suspension`, sem lease; a guarda global continuou fechada na geração
+42, com a mesma tarefa `provider/persisting`. Os bindings recapturados conservaram
+o SHA-256
+`dc67b3ebb9fb188d382c83b12dc5cdf44e7031dea9b87365aeb2658924fa1ad3`.
+
+O plano anterior a esse cancelamento não é consumível no estado novo. O candidato
+versionado `a1ee1154b5cfc1ee1cbd10437729cabc4c06f925` passou localmente pelo percurso
+`sending -> cancelled`: o estado observado integra o hash do plano, o plano antigo
+nega por drift e o receipt sucessor preserva `cancelled`. O `dry-run` dirigido do
+candidato serializou o plano SHA-256
+`0ba2823978c148ad6d144a7cc311cd00858a8660a36734b4edbf28431bac933a`,
+com `providerCalls=0`, dois resultados preservados, 960 destinatários restantes e
+continuidade não autorizada. A saída privada possui SHA-256
+`4a0826260ff35551712fb51d09057117a470de4edae8143aa02b49feec5551cb`.
+
+O primeiro lançador offline terminou depois da serialização com `-6` (`SIGABRT`),
+sem stderr ou evento no journal do usuário. A causa foi reproduzida isoladamente:
+o ambiente copiado do processo PM2 continha `NODE_CHANNEL_FD` e
+`NODE_CHANNEL_SERIALIZATION_MODE`, mas o subprocesso Node não herdava esse canal
+IPC. Uma sonda somente leitura concluiu `SELECT 1` e `$disconnect()`, abortou com o
+ambiente integral e terminou `0` ao retirar exclusivamente as variáveis de
+transporte IPC (`NODE_CHANNEL_FD`, `NODE_CHANNEL_SERIALIZATION_MODE` e o legado
+`NODE_UNIQUE_ID`).
+
+Com esse filtro, a repetição única do mesmo `dry-run`, usando os mesmos bindings e
+bytes candidatos, terminou com código `0` e reproduziu exatamente o plano e a saída
+privada SHA-256 já registrados. A fotografia independente posterior também terminou
+`0`, gerou evidência SHA-256
+`2bf7536c91a933a317c4dea90b7fcfc3c65c31750c7afe467fe0cfa112ef9106`
+e confirmou campanha, job, tarefa, guarda e conjunto de efeitos inalterados. O
+`dry-run` pós-cancelamento está concluído; seu plano continua sendo evidência para
+revisão, não autorização de `apply-sql`. Aplicação, arquivamento da tarefa e abertura
+da guarda permanecem atos separados e proibidos nesta etapa.
+
 A interface proposta pesquisa a lista gerada no conjunto integral no servidor,
 mantém `Carregar mais` acumulativo e deduplicado dentro de uma área com rolagem
 própria e exibe `Exibindo X de Y`. O detalhe do rascunho oferece `Limpar`, que
 retorna à primeira página sem filtro. Ao iniciar processamento, a prévia deixa de
 ser exibida e o painel de acompanhamento permanece. Essas mudanças não alteram a
 seleção autenticada nem autorizam envio.
+
+## Campanha teste nov.03 — resultado de submissão desconhecido
+
+A leitura produtiva preservada em 05/11/2026 confirmou que a campanha chegou ao
+ordinal 588 e fechou a guarda global na geração 45. Existe a intenção durável
+`campaign.message.submit_started`, mas não existe `provider_accepted`, identificador
+Meta, `OutboundMessage` nem resultado terminal para esse ordinal. Os retornos Meta
+`131048` anteriores ocorreram depois de aceitações síncronas e não demonstram a
+causa do fechamento. A evidência disponível também não comprova o limite inicial
+de destinatários da Meta. Portanto, o ordinal 588 permanece **desconhecido**: não
+pode ser reenviado nem convertido em falha definitiva.
+
+Os reconciliadores anteriores só aceitam resultados conhecidos e não são aplicáveis
+a este incidente. A disposição versionada específica deve:
+
+1. reabrir seed, intenção de submissão, campanha, job e a única tarefa
+   `provider/persisting`, vinculando tenant, run, ordinal e geração da guarda;
+2. negar se surgir aceitação, outbound, resultado terminal ou qualquer drift;
+3. registrar `providerAcceptance=unknown`, `definitiveFailure=false`,
+   `retryAllowed=false`, `outboundMaterialized=false` e `providerCalls=0`;
+4. preservar status e contadores da campanha e o job suspenso;
+5. permitir arquivar somente a tarefa autenticada após verificação do receipt,
+   usando o motivo `durable_submission_uncertain_no_retry`;
+6. manter a guarda fechada. Reabertura e disposição dos destinatários restantes
+   continuam decisões posteriores e separadas.
+
+O fluxo é `dry-run` por padrão. `apply-sql` e `ack-task` exigem autorizações
+distintas; nenhuma fase chama o provedor. Nesta entrega não há aplicação produtiva,
+arquivamento de tarefa, reabertura da guarda ou retomada de campanha.
+
+As correções de audiência e apresentação associadas permanecem independentes da
+reconciliação: anonimizados ficam fora da prévia, criação estática e materialização
+dinâmica pelo mesmo read model canônico; o aviso de divisão usa mais de 1.000
+**elegíveis**, não o total bruto; há uma única ação de cancelamento; e a tabela
+“Situação real por mensagem” possui rolagem vertical e horizontal própria. A
+alternância visual posterior a um estado realmente incerto continua sem causa
+comprovada e não é declarada corrigida por essas mudanças.
 
 ## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
 

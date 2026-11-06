@@ -65,6 +65,7 @@ import {
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
+  resolveTenantBaseConfigSettings,
   resolveSatisfactionPolicySettings,
   resolveServiceMessagePolicySettings,
   resolveWhatsappTemplatePolicySettings,
@@ -104,6 +105,7 @@ import {
   type RuntimeLimitsSettings,
   type ResolvedWebSessionAlertEmails,
 } from "../config/tenantOperationalConfig.js";
+import { readMetaInboundReadiness } from "../channels/metaInboundReadiness.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { hasOperationallyExcludedContact, loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
@@ -22542,6 +22544,109 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         redirectUri: getInstagramBusinessRedirectUri(),
         returnPath,
         scopes: ["instagram_business_basic", "instagram_business_manage_messages"],
+      });
+      return;
+    }
+
+    const metaInboundReadinessMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/channel-accounts\/meta-inbound-readiness$/
+    );
+    if (req.method === "GET" && metaInboundReadinessMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(metaInboundReadinessMatch[1] ?? "").trim();
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const tenants = await getTenants();
+      json(res, 200, {
+        ok: true,
+        tenantId,
+        readiness: await readMetaInboundReadiness({
+          prisma,
+          clientId: client.id,
+          hasCanonicalTenantSource: Boolean(tenants[tenantId]),
+        }),
+      });
+      return;
+    }
+
+    const metaInboundBaseConfigMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/channel-accounts\/meta-inbound-readiness\/base-config$/
+    );
+    if (req.method === "POST" && metaInboundBaseConfigMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(metaInboundBaseConfigMatch[1] ?? "").trim();
+      const body = await readJsonBody(req, res);
+      if (body === null) return;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body as Record<string, unknown>).length !== 1 ||
+          (body as Record<string, unknown>).field !== "baseConfig") {
+        json(res, 400, httpError("base_config_field_confirmation_required", "field must be baseConfig"));
+        return;
+      }
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 409, httpError("canonical_tenant_source_missing", "Canonical tenant source is required"));
+        return;
+      }
+      const resolved = await resolveTenantBaseConfigSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const result = await saveTenantBaseConfigSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+        settings: resolved.settings,
+        onlyIfMissing: true,
+      });
+      if (result.action === "saved") {
+        await persistEvent({
+          clientId: client.id,
+          requestId: `${requestId}:admin-meta-inbound-base-config`,
+          eventName: "admin.tenant.meta_inbound.base_config_materialized",
+          payloadJson: {
+            actorUserId: `admin:${authToken.source}`,
+            tenantKey: client.clientKey,
+            fieldsChanged: ["baseConfig"],
+          },
+        });
+      }
+      logger.info({
+        event: "admin.tenant.meta_inbound.base_config_materialized",
+        tenantId,
+        authSource: authToken.source,
+        action: result.action,
+        fieldsChanged: result.action === "saved" ? ["baseConfig"] : [],
+        requestId,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId,
+        action: result.action,
+        fieldsChanged: result.action === "saved" ? ["baseConfig"] : [],
+        readiness: await readMetaInboundReadiness({
+          prisma,
+          clientId: client.id,
+          hasCanonicalTenantSource: true,
+        }),
       });
       return;
     }

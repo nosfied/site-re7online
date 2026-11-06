@@ -644,6 +644,79 @@ test("selected Tendencia, Justa and owner-authorized CRA are one atomic batch", 
   assert.deepEqual(omittedReport.selectedTenants, ["tendencia-modas"]);
   assert.equal(omittedReport.processed, 1);
 
+  const scoped = created.find((entry) => entry.tenantKey === "tendencia-modas")!;
+  const scopedBeforeRow = await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: scoped.client.id } });
+  const scopedBeforeConfig = structuredClone(scopedBeforeRow.config as Record<string, unknown>);
+  delete scopedBeforeConfig.baseConfig;
+  Object.assign(scopedBeforeConfig, {
+    crmBusinessStatuses: [{ id: "preserve", label: "Preserve" }],
+    followUp: { preserve: true },
+    handoffLeadNotification: { preserve: true },
+    mediaHandoffPolicy: { preserve: true },
+    aiAssistantConfig: { preserve: true },
+  });
+  await prisma.tenantOperationalConfig.update({
+    where: { clientId: scoped.client.id },
+    data: { config: JSON.parse(JSON.stringify(scopedBeforeConfig)) },
+  });
+  const baseConfigOnlyArgs = [
+    "--source", source,
+    "--expected-source-sha256", sourceSha256,
+    "--plan", planPath,
+    "--expected-plan-sha256", planSha256,
+    "--tenant", scoped.tenantKey,
+    "--field", "baseConfig",
+    "--json",
+  ];
+  const baseConfigDryRun = JSON.parse(await runScript(
+    cwd,
+    "backfill-tenant-operational-config.ts",
+    [...baseConfigOnlyArgs, "--dry-run"]
+  ));
+  assert.deepEqual(baseConfigDryRun.selectedTenants, [scoped.tenantKey]);
+  assert.deepEqual(baseConfigDryRun.selectedFields, ["baseConfig"]);
+  assert.deepEqual(baseConfigDryRun.items[0].fieldsChanged, ["baseConfig"]);
+  assert.deepEqual(
+    (await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: scoped.client.id } })).config,
+    scopedBeforeConfig
+  );
+  const baseConfigApply = JSON.parse(await runScript(cwd, "backfill-tenant-operational-config.ts", baseConfigOnlyArgs));
+  assert.deepEqual(baseConfigApply.selectedFields, ["baseConfig"]);
+  assert.deepEqual(baseConfigApply.items[0].fieldsChanged, ["baseConfig"]);
+  const scopedAfter = (await prisma.tenantOperationalConfig.findUniqueOrThrow({
+    where: { clientId: scoped.client.id },
+  })).config as Record<string, unknown>;
+  assert.deepEqual(scopedAfter.baseConfig, {
+    allowlist: [],
+    handoffAttendantWaid: "",
+    defaultLanguage: "pt_BR",
+    disableAutoReply: false,
+  });
+  for (const field of [
+    "crmBusinessStatuses",
+    "followUp",
+    "handoffLeadNotification",
+    "mediaHandoffPolicy",
+    "aiAssistantConfig",
+    "sentinel",
+    "unrelatedPolicy",
+  ]) assert.deepEqual(scopedAfter[field], scopedBeforeConfig[field], field);
+  await assert.rejects(runScript(cwd, "backfill-tenant-operational-config.ts", [
+    "--source", source,
+    "--expected-source-sha256", sourceSha256,
+    "--tenant", scoped.tenantKey,
+    "--field", "crmBusinessStatuses",
+    "--dry-run",
+    "--json",
+  ]), /FIELD_SELECTOR_UNSUPPORTED:crmBusinessStatuses/);
+  await assert.rejects(runScript(cwd, "backfill-tenant-operational-config.ts", [
+    "--source", source,
+    "--expected-source-sha256", sourceSha256,
+    "--field", "baseConfig",
+    "--dry-run",
+    "--json",
+  ]), /field_selection_requires_exactly_one_tenant/);
+
   const changedSourceValue = structuredClone(sourceValue);
   for (const tenant of Object.values(changedSourceValue)) tenant.disableAutoReply = true;
   const changedSourceBytes = JSON.stringify(changedSourceValue);

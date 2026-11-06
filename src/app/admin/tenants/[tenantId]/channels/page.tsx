@@ -9,7 +9,10 @@ import {
   authorizeTenantWebSessionNumber,
   cancelTenantWhatsappNumberReplacement,
   getTenantChannelAccounts,
+  getTenantMetaInboundReadiness,
   getTenantWhatsAppMediaPolicy,
+  materializeTenantMetaInboundBaseConfig,
+  MetaInboundReadiness,
   Provider,
   refreshTenantMetaCloudReadiness,
   releaseTenantWebSessionNumber,
@@ -641,6 +644,9 @@ export default function TenantChannelsPage() {
   const [savedDrafts, setSavedDrafts] = useState<ChannelAccountDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [metaInboundReadiness, setMetaInboundReadiness] = useState<MetaInboundReadiness | null>(null);
+  const [metaInboundReadinessError, setMetaInboundReadinessError] = useState<string | null>(null);
+  const [metaInboundWorking, setMetaInboundWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<AdminToast | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
@@ -693,6 +699,7 @@ export default function TenantChannelsPage() {
   const metaOperationalCard = getMetaOperationalCard(webSessionStatus);
   const webOperationalCard = getWebOperationalCard(webSessionStatus);
   const incidentBanners = getIncidentBanners(webSessionStatus);
+  const unlinkedMetaIdentities = metaInboundReadiness?.accounts.filter((account) => !account.identityLinked) ?? [];
 
   const showToast = useCallback((tone: ToastTone, title: string, message?: string) => {
     setToast({ tone, title, message });
@@ -719,8 +726,14 @@ export default function TenantChannelsPage() {
     Promise.all([
       getTenantChannelAccounts(connection, tenantId),
       getTenantWhatsAppMediaPolicy(connection, tenantId),
+      getTenantMetaInboundReadiness(connection, tenantId)
+        .then((response) => ({ response, error: null }))
+        .catch((readinessError: { message?: string }) => ({
+          response: null,
+          error: readinessError.message || "Falha ao carregar prontidão inbound.",
+        })),
     ])
-      .then(([response, policyResponse]) => {
+      .then(([response, policyResponse, readinessResult]) => {
         if (cancelled) return;
         const loadedDrafts = response.channelAccounts.map(toDraft);
         const loadedTemplatePolicy =
@@ -738,6 +751,8 @@ export default function TenantChannelsPage() {
         setSavedTemplateCategoryPolicyUnrestricted(loadedTemplatePolicyUnrestricted);
         setMediaPolicy(policyResponse.whatsappMediaPolicy);
         setMediaPolicySource(policyResponse.source);
+        setMetaInboundReadiness(readinessResult.response?.readiness ?? null);
+        setMetaInboundReadinessError(readinessResult.error);
       })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -803,6 +818,42 @@ export default function TenantChannelsPage() {
       setError((err as Error).message || "Falha ao salvar canais.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRefreshMetaInboundReadiness = async () => {
+    setMetaInboundWorking("refresh");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await getTenantMetaInboundReadiness(connection, tenantId);
+      setMetaInboundReadiness(response.readiness);
+      setMetaInboundReadinessError(null);
+      showToast("success", "Prontidão inbound atualizada.");
+    } catch (err) {
+      setMetaInboundReadinessError((err as Error).message || "Falha ao atualizar prontidão inbound.");
+      setError((err as Error).message || "Falha ao atualizar prontidão inbound.");
+    } finally {
+      setMetaInboundWorking(null);
+    }
+  };
+
+  const handleMaterializeMetaInboundBaseConfig = async () => {
+    if (!window.confirm("Gravar exclusivamente baseConfig a partir da fonte canônica deste tenant?")) return;
+    setMetaInboundWorking("base-config");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await materializeTenantMetaInboundBaseConfig(connection, tenantId);
+      setMetaInboundReadiness(response.readiness);
+      showToast(
+        "success",
+        response.action === "saved" ? "baseConfig gravada isoladamente." : "baseConfig já estava configurada."
+      );
+    } catch (err) {
+      setError((err as Error).message || "Falha ao gravar baseConfig.");
+    } finally {
+      setMetaInboundWorking(null);
     }
   };
 
@@ -1785,6 +1836,39 @@ export default function TenantChannelsPage() {
           </ol>
         </section>
 
+        {unlinkedMetaIdentities.length > 0 ? (
+          <section className="rounded-xl border border-amber-300/25 bg-amber-500/10 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-amber-100">Bindings Meta pendentes</h2>
+                <p className="mt-1 text-sm text-amber-50/75">
+                  Falta uma ChannelAccount whatsapp/meta ou a conta existente não corresponde a uma identidade Meta conhecida do tenant.
+                </p>
+              </div>
+              <StatusBadge label={`${unlinkedMetaIdentities.length} pendente(s)`} tone="warning" />
+            </div>
+            <dl className="mt-3 grid gap-2 md:grid-cols-2">
+              {unlinkedMetaIdentities.map((identity) => (
+                <TechnicalValue
+                  key={identity.channelAccountId}
+                  label="channelAccountId sem vínculo"
+                  value={identity.channelAccountId}
+                />
+              ))}
+            </dl>
+          </section>
+        ) : null}
+
+        {metaInboundReadinessError ? (
+          <section className="rounded-xl border border-amber-300/25 bg-amber-500/10 p-4 text-sm text-amber-50/80">
+            <p className="font-semibold text-amber-100">Prontidão inbound indisponível</p>
+            <p className="mt-1">
+              {metaInboundReadinessError} As contas continuam disponíveis para revisão; nenhuma etapa será marcada como
+              validada sem a leitura do estado real.
+            </p>
+          </section>
+        ) : null}
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -1795,13 +1879,23 @@ export default function TenantChannelsPage() {
                 {loading ? "Carregando..." : `${drafts.length} conta(s) configurada(s).`}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setDrafts((current) => [...current, createDraft()])}
-              className={PRIMARY_BUTTON_CLASS}
-            >
-              Adicionar conta
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleRefreshMetaInboundReadiness}
+                disabled={Boolean(metaInboundWorking) || loading}
+                className={SECONDARY_BUTTON_CLASS}
+              >
+                {metaInboundWorking === "refresh" ? "Atualizando..." : "Atualizar prontidão inbound"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrafts((current) => [...current, createDraft()])}
+                className={PRIMARY_BUTTON_CLASS}
+              >
+                Adicionar conta
+              </button>
+            </div>
           </div>
 
           {drafts.length === 0 && !loading ? (
@@ -1815,6 +1909,11 @@ export default function TenantChannelsPage() {
             const source = metadata.source;
             const warnings = getChannelWarnings(draft, metadata);
             const statusManagedByLifecycle = isExistingWebSessionDraft(draft, savedDrafts);
+            const metaReadinessAccount = draft.channel === "whatsapp" && draft.provider === "meta"
+              ? metaInboundReadiness?.accounts.find(
+                  (account) => account.accountId === draft.id || account.channelAccountId === draft.channelAccountId
+                ) ?? null
+              : null;
             return (
             <section key={draft.id || index} className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
@@ -1864,6 +1963,107 @@ export default function TenantChannelsPage() {
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
+                </div>
+              ) : null}
+
+              {draft.channel === "whatsapp" && draft.provider === "meta" ? (
+                <div className="mb-4 rounded-xl border border-sky-300/20 bg-sky-500/5 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold text-sky-100">Validação do canal Meta inbound</h3>
+                      <p className="mt-1 text-xs text-white/55">
+                        Conexão, persistência DB-first e recebimento real são verificações independentes.
+                      </p>
+                    </div>
+                    <StatusBadge
+                      label={metaReadinessAccount?.connected ? "Conectado" : "Conexão pendente"}
+                      tone={metaReadinessAccount?.connected ? "success" : "warning"}
+                    />
+                  </div>
+
+                  <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                    <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-white/55">1. Identidade vinculada</p>
+                        <StatusBadge
+                          label={metaReadinessAccount?.identityLinked ? "Vinculada" : "Não vinculada"}
+                          tone={metaReadinessAccount?.identityLinked ? "success" : "warning"}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-white/65">
+                        {metaReadinessAccount
+                          ? metaReadinessAccount.identityLinked
+                            ? "ChannelAccount whatsapp/meta corresponde a uma identidade Meta conhecida do tenant."
+                            : "A conta existe, mas seu ID ou alias não corresponde às identidades Meta conhecidas do tenant."
+                          : "Salve esta conta antes de validar o binding."}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-white/55">2. Persistência configurada</p>
+                        <StatusBadge
+                          label={
+                            metaReadinessAccount?.permissions.enabled &&
+                            metaReadinessAccount.permissions.runtimeEnabled &&
+                            metaReadinessAccount.permissions.inboundPersistenceEnabled &&
+                            metaInboundReadiness?.baseConfig.configured
+                              ? "Configurada"
+                              : "Pendente"
+                          }
+                          tone={
+                            metaReadinessAccount?.permissions.enabled &&
+                            metaReadinessAccount.permissions.runtimeEnabled &&
+                            metaReadinessAccount.permissions.inboundPersistenceEnabled &&
+                            metaInboundReadiness?.baseConfig.configured
+                              ? "success"
+                              : "warning"
+                          }
+                        />
+                      </div>
+                      <ul className="mt-2 space-y-1 text-xs text-white/65">
+                        <li>enabled: {metaReadinessAccount?.permissions.enabled ? "sim" : "não"}</li>
+                        <li>runtimeEnabled: {metaReadinessAccount?.permissions.runtimeEnabled ? "sim" : "não"}</li>
+                        <li>inboundPersistenceEnabled: {metaReadinessAccount?.permissions.inboundPersistenceEnabled ? "sim" : "não"}</li>
+                        <li>baseConfig DB-first: {metaInboundReadiness?.baseConfig.configured ? "presente" : "ausente"}</li>
+                      </ul>
+                      {!metaInboundReadiness?.baseConfig.configured ? (
+                        <button
+                          type="button"
+                          onClick={handleMaterializeMetaInboundBaseConfig}
+                          disabled={!metaInboundReadiness?.baseConfig.canMaterialize || Boolean(metaInboundWorking)}
+                          className={`${SECONDARY_BUTTON_CLASS} mt-3 w-full`}
+                        >
+                          {metaInboundWorking === "base-config" ? "Gravando..." : "Gravar somente baseConfig"}
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-white/55">3. Recebimento na Inbox</p>
+                        <StatusBadge
+                          label={metaReadinessAccount?.inboundValidation.validated ? "Inbound validado" : "Teste pendente"}
+                          tone={metaReadinessAccount?.inboundValidation.validated ? "success" : "warning"}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-white/65">
+                        {metaReadinessAccount?.inboundValidation.validated
+                          ? "Mensagem real persistida uma vez e visível na timeline humana."
+                          : "Envie uma mensagem controlada para este binding e atualize a prontidão."}
+                      </p>
+                      {metaReadinessAccount?.inboundValidation.receivedAt ? (
+                        <p className="mt-2 text-xs text-white/50">
+                          Último teste: {new Date(metaReadinessAccount.inboundValidation.receivedAt).toLocaleString("pt-BR")}
+                        </p>
+                      ) : null}
+                      {metaReadinessAccount?.inboundValidation.departmentName || metaReadinessAccount?.inboundValidation.queueName ? (
+                        <p className="mt-1 text-xs text-white/50">
+                          Destino: {metaReadinessAccount.inboundValidation.departmentName ?? "-"} → {metaReadinessAccount.inboundValidation.queueName ?? "-"}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               ) : null}
 

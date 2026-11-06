@@ -2,6 +2,7 @@ import "./campaignOperationsTestSupport.js";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
+import type { Prisma } from "@prisma/client";
 import { getPrisma } from "../db.js";
 import {
   acknowledgeAcceptedCrmFailure,
@@ -82,9 +83,19 @@ test("accepted provider result with CRM failure is reconciled without replay and
   assert.equal(plan.plan.providerCalls, 0);
   await assert.rejects(dryRunAcceptedCrmFailure(db, { ...bindings, clientId: otherClientId }), /task_binding_mismatch/);
   await assert.rejects(applyAcceptedCrmFailure(db, bindings, "0".repeat(64)), /plan_drift/);
-  await applyAcceptedCrmFailure(db, bindings, plan.planHash);
+  const applied = await applyAcceptedCrmFailure(db, bindings, plan.planHash);
+  assert.equal(applied.alreadyApplied, false);
   assert.equal((await applyAcceptedCrmFailure(db, bindings, plan.planHash)).alreadyApplied, true);
+  const generatedReceipt = await db.event.findUniqueOrThrow({ where: { id: applied.receiptId } });
+  const legacyPayload: Record<string, unknown> = {
+    ...(generatedReceipt.payloadJson as Record<string, unknown>), version: 1,
+  };
+  delete legacyPayload.campaignStatusPreserved;
+  delete legacyPayload.campaignRemainsCancelled;
+  await db.event.update({ where: { id: generatedReceipt.id },
+    data: { payloadJson: legacyPayload as Prisma.InputJsonObject } });
   const verified = await verifyAcceptedCrmFailure(db, bindings);
+  assert.equal(verified.campaignStatusPreserved, "sending", "version 1 receipts remain verifiable");
   assert.equal(verified.campaignContinuationAuthorized, false);
   assert.equal(await db.outboundMessage.count({ where: { clientId } }), 3);
   assert.equal(await db.contact.count({ where: { clientId } }), 0);
@@ -110,4 +121,85 @@ test("accepted provider result with CRM failure is reconciled without replay and
   const completed = await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
   assert.equal(completed.status, "completed"); assert.equal(completed.sentCount, 3);
   assert.equal(await db.event.count({ where: { clientId: otherClientId } }), 0);
+});
+
+test("cancelled campaign preserves its terminal state and binds a successor dry-run before reconciliation", async (t) => {
+  const db = getPrisma();
+  const clientId = crypto.randomUUID();
+  const clientKey = `cancelled-accepted-crm-${clientId}`;
+  const templateName = `cancelled_accepted_crm_${Date.now()}`;
+  const recipients = ["5541991200601", "5541991200602", "12025550299", "5541991200604"];
+  t.after(async () => {
+    await db.tenantCampaignExecutionLease.deleteMany({ where: { clientId } });
+    await db.event.deleteMany({ where: { clientId } });
+    await db.outboundMessage.deleteMany({ where: { clientId } });
+    await db.campaignExecutionJob.deleteMany({ where: { clientId } });
+    await db.campaign.deleteMany({ where: { clientId } });
+    await db.template.deleteMany({ where: { clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  });
+  await db.client.create({ data: { id: clientId, clientKey, name: "Synthetic cancelled", profile: "business",
+    features: { campaigns: true } } });
+  await db.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR",
+    status: "approved", content: "Synthetic" } });
+  const campaign = await db.campaign.create({ data: { clientId, name: "Cancelled accepted CRM failure", templateName,
+    status: "sending", totalRecipients: recipients.length, sentCount: 2 } });
+  const job = await db.campaignExecutionJob.create({ data: { clientId, campaignId: campaign.id, kind: "campaign",
+    status: "queued", eligibleAt: new Date(), idempotencyKey: crypto.randomUUID(), failureReason: "operational_suspension" } });
+  const seed = await db.event.create({ data: { clientId, messageId: campaign.id, eventName: "campaign.seed.saved",
+    payloadJson: { templateName, ...buildPrivateCampaignSeedFields({ clientId, waIds: recipients }) } } });
+  const runId = crypto.randomUUID();
+  const metaMessageId = "wamid.synthetic.cancelled.accepted.crm.failure";
+  const accepted = await db.event.create({ data: { clientId, waId: recipients[2], messageId: `campaign.${campaign.id}.3`,
+    eventName: "campaign.message.provider_accepted", payloadJson: { campaignId: campaign.id, campaignRunId: runId, metaMessageId } } });
+  const outbounds = await Promise.all(recipients.slice(0, 3).map((waId, index) => db.outboundMessage.create({ data: {
+    clientId, waId, messageId: `campaign.${campaign.id}.${index + 1}`,
+    metaMessageId: index === 2 ? metaMessageId : `wamid.synthetic.cancelled.${index + 1}`,
+    channel: "whatsapp", provider: "meta", type: "TEMPLATE", status: index === 2 ? "FAILED" : "SENT",
+    rawPayload: index === 2 ? { metaStatus: { lastStatus: "failed", errors: [{ code: 130497 }] } } : {},
+  } })));
+  await db.event.createMany({ data: recipients.slice(0, 3).map((_waId, index) => ({ clientId,
+    messageId: `campaign.${campaign.id}.${index + 1}`, eventName: "campaign.message.submit_started", payloadJson: {} })) });
+  await campaignTask("synthetic-cancelled-crm-failure", async () => {
+    await campaignProviderAttempt(async () => undefined, async () => ({ ok: true }), {
+      clientId, campaignId: campaign.id, messageId: `campaign.${campaign.id}.3`,
+    });
+  });
+  const guard = campaignOperationsStatus();
+  assert.equal(guard.open, false);
+  assert.equal(guard.tasks.length, 1);
+  const bindings: AcceptedCrmFailureBindings = { clientId, campaignId: campaign.id, jobId: job.id, runId,
+    seedEventId: seed.id, acceptedEventId: accepted.id, failedOutboundId: outbounds[2].id,
+    taskId: guard.tasks[0].id, guardGeneration: guard.generation!, position: 3, providerErrorCode: 130497 };
+
+  const sendingPlan = await dryRunAcceptedCrmFailure(db, bindings);
+  assert.equal(sendingPlan.alreadyApplied, false);
+  if (sendingPlan.alreadyApplied) throw new Error("unexpected_prior_receipt");
+  assert.equal(sendingPlan.plan.campaignStatusPreserved, "sending");
+
+  await db.campaign.update({ where: { id: campaign.id }, data: { status: "completed" } });
+  await assert.rejects(dryRunAcceptedCrmFailure(db, bindings), /campaign_state_drift/);
+  await db.campaign.update({ where: { id: campaign.id }, data: { status: "cancelled" } });
+  const cancelledPlan = await dryRunAcceptedCrmFailure(db, bindings);
+  assert.equal(cancelledPlan.alreadyApplied, false);
+  if (cancelledPlan.alreadyApplied) throw new Error("unexpected_prior_receipt");
+  assert.equal(cancelledPlan.plan.campaignStatusPreserved, "cancelled");
+  assert.notEqual(cancelledPlan.planHash, sendingPlan.planHash, "cancellation must invalidate the prior dry-run");
+  await assert.rejects(applyAcceptedCrmFailure(db, bindings, sendingPlan.planHash), /plan_drift/);
+
+  const applied = await applyAcceptedCrmFailure(db, bindings, cancelledPlan.planHash);
+  assert.equal(applied.alreadyApplied, false);
+  const verified = await verifyAcceptedCrmFailure(db, bindings);
+  assert.equal(verified.campaignStatusPreserved, "cancelled");
+  assert.equal(verified.campaignContinuationAuthorized, false);
+  const preserved = await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
+  assert.equal(preserved.status, "cancelled");
+  assert.equal(preserved.sentCount, 2);
+  assert.equal(preserved.blockedCount, 0);
+  assert.equal(await db.outboundMessage.count({ where: { clientId } }), 3);
+  assert.equal(await db.event.count({ where: { clientId, eventName: "campaign.message.submit_started" } }), 3);
+  assert.equal(campaignOperationsStatus().open, false);
+  assert.equal(campaignOperationsStatus().tasks.length, 1);
+  assert.equal((await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: job.id } })).status, "queued");
 });

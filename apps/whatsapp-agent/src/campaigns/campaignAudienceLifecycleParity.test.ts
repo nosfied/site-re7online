@@ -37,6 +37,8 @@ test("dynamic NEW preview and real snapshot exclude provisional lifecycle withou
   await db.contact.create({data:{clientId:other,waId:waIds[0],channel:"whatsapp",lifecycle:"PROVISIONAL"}});
   const preview=await buildCampaignAudiencePreviewPayload(db,{clientId,query:{status:"NEW",limit:100},statuses,now});
   const expected=waIds.filter((_,i)=>!provisional.has(i));
+  assert.equal(preview.summary.total,7);assert.equal(preview.summary.blocked,3);
+  assert.equal(preview.summary.blockedByReason.some(item=>item.reason==="anonymized_contact"),false);
   assert.equal(preview.summary.eligible,4);
   assert.deepEqual(new Set(preview.items.map(x=>x.leadId)),new Set((await db.lead.findMany({where:{tenantId:clientId,waId:{in:expected}},select:{id:true}})).map(x=>x.id)));
   const originalFetch=globalThis.fetch;let providers=0;
@@ -52,13 +54,13 @@ test("dynamic NEW preview and real snapshot exclude provisional lifecycle withou
   await assert.rejects(processDueScheduledCampaigns({now,limit:1}),/synthetic_snapshot_only/);
   const event=await db.event.findFirstOrThrow({where:{clientId,messageId:parent.id,eventName:"campaign.dynamic_batch_snapshot.created"}});
   const payload=event.payloadJson as Record<string,unknown>;
-  assert.equal(payload.matchedCount,255);assert.equal(payload.eligibleCount,4);assert.equal(payload.blockedCount,251);
+  assert.equal(payload.matchedCount,7);assert.equal(payload.eligibleCount,4);assert.equal(payload.blockedCount,3);
   assert.deepEqual(new Set(readPrivateCampaignSeedFields(payload).recipients),new Set(expected));
   const blocked=payload.blocked as Array<{reason:string}>;
-  assert.equal(blocked.filter(x=>x.reason==="provisional_contact").length,6);
-  assert.equal(blocked.filter(x=>x.reason==="unsupported_international_identity").length,1);
-  assert.equal(blocked.filter(x=>x.reason==="anonymized_contact").length,240);
-  assert.equal(blocked.filter(x=>x.reason==="operationally_excluded_contact").length,1);
+  assert.equal(blocked.filter(x=>x.reason==="provisional_contact").length,0,"provisional contacts are outside the canonical audience read model");
+  assert.equal(blocked.filter(x=>x.reason==="unsupported_international_identity").length,0);
+  assert.equal(blocked.filter(x=>x.reason==="anonymized_contact").length,0,"anonymized records are outside every campaign audience mode");
+  assert.equal(blocked.filter(x=>x.reason==="operationally_excluded_contact").length,0);
   assert.equal(blocked.filter(x=>x.reason==="non_whatsapp_channel").length,3);
   assert.equal(providers,0);assert.equal(await db.outboundMessage.count({where:{clientId}}),0);
   assert.equal(await db.campaignExecutionBatchCampaign.count({where:{batchId:batch.id}}),0);

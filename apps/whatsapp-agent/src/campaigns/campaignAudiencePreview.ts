@@ -260,7 +260,7 @@ async function resolveCampaignAudiencePreviewAnalysis(
     query: baseQuery,
     statuses: params.statuses,
     now: params.now,
-    includeAnonymized: true,
+    includeAnonymized: false,
     audienceAnalysisLimit: MAX_ANALYSIS_ITEMS,
   });
 
@@ -280,7 +280,7 @@ async function resolveCampaignAudiencePreviewAnalysis(
       },
       statuses: params.statuses,
       now: params.now,
-      includeAnonymized: true,
+      includeAnonymized: false,
     });
     collected.push(...nextPage.items);
     currentPage += 1;

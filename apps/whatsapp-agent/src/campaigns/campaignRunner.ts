@@ -46,6 +46,7 @@ import {
   readPrivateCampaignSeedFields,
 } from "./campaignSeedPrivacy.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
+import { resolveCampaignAudiencePreviewSelection } from "./campaignAudiencePreview.js";
 import {
   suspendCampaignExecutionJob,
   CAMPAIGN_EXECUTION_RENEW_MS,
@@ -446,10 +447,14 @@ async function materializeDynamicCampaignSnapshot(params: {
   const status = resolvedStatuses.statuses.find((item) => item.id === statusId && item.isActive !== false);
   if (!status) return { ok: false, reason: "crm_status_not_found" };
 
+  const audience = await resolveCampaignAudiencePreviewSelection(prisma, {
+    clientId: params.clientId, query: { status: statusId, limit: 200 }, statuses: resolvedStatuses.statuses, now: params.now,
+  });
+  if (audience.summary.total > 1000) return { ok: false, reason: "dynamic_match_limit_exceeded" };
   const leads = await prisma.lead.findMany({
     where: {
       tenantId: params.clientId,
-      status: statusId,
+      id: { in: audience.leadIds },
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
     take: 1001,
@@ -464,7 +469,6 @@ async function materializeDynamicCampaignSnapshot(params: {
       channel: true,
     },
   });
-  if (leads.length > 1000) return { ok: false, reason: "dynamic_match_limit_exceeded" };
 
   const recipients: string[] = [];
   const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
@@ -589,10 +593,16 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
   const status = resolvedStatuses.statuses.find((item) => item.id === statusId && item.isActive !== false);
   if (!status) return { ok: false, reason: "crm_status_not_found" };
 
+  const audience = await resolveCampaignAudiencePreviewSelection(prisma, {
+    clientId: params.clientId, query: { status: statusId, limit: 200 }, statuses: resolvedStatuses.statuses, now: params.now,
+  });
+  if (audience.summary.truncated || audience.summary.total > CAMPAIGN_BATCH_MAX_ANALYZED) {
+    return { ok: false, reason: "dynamic_batch_limit_exceeded" };
+  }
   const leads = await prisma.lead.findMany({
     where: {
       tenantId: params.clientId,
-      status: statusId,
+      id: { in: audience.leadIds },
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
     take: CAMPAIGN_BATCH_MAX_ANALYZED + 1,
@@ -607,7 +617,6 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
       channel: true,
     },
   });
-  if (leads.length > CAMPAIGN_BATCH_MAX_ANALYZED) return { ok: false, reason: "dynamic_batch_limit_exceeded" };
   if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("before_eligibility");
 
   const recipients: string[] = [];

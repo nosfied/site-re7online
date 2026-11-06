@@ -30,6 +30,12 @@ const record = (value: unknown): Record<string, unknown> =>
 function requireThat(value: unknown, reason: string): asserts value { if (!value) throw new Error(reason); }
 const messageIdFor = (b: AcceptedCrmFailureBindings) => `campaign.${b.campaignId}.${b.position}`;
 const receiptRequestId = (b: AcceptedCrmFailureBindings) => `accepted-crm-failure:${b.acceptedEventId}`;
+type PreservedCampaignStatus = "sending" | "cancelled";
+
+function preservedCampaignStatus(value: unknown, reason = "crm_failure_campaign_state_drift"): PreservedCampaignStatus {
+  requireThat(value === "sending" || value === "cancelled", reason);
+  return value;
+}
 
 function authenticateFence(b: AcceptedCrmFailureBindings) {
   const fence = readCampaignReconciliationFence();
@@ -54,7 +60,8 @@ async function inspect(db: Db, b: AcceptedCrmFailureBindings) {
     db.outboundMessage.findFirst({ where: { id: b.failedOutboundId, clientId: b.clientId, messageId: messageIdFor(b) } }),
   ]);
   requireThat(campaign && job && seed && accepted && outbound, "crm_failure_evidence_missing");
-  requireThat(campaign.status === "sending" && campaign.sentCount === b.position - 1 && campaign.blockedCount === 0,
+  const campaignStatusPreserved = preservedCampaignStatus(campaign.status);
+  requireThat(campaign.sentCount === b.position - 1 && campaign.blockedCount === 0,
     "crm_failure_campaign_state_drift");
   requireThat(job.kind === "campaign" && job.status === "queued" && job.batchId === null && job.failureReason === "operational_suspension" &&
     !job.leaseToken && !job.leaseOwner && !job.leaseExpiresAt, "crm_failure_job_state_drift");
@@ -79,7 +86,8 @@ async function inspect(db: Db, b: AcceptedCrmFailureBindings) {
   const plan = { bindings: b, messageId: messageIdFor(b), taskHash,
     metaMessageIdSha256: hash(acceptedPayload.metaMessageId), evidenceHash: hash(evidence),
     disposition: "unsupported_international_identity_after_provider_acceptance", providerCalls: 0,
-    sentCountPreserved: campaign.sentCount, remainingRecipients: campaign.totalRecipients - b.position };
+    campaignStatusPreserved, sentCountPreserved: campaign.sentCount,
+    remainingRecipients: campaign.totalRecipients - b.position };
   return { plan, planHash: hash(plan) };
 }
 
@@ -119,9 +127,12 @@ export async function applyAcceptedCrmFailure(db: PrismaClient, b: AcceptedCrmFa
         crmMaterialized: false, reconciliation: true, outboundMessageId: b.failedOutboundId } } });
     const receipt = await tx.event.create({ data: { clientId: b.clientId, messageId: b.campaignId,
       requestId: receiptRequestId(b), eventName: "campaign.accepted_crm_failure.reconciled",
-      payloadJson: { version: 1, bindings: b, planHash: inspected.planHash, taskHash: inspected.plan.taskHash,
+      payloadJson: { version: 2, bindings: b, planHash: inspected.planHash, taskHash: inspected.plan.taskHash,
         dispositionEventId: disposition.id, failureEventId: failed.id, providerCalls: 0,
-        campaignRemainsSending: true, guardRemainsClosed: true, jobContinuationAuthorized: false } } });
+        campaignStatusPreserved: inspected.plan.campaignStatusPreserved,
+        campaignRemainsSending: inspected.plan.campaignStatusPreserved === "sending",
+        campaignRemainsCancelled: inspected.plan.campaignStatusPreserved === "cancelled",
+        guardRemainsClosed: true, jobContinuationAuthorized: false } } });
     return { alreadyApplied: false as const, receiptId: receipt.id };
   }, { isolationLevel: "Serializable", timeout: 15000 });
 }
@@ -131,14 +142,21 @@ export async function verifyAcceptedCrmFailure(db: PrismaClient, b: AcceptedCrmF
   requireThat(result.alreadyApplied, "crm_failure_receipt_missing");
   const receipt = await db.event.findUniqueOrThrow({ where: { id: result.receiptId } });
   const payload = record(receipt.payloadJson);
-  requireThat(payload.providerCalls === 0 && payload.campaignRemainsSending === true && payload.guardRemainsClosed === true &&
+  const version = Number(payload.version);
+  const campaignStatusPreserved = version === 1 && payload.campaignRemainsSending === true
+    ? "sending"
+    : preservedCampaignStatus(payload.campaignStatusPreserved, "crm_failure_receipt_contract_drift");
+  requireThat((version === 1 || version === 2) &&
+    payload.campaignRemainsSending === (campaignStatusPreserved === "sending") &&
+    (version === 1 || payload.campaignRemainsCancelled === (campaignStatusPreserved === "cancelled")) &&
+    payload.providerCalls === 0 && payload.guardRemainsClosed === true &&
     payload.jobContinuationAuthorized === false && typeof payload.taskHash === "string", "crm_failure_receipt_contract_drift");
   requireThat(typeof payload.dispositionEventId === "string" && typeof payload.failureEventId === "string",
     "crm_failure_receipt_effect_binding_invalid");
   requireThat(await db.event.count({ where: { id: { in: [payload.dispositionEventId, payload.failureEventId] }, clientId: b.clientId,
     messageId: messageIdFor(b) } }) === 2, "crm_failure_receipt_effect_missing");
   return { receiptId: receipt.id, taskHash: payload.taskHash as string, terminalForAcceptedResult: true as const,
-    campaignContinuationAuthorized: false as const };
+    campaignStatusPreserved, campaignContinuationAuthorized: false as const };
 }
 
 export async function acknowledgeAcceptedCrmFailure(db: PrismaClient, b: AcceptedCrmFailureBindings, actor: string) {
