@@ -612,7 +612,8 @@ reconciliação acima. Para novas execuções, uma resposta de transporte inconc
 é isolada no menor escopo autenticável: o runner grava, ainda sob a tarefa do
 provider, `campaign.message.submission_uncertain_preserved` com aceitação
 `unknown`, zero outbound materializado e retry proibido. Somente depois da escrita
-durável ele encerra essa tarefa e continua os demais destinatários. Uma retomada
+durável e do readback integral desse marcador ele encerra essa tarefa e continua os
+demais destinatários, respeitando o mesmo intervalo entre submissões. Uma retomada
 reconhece a mesma evidência e pula a posição, sem nova chamada ao provider.
 
 A guarda global permanece fail-closed se a intenção, a evidência SQL ou o ledger

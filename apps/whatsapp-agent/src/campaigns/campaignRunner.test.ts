@@ -1876,6 +1876,9 @@ test("account or template provider failure stops the campaign without weakening 
 
 test("transport uncertainty isolates one position without retry while later recipients and another tenant continue", async (t) => {
   createOpenCampaignOperationsTestLedger("campaign-submission-uncertain");
+  const throttles: number[] = [];
+  const restoreSleep = setCampaignRunnerSleepForTests(async (ms) => { throttles.push(ms); });
+  t.after(restoreSleep);
   const clientId = crypto.randomUUID(), clientKey = `submission-uncertain-${clientId}`;
   const otherClientId = crypto.randomUUID(), otherClientKey = `submission-uncertain-other-${otherClientId}`;
   const templateName = `submission_uncertain_${Date.now()}`;
@@ -1910,6 +1913,7 @@ test("transport uncertainty isolates one position without retry while later reci
   assert.equal(await prisma.event.count({ where: { clientId, messageId: `campaign.${campaign.id}.2`, eventName: "campaign.message.submission_uncertain_preserved" } }), 1);
   assert.deepEqual(await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id }, select: { status: true, sentCount: true } }), { status: "completed", sentCount: 2 });
   assert.deepEqual(await prisma.campaign.findUniqueOrThrow({ where: { id: otherCampaign.id }, select: { status: true, sentCount: true } }), { status: "completed", sentCount: 1 });
+  assert.deepEqual(throttles, [1000, 1000]);
 
   await prisma.campaign.update({ where: { id: campaign.id }, data: { status: "sending" } });
   startCampaignRun({ clientId, clientKey, campaignId: campaign.id, name: campaign.name, templateName, waIds: recipients });
@@ -1933,4 +1937,50 @@ test("transport uncertainty isolates one position without retry while later reci
   assert.equal(submitted.filter(value => value === recipients[1]).length, 1);
   assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status, "failed");
   assert.equal(await prisma.event.count({ where: { clientId, messageId: `campaign.${campaign.id}.2`, eventName: "campaign.message.reconciliation_required" } }), 1);
+});
+
+test("uncertain marker collision is read back before releasing the provider task", async (t) => {
+  createOpenCampaignOperationsTestLedger("campaign-submission-uncertain-collision");
+  const restoreSleep = setCampaignRunnerSleepForTests(async () => undefined);
+  t.after(restoreSleep);
+  const clientId = crypto.randomUUID(), clientKey = `submission-uncertain-collision-${clientId}`;
+  const templateName = `submission_uncertain_collision_${Date.now()}`;
+  const recipients = ["5541991100601", "5541991100602"];
+  t.after(() => cleanup(clientId).catch(() => undefined));
+  await prisma.client.create({ data: { id: clientId, clientKey, name: "Synthetic collision", profile: "business", features: { campaigns: true } } });
+  await prisma.template.create({ data: { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" } });
+  const campaign = await prisma.campaign.create({ data: { clientId, name: "Submission uncertain collision", templateName, status: "sending", totalRecipients: recipients.length } });
+  await prisma.event.create({
+    data: {
+      clientId,
+      messageId: `campaign.${campaign.id}.1`,
+      requestId: `campaign-message-submission-uncertain:${campaign.id}:1`,
+      eventName: "campaign.message.submission_uncertain_preserved",
+      payloadJson: {
+        campaignId: campaign.id,
+        position: 1,
+        providerAcceptance: "unknown",
+        outboundMaterialized: false,
+        definitiveFailure: false,
+        retryAllowed: true,
+        providerCalls: 1,
+      },
+    },
+  });
+  const originalFetch = globalThis.fetch; const submitted: string[] = [];
+  globalThis.fetch = (async (_input, init) => {
+    submitted.push(String((JSON.parse(String(init?.body ?? "{}")) as { to?: string }).to ?? ""));
+    throw new Error("synthetic_connection_lost_after_write");
+  }) as typeof fetch;
+  t.after(async () => { await drainCampaignRunnersForTests(); globalThis.fetch = originalFetch; });
+  startCampaignRun({ clientId, clientKey, campaignId: campaign.id, name: campaign.name, templateName, waIds: recipients });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  assert.deepEqual(submitted, [recipients[0]]);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
+  assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status, "sending");
+  const guard = campaignOperationsStatus();
+  assert.equal(guard.open, false);
+  assert.equal(guard.tasks.length, 1);
+  assert.equal(guard.tasks[0].phase, "persisting");
+  assert.equal(guard.tasks[0].reference?.messageId, `campaign.${campaign.id}.1`);
 });
