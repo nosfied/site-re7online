@@ -271,6 +271,7 @@ LEGACY_P00_INSTALLED_BATCH = {
         {"path": "/opt/re7online/backups/converta-persistent/preparations/p00-legacy-installed-releases-20261107-v1/evidence/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json", "sha256": "c0d702aabd0e3caa1d8044671de07bd1f355985fd34b3d6bb457c146a708abb6", "expected": {"rollback": {"previousApiReleaseId": "immutable-d7de6453-vps-20261024T221500Z", "previousFrontendReleaseId": "immutable-d7de6453-vps-20261024T221500Z"}, "receiptSha256": "3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8", "journalSha256": "991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240"}},
     ),
 }
+LEGACY_P00_CUSTODY_RESERVE_BYTES = 16 * 1024 * 1024
 
 
 class Denied(RuntimeError):
@@ -773,7 +774,10 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
     if not isinstance(deployment, dict) or set(deployment) != {"state"} or not isinstance(deployment["state"], str):
         deny("operational_deployment_state")
     observations = value.get("observations")
-    if not isinstance(observations, dict) or set(observations) != {"currentLinks", "pm2", "dump", "releaseGraph"}:
+    observation_keys = {"currentLinks", "pm2", "dump", "releaseGraph"}
+    if (not isinstance(observations, dict) or
+            set(observations) not in {frozenset(observation_keys),
+                                     frozenset(observation_keys | {"dependencies"})}):
         deny("operational_observations")
     links = observations.get("currentLinks")
     if not isinstance(links, list) or any(not isinstance(item, dict) or set(item) != {"path", "target"}
@@ -792,6 +796,13 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                 not Path(str(item.get("path", ""))).is_absolute() or
                 not SHA256.fullmatch(str(item.get("sha256", "")))):
             deny(f"operational_{label}_observation")
+    dependency_observation = observations.get("dependencies")
+    if dependency_observation is not None:
+        if (not isinstance(dependency_observation, dict) or
+                set(dependency_observation) != {"path", "sha256"} or
+                not Path(str(dependency_observation.get("path", ""))).is_absolute() or
+                not SHA256.fullmatch(str(dependency_observation.get("sha256", "")))):
+            deny("operational_dependencies_observation")
 
 
 def _path_has_symlink(path: Path, root: Path) -> bool:
@@ -926,6 +937,16 @@ def capture_fresh_operational(operational: dict[str, Any]) -> dict[str, Any]:
                 expected["immediateRollbackReleases"] = operational["immediateRollbackReleases"]
             if graph != expected:
                 deny("fresh_release_graph_changed")
+    dependency_observation = observations.get("dependencies")
+    if dependency_observation is not None:
+        raw, _ = stable_private(Path(dependency_observation["path"]),
+                                dependency_observation["sha256"])
+        snapshot = object_json(raw, "dependencies-snapshot")
+        if (set(snapshot) != {"schemaVersion", "dependencies"} or
+                snapshot.get("schemaVersion") != 1 or
+                snapshot.get("dependencies") != operational["dependencies"]):
+            deny("fresh_dependencies_changed")
+        captured["dependenciesSha256"] = digest_bytes(raw)
     return captured
 
 
@@ -1831,11 +1852,19 @@ def qualify_legacy_p00_installed_batch(args: argparse.Namespace) -> None:
                                 "runtimeCacheOverlay": installed_result.get("runtimeCacheOverlay")})
     if not release_results:
         deny("legacy_p00_empty_batch")
+    total_allocated = sum(item["allocatedBytes"] for item in release_results)
+    extraction_peak = max(item["allocatedBytes"] for item in release_results)
     proof = {"schemaVersion": 1, "kind": "LEGACY_P00_INSTALLED_BATCH_QUALIFICATION",
              "batchId": binding["batchId"], "sourceGraph": graph_binding,
              "canonicalVerifierSha256": verifier_sha, "chainEvidence": evidence_results,
              "releases": release_results,
-             "totalAllocatedBytes": sum(item["allocatedBytes"] for item in release_results),
+             "totalAllocatedBytes": total_allocated,
+             "capacityBudget": {
+                 "packageExtractionPeakBytes": extraction_peak,
+                 "custodyAndClosureReserveBytes": LEGACY_P00_CUSTODY_RESERVE_BYTES,
+                 "grossRecoverableBytes": total_allocated,
+                 "netRecoverableBytes": total_allocated - LEGACY_P00_CUSTODY_RESERVE_BYTES,
+             },
              "authorizationGranted": False, "executionPermitted": False,
              "destructiveCommands": 0,
              "nextRequiredStep": "CANONICAL_CONTRACT_LIFECYCLE_MATERIALIZATION"}

@@ -49,6 +49,17 @@ RICH_GRAPH_KEYS = {
     "candidateReleases", "installedVerifiedReleases", "supersededCandidates",
 }
 PRIOR_EVIDENCE_KEYS = {"intent", "receipt", "journal"}
+LEGACY_P00_BATCH_ID = "p00-legacy-installed-releases-20261107-v1"
+LEGACY_P00_RELEASES = {
+    "immutable-ec2a9fde-vps-20261024T162005Z":
+        "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z",
+    "immutable-ef7db111-vps-20261024T174000Z":
+        "/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z",
+    "immutable-3630e16-vps-20261024T195842Z":
+        "/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z",
+    "immutable-d7de6453-vps-20261024T221500Z":
+        "/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z",
+}
 
 
 def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
@@ -60,19 +71,30 @@ def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
         value = json.loads(path.read_bytes())
     except (UnicodeDecodeError, json.JSONDecodeError):
         deny("PREPARE_REQUEST_JSON")
-    required = {"schemaVersion", "deploymentLock", "rootPolicy", "sourceReconciliation",
-                "generations"}
-    if not isinstance(value, dict) or set(value) != required or value.get("schemaVersion") != 1:
+    schema = value.get("schemaVersion") if isinstance(value, dict) else None
+    required = ({"schemaVersion", "deploymentLock", "rootPolicy", "sourceReconciliation",
+                 "generations"} if schema == 1 else
+                {"schemaVersion", "deploymentLock", "rootPolicy", "sourceQualification",
+                 "generations"} if schema == 2 else set())
+    if not isinstance(value, dict) or not required or set(value) != required:
         deny("PREPARE_REQUEST_SCHEMA")
     lock = Path(str(value.get("deploymentLock", "")))
     if not lock.is_absolute() or lock != Path(os.path.normpath(str(lock))):
         deny("PREPARE_DEPLOYMENT_LOCK")
-    source = value.get("sourceReconciliation")
-    if not isinstance(source, dict) or set(source) != {
-            "request", "successorGraph", "projection", "receipt"}:
-        deny("PREPARE_RECONCILIATION_BINDINGS")
+    if schema == 1:
+        source = value.get("sourceReconciliation")
+        if not isinstance(source, dict) or set(source) != {
+                "request", "successorGraph", "projection", "receipt"}:
+            deny("PREPARE_RECONCILIATION_BINDINGS")
+    else:
+        source = value.get("sourceQualification")
+        if not isinstance(source, dict) or set(source) != {"proof"}:
+            deny("PREPARE_QUALIFICATION_BINDING")
     generations = value.get("generations")
-    if not isinstance(generations, list) or len(generations) not in {1, 2}:
+    expected_count = 4 if schema == 2 else None
+    if (not isinstance(generations, list) or
+            (schema == 1 and len(generations) not in {1, 2}) or
+            (schema == 2 and len(generations) != expected_count)):
         deny("PREPARE_GENERATIONS")
     names: set[str] = set()
     releases: set[str] = set()
@@ -89,6 +111,8 @@ def _closed_request(path: Path, expected_sha256: str) -> dict[str, Any]:
                 not isinstance(item.get("reason"), str) or not item["reason"].strip()):
             deny("PREPARE_GENERATION_IDENTITY")
         names.add(name); releases.add(release)
+    if schema == 2 and releases != set(LEGACY_P00_RELEASES):
+        deny("PREPARE_QUALIFICATION_GENERATIONS")
     request_binding_readback(value)
     return value
 
@@ -213,12 +237,127 @@ def _validate_reconciliation_bundle(
     return prior_by_release
 
 
+def _validate_legacy_p00_qualification(request: dict[str, Any]) -> None:
+    """Bind the closed four-release qualification to canonical prepare inputs.
+
+    Contracts and lifecycles remain one-per-generation.  This adapter only proves
+    that all four were derived from the same authenticated qualification and the
+    same live graph; it does not create an authorization or execute prepare.
+    """
+    proof_binding = request["sourceQualification"]["proof"]
+    proof = _bound_json(proof_binding, "PREPARE_QUALIFICATION_PROOF")
+    expected_proof_keys = {
+        "schemaVersion", "kind", "batchId", "sourceGraph",
+        "canonicalVerifierSha256", "chainEvidence", "releases",
+        "totalAllocatedBytes", "capacityBudget", "authorizationGranted", "executionPermitted",
+        "destructiveCommands", "nextRequiredStep",
+    }
+    if (set(proof) != expected_proof_keys or proof.get("schemaVersion") != 1 or
+            proof.get("kind") != "LEGACY_P00_INSTALLED_BATCH_QUALIFICATION" or
+            proof.get("batchId") != LEGACY_P00_BATCH_ID or
+            proof.get("authorizationGranted") is not False or
+            proof.get("executionPermitted") is not False or
+            proof.get("destructiveCommands") != 0 or
+            proof.get("nextRequiredStep") != "CANONICAL_CONTRACT_LIFECYCLE_MATERIALIZATION" or
+            not isinstance(proof.get("chainEvidence"), list) or
+            not proof["chainEvidence"]):
+        deny("PREPARE_QUALIFICATION_PROOF")
+    source_graph = _bound_json(proof.get("sourceGraph"),
+                               "PREPARE_QUALIFICATION_GRAPH")
+    graph_keys = {"activeReleases", "rollbackReleases", "transitiveReturnReleases",
+                  "candidateReleases", "installedVerifiedReleases", "supersededCandidates"}
+    if (not graph_keys.issubset(source_graph) or
+            any(not isinstance(source_graph.get(key), list) for key in graph_keys) or
+            ("immediateRollbackReleases" in source_graph and
+             not isinstance(source_graph["immediateRollbackReleases"], dict))):
+        deny("PREPARE_QUALIFICATION_GRAPH")
+    releases = proof.get("releases")
+    if not isinstance(releases, list) or len(releases) != 4:
+        deny("PREPARE_QUALIFICATION_GENERATIONS")
+    proof_by_release = {item.get("releaseId"): item for item in releases
+                        if isinstance(item, dict)}
+    if (set(proof_by_release) != set(LEGACY_P00_RELEASES) or
+            len(proof_by_release) != len(releases) or
+            proof.get("totalAllocatedBytes") !=
+            sum(item.get("allocatedBytes", -1) for item in releases)):
+        deny("PREPARE_QUALIFICATION_GENERATIONS")
+    total_allocated = proof["totalAllocatedBytes"]
+    capacity = proof.get("capacityBudget")
+    if capacity != {
+            "packageExtractionPeakBytes": max(item["allocatedBytes"] for item in releases),
+            "custodyAndClosureReserveBytes": 16 * 1024 * 1024,
+            "grossRecoverableBytes": total_allocated,
+            "netRecoverableBytes": total_allocated - 16 * 1024 * 1024,
+            }:
+        deny("PREPARE_QUALIFICATION_CAPACITY")
+    expected_dependency = f"legacy_p00_qualification:{proof_binding['sha256']}"
+    for generation in request["generations"]:
+        release = generation["releaseId"]
+        qualified = proof_by_release[release]
+        if (qualified.get("classification") != "RETIREMENT_READY" or
+                qualified.get("targetCommit") != generation["targetCommit"] or
+                any(not isinstance(qualified.get(key), int) or qualified[key] < 0
+                    for key in ("sizeBytes", "allocatedBytes", "inodes"))):
+            deny("PREPARE_QUALIFICATION_RELEASE")
+        contract = _bound_json(generation["contract"], "PREPARE_CONTRACT_BINDING")
+        lifecycle = _bound_json(generation["lifecycle"], "PREPARE_LIFECYCLE_BINDING")
+        operational = _bound_json(generation["operationalState"],
+                                  "PREPARE_OPERATIONAL_BINDING")
+        review = _bound_json(generation["review"], "PREPARE_REVIEW_BINDING")
+        artifacts = contract.get("artifacts")
+        if (contract.get("generationId") != release or
+                contract.get("releaseId") != release or
+                contract.get("targetCommit") != generation["targetCommit"] or
+                not isinstance(artifacts, list) or len(artifacts) != 1):
+            deny("PREPARE_QUALIFICATION_CONTRACT")
+        artifact = artifacts[0]
+        if (artifact.get("class") != "RELEASE_RUNTIME" or
+                artifact.get("path") != qualified["path"] or
+                artifact.get("releaseId") != release or
+                artifact.get("targetCommit") != generation["targetCommit"] or
+                any(artifact.get(key) != qualified[key]
+                    for key in ("sizeBytes", "allocatedBytes", "inodes",
+                                "structuralSha256")) or
+                expected_dependency not in artifact.get("dependencies", [])):
+            deny("PREPARE_QUALIFICATION_CONTRACT")
+        if (lifecycle.get("schemaVersion") != 1 or
+                lifecycle.get("generationId") != release or
+                lifecycle.get("targetCommit") != generation["targetCommit"] or
+                lifecycle.get("state") != "COMPLETE"):
+            deny("PREPARE_QUALIFICATION_LIFECYCLE")
+        if (review.get("schemaVersion") != 2 or
+                review.get("generationId") != release or
+                review.get("lifecycleSha256") != generation["lifecycle"]["sha256"] or
+                review.get("state") != "RETIREMENT_READY" or
+                review.get("evidenceSha256") != proof_binding["sha256"]):
+            deny("PREPARE_QUALIFICATION_REVIEW")
+        observations = operational.get("observations", {})
+        expected_release_path = str(Path(operational.get("canonicalRoots", {}).get(
+            "releases", "")) / release)
+        if (operational.get("releaseId") != release or
+                operational.get("targetCommit") != generation["targetCommit"] or
+                qualified.get("path") != expected_release_path or
+                observations.get("releaseGraph") != proof["sourceGraph"] or
+                not isinstance(observations.get("dependencies"), dict) or
+                any(operational.get(key) != source_graph.get(key) for key in graph_keys) or
+                any(release in operational.get(key, []) for key in
+                    ("activeReleases", "rollbackReleases", "transitiveReturnReleases",
+                     "candidateReleases")) or
+                release not in operational.get("installedVerifiedReleases", [])):
+            deny("PREPARE_QUALIFICATION_OPERATIONAL")
+
+
 def materialize(control_root: Path, custody: Path, source_commit: str,
                 request_path: Path, request_sha256: str) -> dict[str, Any]:
     if not GIT_SHA1.fullmatch(source_commit):
         deny("CONTROL_SOURCE_COMMIT_FORMAT")
     request = _closed_request(request_path, request_sha256)
-    prior_by_release = _validate_reconciliation_bundle(request)
+    legacy_qualification = request["schemaVersion"] == 2
+    if legacy_qualification:
+        _validate_legacy_p00_qualification(request)
+        prior_by_release = {}
+    else:
+        prior_by_release = _validate_reconciliation_bundle(request)
     if custody.exists() or custody.is_symlink():
         deny("PREPARE_CUSTODY_EXISTS")
     custody.mkdir(mode=0o700, parents=False)
@@ -263,25 +402,34 @@ def materialize(control_root: Path, custody: Path, source_commit: str,
             "--review-output", item["review"]["path"],
             "--reviewer", item["reviewer"], "--reason", item["reason"],
         ]
-        prior = prior_by_release[item["releaseId"]]
-        for name in ("intent", "receipt", "journal"):
-            argv.extend([f"--prior-{name}", prior[name]["path"],
-                         f"--prior-{name}-sha256", prior[name]["sha256"]])
-        plans.append({"name": item["name"], "releaseId": item["releaseId"],
-                      "targetCommit": item["targetCommit"], "argv": argv,
-                      "priorEvidence": prior,
-                      "priorReview": file_binding(preserved_review),
-                      "intentOutput": str(intent), "commandsOutput": str(commands)})
+        prior = prior_by_release.get(item["releaseId"])
+        if prior is not None:
+            for name in ("intent", "receipt", "journal"):
+                argv.extend([f"--prior-{name}", prior[name]["path"],
+                             f"--prior-{name}-sha256", prior[name]["sha256"]])
+        plan = {"name": item["name"], "releaseId": item["releaseId"],
+                "targetCommit": item["targetCommit"], "argv": argv,
+                "priorReview": file_binding(preserved_review),
+                "intentOutput": str(intent), "commandsOutput": str(commands)}
+        if prior is not None:
+            plan["priorEvidence"] = prior
+        plans.append(plan)
     reopened_request = _closed_request(request_path, request_sha256)
     if reopened_request != request:
         deny("PREPARE_REQUEST_DRIFT")
-    if _validate_reconciliation_bundle(reopened_request) != prior_by_release:
+    if legacy_qualification:
+        _validate_legacy_p00_qualification(reopened_request)
+    elif _validate_reconciliation_bundle(reopened_request) != prior_by_release:
         deny("PREPARE_RECONCILIATION_EVIDENCE_DRIFT")
     result = {"schemaVersion": 1, "state": "READY_FOR_RETIREMENT_PREPARE",
               "sourceCommit": source_commit,
               "request": {"path": str(request_path), "sha256": request_sha256},
-              "controls": controls, "sourceReconciliation": request["sourceReconciliation"],
+              "controls": controls,
               "prepares": plans, "executionAuthorized": False}
+    if legacy_qualification:
+        result["sourceQualification"] = request["sourceQualification"]
+    else:
+        result["sourceReconciliation"] = request["sourceReconciliation"]
     request_binding_readback(result)
     manifest = custody / "prepare-materialization.private.json"
     write_json_exclusive(manifest, result)
