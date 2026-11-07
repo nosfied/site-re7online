@@ -1076,9 +1076,9 @@ O vínculo terminal é exato:
 Os dois efeitos somam 982.130.688 bytes. O ordinal 1 do mesmo receipt pertence ao
 cache npm e não compõe a geração d7. O output-pai permanece com 154.484.736 bytes
 e conserva pacote, manifesto e índice; não é candidato integral. O fechamento do
-worktree d7 continua registrado no lote conjunto d7/3630, mas esta rodada não
-recuperou um binding consumível com caminho e SHA de receipt/journal para esse
-efeito. A afirmação histórica não substitui esse binding numa closure nova.
+worktree d7 pertence ao lote conjunto d7/3630. A custódia original e seu formato
+legado, localizados depois desta primeira leitura, são reconciliados abaixo sem
+converter o receipt incorporado em journal canônico.
 
 `PROTECTED_TRANSITIVE` era a classificação da fotografia do inventário
 `f9acb9a9c51aa78f76d6c9820dbc18b8f5ba853980a916427d62d540da65b728`.
@@ -1120,11 +1120,36 @@ no output canônico. d7 preserva o contrato específico
 que autentica os runtimes derivados, mas contém somente `schemaVersion`,
 `releaseId`, `targetCommit` e `artifacts`; não possui `generationId`, estado,
 writer lock, classes, política privada ou lifecycle exigidos pelo contrato de
-geração. Os três arquivos canônicos estão fisicamente ausentes. Também falta o
-triplo vinculável `prior-intent`/`prior-receipt`/`prior-journal` do fechamento do
-worktree literal `/opt/re7online/build-worktrees/immutable-d7de6453-vps-20261024T221500Z-source`.
-O cache extra precisará de classificação explícita confinada ao pai; a exceção
-existente para cache f160 não se aplica a d7. Portanto, nenhuma adaptação ou
-descriptor legado foi proposto: o piloto encerra em
-`DENY_BEFORE_PREPARE / GENERATION_CONTRACT_MISSING`, com potencial físico da
-release ainda condicionado e ganho qualificado de 0 B.
+geração. Os três arquivos canônicos estão fisicamente ausentes.
+
+A custódia histórica do worktree foi posteriormente localizada em
+`retention-d7-3630-worktrees-ready-20261025` e autenticada por um leitor legado
+fechado no consumidor existente. O leitor fixa o lote conjunto, os caminhos e
+HEADs de `3630e16` e `d7de6453`, e os hashes dos cinco originais:
+
+- intenção `3042455be0f8d0900245c4e63844d5814589ae44e5b2cb3f30057ec609f4bf48`;
+- comandos literais `5d7d6e85d0d850d11b8a612817f1f2a2867acfc8362d9736878d1e5ac9b541e4`;
+- receipt final `a5afecb03bdce97e03fde35597f9f92ef30a70055cbc9d1e763d1655ef431f72`;
+- prova do lock `1793b9a3d91842d4431339bc9b951f09de4133938a128e3f806e4931516b9679`;
+- manifest final `23adcdac759beecf7370ea9c1aea3b8f909a1db2cba6f9daa8458216b857ec02`.
+
+O formato antigo não possui journal JSONL. O receipt incorpora o log terminal dos
+dois comandos. A prova derivada autentica somente o efeito histórico do worktree
+d7 no índice 2 (`exitCode=0`, caminho ausente e registro Git ausente), registra
+`3630e16` apenas como membro obrigatório do lote e concede zero autorização ou
+comando destrutivo. Os originais privados permanecem fora do Git. Os runtimes d7
+dos ordinais 2 e 3 continuam vinculados separadamente ao receipt `97a121df...` e
+ao journal `9baa07a0...`; não foram reexpressos pela closure do worktree.
+
+O consumidor copiado fora do checkout aceitou os originais e emitiu uma closure
+derivada com zero efeitos novos. Fixtures sanitizadas negam hash, caminho, HEAD,
+comando, baixa incompleta do registro Git, resultado incompleto e lote divergente.
+A entrada isolada de `RELEASE_RUNTIME`, contudo, ainda para no primeiro gate
+`private_read:generation-artifacts.private.json`: o contrato canônico não existe.
+Lifecycle e review permanecem consequentes a esse primeiro bloqueio. Os dez extras
+de `frontend-runtime/.next/cache` continuam confinados e integralmente classificados
+pela comparação de 34.349 entradas, mas não são automaticamente dispensáveis: a
+política vigente só admite a classe subordinada de cache para f160. Assim, o
+veredito permanece `DENY_BEFORE_PREPARE / GENERATION_CONTRACT_MISSING`, com o
+fechamento do worktree agora autenticável, potencial físico da release ainda
+condicionado e ganho qualificado de 0 B.

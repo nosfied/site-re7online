@@ -682,7 +682,166 @@ class LegacyBatchV1PreserveFixture(LegacyA959V1PreserveFixture):
         return output.getvalue()
 
 
+class LegacyD7WorktreeClosureFixture:
+    def __init__(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="legacy-d7-worktree-closure-")
+        self.root = Path(self.temp.name)
+        self.control = self.root / "control"; self.control.mkdir(mode=0o700)
+        self.tool = self.control / "generation-retirement.py"
+        self.dependency = self.control / "preparation_artifact_lifecycle.py"
+        shutil.copyfile(TOOL, self.tool)
+        shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", self.dependency)
+        self.tool.chmod(0o500); self.dependency.chmod(0o600)
+        spec = importlib.util.spec_from_file_location("legacy_d7_copied_consumer", self.tool)
+        assert spec and spec.loader
+        self.module = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.module)
+        self.intent = self.root / "batch-intent.private.json"
+        self.commands = self.root / "commands.literal.private.txt"
+        self.receipt = self.root / "receipt.final.private.json"
+        self.lock = self.root / "lock-release.private.json"
+        self.manifest = self.root / "evidence-manifest.final.private.sha256"
+        self.output = self.root / "derived-d7-worktree-closure.private.json"
+        self.members = [dict(item) for item in self.module.LEGACY_D7_WORKTREE_BATCH["members"]]
+        commands = [self.module._legacy_worktree_command(item) for item in self.members]
+        private_json(self.intent, {"schemaVersion": 3,
+            "batchId": self.module.LEGACY_D7_WORKTREE_BATCH["batchId"],
+            "state": "READY_FOR_EXPLICIT_AUTHORIZATION",
+            "totalProvenAllocatedBytes": sum(item["allocatedBytes"] for item in self.members),
+            "provenCandidates": [{"path": item["path"], "head": item["head"],
+                "allocatedBytes": item["allocatedBytes"], "command": command,
+                "classification":
+                "TRACKED_GIT_OBJECTS_PRESERVED_IGNORED_CONTENT_REGENERABLE_OR_AUTHENTICATED_COPY"}
+                for item, command in zip(self.members, commands)]})
+        self.commands.write_text("\n".join(commands) + "\n"); self.commands.chmod(0o600)
+        private_json(self.lock, {"schemaVersion": 1, "state": "FREE",
+            "lockPath": self.module.LEGACY_D7_WORKTREE_BATCH["lockPath"],
+            "lockFilePreserved": True, "postReleaseNonblockingProbeExit": 0,
+            "releaseMethod": "CLOSE_OWN_FD"})
+        private_json(self.receipt, {"schemaVersion": 3,
+            "batchId": self.module.LEGACY_D7_WORKTREE_BATCH["batchId"], "state": "COMPLETED",
+            "intentSha256": sha(self.intent), "automaticRetry": False, "partialExecution": False,
+            "commands": [{"index": item["index"], "command": command, "exitCode": 0,
+                "pathAbsent": True, "worktreeRegistrationAbsent": True}
+                for item, command in zip(self.members, commands)],
+            "after": {"bothPathsAbsent": True, "bothWorktreeRegistrationsAbsent": True,
+                "sealedCandidateAllocatedBytes": sum(item["allocatedBytes"] for item in self.members)}})
+        self.refresh_binding()
+
+    def refresh_binding(self):
+        receipt_hash = sha(self.receipt)
+        lock_hash = sha(self.lock)
+        self.manifest.write_text(
+            f"{lock_hash}  ./{self.lock.name}\n{receipt_hash}  ./{self.receipt.name}\n")
+        self.manifest.chmod(0o600)
+        self.binding = {**self.module.LEGACY_D7_WORKTREE_BATCH,
+            "intentSha256": sha(self.intent), "commandsSha256": sha(self.commands),
+            "receiptSha256": receipt_hash, "lockProofSha256": lock_hash,
+            "finalManifestSha256": sha(self.manifest), "members": tuple(self.members)}
+
+    def args(self):
+        return SimpleNamespace(batch_intent=self.intent, commands=self.commands,
+            receipt=self.receipt, lock_proof=self.lock, final_manifest=self.manifest,
+            closure_output=self.output)
+
+    def derive(self):
+        output = io.StringIO()
+        with patch.object(self.module, "LEGACY_D7_WORKTREE_BATCH", self.binding), \
+                redirect_stdout(output):
+            self.module.derive_legacy_d7_worktree_closure(self.args())
+        return json.loads(output.getvalue())
+
+    def close(self):
+        self.temp.cleanup()
+
+
 class GenerationRetirementTest(unittest.TestCase):
+    def test_legacy_d7_worktree_closure_authenticates_joint_batch_without_authority(self):
+        fixture = LegacyD7WorktreeClosureFixture()
+        try:
+            result = fixture.derive()
+            self.assertEqual(result["result"], "LEGACY_D7_WORKTREE_CLOSURE_AUTHENTICATED")
+            self.assertEqual(result["historicalEffectsAuthenticated"], 1)
+            closure = json.loads(fixture.output.read_text())
+            with patch.object(fixture.module, "LEGACY_D7_WORKTREE_BATCH", fixture.binding):
+                fixture.module.validate_legacy_d7_worktree_closure(closure)
+            self.assertEqual([item["path"] for item in closure["batchMembers"]],
+                             [item["path"] for item in fixture.members])
+            self.assertEqual(closure["effect"]["path"], fixture.members[1]["path"])
+            self.assertEqual(closure["effect"]["index"], 2)
+            self.assertFalse(closure["retirementAuthorizationGranted"])
+            self.assertEqual(closure["destructiveCommands"], 0)
+            self.assertEqual(closure["journalFormat"],
+                             "EMBEDDED_RECEIPT_COMMANDS_NO_JSONL")
+        finally:
+            fixture.close()
+
+    def test_legacy_d7_worktree_closure_denies_drift_and_incomplete_effects(self):
+        cases = {
+            "path": (lambda f: self._mutate_json(f.intent, lambda value:
+                      value["provenCandidates"][1].__setitem__("path", "/wrong")),
+                     "legacy_d7_worktree_intent_member"),
+            "head": (lambda f: self._mutate_json(f.intent, lambda value:
+                      value["provenCandidates"][1].__setitem__("head", "f" * 40)),
+                     "legacy_d7_worktree_intent_member"),
+            "command": (lambda f: self._mutate_text(f.commands, "printf forbidden\\n"),
+                        "legacy_d7_worktree_commands_identity"),
+            "registration": (lambda f: self._mutate_json(f.receipt, lambda value:
+                              value["commands"][1].__setitem__("worktreeRegistrationAbsent", False)),
+                             "legacy_d7_worktree_receipt_effect"),
+            "incomplete": (lambda f: self._mutate_json(f.receipt, lambda value:
+                            value["commands"][1].__setitem__("exitCode", 1)),
+                           "legacy_d7_worktree_receipt_effect"),
+            "batch": (lambda f: self._mutate_json(f.intent, lambda value:
+                       value.__setitem__("batchId", "different-batch")),
+                      "legacy_d7_worktree_intent_identity"),
+        }
+        for name, (mutate, predicate) in cases.items():
+            with self.subTest(name=name):
+                fixture = LegacyD7WorktreeClosureFixture()
+                try:
+                    mutate(fixture); fixture.refresh_binding()
+                    with self.assertRaisesRegex(fixture.module.Denied, predicate):
+                        fixture.derive()
+                    self.assertFalse(fixture.output.exists())
+                finally:
+                    fixture.close()
+
+        fixture = LegacyD7WorktreeClosureFixture()
+        try:
+            fixture.commands.write_text(fixture.commands.read_text() + "drift\n")
+            with self.assertRaisesRegex(fixture.module.Denied, "private_hash"):
+                fixture.derive()
+            self.assertFalse(fixture.output.exists())
+        finally:
+            fixture.close()
+
+    @staticmethod
+    def _mutate_json(path: Path, mutate) -> None:
+        value = json.loads(path.read_text()); mutate(value); private_json(path, value)
+
+    @staticmethod
+    def _mutate_text(path: Path, value: str) -> None:
+        path.write_text(value); path.chmod(0o600)
+
+    def test_d7_release_runtime_stops_at_missing_generation_contract(self):
+        fixture = LegacyD7WorktreeClosureFixture()
+        try:
+            missing = fixture.root / "generation-artifacts.private.json"
+            unavailable = fixture.root / "unavailable"
+            result = invoke_tool(fixture.tool, "prepare",
+                "--contract", str(missing), "--contract-sha256", "0" * 64,
+                "--lifecycle", str(unavailable), "--lifecycle-sha256", "0" * 64,
+                "--operational-state", str(unavailable), "--operational-state-sha256", "0" * 64,
+                "--root-policy", str(unavailable), "--root-policy-sha256", "0" * 64,
+                "--deployment-lock", str(unavailable), "--intent-output", str(fixture.root / "intent"),
+                "--commands-output", str(fixture.root / "commands"),
+                "--review-output", str(fixture.root / "review"),
+                "--reviewer", "fixture", "--reason", "d7 isolated qualification")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("private_read:generation-artifacts.private.json", result.stderr)
+        finally:
+            fixture.close()
+
     def test_rich_graph_preserves_component_rollbacks_and_denies_omission(self):
         graph = {
             "activeReleases": ["active"],

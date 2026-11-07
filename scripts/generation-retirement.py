@@ -172,6 +172,36 @@ LEGACY_D436_F160_BINDINGS = {
     },
 }
 
+# Closed historical batch.  These hashes authenticate the original private
+# custody; the derived closure below is evidence of one completed historical
+# effect, never an authorization to remove either member again.
+LEGACY_D7_WORKTREE_BATCH = {
+    "schemaVersion": 1,
+    "batchId": "retention-3630e16-d7de6453-worktrees-20261025",
+    "sourceFormat": "LEGACY_WORKTREE_BATCH_V3",
+    "intentSha256": "3042455be0f8d0900245c4e63844d5814589ae44e5b2cb3f30057ec609f4bf48",
+    "commandsSha256": "5d7d6e85d0d850d11b8a612817f1f2a2867acfc8362d9736878d1e5ac9b541e4",
+    "receiptSha256": "a5afecb03bdce97e03fde35597f9f92ef30a70055cbc9d1e763d1655ef431f72",
+    "lockProofSha256": "1793b9a3d91842d4431339bc9b951f09de4133938a128e3f806e4931516b9679",
+    "finalManifestSha256": "23adcdac759beecf7370ea9c1aea3b8f909a1db2cba6f9daa8458216b857ec02",
+    "members": (
+        {
+            "index": 1,
+            "path": "/opt/re7online/build-worktrees/immutable-3630e16-vps-20261024T195842Z-source",
+            "head": "3630e16dfc946ab8ef97fb73780075a736f38a63",
+            "allocatedBytes": 1023369216,
+        },
+        {
+            "index": 2,
+            "path": "/opt/re7online/build-worktrees/immutable-d7de6453-vps-20261024T221500Z-source",
+            "head": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+            "allocatedBytes": 1023418368,
+        },
+    ),
+    "derivedReleaseId": "immutable-d7de6453-vps-20261024T221500Z",
+    "lockPath": "/opt/re7online/backups/converta-persistent/.deployment-window.lock",
+}
+
 
 class Denied(RuntimeError):
     pass
@@ -1451,6 +1481,162 @@ def validate_batch_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[s
             descriptor["lifecycle"]["path"] != f"{output_path}/generation-lifecycle.private.json"):
         deny("legacy_batch_descriptor_path_binding")
     return descriptor
+
+
+def _legacy_worktree_command(member: dict[str, Any]) -> str:
+    return ("git -C /opt/re7online/site-re7online worktree remove " +
+            str(member["path"]))
+
+
+def _legacy_manifest_entries(raw: bytes) -> dict[str, str]:
+    try:
+        lines = raw.decode().splitlines()
+    except UnicodeDecodeError:
+        deny("legacy_d7_worktree_manifest_encoding")
+    entries: dict[str, str] = {}
+    for line in lines:
+        match = re.fullmatch(r"([0-9a-f]{64})  \./([^/]+)", line)
+        if match is None or match.group(2) in entries:
+            deny("legacy_d7_worktree_manifest_schema")
+        entries[match.group(2)] = match.group(1)
+    return entries
+
+
+def validate_legacy_d7_worktree_closure(value: Any) -> dict[str, Any]:
+    binding = LEGACY_D7_WORKTREE_BATCH
+    required = {"schemaVersion", "kind", "sourceFormat", "batchId", "releaseId",
+                "targetCommit", "batchMembers", "effect", "originals", "journalFormat",
+                "retirementAuthorizationGranted", "destructiveCommands"}
+    if (not isinstance(value, dict) or set(value) != required or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != "LEGACY_D7_WORKTREE_CLOSURE" or
+            value.get("sourceFormat") != binding["sourceFormat"] or
+            value.get("batchId") != binding["batchId"] or
+            value.get("releaseId") != binding["derivedReleaseId"] or
+            value.get("targetCommit") != binding["members"][1]["head"] or
+            value.get("journalFormat") != "EMBEDDED_RECEIPT_COMMANDS_NO_JSONL" or
+            value.get("retirementAuthorizationGranted") is not False or
+            value.get("destructiveCommands") != 0):
+        deny("legacy_d7_worktree_closure_schema")
+    expected_members = [{"index": member["index"], "path": member["path"],
+                         "head": member["head"]} for member in binding["members"]]
+    if value.get("batchMembers") != expected_members:
+        deny("legacy_d7_worktree_closure_members")
+    d7 = binding["members"][1]
+    expected_effect = {"index": 2, "path": d7["path"], "head": d7["head"],
+                       "class": "DERIVED_WORKTREE", "exitCode": 0,
+                       "pathAbsent": True, "worktreeRegistrationAbsent": True}
+    if value.get("effect") != expected_effect:
+        deny("legacy_d7_worktree_closure_effect")
+    originals = value.get("originals")
+    expected_hashes = {
+        "intent": binding["intentSha256"], "commands": binding["commandsSha256"],
+        "receipt": binding["receiptSha256"], "lockProof": binding["lockProofSha256"],
+        "finalManifest": binding["finalManifestSha256"],
+    }
+    if (not isinstance(originals, dict) or set(originals) != set(expected_hashes) or
+            any(not isinstance(originals.get(name), dict) or
+                set(originals[name]) != {"path", "sha256"} or
+                not Path(str(originals[name].get("path", ""))).is_absolute() or
+                originals[name].get("sha256") != expected
+                for name, expected in expected_hashes.items())):
+        deny("legacy_d7_worktree_closure_originals")
+    return value
+
+
+def derive_legacy_d7_worktree_closure(args: argparse.Namespace) -> None:
+    binding = LEGACY_D7_WORKTREE_BATCH
+    paths = {
+        "intent": args.batch_intent,
+        "commands": args.commands,
+        "receipt": args.receipt,
+        "lockProof": args.lock_proof,
+        "finalManifest": args.final_manifest,
+    }
+    hashes = {
+        "intent": binding["intentSha256"], "commands": binding["commandsSha256"],
+        "receipt": binding["receiptSha256"], "lockProof": binding["lockProofSha256"],
+        "finalManifest": binding["finalManifestSha256"],
+    }
+    raw = {name: stable_private(path, hashes[name])[0] for name, path in paths.items()}
+    intent = object_json(raw["intent"], "legacy-d7-worktree-intent")
+    receipt = object_json(raw["receipt"], "legacy-d7-worktree-receipt")
+    lock = object_json(raw["lockProof"], "legacy-d7-worktree-lock")
+    members = list(binding["members"])
+    expected_commands = [_legacy_worktree_command(member) for member in members]
+    try:
+        literal_commands = raw["commands"].decode().splitlines()
+    except UnicodeDecodeError:
+        deny("legacy_d7_worktree_commands_encoding")
+    if literal_commands != expected_commands:
+        deny("legacy_d7_worktree_commands_identity")
+    candidates = intent.get("provenCandidates")
+    if (intent.get("schemaVersion") != 3 or intent.get("batchId") != binding["batchId"] or
+            intent.get("state") != "READY_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("totalProvenAllocatedBytes") !=
+            sum(member["allocatedBytes"] for member in members) or
+            not isinstance(candidates, list) or len(candidates) != len(members)):
+        deny("legacy_d7_worktree_intent_identity")
+    for candidate, member, command in zip(candidates, members, expected_commands):
+        if (not isinstance(candidate, dict) or candidate.get("path") != member["path"] or
+                candidate.get("head") != member["head"] or
+                candidate.get("allocatedBytes") != member["allocatedBytes"] or
+                candidate.get("command") != command or
+                candidate.get("classification") !=
+                "TRACKED_GIT_OBJECTS_PRESERVED_IGNORED_CONTENT_REGENERABLE_OR_AUTHENTICATED_COPY"):
+            deny("legacy_d7_worktree_intent_member")
+    receipt_commands = receipt.get("commands")
+    if (receipt.get("schemaVersion") != 3 or receipt.get("batchId") != binding["batchId"] or
+            receipt.get("state") != "COMPLETED" or
+            receipt.get("intentSha256") != binding["intentSha256"] or
+            receipt.get("automaticRetry") is not False or
+            receipt.get("partialExecution") is not False or
+            not isinstance(receipt_commands, list) or len(receipt_commands) != len(members)):
+        deny("legacy_d7_worktree_receipt_identity")
+    for result, member, command in zip(receipt_commands, members, expected_commands):
+        if (not isinstance(result, dict) or result.get("index") != member["index"] or
+                result.get("command") != command or type(result.get("exitCode")) is not int or
+                result.get("exitCode") != 0 or result.get("pathAbsent") is not True or
+                result.get("worktreeRegistrationAbsent") is not True):
+            deny("legacy_d7_worktree_receipt_effect")
+    after = receipt.get("after")
+    if (not isinstance(after, dict) or after.get("bothPathsAbsent") is not True or
+            after.get("bothWorktreeRegistrationsAbsent") is not True or
+            after.get("sealedCandidateAllocatedBytes") !=
+            sum(member["allocatedBytes"] for member in members)):
+        deny("legacy_d7_worktree_receipt_completion")
+    if (lock.get("schemaVersion") != 1 or lock.get("state") != "FREE" or
+            lock.get("lockPath") != binding["lockPath"] or
+            lock.get("lockFilePreserved") is not True or
+            lock.get("postReleaseNonblockingProbeExit") != 0 or
+            lock.get("releaseMethod") != "CLOSE_OWN_FD"):
+        deny("legacy_d7_worktree_lock_identity")
+    manifest = _legacy_manifest_entries(raw["finalManifest"])
+    if (manifest.get(paths["receipt"].name) != binding["receiptSha256"] or
+            manifest.get(paths["lockProof"].name) != binding["lockProofSha256"]):
+        deny("legacy_d7_worktree_manifest_binding")
+    d7 = members[1]
+    closure = {
+        "schemaVersion": 1, "kind": "LEGACY_D7_WORKTREE_CLOSURE",
+        "sourceFormat": binding["sourceFormat"], "batchId": binding["batchId"],
+        "releaseId": binding["derivedReleaseId"], "targetCommit": d7["head"],
+        "batchMembers": [{"index": member["index"], "path": member["path"],
+                          "head": member["head"]} for member in members],
+        "effect": {"index": 2, "path": d7["path"], "head": d7["head"],
+                   "class": "DERIVED_WORKTREE", "exitCode": 0,
+                   "pathAbsent": True, "worktreeRegistrationAbsent": True},
+        "originals": {name: {"path": str(paths[name]), "sha256": hashes[name]}
+                      for name in paths},
+        "journalFormat": "EMBEDDED_RECEIPT_COMMANDS_NO_JSONL",
+        "retirementAuthorizationGranted": False, "destructiveCommands": 0,
+    }
+    validate_legacy_d7_worktree_closure(closure)
+    closure_raw = canonical(closure)
+    write_exclusive(args.closure_output, closure_raw)
+    print(canonical({"result": "LEGACY_D7_WORKTREE_CLOSURE_AUTHENTICATED",
+                     "closureSha256": digest_bytes(closure_raw),
+                     "historicalEffectsAuthenticated": 1,
+                     "destructiveCommands": 0}).decode().strip())
 
 
 def _legacy_tree_root(path: Path, root: Path, policy: dict[str, Any], key: str) -> None:
@@ -3334,6 +3520,14 @@ def parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--retention-journal", type=Path, required=True)
     batch_parser.add_argument("--retention-journal-sha256", required=True)
     batch_parser.set_defaults(handler=bootstrap_legacy_batch_v1_preserve)
+    d7_worktree_parser = commands.add_parser("derive-legacy-d7-worktree-closure")
+    d7_worktree_parser.add_argument("--batch-intent", type=Path, required=True)
+    d7_worktree_parser.add_argument("--commands", type=Path, required=True)
+    d7_worktree_parser.add_argument("--receipt", type=Path, required=True)
+    d7_worktree_parser.add_argument("--lock-proof", type=Path, required=True)
+    d7_worktree_parser.add_argument("--final-manifest", type=Path, required=True)
+    d7_worktree_parser.add_argument("--closure-output", type=Path, required=True)
+    d7_worktree_parser.set_defaults(handler=derive_legacy_d7_worktree_closure)
     reconciliation_parser = commands.add_parser("reconcile-release-graph")
     reconciliation_parser.add_argument("--request", type=Path, required=True)
     reconciliation_parser.add_argument("--request-sha256", required=True)
