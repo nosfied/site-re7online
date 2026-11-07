@@ -708,6 +708,8 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
             first_journal_path = first_receipt_root / "command-results.private.jsonl"
             first_receipt_bytes = first_receipt_path.read_bytes()
             first_journal_bytes = first_journal_path.read_bytes()
+            first_review_path = fixture.generation(first["releaseId"])["review"]
+            first_review_bytes = first_review_path.read_bytes()
             self.assertFalse(fixture.generation(first["releaseId"])["release"].exists())
 
             second = manifest["prepares"][1]
@@ -737,6 +739,13 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
             self.assertEqual(failed_receipt["state"], "QUARANTINED")
             self.assertEqual(failed_receipt["attemptedCommands"], 1)
             self.assertEqual(failed_receipt["completedCommands"], 0)
+            failed_journal = [json.loads(line) for line in
+                (second_receipt_root / "command-results.private.jsonl").read_text().splitlines()]
+            self.assertEqual([event["event"] for event in failed_journal],
+                             ["ATTEMPT", "RESULT"])
+            failed_review = json.loads(
+                fixture.generation(second["releaseId"])["review"].read_text())
+            self.assertEqual(failed_review["state"], "QUARANTINED")
             self.assertTrue(fixture.generation(second["releaseId"])["release"].is_dir())
             for plan in manifest["prepares"][2:]:
                 self.assertTrue(fixture.generation(plan["releaseId"])["release"].is_dir())
@@ -748,6 +757,7 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
             self.assertIn("evidence_destination_exists:receipt-first", replay.stderr)
             self.assertEqual(first_receipt_path.read_bytes(), first_receipt_bytes)
             self.assertEqual(first_journal_path.read_bytes(), first_journal_bytes)
+            self.assertEqual(first_review_path.read_bytes(), first_review_bytes)
         finally:
             fixture.close()
 
