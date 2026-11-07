@@ -308,17 +308,29 @@ def _validate_legacy_p00_qualification(request: dict[str, Any]) -> None:
         if (contract.get("generationId") != release or
                 contract.get("releaseId") != release or
                 contract.get("targetCommit") != generation["targetCommit"] or
-                not isinstance(artifacts, list) or len(artifacts) != 1):
+                not isinstance(artifacts, list) or len(artifacts) != 2):
             deny("PREPARE_QUALIFICATION_CONTRACT")
-        artifact = artifacts[0]
-        if (artifact.get("class") != "RELEASE_RUNTIME" or
-                artifact.get("path") != qualified["path"] or
-                artifact.get("releaseId") != release or
-                artifact.get("targetCommit") != generation["targetCommit"] or
-                any(artifact.get(key) != qualified[key]
+        by_class = {item.get("class"): item for item in artifacts if isinstance(item, dict)}
+        if set(by_class) != {"EVIDENCE_PRESERVE", "RELEASE_RUNTIME"}:
+            deny("PREPARE_QUALIFICATION_CONTRACT")
+        release_artifact = by_class["RELEASE_RUNTIME"]
+        lifecycle_artifact = by_class["EVIDENCE_PRESERVE"]
+        if (release_artifact.get("path") != qualified["path"] or
+                release_artifact.get("releaseId") != release or
+                release_artifact.get("targetCommit") != generation["targetCommit"] or
+                any(release_artifact.get(key) != qualified[key]
                     for key in ("sizeBytes", "allocatedBytes", "inodes",
                                 "structuralSha256")) or
-                expected_dependency not in artifact.get("dependencies", [])):
+                expected_dependency not in release_artifact.get("dependencies", []) or
+                lifecycle_artifact.get("path") != generation["lifecycle"]["path"] or
+                lifecycle_artifact.get("releaseId") != release or
+                lifecycle_artifact.get("targetCommit") != generation["targetCommit"] or
+                lifecycle_artifact.get("expectedType") != "regular_file" or
+                lifecycle_artifact.get("state") != "ACTIVE_DEPENDENCY" or
+                lifecycle_artifact.get("retirableOn") != "NEVER_AUTOMATIC" or
+                lifecycle_artifact.get("digest") != {
+                    "sha256": generation["lifecycle"]["sha256"]} or
+                expected_dependency not in lifecycle_artifact.get("dependencies", [])):
             deny("PREPARE_QUALIFICATION_CONTRACT")
         if (lifecycle.get("schemaVersion") != 1 or
                 lifecycle.get("generationId") != release or

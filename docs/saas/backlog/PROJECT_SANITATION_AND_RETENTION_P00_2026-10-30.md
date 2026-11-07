@@ -1374,3 +1374,44 @@ O orçamento produtivo fica separado dos pequenos valores da fixture:
 O ensaio não substitui a etapa produtiva. Depois da integração, a VPS exige prova e
 custódia novas, medição fresca, `audit` próprio, plano por SHA e `prepare`; nenhuma
 intenção ou hash sintético pode ser usado para autorização.
+
+##### Fronteira canônica, lifecycle preservado e execução isolada — 07/11/2026
+
+A referência anterior a um `audit` produtivo por `capacity-recovery.py audit` não
+se aplica a este lote: esse consumidor não admite `RELEASE_RUNTIME` como classe de
+candidato. O controle fechado deste lote pertence integralmente ao fluxo de
+`generation-retirement.py`. A sequência produtiva exata, ainda não executada, é:
+
+1. em custódia privada sucessora, executar somente a qualificação em leitura
+   `generation-retirement.py qualify-legacy-p00-installed-batch`, recapturando as
+   árvores e as autoridades fixadas e produzindo a prova
+   `LEGACY_P00_INSTALLED_BATCH_QUALIFICATION`;
+2. finalizar o request schema 2, reabrir todos os bindings e executar
+   `generation-retirement-prepare-materialize.py`, que copia/readback o consumidor
+   integrado e emite os quatro argv fechados;
+3. executar cada argv `generation-retirement.py prepare`. Esta é a classificação
+   canônica que recaptura `current`, PM2 vivo, dump salvo, grafo/retornos e
+   dependências antes de selar cada intenção. Não existe plano
+   `capacity-recovery` intermediário para estas releases;
+4. somente depois de revisão e `AUTHORIZE_ONCE` individuais, uma etapa futura pode
+   executar os quatro `generation-retirement.py execute`, parando na primeira
+   negativa. Nada nesta seção concede essa autorização.
+
+O vínculo entre materializador e executor preserva agora dois artefatos no
+contrato e na intenção de cada geração, no schema canônico: o lifecycle como
+`EVIDENCE_PRESERVE/ACTIVE_DEPENDENCY/NEVER_AUTOMATIC`, com digest e dependência da
+prova de qualificação, e exatamente uma `RELEASE_RUNTIME`, que é o único artefato
+removível e o único comando. O materializador nega contrato sem lifecycle, com
+lifecycle cruzado ou com segundo artefato removível; o executor mantém sua
+exigência de exatamente um lifecycle autenticado.
+
+A fixture isolada atravessa qualificação, materialização, quatro prepares e quatro
+executes reais com autorizações sintéticas. O resultado é exatamente quatro
+receipts `SANITIZED`, quatro journals `ATTEMPT → RESULT → VERIFIED` e quatro
+reviews terminais, um efeito `RELEASE_RUNTIME` por geração; os quatro lifecycles
+permanecem presentes. Uma segunda regressão conclui a primeira retirada, injeta
+falha no `rm` da segunda, obtém receipt/review `QUARANTINED`, não invoca a terceira
+nem a quarta e preserva byte-exatamente receipt e journal já emitidos. A tentativa
+de repetir o primeiro comando com o mesmo destino selado nega antes do efeito por
+`evidence_destination_exists`. Essas provas usam somente árvores temporárias e
+não alteram bytes qualificados ou recuperados na VPS.

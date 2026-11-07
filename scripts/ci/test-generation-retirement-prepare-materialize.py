@@ -458,7 +458,19 @@ class LegacyP00PrepareMaterializationFixture:
             private_json(lifecycle, {"schemaVersion": 1, "generationId": release,
                                      "targetCommit": target, "state": "COMPLETE"})
             installed = Path(identity["installedReleasePath"]); info = installed.lstat()
-            artifact = {"path": str(installed), "releaseId": release,
+            proof_dependency = f"legacy_p00_qualification:{sha(self.qualification)}"
+            lifecycle_info = lifecycle.lstat()
+            lifecycle_artifact = {"path": str(lifecycle), "releaseId": release,
+                "targetCommit": target, "expectedType": "regular_file",
+                "initialIdentity": {"device": lifecycle_info.st_dev,
+                                    "inode": lifecycle_info.st_ino},
+                "observedIdentity": {"device": lifecycle_info.st_dev,
+                                     "inode": lifecycle_info.st_ino},
+                **RETIREMENT.structural_metrics(lifecycle),
+                "digest": {"sha256": sha(lifecycle)}, "class": "EVIDENCE_PRESERVE",
+                "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+                "dependencies": [proof_dependency]}
+            release_artifact = {"path": str(installed), "releaseId": release,
                 "targetCommit": target, "expectedType": "directory",
                 "initialIdentity": {"device": info.st_dev, "inode": info.st_ino},
                 "observedIdentity": {"device": info.st_dev, "inode": info.st_ino},
@@ -468,13 +480,14 @@ class LegacyP00PrepareMaterializationFixture:
                 "digest": {"qualificationSha256": sha(self.qualification)},
                 "class": "RELEASE_RUNTIME", "state": "RETIREMENT_READY",
                 "retirableOn": "LEGACY_P00_QUALIFICATION",
-                "dependencies": [f"legacy_p00_qualification:{sha(self.qualification)}"]}
+                "dependencies": [proof_dependency]}
             contract = output_root / "generation-artifacts.private.json"
             private_json(contract, {"schemaVersion": 1, "generationId": release,
                 "releaseId": release, "targetCommit": target, "state": "COMPLETE",
                 "writerLockPath": str(self.writer_lock),
                 "classes": sorted(RETIREMENT.PRESERVE_CLASSES | RETIREMENT.DERIVED_CLASSES |
-                                  {"RELEASE_RUNTIME"}), "artifacts": [artifact],
+                                  {"RELEASE_RUNTIME"}),
+                "artifacts": [lifecycle_artifact, release_artifact],
                 "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"})
             review = output_root / "generation-review.private.json"
             private_json(review, {"schemaVersion": 2, "generationId": release,
@@ -529,6 +542,33 @@ class LegacyP00PrepareMaterializationFixture:
             "--request-sha256", sha(self.request)], text=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+    def generation(self, release_id: str):
+        return next(item for item in self.generations if item["releaseId"] == release_id)
+
+    def authorize(self, plan: dict, name: str) -> Path:
+        intent_path = Path(plan["intentOutput"])
+        intent = json.loads(intent_path.read_text())
+        authorization = self.evidence / f"{name}.private.json"
+        private_json(authorization, {"schemaVersion": 1, "authorizationId": name,
+            "decision": "AUTHORIZE_ONCE", "intentSha256": sha(intent_path),
+            "approvedPaths": [item["path"] for item in intent["commands"]],
+            "owner": "fixture-owner"})
+        return authorization
+
+    def execution_argv(self, plan: dict, authorization: Path, receipt_root: Path):
+        generation = self.generation(plan["releaseId"])
+        return ["/usr/bin/python3", "-B",
+            str(self.custody / "control/generation-retirement.py"), "execute",
+            "--intent", plan["intentOutput"], "--intent-sha256", sha(Path(plan["intentOutput"])),
+            "--authorization", str(authorization), "--authorization-sha256", sha(authorization),
+            "--operational-state", str(generation["operational"]),
+            "--operational-state-sha256", sha(generation["operational"]),
+            "--root-policy", str(self.custody / "control/deploy-artifact-roots.json"),
+            "--root-policy-sha256", sha(self.policy),
+            "--deployment-lock", str(self.deploy_lock),
+            "--receipt-root", str(receipt_root),
+            "--review-output", str(generation["review"])]
+
     def close(self):
         self.temp.cleanup()
 
@@ -546,6 +586,7 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
             self.assertEqual(len(manifest["prepares"]), 4)
             effects = []
             intent_hashes = []
+            terminal_receipts = []
             for plan in manifest["prepares"]:
                 completed = subprocess.run(plan["argv"], text=True,
                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -558,12 +599,40 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
                 self.assertIn("pm2FingerprintSha256", intent["freshObservation"])
                 self.assertIn("dumpSha256", intent["freshObservation"])
                 self.assertIn("releaseGraphSha256", intent["freshObservation"])
+                self.assertEqual(len(intent["artifacts"]), 2)
+                self.assertEqual([item["class"] for item in intent["artifacts"]],
+                                 ["EVIDENCE_PRESERVE", "RELEASE_RUNTIME"])
                 effects.extend(intent["commands"])
+                authorization = fixture.authorize(plan, f"authorize-{plan['name']}")
+                receipt_root = fixture.evidence / f"receipt-{plan['name']}"
+                executed = subprocess.run(
+                    fixture.execution_argv(plan, authorization, receipt_root),
+                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(executed.returncode, 0,
+                                 executed.stdout + executed.stderr)
+                receipt_path = receipt_root / "execution-receipt.private.json"
+                journal_path = receipt_root / "command-results.private.jsonl"
+                receipt = json.loads(receipt_path.read_text())
+                terminal_receipts.append(receipt)
+                self.assertEqual(receipt["state"], "SANITIZED")
+                self.assertEqual(receipt["completedCommands"], 1)
+                self.assertEqual(receipt["removedPaths"],
+                                 [intent["commands"][0]["path"]])
+                events = [json.loads(line) for line in journal_path.read_text().splitlines()]
+                self.assertEqual([event["event"] for event in events],
+                                 ["ATTEMPT", "RESULT", "VERIFIED"])
+                review = json.loads(
+                    fixture.generation(plan["releaseId"])["review"].read_text())
+                self.assertEqual(review["state"], "SANITIZED")
+                lifecycle_path = Path(next(item["path"] for item in intent["artifacts"]
+                                           if item["class"] == "EVIDENCE_PRESERVE"))
+                self.assertTrue(lifecycle_path.is_file())
             self.assertEqual(len(effects), 4)
             self.assertEqual({item["class"] for item in effects}, {"RELEASE_RUNTIME"})
             self.assertEqual({item["path"] for item in effects},
                              {str(item["release"]) for item in fixture.generations})
             self.assertEqual(len(set(intent_hashes)), 4)
+            self.assertEqual(len(terminal_receipts), 4)
             self.assertFalse(manifest["executionAuthorized"])
             self.assertTrue(sha(manifest_path))
         finally:
@@ -586,6 +655,99 @@ class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
             self.assertIn("private_hash:dependencies.private.json", completed.stderr)
             self.assertFalse(Path(plan["intentOutput"]).exists())
             self.assertFalse(Path(plan["commandsOutput"]).exists())
+        finally:
+            fixture.close()
+
+    def test_legacy_p00_contract_requires_its_authenticated_lifecycle_evidence(self):
+        for label in ("missing", "crossed"):
+            with self.subTest(label=label):
+                fixture = LegacyP00PrepareMaterializationFixture()
+                try:
+                    generation = fixture.generations[0]
+                    contract = json.loads(generation["contract"].read_text())
+                    if label == "missing":
+                        contract["artifacts"] = [contract["artifacts"][1]]
+                    else:
+                        other = fixture.generations[1]
+                        contract["artifacts"][0]["path"] = str(other["lifecycle"])
+                        contract["artifacts"][0]["digest"] = {
+                            "sha256": sha(other["lifecycle"])}
+                    private_json(generation["contract"], contract)
+                    request = json.loads(fixture.request.read_text())
+                    request["generations"][0]["contract"] = binding(generation["contract"])
+                    private_json(fixture.request, request)
+                    result = fixture.materialize()
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("PREPARE_QUALIFICATION_CONTRACT", result.stdout)
+                    self.assertFalse(fixture.custody.exists())
+                finally:
+                    fixture.close()
+
+    def test_legacy_p00_batch_stops_after_failure_and_never_replays_completed_effect(self):
+        fixture = LegacyP00PrepareMaterializationFixture()
+        try:
+            result = fixture.materialize()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = json.loads(
+                (fixture.custody / "prepare-materialization.private.json").read_text())
+            for plan in manifest["prepares"]:
+                prepared = subprocess.run(plan["argv"], text=True,
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(prepared.returncode, 0,
+                                 prepared.stdout + prepared.stderr)
+
+            first = manifest["prepares"][0]
+            first_authorization = fixture.authorize(first, "first-once")
+            first_receipt_root = fixture.evidence / "receipt-first"
+            first_execution = subprocess.run(
+                fixture.execution_argv(first, first_authorization, first_receipt_root),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(first_execution.returncode, 0,
+                             first_execution.stdout + first_execution.stderr)
+            first_receipt_path = first_receipt_root / "execution-receipt.private.json"
+            first_journal_path = first_receipt_root / "command-results.private.jsonl"
+            first_receipt_bytes = first_receipt_path.read_bytes()
+            first_journal_bytes = first_journal_path.read_bytes()
+            self.assertFalse(fixture.generation(first["releaseId"])["release"].exists())
+
+            second = manifest["prepares"][1]
+            second_authorization = fixture.authorize(second, "second-once")
+            second_receipt_root = fixture.evidence / "receipt-second-failed"
+            execution_argv = fixture.execution_argv(
+                second, second_authorization, second_receipt_root)
+            consumer_path = fixture.custody / "control/generation-retirement.py"
+            spec = importlib.util.spec_from_file_location(
+                "legacy_p00_failure_consumer", consumer_path)
+            self.assertIsNotNone(spec); self.assertIsNotNone(spec.loader)
+            consumer = importlib.util.module_from_spec(spec); spec.loader.exec_module(consumer)
+            args = consumer.parser().parse_args(execution_argv[3:])
+            real_run = subprocess.run
+
+            def fail_second_rm(command, *call_args, **call_kwargs):
+                if command and command[0] == "/usr/bin/rm":
+                    return subprocess.CompletedProcess(command, 7, b"", b"synthetic failure")
+                return real_run(command, *call_args, **call_kwargs)
+
+            with patch.object(consumer.subprocess, "run", side_effect=fail_second_rm):
+                with self.assertRaisesRegex(consumer.Denied,
+                                            "retirement_command:2:exit_7"):
+                    args.handler(args)
+            failed_receipt = json.loads(
+                (second_receipt_root / "execution-receipt.private.json").read_text())
+            self.assertEqual(failed_receipt["state"], "QUARANTINED")
+            self.assertEqual(failed_receipt["attemptedCommands"], 1)
+            self.assertEqual(failed_receipt["completedCommands"], 0)
+            self.assertTrue(fixture.generation(second["releaseId"])["release"].is_dir())
+            for plan in manifest["prepares"][2:]:
+                self.assertTrue(fixture.generation(plan["releaseId"])["release"].is_dir())
+
+            replay = subprocess.run(
+                fixture.execution_argv(first, first_authorization, first_receipt_root),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(replay.returncode, 2)
+            self.assertIn("evidence_destination_exists:receipt-first", replay.stderr)
+            self.assertEqual(first_receipt_path.read_bytes(), first_receipt_bytes)
+            self.assertEqual(first_journal_path.read_bytes(), first_journal_bytes)
         finally:
             fixture.close()
 
