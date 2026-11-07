@@ -1049,7 +1049,7 @@ Nenhum request, plano ou intenção novos foi produzido.
 | `worker-package-audit` | Audit v5 terminal `DENY` por `DISPOSITION_TREE_DIRECTORY_IDENTITY`, plano `57eda79930ec4f24dcc56bccd6f46e9996f3855386264267d80b8071d18302ea`. |
 | `ef7db111-prep` | Audit terminal `DENY`; resultado parcial sem autorização de retirada. |
 | Worktrees históricos de `deploy-control` | 0 B qualificados; #352 cobre somente novos worktrees. |
-| `build-output` | Runtimes derivados ausentes na enumeração dirigida; pacotes, manifestos, índices e evidências protegidos pelos contratos vigentes. |
+| `build-output` | Os runtimes d7 são efeitos terminais autenticados; os demais runtimes derivados já encerrados permanecem irrepetíveis. Pacotes, manifestos, índices e evidências residuais continuam preservados. |
 
 As seis gerações com análise aberta na seção de 03/11 são escopo de
 reconciliação documental. Reaproveitar inventários, contratos e receipts para
@@ -1057,3 +1057,361 @@ identificar um artefato literal ainda presente, sua autoridade preservada,
 a lacuna de evidência resolúvel e a classe admitida pelo executor vigente.
 Sem candidato qualificado, o build de `36b94c6d` continua bloqueado pelo gate
 de capacidade.
+
+### Piloto documental d7 — efeitos terminais e entrada `RELEASE_RUNTIME`
+
+Leitura dirigida em 06/11/2026, sem request, `audit`, `prepare` ou alteração da
+VPS. O receipt
+`/opt/re7online/backups/converta-persistent/retention-receipts/p00-capacity-recovery-9b2169d4-20261030T121840Z/execution-receipt.private.json`,
+SHA-256 `97a121df8fab427ada569652c7d9f45ee04fe4d9a5c93c032daa65dfd1b817f8`,
+foi reaberto com o journal `command-journal.private.jsonl`, SHA-256
+`9baa07a07f14bdc00e2c62d1374547dd41e8ed534d6968ed554d346e596dc338`.
+O vínculo terminal é exato:
+
+| Ordinal | Efeito autenticado | Bytes físicos selados | Resultado |
+| ---: | --- | ---: | --- |
+| 2 | `/opt/re7online/build-output/immutable-d7de6453-vps-20261024T221500Z-producer/immutable-d7de6453-vps-20261024T221500Z/frontend-runtime` | 645.029.888 | `ATTEMPT → RESULT(0) → VERIFIED`; ausente e irrepetível |
+| 3 | `/opt/re7online/build-output/immutable-d7de6453-vps-20261024T221500Z-producer/immutable-d7de6453-vps-20261024T221500Z/api-runtime` | 337.100.800 | `ATTEMPT → RESULT(0) → VERIFIED`; ausente e irrepetível |
+
+Os dois efeitos somam 982.130.688 bytes. O ordinal 1 do mesmo receipt pertence ao
+cache npm e não compõe a geração d7. O output-pai permanece com 154.484.736 bytes
+e conserva pacote, manifesto e índice; não é candidato integral. O fechamento do
+worktree d7 pertence ao lote conjunto d7/3630. A custódia original e seu formato
+legado, localizados depois desta primeira leitura, são reconciliados abaixo sem
+converter o receipt incorporado em journal canônico.
+
+`PROTECTED_TRANSITIVE` era a classificação da fotografia do inventário
+`f9acb9a9c51aa78f76d6c9820dbc18b8f5ba853980a916427d62d540da65b728`.
+No grafo vigente
+`/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-17cc77a8-vps-20261104T141039Z-api-frontend-c206959c-v3-once/generation-release-graph.final.private.json`,
+SHA-256 `ceff32cf664d14382b0209a30ac556012c2cd2a484d5039d04fa2f1c14f47224`,
+d7 consta somente em `installedVerifiedReleases`. Não consta em ativo, rollback,
+rollback imediato, retorno transitivo ou candidato. Preserva-se a negativa do
+reconciliador de grafo: uma entrada d7 nega em
+`release_reconciliation_entry_identity`, pois não há papel operacional aberto a
+encerrar. Isso não transforma inventário em elegibilidade de retirada.
+
+O verificador canônico `converta-release.py`, SHA-256
+`da62e006cb92d3409cb042971611fcd1849a193fd7fda1645972ebce9f634973`,
+foi executado em leitura sobre
+`/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z`. A verificação
+estrita negou em `forbidden_release_entry:frontend-runtime/.next/cache`; a
+comparação dirigida subsequente esclareceu integralmente o delta sem flexibilizar
+o verificador:
+
+- 34.349 entradas do índice: zero ausentes e zero divergências de tipo, modo,
+  tamanho, SHA-256 ou destino de symlink;
+- 30.922 arquivos, 880.051.412 bytes lógicos, foram conferidos pelo hash do índice;
+- dez extras, todos confinados a `frontend-runtime/.next/cache`: seis diretórios
+  `0755` e quatro arquivos `0644`, 30.176 bytes lógicos e 61.440 bytes físicos;
+- zero extras fora do cache, zero symlinks extras/absolutos/escapando da release e
+  zero nomes extras associados a `.data`, ambiente, sessão, autenticação,
+  credencial, uploads ou banco; `api-runtime/.data` está ausente;
+- a release mede 988.606.464 bytes físicos. Pacote, manifesto, índice, marker e
+  release conservaram as identidades autenticadas.
+
+Essa prova classifica todos os extras observados como cache derivado, mas não
+supre o primeiro pré-requisito do consumidor. A entrada direta de
+`RELEASE_RUNTIME` exige `generation-artifacts.private.json`,
+`generation-lifecycle.private.json` terminal e `generation-review.private.json`
+no output canônico. d7 preserva o contrato específico
+`d7-capacity-binding-contract.private.json`, SHA-256
+`6b9234fb9cc20050f946c0728e59d2aee358d5207d1402a934622387a8409f81`,
+que autentica os runtimes derivados, mas contém somente `schemaVersion`,
+`releaseId`, `targetCommit` e `artifacts`; não possui `generationId`, estado,
+writer lock, classes, política privada ou lifecycle exigidos pelo contrato de
+geração. Os três arquivos canônicos estão fisicamente ausentes.
+
+A custódia histórica do worktree foi posteriormente localizada em
+`retention-d7-3630-worktrees-ready-20261025` e autenticada por um leitor legado
+fechado no consumidor existente. O leitor fixa o lote conjunto, os caminhos e
+HEADs de `3630e16` e `d7de6453`, e os hashes dos cinco originais:
+
+- intenção `3042455be0f8d0900245c4e63844d5814589ae44e5b2cb3f30057ec609f4bf48`;
+- comandos literais `5d7d6e85d0d850d11b8a612817f1f2a2867acfc8362d9736878d1e5ac9b541e4`;
+- receipt final `a5afecb03bdce97e03fde35597f9f92ef30a70055cbc9d1e763d1655ef431f72`;
+- prova do lock `1793b9a3d91842d4431339bc9b951f09de4133938a128e3f806e4931516b9679`;
+- manifest final `23adcdac759beecf7370ea9c1aea3b8f909a1db2cba6f9daa8458216b857ec02`.
+
+O formato antigo não possui journal JSONL. O receipt incorpora o log terminal dos
+dois comandos. A prova derivada autentica somente o efeito histórico do worktree
+d7 no índice 2 (`exitCode=0`, caminho ausente e registro Git ausente), registra
+`3630e16` apenas como membro obrigatório do lote e concede zero autorização ou
+comando destrutivo. Os originais privados permanecem fora do Git. Os runtimes d7
+dos ordinais 2 e 3 continuam vinculados separadamente ao receipt `97a121df...` e
+ao journal `9baa07a0...`; não foram reexpressos pela closure do worktree.
+
+O consumidor copiado fora do checkout aceitou os originais e emitiu uma closure
+derivada com zero efeitos novos. Fixtures sanitizadas negam hash, caminho, HEAD,
+comando, baixa incompleta do registro Git, resultado incompleto e lote divergente.
+A entrada isolada de `RELEASE_RUNTIME`, contudo, ainda para no primeiro gate
+`private_read:generation-artifacts.private.json`: o contrato canônico não existe.
+Lifecycle e review permanecem consequentes a esse primeiro bloqueio. Os dez extras
+de `frontend-runtime/.next/cache` continuam confinados e integralmente classificados
+pela comparação de 34.349 entradas, mas não são automaticamente dispensáveis: a
+política vigente só admite a classe subordinada de cache para f160. Assim, o
+veredito permanece `DENY_BEFORE_PREPARE / GENERATION_CONTRACT_MISSING`, com o
+fechamento do worktree agora autenticável, potencial físico da release ainda
+condicionado e ganho qualificado de 0 B.
+
+#### Veredito reproduzível da geração instalada
+
+O contrato antigo `d7-capacity-binding-contract.private.json`, SHA-256
+`6b9234fb9cc20050f946c0728e59d2aee358d5207d1402a934622387a8409f81`, autentica
+somente os runtimes derivados. A comparação com `validate_contract()` termina em
+`artifact_contract_schema`: faltam `generationId`, estado terminal, writer lock,
+classes, política privada e as métricas/identidades exigidas para a release
+instalada. Ele não pode ser promovido por mudança de nome ou preenchimento de
+campos presumidos.
+
+As fontes Git preservadas sustentam parte, mas não toda a cadeia:
+
+- o registro d7
+  `TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json`, SHA-256
+  `3babb512086e6233a996e80ea5477855986a22177fc489f1d429f36fbd6043dd`,
+  vincula release, target, pacote, manifesto, índice, marker, componentes e
+  retornos anteriores;
+- o registro sucessor a959
+  `CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json`, SHA-256
+  `c0d702aabd0e3caa1d8044671de07bd1f355985fd34b3d6bb457c146a708abb6`,
+  declara d7 como predecessor de API e frontend e publica os hashes do receipt
+  `3567a10a...f353dc8` e journal `991d549a...e0804240`;
+- entretanto, o próprio registro d7 declara `privateEvidence.versioned=false` e
+  `locationPublished=false`, e o registro a959 atribui sua proveniência a relato
+  do owner, sem inspeção independente. Os bytes originais do receipt/journal de
+  ativação a959 e um lifecycle privado d7 vinculável não estão na custódia local
+  identificada. Hashes publicados sem os arquivos não permitem executar os
+  leitores existentes nem autenticar a sucessão por componente.
+
+Uma fixture com contrato canônico, lifecycle terminal e fotografia observada — d7
+somente em `installedVerifiedReleases`, fora de ativo, rollback, retorno transitivo
+e candidato — produz exatamente um comando `RELEASE_RUNTIME` com
+`eligibilityAtPrepare=RETIREMENT_READY`. A mesma entrada com o contrato histórico
+nega antes da classificação. Portanto, o grafo não é o bloqueio; a provenance da
+geração é.
+
+Não foi criado bootstrap d7. A fonte capaz de resolver a lacuna é a custódia
+autenticada dos bytes originais do receipt e journal a959 já publicados por hash,
+somada ao lifecycle privado d7 original; alternativamente, uma decisão contratual
+versionada teria de autorizar explicitamente uma derivação a partir dos registros
+Git, sem apresentá-la como lifecycle histórico. Até uma dessas provas existir,
+review nova não pode legitimar contrato/lifecycle ausentes. Os dez extras de cache
+continuam preservados; a exceção específica f160 não foi generalizada.
+
+Nesta rodada, a medição física reutilizada da release é 988.606.464 bytes, incluindo
+61.440 bytes dos dez extras de cache. Bytes qualificados: 0. Bytes efetivamente
+recuperados: 0. Os efeitos terminais anteriores do worktree e dos runtimes permanecem
+contabilizados separadamente e não foram somados de novo.
+
+#### Busca dirigida da ativação a959 e próximo piloto — 07/11/2026
+
+A busca somente leitura partiu dos hashes completos publicados pelo registro a959,
+SHA-256 `c0d702aabd0e3caa1d8044671de07bd1f355985fd34b3d6bb457c146a708abb6`.
+Os originais da ativação, distintos do par de retenção usado pelo descriptor legado,
+foram localizados em
+`/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-a959129e-vps-20261026T023100Z-activation-v7-20261026`:
+
+- `finalization-receipt.private.json`, SHA-256
+  `3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8`;
+- `window-state.private.json`, SHA-256
+  `991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240`.
+
+Ambos são regulares `deploy:deploy 0600`. O receipt e o estado concordam em release,
+target, estado terminal `DEPLOYED`, aceite, dump, marker, guarda e único `pm2 save`.
+O campo chamado `journalSha256` no registro versionado referencia o estado terminal,
+não um journal de eventos. Os dois arquivos privados não contêm os predecessores.
+A sucessão de API e frontend por a959 é vinculável somente pelo conjunto: o registro
+Git publica os dois hashes e declara d7 como `previousApiReleaseId` e
+`previousFrontendReleaseId`, enquanto os originais autenticam a ativação terminal
+conjunta. O leitor canônico atual não admite diretamente esse formato pré-canônico;
+o descriptor a959 existente autentica outro par, pertencente à retenção, e não deve
+ser reutilizado para representar a ativação.
+
+O lifecycle privado d7 não foi recuperado. Uma primeira enumeração de nomes retornou
+`/opt/re7online/build-output/immutable-d7de6453-vps-20261024T221500Z-producer/generation-lifecycle.private.json`,
+mas a abertura imediata terminou em `ENOENT`. Releituras do pai e buscas pelo release
+ID em arquivos `*lifecycle*.json` não localizaram o arquivo; portanto essa observação
+volátil não é evidência autenticada. Foram consultadas, de forma dirigida, as raízes
+`deploy-transactions`, `preparations`, `retention-receipts`, `deploy-preparations`,
+`deploys`, `simple-activations`, `build-evidence`, `audits`, `read-only-audits`,
+`build-output` e `deploy-control`. O veredito d7 permanece
+`DENY_BEFORE_PREPARE / GENERATION_CONTRACT_MISSING`: a ativação sucessora está agora
+localizada, mas não substitui o contrato/lifecycle original da geração.
+
+O inventário autenticado
+`f9acb9a9c51aa78f76d6c9820dbc18b8f5ba853980a916427d62d540da65b728`
+foi reutilizado e somente os três caminhos literais abaixo foram recapturados. Não
+foi feito inventário global nem leitura de payload da release:
+
+| Próximo caso | Caminho literal e bytes físicos | Evidência recuperável | Primeiro gate e fonte capaz de resolvê-lo |
+| --- | --- | --- | --- |
+| `3630e16` — cadeia mais completa | `/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z`, presente, `988.524.544` B | membro autenticado do lote conjunto de worktrees; outputs encerrados pelo receipt `c1a99e4620860a867bb9da727e01451d84cb5cde07c6d0b9467feed25ceff3ff`, intenção `dbf1d0a273003b52167be035c4b0cf2d94c7356afe8154cb1c9b1d7a4054d39e`; registro d7 declara 3630 como predecessor da API | `private_read:generation-artifacts.private.json`: output preserva pacote, mas não contrato/lifecycle/review canônicos. Resolve com a custódia original da geração 3630 e a ativação d7 autenticada, ou decisão contratual explícita de derivação; depois ainda exige comparação integral e classificação privada. |
+| `ec2a9fde` | `/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z`, presente, `988.528.640` B | registro de deploy SHA-256 `84d3e9c0f9b7f2d715851e68baa24e04a8a81f6c4dc94021a265be213e77017e`; d7 declara ec2 como predecessor do frontend; quatro runtimes antigos são efeitos terminais e não candidatos | mesmo gate de contrato/lifecycle da release. Resolve com originais da geração ec2 e receipts/journals das sucessões por componente; a custódia histórica de 19 arquivos continua não localizada nas raízes antes consultadas. |
+| `ef7db111` | `/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z`, presente, `988.508.160` B | registro API-only SHA-256 `446d727bf9506fe3141222215d381f6d335700714d970a5fa0a5068bdc570fb3`; outputs encerrados no mesmo receipt `c1a99e46...ceff3ff` | contrato/lifecycle canônicos ausentes e a sucessão API `ef7 → 3630` ainda carece do original da ativação 3630. O perfil `ef7db111-prep` permanece `DENY` terminal e fora deste escopo. |
+
+O primeiro próximo caminho para revisão é a release instalada `3630e16`, pois reúne
+o fechamento recuperável de worktree e outputs e uma aresta sucessora publicada.
+Isso não a qualifica: os três potenciais permanecem, respectivamente,
+`988.524.544`, `988.528.640` e `988.508.160` bytes; bytes qualificados nesta rodada:
+`0`; bytes efetivamente recuperados: `0`. Nenhum request, `audit`, `prepare` ou
+`execute` foi criado ou executado.
+
+#### Qualificação consolidada P00 — 07/11/2026
+
+Esta seção substitui o encaminhamento de buscas individuais acima. A leitura
+dirigida localizou os originais de ativação de `ec2`, `ef7`, `3630` e `d7`, além
+dos originais a959 já registrados. Portanto, não permanece correto afirmar que a
+sucessão `ef7 → 3630`, a ativação d7 ou a ativação a959 estão ausentes. O lifecycle
+privado histórico das quatro gerações continua ausente; ele não foi sintetizado.
+
+O fluxo novo `qualify-legacy-p00-installed-batch` é uma prova derivada e fechada,
+não um lifecycle histórico nem autorização. Ele fixa o grafo
+`ceff32cf664d14382b0209a30ac556012c2cd2a484d5039d04fa2f1c14f47224`, os quatro
+caminhos, targets, pacotes, manifests, índices e markers, e autentica a cadeia por
+componente `a62 → ec2`, `ec2(api) → ef7`, `ef7(api) → 3630`,
+`3630(api)+ec2(frontend) → d7` e `d7(api+frontend) → a959`. As provas novas desta
+rodada são a verificação canônica direta dos quatro pacotes e árvores e a prova
+derivada emitida em fixture isolada. Os receipts, registros e ativações originais
+continuam sendo as autoridades históricas.
+
+| Geração / caminho literal presente | Bytes físicos observados | Veredito desta rodada | Evidência e impedimento remanescente |
+| --- | ---: | --- | --- |
+| `/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z` | 988.524.544 | **dependente de regra para o legado** | pacote `346246ce…fc18`, manifest `ec677da8…218e`, índice `92a62cc5…7952` e árvore passam no verificador; ativação `1da6cc4b…339a` e preflight `0ec17142…597b` comprovam API `ef7 → 3630`; d7 comprova sucessão. Falta integrar/materializar contrato e lifecycle derivados pelo fluxo fechado. |
+| `/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z` | 988.606.464 | **dependente de regra para o legado** | pacote `b75500e6…519`, manifest `dcc3c1a4…85d6`, índice `fcd7a0be…b6f4`; 34.349 entradas conferem. Os 61.440 B extras são somente cache subordinado. Ativação d7 `a119f623…79af` e sucessão a959 `3567a10a…dc8`/`991d549a…4240` estão autenticadas. Falta a mesma materialização derivada, sem reescrever o lifecycle ausente. |
+| `/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z` | 988.528.640 | **dependente de regra para o legado** | pacote `a8715c8d…b4ad`, manifest `b9aa1c53…f5e6`, índice `22b790da…4241`; árvore só diverge por cache runtime confinado. Preflight `23ef53b2…b82e`, ativação `45808ec5…511f`, ef7 e d7 fecham a sucessão dos dois componentes. Falta materialização derivada. |
+| `/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z` | 988.508.160 | **dependente de regra para o legado** | pacote `c5bb0b94…351c`, manifest `f6660e61…97aa`, índice `9f8ffc1e…bb74` e árvore passam estritamente. Preflight `c39675ef…10f0`, ativação `f8073f00…8d2` e 3630 fecham a sucessão API. O `DENY` terminal de `ef7db111-prep` continua preservado e não integra este candidato. |
+| `/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z` | 988.495.872 | **preservado** | contém `api-runtime/.data` físico; pai privado não pode receber comando. A cópia anterior sem `-vps`, o incoming de 147.972.096 B e as preparações a62 permanecem sem closure própria e fora do lote. |
+| `/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z` | 985.571.328 | **preservado** | contém `api-runtime/.data` físico. Incoming de 166.449.152 B e checksum permanecem inventário sem disposição autenticada. |
+
+O verificador canônico agora possui a exceção fechada
+`--legacy-p00-runtime-cache-overlay`, aceita somente as identidades exatas d7/ec2
+e somente `frontend-runtime/.next/cache`; arquivo extra fora dessa subárvore,
+release diferente, symlink, modo gravável ou conteúdo privado continuam negando.
+Os bytes finais do verificador proposto têm SHA-256
+`8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec`;
+os descriptors legados versionados foram atualizados para vincular esse mesmo
+consumidor, sem alterar as evidências históricas privadas.
+O próprio script final foi transmitido por stdin e executado em leitura na VPS:
+d7 retornou `RELEASE VERIFIED` com dez entradas de cache, e ec2 retornou
+`RELEASE VERIFIED` com seis; nenhum arquivo foi materializado ou alterado nessa
+prova.
+O consumidor copiado fora do checkout comprovou quatro classificações
+`RETIREMENT_READY`, mas emitiu somente
+`LEGACY_P00_INSTALLED_BATCH_QUALIFICATION`, com `authorizationGranted=false`,
+`executionPermitted=false`, zero comandos e próximo passo obrigatório
+`CANONICAL_CONTRACT_LIFECYCLE_MATERIALIZATION`. Referência operacional, `.data`,
+drift da cadeia ou divergência pacote/árvore negam antes de produzir a prova.
+
+Os demais escopos não entram na soma: os 34 filhos históricos de
+`/opt/re7online/deploy-control` continuam na tabela literal de 06/11, sem receipt
+de disposição próprio (#352 previne apenas novas alocações); os pais de
+`build-output` preservam pacote/manifest/índice/evidência, enquanto os runtimes já
+retirados são terminais; `/opt/re7online/release-sources/freeform-window-af26`
+(130.396.160 B) e `freeform-window-af26-cumulative-20261002` (1.879.433.216 B)
+são fontes únicas preservadas; preparações e receipts terminais permanecem
+evidência e não são efeitos repetíveis. O perfil `ef7db111-prep` continua
+terminal `DENY` e integralmente excluído.
+
+Medição fresca: 8.181.280.768 B e 8.752.642 inodes disponíveis. O gate do build
+`36b94c6d` exige 9.663.676.416 B; déficit atual 1.482.395.648 B. Os quatro
+caminhos legados somam 3.954.167.808 B físicos observados. Como a regra ainda não
+foi integrada/materializada na VPS, **bytes aptos pelo fluxo vigente: 0**,
+**bytes dependentes da regra versionada: 3.954.167.808**, **bytes recuperados: 0**.
+Se a regra for integrada e a recaptura canônica mantiver o veredito, o saldo bruto
+projetado será 12.135.448.576 B, 2.471.772.160 B acima do gate. Reservando
+16.777.216 B para a custódia compacta e o fechamento, o ganho líquido conservador
+é 3.937.390.592 B e a folga projetada é 2.454.994.944 B.
+
+O lote completo para a próxima etapa canônica é exatamente, e somente, `3630`,
+`d7`, `ec2` e `ef7` nos quatro caminhos literais da tabela. Ele ainda não está
+selado: após integração da regra, requer materialização privada (inclusive a cópia
+`0600` do registro Git a959 já autenticado), `audit`, plano por
+SHA e `prepare` próprios. Nenhum request produtivo, retirada ou build foi iniciado
+nesta rodada.
+
+##### Ensaio integrado da materialização e do prepare — 07/11/2026
+
+O schema 2 de `generation-retirement-prepare-materialize.py` fecha exclusivamente
+o lote `p00-legacy-installed-releases-20261107-v1`. Ele exige as quatro releases
+literais acima, a prova de qualificação, os quatro contratos/lifecycles/reviews e
+fotografias vinculadas ao mesmo grafo. O schema 1 de uma ou duas gerações
+reconciliadas permanece inalterado. O materializador continua sem executar
+`prepare` e sem conceder autorização; ele apenas copia/readback os controles e
+emite os quatro argv canônicos.
+
+O ensaio isolado produziu a prova pelo consumidor real, materializou o pacote fora
+do checkout e executou os quatro argv contra `generation-retirement.py prepare`.
+O resultado no commit de código `4fcb87ef` foi exatamente quatro efeitos
+`RELEASE_RUNTIME`, um para cada caminho
+da tabela, sem efeito adicional, glob, force ou prune. Cada intenção ficou
+`SEALED_FOR_EXPLICIT_AUTHORIZATION` e `authorizationGranted=false`. Os hashes de
+uma execução registrada de fixture são:
+
+- prova de qualificação: `1680fc80719889d646c0069dd15c0a865a4a83d711db81f1a8ef1ccbdd45787b`;
+- plano/materialização: `1ae2475afcd10142d2b8279131234d4fcb7aaa69f36184e241ab55db0c73771d`;
+- intents, na ordem ec2, ef7, 3630 e d7:
+  `d52436ce3ae04178b6804a94580ed108299a4ee1e01e1226ee67e19233a00b13`,
+  `7ea0175d555221d7d72522f63650e8afa692cd69d823c8df9604c602586f92b5`,
+  `05d5d15dcdd36d2f84b9deec398588fe87bfdfef0dded6fd8c974eb0565fc76d`
+  e `bdeba74dbf5f3410658aa7cd09d5459ee51e6ac86c3ac466e5af26af7c8ca9cd`.
+
+Esses hashes identificam somente a execução sintética e não são reutilizáveis na
+VPS. A regressão também acrescentou uma referência de dependência depois da
+materialização: o `prepare` real negou por drift antes de criar intent ou arquivo
+de comandos. A observação fresca de cada intent inclui os links `current`, o
+fingerprint do PM2 vivo, o SHA do dump salvo, o SHA do grafo/retornos e o SHA da
+lista de dependências.
+
+O orçamento produtivo fica separado dos pequenos valores da fixture:
+
+| Parcela | Bytes | Tratamento |
+| --- | ---: | --- |
+| pico temporário conservador de extração, um pacote por vez | 988.606.464 | capacidade necessária durante a qualificação; não é descontada do ganho líquido |
+| custódia e fechamento | 16.777.216 | reserva descontada do ganho bruto |
+| quatro releases | 3.954.167.808 | ganho bruto condicionado ao audit produtivo |
+| ganho líquido conservador | 3.937.390.592 | ganho bruto menos a reserva de custódia |
+
+O ensaio não substitui a etapa produtiva. Depois da integração, a VPS exige prova e
+custódia novas, medição fresca, `audit` próprio, plano por SHA e `prepare`; nenhuma
+intenção ou hash sintético pode ser usado para autorização.
+
+##### Fronteira canônica, lifecycle preservado e execução isolada — 07/11/2026
+
+A referência anterior a um `audit` produtivo por `capacity-recovery.py audit` não
+se aplica a este lote: esse consumidor não admite `RELEASE_RUNTIME` como classe de
+candidato. O controle fechado deste lote pertence integralmente ao fluxo de
+`generation-retirement.py`. A sequência produtiva exata, ainda não executada, é:
+
+1. em custódia privada sucessora, executar somente a qualificação em leitura
+   `generation-retirement.py qualify-legacy-p00-installed-batch`, recapturando as
+   árvores e as autoridades fixadas e produzindo a prova
+   `LEGACY_P00_INSTALLED_BATCH_QUALIFICATION`;
+2. finalizar o request schema 2, reabrir todos os bindings e executar
+   `generation-retirement-prepare-materialize.py`, que copia/readback o consumidor
+   integrado e emite os quatro argv fechados;
+3. executar cada argv `generation-retirement.py prepare`. Esta é a classificação
+   canônica que recaptura `current`, PM2 vivo, dump salvo, grafo/retornos e
+   dependências antes de selar cada intenção. Não existe plano
+   `capacity-recovery` intermediário para estas releases;
+4. somente depois de revisão e `AUTHORIZE_ONCE` individuais, uma etapa futura pode
+   executar os quatro `generation-retirement.py execute`, parando na primeira
+   negativa. Nada nesta seção concede essa autorização.
+
+O vínculo entre materializador e executor preserva agora dois artefatos no
+contrato e na intenção de cada geração, no schema canônico: o lifecycle como
+`EVIDENCE_PRESERVE/ACTIVE_DEPENDENCY/NEVER_AUTOMATIC`, com digest e dependência da
+prova de qualificação, e exatamente uma `RELEASE_RUNTIME`, que é o único artefato
+removível e o único comando. O materializador nega contrato sem lifecycle, com
+lifecycle cruzado ou com segundo artefato removível; o executor mantém sua
+exigência de exatamente um lifecycle autenticado.
+
+A fixture isolada atravessa qualificação, materialização, quatro prepares e quatro
+executes reais com autorizações sintéticas. O resultado é exatamente quatro
+receipts `SANITIZED`, quatro journals `ATTEMPT → RESULT → VERIFIED` e quatro
+reviews terminais, um efeito `RELEASE_RUNTIME` por geração; os quatro lifecycles
+permanecem presentes. Uma segunda regressão conclui a primeira retirada, injeta
+falha no `rm` da segunda, obtém receipt/review `QUARANTINED`, não invoca a terceira
+nem a quarta e preserva byte-exatamente receipt e journal já emitidos. A tentativa
+de repetir o primeiro comando com o mesmo destino selado nega antes do efeito por
+`evidence_destination_exists`. Essas provas usam somente árvores temporárias e
+não alteram bytes qualificados ou recuperados na VPS.

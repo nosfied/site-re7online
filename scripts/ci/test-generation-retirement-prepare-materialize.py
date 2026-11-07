@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,9 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOL = ROOT / "scripts/generation-retirement-prepare-materialize.py"
@@ -320,7 +324,461 @@ class PrepareMaterializationFixture:
     def close(self): self.temp.cleanup()
 
 
+class LegacyP00PrepareMaterializationFixture:
+    def __init__(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="legacy-p00-prepare-materialized-")
+        self.root = Path(self.temp.name)
+        self.repo = self.root / "repo"; self.repo.mkdir(mode=0o755)
+        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.invalid"],
+                       cwd=self.repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.repo, check=True)
+        (self.repo / "tracked").write_text("fixture\n")
+        subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-qm", "fixture"], cwd=self.repo, check=True)
+        self.outputs = self.root / "outputs"; self.outputs.mkdir(mode=0o755)
+        self.worktrees = self.root / "worktrees"; self.worktrees.mkdir(mode=0o755)
+        self.releases = self.root / "releases"; self.releases.mkdir(mode=0o755)
+        self.staging = self.root / "staging"; self.staging.mkdir(mode=0o755)
+        self.evidence = self.root / "evidence"; self.evidence.mkdir(mode=0o750)
+        self.writer_lock = self.outputs / ".generation-build.lock"
+        self.writer_lock.write_text(""); self.writer_lock.chmod(0o600)
+        self.deploy_lock = self.evidence / ".deployment-window.lock"
+        self.deploy_lock.write_text(""); self.deploy_lock.chmod(0o600)
+        self.custody = self.evidence / "custody"
+
+        def policy_entry(path: Path):
+            info = path.lstat()
+            return {"path": str(path), "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                    "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}
+
+        self.policy = self.root / "policy.private.json"
+        private_json(self.policy, {"schemaVersion": 1, "canonicalRoots": {
+            "repository": policy_entry(self.repo), "worktrees": policy_entry(self.worktrees),
+            "outputs": policy_entry(self.outputs), "releases": policy_entry(self.releases),
+            "staging": policy_entry(self.staging),
+            "evidence": [{**policy_entry(self.evidence), "allowedModes": ["0700", "0750"]}]}})
+
+        self.pm2_rows = [{"name": "fixture-api", "pid": 41,
+            "pm2_env": {"status": "online", "pm_cwd": str(self.root / "active"),
+                        "pm_exec_path": str(self.root / "active/api.js"),
+                        "exec_mode": "fork_mode", "instances": 1, "args": [],
+                        "namespace": "default"}}]
+        self.pm2_state = self.root / "pm2-state.json"
+        self.pm2_state.write_text(json.dumps(self.pm2_rows))
+        self.pm2 = self.root / "pm2"
+        self.pm2.write_text("#!/usr/bin/env python3\nfrom pathlib import Path\nprint(Path(" +
+                            repr(str(self.pm2_state)) + ").read_text())\n")
+        self.pm2.chmod(0o700)
+        self.dump = self.evidence / "dump.pm2.private.json"; private_json(self.dump, [])
+        self.dependencies = self.evidence / "dependencies.private.json"
+        private_json(self.dependencies, {"schemaVersion": 1, "dependencies": []})
+        self.active_api = self.root / "active" / "api-runtime"
+        self.active_frontend = self.root / "active" / "frontend-runtime"
+        self.active_api.mkdir(parents=True); self.active_frontend.mkdir()
+        self.current_api = self.root / "current-api"; self.current_api.symlink_to(self.active_api)
+        self.current_frontend = self.root / "current-frontend"
+        self.current_frontend.symlink_to(self.active_frontend)
+
+        identities = [(item["releaseId"], item["targetCommit"],
+                       item["runtimeCacheOverlay"])
+                      for item in RETIREMENT.LEGACY_P00_INSTALLED_BATCH["releases"]]
+        self.generation_data = []
+        verifier_values = {}
+        for release, target, cache in identities:
+            installed = self.releases / release
+            (installed / "api-runtime").mkdir(parents=True)
+            (installed / "frontend-runtime").mkdir()
+            (installed / "api-runtime/app").write_text(f"api-{release}\n")
+            (installed / "frontend-runtime/app").write_text(f"frontend-{release}\n")
+            if cache:
+                cache_path = installed / "frontend-runtime/.next/cache"
+                cache_path.mkdir(parents=True); (cache_path / "item").write_text("derived\n")
+            manifest = installed / "manifest.json"; manifest.write_text(f"manifest-{release}\n")
+            manifest.chmod(0o644)
+            index = installed / "index.sha256"; index.write_text(f"index-{release}\n")
+            index.chmod(0o644)
+            marker = installed / "DEPLOYED"; marker.write_text(f"marker-{release}\n")
+            marker.chmod(0o600)
+            package = self.outputs / f"{release}.tar.xz"; package.write_text(f"package-{release}\n")
+            package.chmod(0o644)
+            verifier_values[release] = {"result": "RELEASE VERIFIED", "releaseId": release,
+                "targetCommit": target, "manifestSha256": sha(manifest),
+                "indexSha256": sha(index), "apiEntrySha256": "a" * 64,
+                "buildId": f"build-{release}", "indexEntries": 2}
+            self.generation_data.append({"releaseId": release, "targetCommit": target,
+                "installedReleasePath": str(installed),
+                "package": {"path": str(package), "sha256": sha(package)},
+                "manifestSha256": sha(manifest), "indexSha256": sha(index),
+                "deployedMarkerSha256": sha(marker), "runtimeCacheOverlay": cache})
+        self.verifier = self.root / "converta-release.py"
+        self.verifier.write_text(
+            "#!/usr/bin/env python3\nimport json,sys\nvalues=" + repr(verifier_values) +
+            "\nrid=sys.argv[sys.argv.index('--release-id')+1]\nv=dict(values[rid])\n"
+            "if '--legacy-p00-runtime-cache-overlay' in sys.argv:\n"
+            " v['runtimeCacheOverlay']={'path':'frontend-runtime/.next/cache',"
+            "'classification':'EPHEMERAL_RUNTIME_CACHE','state':'ACTIVE_DEPENDENCY'}\n"
+            "print(json.dumps(v))\n")
+        self.verifier.chmod(0o500)
+        self.graph = self.evidence / "release-graph.private.json"
+        self.graph_value = {"activeReleases": ["immutable-active"],
+            "rollbackReleases": ["immutable-return"],
+            "immediateRollbackReleases": {"api": "immutable-return",
+                                           "frontend": "immutable-return"},
+            "transitiveReturnReleases": [], "candidateReleases": [],
+            "installedVerifiedReleases": [item["releaseId"] for item in self.generation_data],
+            "supersededCandidates": []}
+        private_json(self.graph, self.graph_value)
+        chain = self.evidence / "chain.private.json"
+        private_json(chain, {"state": "DEPLOYED", "scope": "fixture-chain"})
+        self.qualification = self.evidence / "qualification.private.json"
+        binding_value = {"schemaVersion": 1,
+            "batchId": "p00-legacy-installed-releases-20261107-v1",
+            "canonicalVerifierSha256": sha(self.verifier),
+            "sourceGraph": binding(self.graph), "releases": tuple(self.generation_data),
+            "chainEvidence": ({"path": str(chain), "sha256": sha(chain),
+                               "expected": {"state": "DEPLOYED",
+                                            "scope": "fixture-chain"}},)}
+        output = io.StringIO()
+        with patch.object(RETIREMENT, "LEGACY_P00_INSTALLED_BATCH", binding_value), \
+                patch.object(RETIREMENT, "canonical_release_verifier",
+                             return_value=self.verifier), redirect_stdout(output):
+            RETIREMENT.qualify_legacy_p00_installed_batch(
+                SimpleNamespace(proof_output=self.qualification))
+        self.qualification_result = json.loads(output.getvalue())
+        proof = json.loads(self.qualification.read_text())
+        proof_by_release = {item["releaseId"]: item for item in proof["releases"]}
+
+        self.generations = []
+        for number, identity in enumerate(self.generation_data, 1):
+            release = identity["releaseId"]; target = identity["targetCommit"]
+            qualified = proof_by_release[release]
+            output_root = self.outputs / release; output_root.mkdir(mode=0o755)
+            lifecycle = output_root / "generation-lifecycle.private.json"
+            private_json(lifecycle, {"schemaVersion": 1, "generationId": release,
+                                     "targetCommit": target, "state": "COMPLETE"})
+            installed = Path(identity["installedReleasePath"]); info = installed.lstat()
+            proof_dependency = f"legacy_p00_qualification:{sha(self.qualification)}"
+            lifecycle_info = lifecycle.lstat()
+            lifecycle_artifact = {"path": str(lifecycle), "releaseId": release,
+                "targetCommit": target, "expectedType": "regular_file",
+                "initialIdentity": {"device": lifecycle_info.st_dev,
+                                    "inode": lifecycle_info.st_ino},
+                "observedIdentity": {"device": lifecycle_info.st_dev,
+                                     "inode": lifecycle_info.st_ino},
+                **RETIREMENT.structural_metrics(lifecycle),
+                "digest": {"sha256": sha(lifecycle)}, "class": "EVIDENCE_PRESERVE",
+                "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+                "dependencies": [proof_dependency]}
+            release_artifact = {"path": str(installed), "releaseId": release,
+                "targetCommit": target, "expectedType": "directory",
+                "initialIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                "observedIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                "sizeBytes": qualified["sizeBytes"],
+                "allocatedBytes": qualified["allocatedBytes"], "inodes": qualified["inodes"],
+                "structuralSha256": qualified["structuralSha256"],
+                "digest": {"qualificationSha256": sha(self.qualification)},
+                "class": "RELEASE_RUNTIME", "state": "RETIREMENT_READY",
+                "retirableOn": "LEGACY_P00_QUALIFICATION",
+                "dependencies": [proof_dependency]}
+            contract = output_root / "generation-artifacts.private.json"
+            private_json(contract, {"schemaVersion": 1, "generationId": release,
+                "releaseId": release, "targetCommit": target, "state": "COMPLETE",
+                "writerLockPath": str(self.writer_lock),
+                "classes": sorted(RETIREMENT.PRESERVE_CLASSES | RETIREMENT.DERIVED_CLASSES |
+                                  {"RELEASE_RUNTIME"}),
+                "artifacts": [lifecycle_artifact, release_artifact],
+                "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"})
+            review = output_root / "generation-review.private.json"
+            private_json(review, {"schemaVersion": 2, "generationId": release,
+                "lifecycleSha256": sha(lifecycle), "state": "RETIREMENT_READY",
+                "reviewer": "fixture-owner", "reason": "legacy qualification",
+                "evidenceSha256": sha(self.qualification)})
+            operational = self.evidence / f"operational-{number}.private.json"
+            private_json(operational, {"schemaVersion": 2, "generationId": release,
+                "releaseId": release, "targetCommit": target, "gitRepository": str(self.repo),
+                "currentPaths": [str(self.active_api), str(self.active_frontend)],
+                "pm2LivePaths": [str(self.active_api)],
+                "pm2DumpPaths": [str(self.active_frontend)], **self.graph_value,
+                "controlPlaneArtifacts": [{"path": str(self.custody / "control" / name),
+                    "sha256": sha(ROOT / "scripts" / name), "copied": True}
+                    for name in ("generation-retirement.py", "preparation_artifact_lifecycle.py",
+                                 "capacity-recovery.py", "converta-release.py")],
+                "dependencies": [], "deploymentState": {"state": "SUPERSEDED"},
+                "canonicalRoots": {"repository": str(self.repo),
+                    "worktrees": str(self.worktrees), "outputs": str(self.outputs),
+                    "releases": str(self.releases), "staging": str(self.staging),
+                    "evidence": [str(self.evidence)]},
+                "observations": {"currentLinks": [
+                    {"path": str(self.current_api), "target": str(self.active_api)},
+                    {"path": str(self.current_frontend), "target": str(self.active_frontend)}],
+                    "pm2": {"path": str(self.pm2), "sha256": sha(self.pm2),
+                        "fingerprintSha256": RETIREMENT._pm2_fingerprint(self.pm2_rows)},
+                    "dump": binding(self.dump), "releaseGraph": binding(self.graph),
+                    "dependencies": binding(self.dependencies)}})
+            self.generations.append({"name": f"legacy-{number}", "releaseId": release,
+                "targetCommit": target, "release": installed, "contract": contract,
+                "lifecycle": lifecycle, "review": review, "operational": operational})
+        self.request = self.evidence / "prepare-request.private.json"
+        private_json(self.request, {"schemaVersion": 2,
+            "deploymentLock": str(self.deploy_lock), "rootPolicy": binding(self.policy),
+            "sourceQualification": {"proof": binding(self.qualification)},
+            "generations": [{"name": item["name"], "releaseId": item["releaseId"],
+                "targetCommit": item["targetCommit"], "contract": binding(item["contract"]),
+                "lifecycle": binding(item["lifecycle"]),
+                "operationalState": binding(item["operational"]),
+                "review": binding(item["review"]), "reviewer": "fixture-owner",
+                "reason": "closed four-release P00 qualification"}
+                for item in self.generations]})
+        self.entrypoint = self.root / "outside" / TOOL.name
+        self.entrypoint.parent.mkdir(mode=0o700)
+        shutil.copy2(TOOL, self.entrypoint)
+        shutil.copy2(SUPPORT, self.entrypoint.parent / SUPPORT.name)
+
+    def materialize(self):
+        return subprocess.run(["/usr/bin/python3", "-B", str(self.entrypoint),
+            "--control-root", str(ROOT), "--custody", str(self.custody),
+            "--source-commit", SOURCE_COMMIT, "--request", str(self.request),
+            "--request-sha256", sha(self.request)], text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def generation(self, release_id: str):
+        return next(item for item in self.generations if item["releaseId"] == release_id)
+
+    def authorize(self, plan: dict, name: str) -> Path:
+        intent_path = Path(plan["intentOutput"])
+        intent = json.loads(intent_path.read_text())
+        authorization = self.evidence / f"{name}.private.json"
+        private_json(authorization, {"schemaVersion": 1, "authorizationId": name,
+            "decision": "AUTHORIZE_ONCE", "intentSha256": sha(intent_path),
+            "approvedPaths": [item["path"] for item in intent["commands"]],
+            "owner": "fixture-owner"})
+        return authorization
+
+    def execution_argv(self, plan: dict, authorization: Path, receipt_root: Path):
+        generation = self.generation(plan["releaseId"])
+        return ["/usr/bin/python3", "-B",
+            str(self.custody / "control/generation-retirement.py"), "execute",
+            "--intent", plan["intentOutput"], "--intent-sha256", sha(Path(plan["intentOutput"])),
+            "--authorization", str(authorization), "--authorization-sha256", sha(authorization),
+            "--operational-state", str(generation["operational"]),
+            "--operational-state-sha256", sha(generation["operational"]),
+            "--root-policy", str(self.custody / "control/deploy-artifact-roots.json"),
+            "--root-policy-sha256", sha(self.policy),
+            "--deployment-lock", str(self.deploy_lock),
+            "--receipt-root", str(receipt_root),
+            "--review-output", str(generation["review"])]
+
+    def close(self):
+        self.temp.cleanup()
+
+
 class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
+    def test_legacy_p00_qualification_materializes_four_real_prepare_intents(self):
+        fixture = LegacyP00PrepareMaterializationFixture()
+        try:
+            result = fixture.materialize()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest_path = fixture.custody / "prepare-materialization.private.json"
+            manifest = json.loads(manifest_path.read_text())
+            self.assertEqual(manifest["sourceQualification"],
+                             {"proof": binding(fixture.qualification)})
+            self.assertEqual(len(manifest["prepares"]), 4)
+            effects = []
+            intent_hashes = []
+            terminal_receipts = []
+            for plan in manifest["prepares"]:
+                completed = subprocess.run(plan["argv"], text=True,
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(completed.returncode, 0,
+                                 completed.stdout + completed.stderr)
+                intent_path = Path(plan["intentOutput"])
+                intent_hashes.append(sha(intent_path))
+                intent = json.loads(intent_path.read_text())
+                self.assertIn("dependenciesSha256", intent["freshObservation"])
+                self.assertIn("pm2FingerprintSha256", intent["freshObservation"])
+                self.assertIn("dumpSha256", intent["freshObservation"])
+                self.assertIn("releaseGraphSha256", intent["freshObservation"])
+                self.assertEqual(len(intent["artifacts"]), 2)
+                self.assertEqual([item["class"] for item in intent["artifacts"]],
+                                 ["EVIDENCE_PRESERVE", "RELEASE_RUNTIME"])
+                effects.extend(intent["commands"])
+                authorization = fixture.authorize(plan, f"authorize-{plan['name']}")
+                receipt_root = fixture.evidence / f"receipt-{plan['name']}"
+                executed = subprocess.run(
+                    fixture.execution_argv(plan, authorization, receipt_root),
+                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(executed.returncode, 0,
+                                 executed.stdout + executed.stderr)
+                receipt_path = receipt_root / "execution-receipt.private.json"
+                journal_path = receipt_root / "command-results.private.jsonl"
+                receipt = json.loads(receipt_path.read_text())
+                terminal_receipts.append(receipt)
+                self.assertEqual(receipt["state"], "SANITIZED")
+                self.assertEqual(receipt["completedCommands"], 1)
+                self.assertEqual(receipt["removedPaths"],
+                                 [intent["commands"][0]["path"]])
+                events = [json.loads(line) for line in journal_path.read_text().splitlines()]
+                self.assertEqual([event["event"] for event in events],
+                                 ["ATTEMPT", "RESULT", "VERIFIED"])
+                review = json.loads(
+                    fixture.generation(plan["releaseId"])["review"].read_text())
+                self.assertEqual(review["state"], "SANITIZED")
+                lifecycle_path = Path(next(item["path"] for item in intent["artifacts"]
+                                           if item["class"] == "EVIDENCE_PRESERVE"))
+                self.assertTrue(lifecycle_path.is_file())
+            self.assertEqual(len(effects), 4)
+            self.assertEqual({item["class"] for item in effects}, {"RELEASE_RUNTIME"})
+            self.assertEqual({item["path"] for item in effects},
+                             {str(item["release"]) for item in fixture.generations})
+            self.assertEqual(len(set(intent_hashes)), 4)
+            self.assertEqual(len(terminal_receipts), 4)
+            self.assertFalse(manifest["executionAuthorized"])
+            self.assertTrue(sha(manifest_path))
+        finally:
+            fixture.close()
+
+    def test_legacy_p00_new_dependency_reference_denies_at_real_prepare(self):
+        fixture = LegacyP00PrepareMaterializationFixture()
+        try:
+            result = fixture.materialize()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = json.loads(
+                (fixture.custody / "prepare-materialization.private.json").read_text())
+            protected = str(fixture.generations[0]["release"] / "api-runtime")
+            private_json(fixture.dependencies,
+                         {"schemaVersion": 1, "dependencies": [protected]})
+            plan = manifest["prepares"][0]
+            completed = subprocess.run(plan["argv"], text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("private_hash:dependencies.private.json", completed.stderr)
+            self.assertFalse(Path(plan["intentOutput"]).exists())
+            self.assertFalse(Path(plan["commandsOutput"]).exists())
+        finally:
+            fixture.close()
+
+    def test_legacy_p00_contract_requires_its_authenticated_lifecycle_evidence(self):
+        for label in ("missing", "crossed"):
+            with self.subTest(label=label):
+                fixture = LegacyP00PrepareMaterializationFixture()
+                try:
+                    generation = fixture.generations[0]
+                    contract = json.loads(generation["contract"].read_text())
+                    if label == "missing":
+                        contract["artifacts"] = [contract["artifacts"][1]]
+                    else:
+                        other = fixture.generations[1]
+                        contract["artifacts"][0]["path"] = str(other["lifecycle"])
+                        contract["artifacts"][0]["digest"] = {
+                            "sha256": sha(other["lifecycle"])}
+                    private_json(generation["contract"], contract)
+                    request = json.loads(fixture.request.read_text())
+                    request["generations"][0]["contract"] = binding(generation["contract"])
+                    private_json(fixture.request, request)
+                    result = fixture.materialize()
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("PREPARE_QUALIFICATION_CONTRACT", result.stdout)
+                    self.assertFalse(fixture.custody.exists())
+                finally:
+                    fixture.close()
+
+    def test_legacy_p00_batch_stops_after_failure_and_never_replays_completed_effect(self):
+        fixture = LegacyP00PrepareMaterializationFixture()
+        try:
+            result = fixture.materialize()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = json.loads(
+                (fixture.custody / "prepare-materialization.private.json").read_text())
+            for plan in manifest["prepares"]:
+                prepared = subprocess.run(plan["argv"], text=True,
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(prepared.returncode, 0,
+                                 prepared.stdout + prepared.stderr)
+
+            first = manifest["prepares"][0]
+            first_authorization = fixture.authorize(first, "first-once")
+            first_receipt_root = fixture.evidence / "receipt-first"
+            first_execution = subprocess.run(
+                fixture.execution_argv(first, first_authorization, first_receipt_root),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(first_execution.returncode, 0,
+                             first_execution.stdout + first_execution.stderr)
+            first_receipt_path = first_receipt_root / "execution-receipt.private.json"
+            first_journal_path = first_receipt_root / "command-results.private.jsonl"
+            first_receipt_bytes = first_receipt_path.read_bytes()
+            first_journal_bytes = first_journal_path.read_bytes()
+            first_review_path = fixture.generation(first["releaseId"])["review"]
+            first_review_bytes = first_review_path.read_bytes()
+            self.assertFalse(fixture.generation(first["releaseId"])["release"].exists())
+
+            second = manifest["prepares"][1]
+            second_authorization = fixture.authorize(second, "second-once")
+            second_receipt_root = fixture.evidence / "receipt-second-failed"
+            execution_argv = fixture.execution_argv(
+                second, second_authorization, second_receipt_root)
+            consumer_path = fixture.custody / "control/generation-retirement.py"
+            spec = importlib.util.spec_from_file_location(
+                "legacy_p00_failure_consumer", consumer_path)
+            self.assertIsNotNone(spec); self.assertIsNotNone(spec.loader)
+            consumer = importlib.util.module_from_spec(spec); spec.loader.exec_module(consumer)
+            args = consumer.parser().parse_args(execution_argv[3:])
+            real_run = subprocess.run
+
+            def fail_second_rm(command, *call_args, **call_kwargs):
+                if command and command[0] == "/usr/bin/rm":
+                    return subprocess.CompletedProcess(command, 7, b"", b"synthetic failure")
+                return real_run(command, *call_args, **call_kwargs)
+
+            with patch.object(consumer.subprocess, "run", side_effect=fail_second_rm):
+                with self.assertRaisesRegex(consumer.Denied,
+                                            "retirement_command:2:exit_7"):
+                    args.handler(args)
+            failed_receipt = json.loads(
+                (second_receipt_root / "execution-receipt.private.json").read_text())
+            self.assertEqual(failed_receipt["state"], "QUARANTINED")
+            self.assertEqual(failed_receipt["attemptedCommands"], 1)
+            self.assertEqual(failed_receipt["completedCommands"], 0)
+            failed_journal = [json.loads(line) for line in
+                (second_receipt_root / "command-results.private.jsonl").read_text().splitlines()]
+            self.assertEqual([event["event"] for event in failed_journal],
+                             ["ATTEMPT", "RESULT"])
+            failed_review = json.loads(
+                fixture.generation(second["releaseId"])["review"].read_text())
+            self.assertEqual(failed_review["state"], "QUARANTINED")
+            self.assertTrue(fixture.generation(second["releaseId"])["release"].is_dir())
+            for plan in manifest["prepares"][2:]:
+                self.assertTrue(fixture.generation(plan["releaseId"])["release"].is_dir())
+
+            replay = subprocess.run(
+                fixture.execution_argv(first, first_authorization, first_receipt_root),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(replay.returncode, 2)
+            self.assertIn("evidence_destination_exists:receipt-first", replay.stderr)
+            self.assertEqual(first_receipt_path.read_bytes(), first_receipt_bytes)
+            self.assertEqual(first_journal_path.read_bytes(), first_journal_bytes)
+            self.assertEqual(first_review_path.read_bytes(), first_review_bytes)
+        finally:
+            fixture.close()
+
+    def test_legacy_p00_request_rejects_missing_or_additional_generation(self):
+        for label in ("missing", "additional"):
+            with self.subTest(label=label):
+                fixture = LegacyP00PrepareMaterializationFixture()
+                try:
+                    request = json.loads(fixture.request.read_text())
+                    if label == "missing":
+                        request["generations"].pop()
+                    else:
+                        request["generations"].append(dict(request["generations"][0]))
+                    private_json(fixture.request, request)
+                    result = fixture.materialize()
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("PREPARE_GENERATIONS", result.stdout)
+                    self.assertFalse(fixture.custody.exists())
+                finally:
+                    fixture.close()
+
     def test_single_reconciled_generation_materializes_and_real_prepare_uses_superseded_state(self):
         fixture = PrepareMaterializationFixture(single_generation=True)
         try:

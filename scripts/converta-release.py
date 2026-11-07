@@ -38,6 +38,12 @@ A959_PRIVATE_DATA_OVERLAY = PRIVATE_DATA_OVERLAY
 F160_LEGACY_RELEASE_ID = "immutable-f1602787-vps-20261026T174702Z"
 F160_LEGACY_TARGET = "f16027874e91c86e5f818d0888e6d735b07a6eda"
 F160_RUNTIME_CACHE_OVERLAY = PurePosixPath("frontend-runtime/.next/cache")
+P00_LEGACY_RUNTIME_CACHE_RELEASES = {
+    "immutable-d7de6453-vps-20261024T221500Z":
+        "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+    "immutable-ec2a9fde-vps-20261024T162005Z":
+        "ec2a9fde99b6421a85256f14604bd469879f4f2a",
+}
 MANIFEST_FIELDS = {
     "schemaVersion", "producer", "releaseId", "targetCommit", "components",
     "sourceDateEpoch", "builtAt", "toolchain", "runtimes", "indexSha256",
@@ -1710,8 +1716,15 @@ def verify(args: argparse.Namespace) -> None:
         if (args.release_id != F160_LEGACY_RELEASE_ID or args.target != F160_LEGACY_TARGET or
                 args.deployed_marker_sha256 is None):
             deny("legacy_f160_runtime_cache_overlay_binding")
+    if args.legacy_p00_runtime_cache_overlay:
+        if args.package:
+            deny("legacy_p00_runtime_cache_overlay_package")
+        if (P00_LEGACY_RUNTIME_CACHE_RELEASES.get(args.release_id) != args.target or
+                args.deployed_marker_sha256 is None):
+            deny("legacy_p00_runtime_cache_overlay_binding")
     if sum((contract_bound, args.legacy_a959_private_data_overlay,
-            args.legacy_f160_runtime_cache_overlay)) > 1:
+            args.legacy_f160_runtime_cache_overlay,
+            args.legacy_p00_runtime_cache_overlay)) > 1:
         deny("legacy_overlay_conflict")
     if args.release_root:
         result = verify_root(
@@ -1719,7 +1732,8 @@ def verify(args: argparse.Namespace) -> None:
             args.deployed_marker_sha256,
             allow_private_data_overlay=contract_bound,
             allow_a959_private_data_overlay=args.legacy_a959_private_data_overlay,
-            allow_f160_runtime_cache_overlay=args.legacy_f160_runtime_cache_overlay,
+            allow_f160_runtime_cache_overlay=(args.legacy_f160_runtime_cache_overlay or
+                                               args.legacy_p00_runtime_cache_overlay),
         )
     else:
         with tempfile.TemporaryDirectory(prefix="converta-release-verify-") as temporary:
@@ -1840,6 +1854,7 @@ def parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--artifact-contract-sha256")
     verify_parser.add_argument("--legacy-a959-private-data-overlay", action="store_true")
     verify_parser.add_argument("--legacy-f160-runtime-cache-overlay", action="store_true")
+    verify_parser.add_argument("--legacy-p00-runtime-cache-overlay", action="store_true")
     verify_parser.set_defaults(handler=verify)
     install_parser = commands.add_parser("install")
     install_parser.add_argument("--package", type=Path, required=True)

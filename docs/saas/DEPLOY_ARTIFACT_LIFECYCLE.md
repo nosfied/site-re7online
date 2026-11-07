@@ -925,14 +925,18 @@ o procedimento dirigido vigente. O operador confirmou o lock vigente livre e
 preservado após os últimos lotes. É uma observação datada, que não dispensa nova
 aquisição e verificação em operações futuras.
 
-### Pendência separada: output d7de6453
+### Estado histórico do output d7de6453 — encerrado posteriormente
 
-Os dois runtimes do output d7de6453 permaneceram intactos e pendentes. A listagem
+Nesta fotografia de 25/10, os dois runtimes do output d7de6453 permaneciam intactos
+e pendentes. A listagem
 somente leitura do pacote preservado retornou exit 0, stderr vazio e 34.352 membros,
 correspondendo às 34.349 entradas indexadas mais raiz, manifesto e índice, sem
 duplicatas. A listagem demonstra legibilidade e membros, sem substituir prova
 byte a byte após extração independente. A recusa anterior e o estado `NOT_PROVEN`
-da captura interrompida permanecem históricos. A release ativa não integra limpeza.
+da captura interrompida permanecem históricos. Em 30/10, os ordinais 2 e 3 do
+receipt `97a121df...`, vinculados ao journal `9baa07a0...`, autenticaram a retirada
+dos runtimes frontend e API. O fechamento terminal e irrepetível está reconciliado
+no P00; esta seção não os reabre nem altera a release instalada.
 
 ### Preparação histórica a62da468 e preparações falhas — anterior à execução
 
@@ -1030,8 +1034,9 @@ comandos e não autoriza repeti-los.
 As tentativas anteriores negadas permanecem encerradas e preservadas. O incidente
 local e as limitações de recuperação de conteúdo não versionado continuam sob
 tratamento próprio; o sucesso desta limpeza não comprova sua recuperação. Outputs
-e releases fora dos sete caminhos, inclusive os runtimes d7de6453 pendentes, seguem
-sem autorização adicional de retirada.
+e releases fora dos sete caminhos seguem sem autorização adicional de retirada.
+Os runtimes d7de6453, ainda pendentes nesta fotografia, foram posteriormente
+encerrados pelos ordinais 2 e 3 autenticados no P00 e não integram novo lote.
 
 ## Encerramento aa9527 — 29/10/2026
 

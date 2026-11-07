@@ -82,7 +82,7 @@ LEGACY_123BA_BINDING = {
         "path": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/immutable-123ba7bd-vps-20261026T200100Z/index.sha256",
         "sha256": "a91323272cdcd3a91c207a18a953f11f93e346cf3bde1f976e3229829fa0e69b",
     },
-    "canonicalVerifierSha256": "da62e006cb92d3409cb042971611fcd1849a193fd7fda1645972ebce9f634973",
+    "canonicalVerifierSha256": "8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec",
     "contractOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-artifacts.private.json",
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
@@ -148,7 +148,7 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
             "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
         },
     },
-    "canonicalVerifierSha256": "da62e006cb92d3409cb042971611fcd1849a193fd7fda1645972ebce9f634973",
+    "canonicalVerifierSha256": "8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
 }
@@ -171,6 +171,107 @@ LEGACY_D436_F160_BINDINGS = {
         "overlayPath": "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z/frontend-runtime/.next/cache",
     },
 }
+
+# Closed historical batch.  These hashes authenticate the original private
+# custody; the derived closure below is evidence of one completed historical
+# effect, never an authorization to remove either member again.
+LEGACY_D7_WORKTREE_BATCH = {
+    "schemaVersion": 1,
+    "batchId": "retention-3630e16-d7de6453-worktrees-20261025",
+    "sourceFormat": "LEGACY_WORKTREE_BATCH_V3",
+    "intentSha256": "3042455be0f8d0900245c4e63844d5814589ae44e5b2cb3f30057ec609f4bf48",
+    "commandsSha256": "5d7d6e85d0d850d11b8a612817f1f2a2867acfc8362d9736878d1e5ac9b541e4",
+    "receiptSha256": "a5afecb03bdce97e03fde35597f9f92ef30a70055cbc9d1e763d1655ef431f72",
+    "lockProofSha256": "1793b9a3d91842d4431339bc9b951f09de4133938a128e3f806e4931516b9679",
+    "finalManifestSha256": "23adcdac759beecf7370ea9c1aea3b8f909a1db2cba6f9daa8458216b857ec02",
+    "members": (
+        {
+            "index": 1,
+            "path": "/opt/re7online/build-worktrees/immutable-3630e16-vps-20261024T195842Z-source",
+            "head": "3630e16dfc946ab8ef97fb73780075a736f38a63",
+            "allocatedBytes": 1023369216,
+        },
+        {
+            "index": 2,
+            "path": "/opt/re7online/build-worktrees/immutable-d7de6453-vps-20261024T221500Z-source",
+            "head": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+            "allocatedBytes": 1023418368,
+        },
+    ),
+    "derivedReleaseId": "immutable-d7de6453-vps-20261024T221500Z",
+    "lockPath": "/opt/re7online/backups/converta-persistent/.deployment-window.lock",
+}
+
+# Closed qualification boundary for the pre-contract releases that are still
+# installed only as historical inventory.  This command derives evidence; it
+# never creates a retirement intent or grants destructive authority.
+LEGACY_P00_INSTALLED_BATCH = {
+    "schemaVersion": 1,
+    "batchId": "p00-legacy-installed-releases-20261107-v1",
+    "canonicalVerifierSha256": "8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec",
+    "sourceGraph": {
+        "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+                "immutable-17cc77a8-vps-20261104T141039Z-api-frontend-c206959c-v3-once/"
+                "generation-release-graph.final.private.json",
+        "sha256": "ceff32cf664d14382b0209a30ac556012c2cd2a484d5039d04fa2f1c14f47224",
+    },
+    "releases": (
+        {
+            "releaseId": "immutable-ec2a9fde-vps-20261024T162005Z",
+            "targetCommit": "ec2a9fde99b6421a85256f14604bd469879f4f2a",
+            "installedReleasePath": "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z",
+            "package": {"path": "/opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T162005Z/immutable-ec2a9fde-vps-20261024T162005Z.tar.xz", "sha256": "a8715c8dcb2a3e654f486cd6d8ed53fb5ef33caf44a6ad90f6e41fd33d73b4ad"},
+            "manifestSha256": "b9aa1c5301c68dd3184978a8bc2b3dfa817e365302f69abe0a3b0725a93cf5e6",
+            "indexSha256": "22b790da2c65793180cfded42825b654f24f07b2e7f4fd63ce618802566b4241",
+            "deployedMarkerSha256": "0894eb7cfb9561682feeca4917063c52fa5d3cf5be00e378eac10d9c00a7c0a2",
+            "runtimeCacheOverlay": True,
+        },
+        {
+            "releaseId": "immutable-ef7db111-vps-20261024T174000Z",
+            "targetCommit": "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece",
+            "installedReleasePath": "/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z",
+            "package": {"path": "/opt/re7online/build-output/immutable-ef7db111-vps-20261024T174000Z-producer/immutable-ef7db111-vps-20261024T174000Z.tar.xz", "sha256": "c5bb0b94a5e96d45b8f3946871c4bb8f33fe042d70d490b6a5606438bbab351c"},
+            "manifestSha256": "f6660e61f19ad7e5231badbd409160ef9b8f5e02545ea81a3e20d936e26b97aa",
+            "indexSha256": "9f8ffc1e60bca006e6bf7f6cfc7006a44f9a5fef23124692d39d621eb403bb74",
+            "deployedMarkerSha256": "c7e629dea342b98c3b5d25cb651ab3997749ca45fbd98074a9d7eb7bcf375e58",
+            "runtimeCacheOverlay": False,
+        },
+        {
+            "releaseId": "immutable-3630e16-vps-20261024T195842Z",
+            "targetCommit": "3630e16dfc946ab8ef97fb73780075a736f38a63",
+            "installedReleasePath": "/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z",
+            "package": {"path": "/opt/re7online/build-output/immutable-3630e16-vps-20261024T195842Z-producer/immutable-3630e16-vps-20261024T195842Z.tar.xz", "sha256": "346246ce283148173ae294254b2caf7072779cc80f7faff15d8f78067d56fc18"},
+            "manifestSha256": "ec677da80c98ef90a707eca009ef24a32bf5292707ff28c0e192ca2767aa218e",
+            "indexSha256": "92a62cc53e28a72fa457f7bdd3f31e7ec86024740fc54081e05c66bd78727952",
+            "deployedMarkerSha256": "cfc2569a4db46aac4f30e0ccaef715b7912c0867043a15c54d9389c99dd55722",
+            "runtimeCacheOverlay": False,
+        },
+        {
+            "releaseId": "immutable-d7de6453-vps-20261024T221500Z",
+            "targetCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+            "installedReleasePath": "/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z",
+            "package": {"path": "/opt/re7online/build-output/immutable-d7de6453-vps-20261024T221500Z-producer/immutable-d7de6453-vps-20261024T221500Z.tar.xz", "sha256": "b75500e62c1333ba917ff7aa22720387b01597910cf24e84f7af6a9ae1e1a519"},
+            "manifestSha256": "dcc3c1a42f2b639f82fd1a24ef9e9991ae65e31b5023ba2ff92ac71142c285d6",
+            "indexSha256": "fcd7a0befd0977a4140deec9ef25621c421e2c70d4a95bc3075d4457d716b6f4",
+            "deployedMarkerSha256": "1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543",
+            "runtimeCacheOverlay": True,
+        },
+    ),
+    "chainEvidence": (
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-ec2a9fde-vps-20261024T162005Z-20261024T165500Z/preflight.private.json", "sha256": "23ef53b2d1148a15c4547076402ca7804574137ef3312d10fbc6a43cff23b82e", "expected": {"candidateRelease": "immutable-ec2a9fde-vps-20261024T162005Z", "components": ["api", "frontend"], "target": "ec2a9fde99b6421a85256f14604bd469879f4f2a", "previousLinks": {"api": "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z/api-runtime", "frontend": "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z/frontend-runtime"}}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-ec2a9fde-vps-20261024T162005Z-20261024T165500Z/activation.private.json", "sha256": "45808ec524e086d9b3b333346d80b24ad1a78e5b2cf86a835fa230e8a09d511f", "expected": {"state": "DEPLOYED"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-ef7db111-vps-20261024T174000Z-20261024T180933Z/preflight.private.json", "sha256": "c39675efcf559059b66f33bf45711e08ec22647afe9dc9e4e121cdc7024510f0", "expected": {"release": "immutable-ef7db111-vps-20261024T174000Z", "target": "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece", "candidateApi": "/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z/api-runtime", "rollbackApi": "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime", "frontendPreserved": "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-ef7db111-vps-20261024T174000Z-20261024T180933Z/activation.private.json", "sha256": "f8073f00dfc0eb990f33e872f1941de02b7f62d348baed1be02aa14a4a4bb8d2", "expected": {"state": "DEPLOYED"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-3630e16-vps-20261024T195842Z-20261024T202748Z/preflight.private.json", "sha256": "0ec171428e7d79bc4d75f37f4f11f2283ffcd44cb473df34ae6b313c1eac597b", "expected": {"release": "immutable-3630e16-vps-20261024T195842Z", "target": "3630e16dfc946ab8ef97fb73780075a736f38a63", "components": ["api"], "candidateApi": "/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z/api-runtime", "rollbackApi": "/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z/api-runtime", "frontendPreserved": "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-3630e16-vps-20261024T195842Z-20261024T202748Z/activation.private.json", "sha256": "1da6cc4b3b8e8ca7b871ec4bffdd8583cebcbd4d58b44ff9705c7563f7df339a", "expected": {"state": "DEPLOYED"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-d7de6453-vps-20261024T221500Z-20261024T223600Z/preflight.private.json", "sha256": "c8730148e03a847bbd4a0c86a0e381a0a47ec6891de93272e035be3056da029e", "expected": {"release": "immutable-d7de6453-vps-20261024T221500Z", "target": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc", "components": ["api", "frontend"], "candidateApi": "/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z/api-runtime", "candidateFrontend": "/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z/frontend-runtime", "rollbackApi": "/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z/api-runtime", "rollbackFrontend": "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-d7de6453-vps-20261024T221500Z-20261024T223600Z/activation.private.json", "sha256": "a119f6231837653c7eeb23922f84ce6da30712972492bb7631665e15d43479af", "expected": {"state": "DEPLOYED"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-a959129e-vps-20261026T023100Z-activation-v7-20261026/finalization-receipt.private.json", "sha256": "3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8", "expected": {"state": "DEPLOYED"}},
+        {"path": "/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-a959129e-vps-20261026T023100Z-activation-v7-20261026/window-state.private.json", "sha256": "991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240", "expected": {"state": "DEPLOYED"}},
+        {"path": "/opt/re7online/backups/converta-persistent/preparations/p00-legacy-installed-releases-20261107-v1/evidence/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json", "sha256": "c0d702aabd0e3caa1d8044671de07bd1f355985fd34b3d6bb457c146a708abb6", "expected": {"rollback": {"previousApiReleaseId": "immutable-d7de6453-vps-20261024T221500Z", "previousFrontendReleaseId": "immutable-d7de6453-vps-20261024T221500Z"}, "receiptSha256": "3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8", "journalSha256": "991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240"}},
+    ),
+}
+LEGACY_P00_CUSTODY_RESERVE_BYTES = 16 * 1024 * 1024
 
 
 class Denied(RuntimeError):
@@ -673,7 +774,10 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
     if not isinstance(deployment, dict) or set(deployment) != {"state"} or not isinstance(deployment["state"], str):
         deny("operational_deployment_state")
     observations = value.get("observations")
-    if not isinstance(observations, dict) or set(observations) != {"currentLinks", "pm2", "dump", "releaseGraph"}:
+    observation_keys = {"currentLinks", "pm2", "dump", "releaseGraph"}
+    if (not isinstance(observations, dict) or
+            set(observations) not in {frozenset(observation_keys),
+                                     frozenset(observation_keys | {"dependencies"})}):
         deny("operational_observations")
     links = observations.get("currentLinks")
     if not isinstance(links, list) or any(not isinstance(item, dict) or set(item) != {"path", "target"}
@@ -692,6 +796,13 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                 not Path(str(item.get("path", ""))).is_absolute() or
                 not SHA256.fullmatch(str(item.get("sha256", "")))):
             deny(f"operational_{label}_observation")
+    dependency_observation = observations.get("dependencies")
+    if dependency_observation is not None:
+        if (not isinstance(dependency_observation, dict) or
+                set(dependency_observation) != {"path", "sha256"} or
+                not Path(str(dependency_observation.get("path", ""))).is_absolute() or
+                not SHA256.fullmatch(str(dependency_observation.get("sha256", "")))):
+            deny("operational_dependencies_observation")
 
 
 def _path_has_symlink(path: Path, root: Path) -> bool:
@@ -826,6 +937,16 @@ def capture_fresh_operational(operational: dict[str, Any]) -> dict[str, Any]:
                 expected["immediateRollbackReleases"] = operational["immediateRollbackReleases"]
             if graph != expected:
                 deny("fresh_release_graph_changed")
+    dependency_observation = observations.get("dependencies")
+    if dependency_observation is not None:
+        raw, _ = stable_private(Path(dependency_observation["path"]),
+                                dependency_observation["sha256"])
+        snapshot = object_json(raw, "dependencies-snapshot")
+        if (set(snapshot) != {"schemaVersion", "dependencies"} or
+                snapshot.get("schemaVersion") != 1 or
+                snapshot.get("dependencies") != operational["dependencies"]):
+            deny("fresh_dependencies_changed")
+        captured["dependenciesSha256"] = digest_bytes(raw)
     return captured
 
 
@@ -1453,6 +1574,309 @@ def validate_batch_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[s
     return descriptor
 
 
+def _legacy_worktree_command(member: dict[str, Any]) -> str:
+    return ("git -C /opt/re7online/site-re7online worktree remove " +
+            str(member["path"]))
+
+
+def _legacy_manifest_entries(raw: bytes) -> dict[str, str]:
+    try:
+        lines = raw.decode().splitlines()
+    except UnicodeDecodeError:
+        deny("legacy_d7_worktree_manifest_encoding")
+    entries: dict[str, str] = {}
+    for line in lines:
+        match = re.fullmatch(r"([0-9a-f]{64})  \./([^/]+)", line)
+        if match is None or match.group(2) in entries:
+            deny("legacy_d7_worktree_manifest_schema")
+        entries[match.group(2)] = match.group(1)
+    return entries
+
+
+def validate_legacy_d7_worktree_closure(value: Any) -> dict[str, Any]:
+    binding = LEGACY_D7_WORKTREE_BATCH
+    required = {"schemaVersion", "kind", "sourceFormat", "batchId", "releaseId",
+                "targetCommit", "batchMembers", "effect", "originals", "journalFormat",
+                "retirementAuthorizationGranted", "destructiveCommands"}
+    if (not isinstance(value, dict) or set(value) != required or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != "LEGACY_D7_WORKTREE_CLOSURE" or
+            value.get("sourceFormat") != binding["sourceFormat"] or
+            value.get("batchId") != binding["batchId"] or
+            value.get("releaseId") != binding["derivedReleaseId"] or
+            value.get("targetCommit") != binding["members"][1]["head"] or
+            value.get("journalFormat") != "EMBEDDED_RECEIPT_COMMANDS_NO_JSONL" or
+            value.get("retirementAuthorizationGranted") is not False or
+            value.get("destructiveCommands") != 0):
+        deny("legacy_d7_worktree_closure_schema")
+    expected_members = [{"index": member["index"], "path": member["path"],
+                         "head": member["head"]} for member in binding["members"]]
+    if value.get("batchMembers") != expected_members:
+        deny("legacy_d7_worktree_closure_members")
+    d7 = binding["members"][1]
+    expected_effect = {"index": 2, "path": d7["path"], "head": d7["head"],
+                       "class": "DERIVED_WORKTREE", "exitCode": 0,
+                       "pathAbsent": True, "worktreeRegistrationAbsent": True}
+    if value.get("effect") != expected_effect:
+        deny("legacy_d7_worktree_closure_effect")
+    originals = value.get("originals")
+    expected_hashes = {
+        "intent": binding["intentSha256"], "commands": binding["commandsSha256"],
+        "receipt": binding["receiptSha256"], "lockProof": binding["lockProofSha256"],
+        "finalManifest": binding["finalManifestSha256"],
+    }
+    if (not isinstance(originals, dict) or set(originals) != set(expected_hashes) or
+            any(not isinstance(originals.get(name), dict) or
+                set(originals[name]) != {"path", "sha256"} or
+                not Path(str(originals[name].get("path", ""))).is_absolute() or
+                originals[name].get("sha256") != expected
+                for name, expected in expected_hashes.items())):
+        deny("legacy_d7_worktree_closure_originals")
+    return value
+
+
+def derive_legacy_d7_worktree_closure(args: argparse.Namespace) -> None:
+    binding = LEGACY_D7_WORKTREE_BATCH
+    paths = {
+        "intent": args.batch_intent,
+        "commands": args.commands,
+        "receipt": args.receipt,
+        "lockProof": args.lock_proof,
+        "finalManifest": args.final_manifest,
+    }
+    hashes = {
+        "intent": binding["intentSha256"], "commands": binding["commandsSha256"],
+        "receipt": binding["receiptSha256"], "lockProof": binding["lockProofSha256"],
+        "finalManifest": binding["finalManifestSha256"],
+    }
+    raw = {name: stable_private(path, hashes[name])[0] for name, path in paths.items()}
+    intent = object_json(raw["intent"], "legacy-d7-worktree-intent")
+    receipt = object_json(raw["receipt"], "legacy-d7-worktree-receipt")
+    lock = object_json(raw["lockProof"], "legacy-d7-worktree-lock")
+    members = list(binding["members"])
+    expected_commands = [_legacy_worktree_command(member) for member in members]
+    try:
+        literal_commands = raw["commands"].decode().splitlines()
+    except UnicodeDecodeError:
+        deny("legacy_d7_worktree_commands_encoding")
+    if literal_commands != expected_commands:
+        deny("legacy_d7_worktree_commands_identity")
+    candidates = intent.get("provenCandidates")
+    if (intent.get("schemaVersion") != 3 or intent.get("batchId") != binding["batchId"] or
+            intent.get("state") != "READY_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("totalProvenAllocatedBytes") !=
+            sum(member["allocatedBytes"] for member in members) or
+            not isinstance(candidates, list) or len(candidates) != len(members)):
+        deny("legacy_d7_worktree_intent_identity")
+    for candidate, member, command in zip(candidates, members, expected_commands):
+        if (not isinstance(candidate, dict) or candidate.get("path") != member["path"] or
+                candidate.get("head") != member["head"] or
+                candidate.get("allocatedBytes") != member["allocatedBytes"] or
+                candidate.get("command") != command or
+                candidate.get("classification") !=
+                "TRACKED_GIT_OBJECTS_PRESERVED_IGNORED_CONTENT_REGENERABLE_OR_AUTHENTICATED_COPY"):
+            deny("legacy_d7_worktree_intent_member")
+    receipt_commands = receipt.get("commands")
+    if (receipt.get("schemaVersion") != 3 or receipt.get("batchId") != binding["batchId"] or
+            receipt.get("state") != "COMPLETED" or
+            receipt.get("intentSha256") != binding["intentSha256"] or
+            receipt.get("automaticRetry") is not False or
+            receipt.get("partialExecution") is not False or
+            not isinstance(receipt_commands, list) or len(receipt_commands) != len(members)):
+        deny("legacy_d7_worktree_receipt_identity")
+    for result, member, command in zip(receipt_commands, members, expected_commands):
+        if (not isinstance(result, dict) or result.get("index") != member["index"] or
+                result.get("command") != command or type(result.get("exitCode")) is not int or
+                result.get("exitCode") != 0 or result.get("pathAbsent") is not True or
+                result.get("worktreeRegistrationAbsent") is not True):
+            deny("legacy_d7_worktree_receipt_effect")
+    after = receipt.get("after")
+    if (not isinstance(after, dict) or after.get("bothPathsAbsent") is not True or
+            after.get("bothWorktreeRegistrationsAbsent") is not True or
+            after.get("sealedCandidateAllocatedBytes") !=
+            sum(member["allocatedBytes"] for member in members)):
+        deny("legacy_d7_worktree_receipt_completion")
+    if (lock.get("schemaVersion") != 1 or lock.get("state") != "FREE" or
+            lock.get("lockPath") != binding["lockPath"] or
+            lock.get("lockFilePreserved") is not True or
+            lock.get("postReleaseNonblockingProbeExit") != 0 or
+            lock.get("releaseMethod") != "CLOSE_OWN_FD"):
+        deny("legacy_d7_worktree_lock_identity")
+    manifest = _legacy_manifest_entries(raw["finalManifest"])
+    if (manifest.get(paths["receipt"].name) != binding["receiptSha256"] or
+            manifest.get(paths["lockProof"].name) != binding["lockProofSha256"]):
+        deny("legacy_d7_worktree_manifest_binding")
+    d7 = members[1]
+    closure = {
+        "schemaVersion": 1, "kind": "LEGACY_D7_WORKTREE_CLOSURE",
+        "sourceFormat": binding["sourceFormat"], "batchId": binding["batchId"],
+        "releaseId": binding["derivedReleaseId"], "targetCommit": d7["head"],
+        "batchMembers": [{"index": member["index"], "path": member["path"],
+                          "head": member["head"]} for member in members],
+        "effect": {"index": 2, "path": d7["path"], "head": d7["head"],
+                   "class": "DERIVED_WORKTREE", "exitCode": 0,
+                   "pathAbsent": True, "worktreeRegistrationAbsent": True},
+        "originals": {name: {"path": str(paths[name]), "sha256": hashes[name]}
+                      for name in paths},
+        "journalFormat": "EMBEDDED_RECEIPT_COMMANDS_NO_JSONL",
+        "retirementAuthorizationGranted": False, "destructiveCommands": 0,
+    }
+    validate_legacy_d7_worktree_closure(closure)
+    closure_raw = canonical(closure)
+    write_exclusive(args.closure_output, closure_raw)
+    print(canonical({"result": "LEGACY_D7_WORKTREE_CLOSURE_AUTHENTICATED",
+                     "closureSha256": digest_bytes(closure_raw),
+                     "historicalEffectsAuthenticated": 1,
+                     "destructiveCommands": 0}).decode().strip())
+
+
+def _expected_json_subset(observed: Any, expected: Any) -> bool:
+    if isinstance(expected, dict):
+        return (isinstance(observed, dict) and
+                all(key in observed and _expected_json_subset(observed[key], value)
+                    for key, value in expected.items()))
+    return observed == expected
+
+
+def qualify_legacy_p00_installed_batch(args: argparse.Namespace) -> None:
+    """Authenticate the closed pre-contract batch without granting removal.
+
+    This is deliberately a qualification boundary, not a bootstrap shortcut.
+    The output may support a later canonical contract/lifecycle materialization,
+    but cannot be passed to ``prepare`` as either of those artifacts.
+    """
+    binding = LEGACY_P00_INSTALLED_BATCH
+    if binding.get("schemaVersion") != 1 or not binding.get("batchId"):
+        deny("legacy_p00_batch_binding")
+    graph_binding = binding.get("sourceGraph")
+    if (not isinstance(graph_binding, dict) or set(graph_binding) != {"path", "sha256"} or
+            not SHA256.fullmatch(str(graph_binding.get("sha256", "")))):
+        deny("legacy_p00_graph_binding")
+    graph_raw, _ = stable_regular_hash(Path(graph_binding["path"]), graph_binding["sha256"],
+                                       "legacy_p00_graph")
+    graph = object_json(graph_raw, "legacy-p00-source-graph")
+    graph_lists = ("activeReleases", "rollbackReleases", "transitiveReturnReleases",
+                   "candidateReleases", "installedVerifiedReleases")
+    if any(not isinstance(graph.get(key), list) for key in graph_lists):
+        deny("legacy_p00_graph_schema")
+    immediate = graph.get("immediateRollbackReleases", {})
+    if not isinstance(immediate, dict):
+        deny("legacy_p00_graph_schema")
+
+    evidence_results = []
+    for index, evidence in enumerate(binding.get("chainEvidence", ())):
+        if (not isinstance(evidence, dict) or set(evidence) != {"path", "sha256", "expected"} or
+                not isinstance(evidence["expected"], dict)):
+            deny("legacy_p00_chain_binding")
+        raw, _ = stable_regular_hash(Path(evidence["path"]), evidence["sha256"],
+                                     f"legacy_p00_chain_{index}")
+        value = object_json(raw, f"legacy-p00-chain-{index}")
+        if not _expected_json_subset(value, evidence["expected"]):
+            deny(f"legacy_p00_chain_divergence:{index}")
+        evidence_results.append({"path": evidence["path"], "sha256": evidence["sha256"]})
+
+    verifier_sha = binding.get("canonicalVerifierSha256")
+    if not SHA256.fullmatch(str(verifier_sha or "")):
+        deny("legacy_p00_verifier_binding")
+    release_results = []
+    seen = set()
+    for item in binding.get("releases", ()):
+        required = {"releaseId", "targetCommit", "installedReleasePath", "package",
+                    "manifestSha256", "indexSha256", "deployedMarkerSha256",
+                    "runtimeCacheOverlay"}
+        if not isinstance(item, dict) or set(item) != required:
+            deny("legacy_p00_release_binding")
+        release = item["releaseId"]
+        installed = Path(item["installedReleasePath"])
+        if release in seen or installed.name != release:
+            deny("legacy_p00_release_binding")
+        seen.add(release)
+        if (release not in graph["installedVerifiedReleases"] or
+                any(release in graph[key] for key in graph_lists[:-1]) or
+                release in immediate.values()):
+            deny(f"legacy_p00_release_referenced:{release}")
+        try:
+            (installed / "api-runtime/.data").lstat()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            deny(f"legacy_p00_private_data_ambiguous:{release}")
+        else:
+            deny(f"legacy_p00_private_data_present:{release}")
+        package = item["package"]
+        if (not isinstance(package, dict) or set(package) != {"path", "sha256"} or
+                not SHA256.fullmatch(str(package.get("sha256", "")))):
+            deny("legacy_p00_package_binding")
+        stable_regular_hash(Path(package["path"]), package["sha256"], "legacy_p00_package")
+        stable_regular_hash(installed / "manifest.json", item["manifestSha256"],
+                            "legacy_p00_manifest")
+        stable_regular_hash(installed / "index.sha256", item["indexSha256"],
+                            "legacy_p00_index")
+        stable_regular_hash(installed / "DEPLOYED", item["deployedMarkerSha256"],
+                            "legacy_p00_marker")
+        descriptor = {
+            "releaseId": release, "targetCommit": item["targetCommit"],
+            "installedReleasePath": str(installed), "package": package,
+            "manifest": {"path": str(installed / "manifest.json"),
+                         "sha256": item["manifestSha256"]},
+            "index": {"path": str(installed / "index.sha256"),
+                      "sha256": item["indexSha256"]},
+            "deployedMarker": {"path": str(installed / "DEPLOYED"),
+                               "sha256": item["deployedMarkerSha256"]},
+            "canonicalVerifierSha256": verifier_sha,
+            "p00RuntimeCacheOverlay": item["runtimeCacheOverlay"],
+        }
+        package_result = _run_legacy_package_verifier(descriptor)
+        installed_result = _run_legacy_installed_verifier(descriptor)
+        comparable = ("apiEntrySha256", "buildId", "indexEntries")
+        if any(package_result.get(key) != installed_result.get(key) for key in comparable):
+            deny(f"legacy_p00_package_installed_mismatch:{release}")
+        if bool(installed_result.get("runtimeCacheOverlay")) != item["runtimeCacheOverlay"]:
+            deny(f"legacy_p00_cache_classification:{release}")
+        metrics = structural_metrics(installed)
+        artifact = {"path": str(installed), "releaseId": release,
+                    "targetCommit": item["targetCommit"], "class": "RELEASE_RUNTIME"}
+        operational = {key: graph[key] for key in graph_lists}
+        operational.update({"currentPaths": [], "pm2LivePaths": [], "pm2DumpPaths": [],
+                            "dependencies": []})
+        if classify(artifact, {"releaseId": release, "artifacts": [artifact]}, operational) != \
+                "RETIREMENT_READY":
+            deny(f"legacy_p00_classification:{release}")
+        release_results.append({"releaseId": release, "targetCommit": item["targetCommit"],
+                                "path": str(installed), **metrics,
+                                "classification": "RETIREMENT_READY",
+                                "packageSha256": package["sha256"],
+                                "manifestSha256": item["manifestSha256"],
+                                "indexSha256": item["indexSha256"],
+                                "deployedMarkerSha256": item["deployedMarkerSha256"],
+                                "runtimeCacheOverlay": installed_result.get("runtimeCacheOverlay")})
+    if not release_results:
+        deny("legacy_p00_empty_batch")
+    total_allocated = sum(item["allocatedBytes"] for item in release_results)
+    extraction_peak = max(item["allocatedBytes"] for item in release_results)
+    proof = {"schemaVersion": 1, "kind": "LEGACY_P00_INSTALLED_BATCH_QUALIFICATION",
+             "batchId": binding["batchId"], "sourceGraph": graph_binding,
+             "canonicalVerifierSha256": verifier_sha, "chainEvidence": evidence_results,
+             "releases": release_results,
+             "totalAllocatedBytes": total_allocated,
+             "capacityBudget": {
+                 "packageExtractionPeakBytes": extraction_peak,
+                 "custodyAndClosureReserveBytes": LEGACY_P00_CUSTODY_RESERVE_BYTES,
+                 "grossRecoverableBytes": total_allocated,
+                 "netRecoverableBytes": total_allocated - LEGACY_P00_CUSTODY_RESERVE_BYTES,
+             },
+             "authorizationGranted": False, "executionPermitted": False,
+             "destructiveCommands": 0,
+             "nextRequiredStep": "CANONICAL_CONTRACT_LIFECYCLE_MATERIALIZATION"}
+    write_exclusive(args.proof_output, canonical(proof))
+    print(canonical({"result": "LEGACY_P00_INSTALLED_BATCH_QUALIFIED",
+                     "batchId": binding["batchId"],
+                     "releaseCount": len(release_results),
+                     "totalAllocatedBytes": proof["totalAllocatedBytes"],
+                     "proofSha256": digest_bytes(canonical(proof)),
+                     "authorizationGranted": False, "executionPermitted": False}).decode().strip())
+
+
 def _legacy_tree_root(path: Path, root: Path, policy: dict[str, Any], key: str) -> None:
     _strict_child(path, root, f"legacy_path_outside_root:{key}")
     if _path_has_symlink(path, root):
@@ -1547,6 +1971,8 @@ def _run_legacy_installed_verifier(descriptor: dict[str, Any]) -> dict[str, Any]
                     if descriptor["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] else
                     ["--legacy-f160-runtime-cache-overlay"]
                     if descriptor["releaseId"] == "immutable-f1602787-vps-20261026T174702Z" else [])
+    if descriptor.get("p00RuntimeCacheOverlay") is True:
+        overlay_flag = ["--legacy-p00-runtime-cache-overlay"]
     return _run_legacy_verifier(
         descriptor,
         ["--release-root", descriptor["installedReleasePath"],
@@ -3334,6 +3760,17 @@ def parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--retention-journal", type=Path, required=True)
     batch_parser.add_argument("--retention-journal-sha256", required=True)
     batch_parser.set_defaults(handler=bootstrap_legacy_batch_v1_preserve)
+    d7_worktree_parser = commands.add_parser("derive-legacy-d7-worktree-closure")
+    d7_worktree_parser.add_argument("--batch-intent", type=Path, required=True)
+    d7_worktree_parser.add_argument("--commands", type=Path, required=True)
+    d7_worktree_parser.add_argument("--receipt", type=Path, required=True)
+    d7_worktree_parser.add_argument("--lock-proof", type=Path, required=True)
+    d7_worktree_parser.add_argument("--final-manifest", type=Path, required=True)
+    d7_worktree_parser.add_argument("--closure-output", type=Path, required=True)
+    d7_worktree_parser.set_defaults(handler=derive_legacy_d7_worktree_closure)
+    p00_batch_parser = commands.add_parser("qualify-legacy-p00-installed-batch")
+    p00_batch_parser.add_argument("--proof-output", type=Path, required=True)
+    p00_batch_parser.set_defaults(handler=qualify_legacy_p00_installed_batch)
     reconciliation_parser = commands.add_parser("reconcile-release-graph")
     reconciliation_parser.add_argument("--request", type=Path, required=True)
     reconciliation_parser.add_argument("--request-sha256", required=True)
