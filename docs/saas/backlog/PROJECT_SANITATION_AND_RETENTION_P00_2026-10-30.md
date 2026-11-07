@@ -1202,3 +1202,56 @@ Nesta rodada, a medição física reutilizada da release é 988.606.464 bytes, i
 61.440 bytes dos dez extras de cache. Bytes qualificados: 0. Bytes efetivamente
 recuperados: 0. Os efeitos terminais anteriores do worktree e dos runtimes permanecem
 contabilizados separadamente e não foram somados de novo.
+
+#### Busca dirigida da ativação a959 e próximo piloto — 07/11/2026
+
+A busca somente leitura partiu dos hashes completos publicados pelo registro a959,
+SHA-256 `c0d702aabd0e3caa1d8044671de07bd1f355985fd34b3d6bb457c146a708abb6`.
+Os originais da ativação, distintos do par de retenção usado pelo descriptor legado,
+foram localizados em
+`/opt/re7online/backups/converta-persistent/deploy-preparations/immutable-a959129e-vps-20261026T023100Z-activation-v7-20261026`:
+
+- `finalization-receipt.private.json`, SHA-256
+  `3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8`;
+- `window-state.private.json`, SHA-256
+  `991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240`.
+
+Ambos são regulares `deploy:deploy 0600`. O receipt e o estado concordam em release,
+target, estado terminal `DEPLOYED`, aceite, dump, marker, guarda e único `pm2 save`.
+O campo chamado `journalSha256` no registro versionado referencia o estado terminal,
+não um journal de eventos. Os dois arquivos privados não contêm os predecessores.
+A sucessão de API e frontend por a959 é vinculável somente pelo conjunto: o registro
+Git publica os dois hashes e declara d7 como `previousApiReleaseId` e
+`previousFrontendReleaseId`, enquanto os originais autenticam a ativação terminal
+conjunta. O leitor canônico atual não admite diretamente esse formato pré-canônico;
+o descriptor a959 existente autentica outro par, pertencente à retenção, e não deve
+ser reutilizado para representar a ativação.
+
+O lifecycle privado d7 não foi recuperado. Uma primeira enumeração de nomes retornou
+`/opt/re7online/build-output/immutable-d7de6453-vps-20261024T221500Z-producer/generation-lifecycle.private.json`,
+mas a abertura imediata terminou em `ENOENT`. Releituras do pai e buscas pelo release
+ID em arquivos `*lifecycle*.json` não localizaram o arquivo; portanto essa observação
+volátil não é evidência autenticada. Foram consultadas, de forma dirigida, as raízes
+`deploy-transactions`, `preparations`, `retention-receipts`, `deploy-preparations`,
+`deploys`, `simple-activations`, `build-evidence`, `audits`, `read-only-audits`,
+`build-output` e `deploy-control`. O veredito d7 permanece
+`DENY_BEFORE_PREPARE / GENERATION_CONTRACT_MISSING`: a ativação sucessora está agora
+localizada, mas não substitui o contrato/lifecycle original da geração.
+
+O inventário autenticado
+`f9acb9a9c51aa78f76d6c9820dbc18b8f5ba853980a916427d62d540da65b728`
+foi reutilizado e somente os três caminhos literais abaixo foram recapturados. Não
+foi feito inventário global nem leitura de payload da release:
+
+| Próximo caso | Caminho literal e bytes físicos | Evidência recuperável | Primeiro gate e fonte capaz de resolvê-lo |
+| --- | --- | --- | --- |
+| `3630e16` — cadeia mais completa | `/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z`, presente, `988.524.544` B | membro autenticado do lote conjunto de worktrees; outputs encerrados pelo receipt `c1a99e4620860a867bb9da727e01451d84cb5cde07c6d0b9467feed25ceff3ff`, intenção `dbf1d0a273003b52167be035c4b0cf2d94c7356afe8154cb1c9b1d7a4054d39e`; registro d7 declara 3630 como predecessor da API | `private_read:generation-artifacts.private.json`: output preserva pacote, mas não contrato/lifecycle/review canônicos. Resolve com a custódia original da geração 3630 e a ativação d7 autenticada, ou decisão contratual explícita de derivação; depois ainda exige comparação integral e classificação privada. |
+| `ec2a9fde` | `/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z`, presente, `988.528.640` B | registro de deploy SHA-256 `84d3e9c0f9b7f2d715851e68baa24e04a8a81f6c4dc94021a265be213e77017e`; d7 declara ec2 como predecessor do frontend; quatro runtimes antigos são efeitos terminais e não candidatos | mesmo gate de contrato/lifecycle da release. Resolve com originais da geração ec2 e receipts/journals das sucessões por componente; a custódia histórica de 19 arquivos continua não localizada nas raízes antes consultadas. |
+| `ef7db111` | `/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z`, presente, `988.508.160` B | registro API-only SHA-256 `446d727bf9506fe3141222215d381f6d335700714d970a5fa0a5068bdc570fb3`; outputs encerrados no mesmo receipt `c1a99e46...ceff3ff` | contrato/lifecycle canônicos ausentes e a sucessão API `ef7 → 3630` ainda carece do original da ativação 3630. O perfil `ef7db111-prep` permanece `DENY` terminal e fora deste escopo. |
+
+O primeiro próximo caminho para revisão é a release instalada `3630e16`, pois reúne
+o fechamento recuperável de worktree e outputs e uma aresta sucessora publicada.
+Isso não a qualifica: os três potenciais permanecem, respectivamente,
+`988.524.544`, `988.528.640` e `988.508.160` bytes; bytes qualificados nesta rodada:
+`0`; bytes efetivamente recuperados: `0`. Nenhum request, `audit`, `prepare` ou
+`execute` foi criado ou executado.
