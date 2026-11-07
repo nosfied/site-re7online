@@ -1322,9 +1322,9 @@ projetado será 12.135.448.576 B, 2.471.772.160 B acima do gate. Reservando
 16.777.216 B para a custódia compacta e o fechamento, o ganho líquido conservador
 é 3.937.390.592 B e a folga projetada é 2.454.994.944 B.
 
-O lote completo para a próxima etapa canônica é exatamente, e somente, `3630`,
-`d7`, `ec2` e `ef7` nos quatro caminhos literais da tabela. Ele ainda não está
-selado: após integração da regra, requer materialização privada (inclusive a cópia
+O lote completo definido naquela rodada era exatamente, e somente, `3630`,
+`d7`, `ec2` e `ef7` nos quatro caminhos literais da tabela. Naquele checkpoint ele
+ainda não estava selado: após integração da regra, requeria materialização privada (inclusive a cópia
 `0600` do registro Git a959 já autenticado), `audit`, plano por
 SHA e `prepare` próprios. Nenhum request produtivo, retirada ou build foi iniciado
 nesta rodada.
@@ -1371,16 +1371,18 @@ O orçamento produtivo fica separado dos pequenos valores da fixture:
 | quatro releases | 3.954.167.808 | ganho bruto condicionado ao audit produtivo |
 | ganho líquido conservador | 3.937.390.592 | ganho bruto menos a reserva de custódia |
 
-O ensaio não substitui a etapa produtiva. Depois da integração, a VPS exige prova e
-custódia novas, medição fresca, `audit` próprio, plano por SHA e `prepare`; nenhuma
-intenção ou hash sintético pode ser usado para autorização.
+O ensaio não substituía a etapa produtiva. Depois da integração, a VPS exigia prova
+e custódia novas, medição fresca, qualificação própria e `prepare`; nenhuma intenção
+ou hash sintético foi usada para autorização. O resultado produtivo terminal está
+registrado no fechamento abaixo.
 
 ##### Fronteira canônica, lifecycle preservado e execução isolada — 07/11/2026
 
 A referência anterior a um `audit` produtivo por `capacity-recovery.py audit` não
 se aplica a este lote: esse consumidor não admite `RELEASE_RUNTIME` como classe de
 candidato. O controle fechado deste lote pertence integralmente ao fluxo de
-`generation-retirement.py`. A sequência produtiva exata, ainda não executada, é:
+`generation-retirement.py`. Naquele checkpoint, a sequência produtiva ainda não
+havia sido executada; ela foi posteriormente consumida uma única vez e consistia em:
 
 1. em custódia privada sucessora, executar somente a qualificação em leitura
    `generation-retirement.py qualify-legacy-p00-installed-batch`, recapturando as
@@ -1415,3 +1417,35 @@ nem a quarta e preserva byte-exatamente receipt e journal já emitidos. A tentat
 de repetir o primeiro comando com o mesmo destino selado nega antes do efeito por
 `evidence_destination_exists`. Essas provas usam somente árvores temporárias e
 não alteram bytes qualificados ou recuperados na VPS.
+
+##### Fechamento produtivo terminal do lote de quatro releases — 07/11/2026
+
+O lote fechado `ec2/ef7/3630/d7` foi executado uma única vez, sequencialmente,
+pela custódia privada
+`p00-legacy-installed-releases-20261107-v1`. Cada intenção recebeu sua própria
+`AUTHORIZE_ONCE`, restrita ao único caminho literal `RELEASE_RUNTIME`. Todos os
+receipts terminaram `SANITIZED`, com `failurePredicate=null`, sem retry automático,
+`remainingDerivedPaths=[]` e journals `ATTEMPT -> RESULT(exitCode=0) ->
+VERIFIED(absent=true)`. Os quatro caminhos estão ausentes e os lifecycles e reviews
+terminais permanecem preservados.
+
+| release | intent | receipt | journal |
+| --- | --- | --- | --- |
+| `ec2a9fde` | `e0e78e46c4dbccc5468654e318ee13b69b25821f10d55851a7b4b950295ffc00` | `dfc0e5353483a6a3dc781cf4d549a23d060058af1863a8739f2b8ffeef88cfcc` | `badf46693db42682daee690b959f85b550a9743f48d2863a8480b4dedebb8ab5` |
+| `ef7db111` | `94bf84a583a6e885180d3799dba2dead3e032fc59156ac3886715868d08619f1` | `416e4173fc92b72500409a9257893392d50e7329922b3e6d10e51e5243bc4142` | `5313ffb6c59ee690eedf5be4cbbf547812f2ae2cf2c0417b7634146a7d5f6ede` |
+| `3630e16` | `283842ab04a7c6b85bce4897d2eb2b4c705614411e161af835b5cd9b3a0fa55f` | `19e45fc4bfcc76414af24b7e952fc505de71b0139bcdd3a3630799000bc0f23c` | `33d10e7757ebbce7a5d9b98d2fca7af068c1ec355fe790f11b7451ae44d03e4d` |
+| `d7de6453` | `219dcf671366b04f81982507001ed5cbaf49f19fc4b55ba29cf1e0ae0b1cc848` | `3cd341565476ec44d568f7301a604e7ef9018a9e0c64012f208844d7b856fccc` | `e1fb9027abcb16a19e3ca08acd0d72dce92817c90380a8cfa4bff9375af5d6f5` |
+
+O validador auxiliar foi corrigido em custódia sucessora para obter o ordinal do
+comando na própria intenção e cruzar ordinal, caminho e `argv`; a releitura separada
+de `ec2` tem SHA-256
+`dd76abdcce5ff2115b170e2d6cb3ee665c456fc1d634bbeac666253cec0359df`.
+Ela confirmou o ordinal canônico `2`, sem alterar receipt, journal ou review.
+
+A leitura imediatamente anterior ao lote registrou 8.155.328.512 B e 8.748.903
+inodes livres. A leitura terminal registrou 12.117.237.760 B e 8.886.295 inodes
+livres: variação observada de +3.961.909.248 B e +137.392 inodes. A alocação
+qualificada das quatro releases era 3.954.167.808 B; os 7.741.440 B adicionais da
+variação não são atribuídos aos comandos. O gate de 9.663.676.416 B do build
+`36b94c6d` passou a ter folga observada de 2.453.561.344 B. O lote é terminal,
+irrepetível e fica excluído de qualquer soma futura de bytes qualificáveis.
