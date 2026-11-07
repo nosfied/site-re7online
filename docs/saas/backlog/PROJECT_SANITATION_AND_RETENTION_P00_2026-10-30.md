@@ -1328,3 +1328,49 @@ selado: após integração da regra, requer materialização privada (inclusive 
 `0600` do registro Git a959 já autenticado), `audit`, plano por
 SHA e `prepare` próprios. Nenhum request produtivo, retirada ou build foi iniciado
 nesta rodada.
+
+##### Ensaio integrado da materialização e do prepare — 07/11/2026
+
+O schema 2 de `generation-retirement-prepare-materialize.py` fecha exclusivamente
+o lote `p00-legacy-installed-releases-20261107-v1`. Ele exige as quatro releases
+literais acima, a prova de qualificação, os quatro contratos/lifecycles/reviews e
+fotografias vinculadas ao mesmo grafo. O schema 1 de uma ou duas gerações
+reconciliadas permanece inalterado. O materializador continua sem executar
+`prepare` e sem conceder autorização; ele apenas copia/readback os controles e
+emite os quatro argv canônicos.
+
+O ensaio isolado produziu a prova pelo consumidor real, materializou o pacote fora
+do checkout e executou os quatro argv contra `generation-retirement.py prepare`.
+O resultado no commit de código `4fcb87ef` foi exatamente quatro efeitos
+`RELEASE_RUNTIME`, um para cada caminho
+da tabela, sem efeito adicional, glob, force ou prune. Cada intenção ficou
+`SEALED_FOR_EXPLICIT_AUTHORIZATION` e `authorizationGranted=false`. Os hashes de
+uma execução registrada de fixture são:
+
+- prova de qualificação: `1680fc80719889d646c0069dd15c0a865a4a83d711db81f1a8ef1ccbdd45787b`;
+- plano/materialização: `1ae2475afcd10142d2b8279131234d4fcb7aaa69f36184e241ab55db0c73771d`;
+- intents, na ordem ec2, ef7, 3630 e d7:
+  `d52436ce3ae04178b6804a94580ed108299a4ee1e01e1226ee67e19233a00b13`,
+  `7ea0175d555221d7d72522f63650e8afa692cd69d823c8df9604c602586f92b5`,
+  `05d5d15dcdd36d2f84b9deec398588fe87bfdfef0dded6fd8c974eb0565fc76d`
+  e `bdeba74dbf5f3410658aa7cd09d5459ee51e6ac86c3ac466e5af26af7c8ca9cd`.
+
+Esses hashes identificam somente a execução sintética e não são reutilizáveis na
+VPS. A regressão também acrescentou uma referência de dependência depois da
+materialização: o `prepare` real negou por drift antes de criar intent ou arquivo
+de comandos. A observação fresca de cada intent inclui os links `current`, o
+fingerprint do PM2 vivo, o SHA do dump salvo, o SHA do grafo/retornos e o SHA da
+lista de dependências.
+
+O orçamento produtivo fica separado dos pequenos valores da fixture:
+
+| Parcela | Bytes | Tratamento |
+| --- | ---: | --- |
+| pico temporário conservador de extração, um pacote por vez | 988.606.464 | capacidade necessária durante a qualificação; não é descontada do ganho líquido |
+| custódia e fechamento | 16.777.216 | reserva descontada do ganho bruto |
+| quatro releases | 3.954.167.808 | ganho bruto condicionado ao audit produtivo |
+| ganho líquido conservador | 3.937.390.592 | ganho bruto menos a reserva de custódia |
+
+O ensaio não substitui a etapa produtiva. Depois da integração, a VPS exige prova e
+custódia novas, medição fresca, `audit` próprio, plano por SHA e `prepare`; nenhuma
+intenção ou hash sintético pode ser usado para autorização.

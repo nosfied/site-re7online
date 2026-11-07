@@ -395,9 +395,13 @@ class LegacyP00PrepareMaterializationFixture:
                 cache_path = installed / "frontend-runtime/.next/cache"
                 cache_path.mkdir(parents=True); (cache_path / "item").write_text("derived\n")
             manifest = installed / "manifest.json"; manifest.write_text(f"manifest-{release}\n")
+            manifest.chmod(0o644)
             index = installed / "index.sha256"; index.write_text(f"index-{release}\n")
+            index.chmod(0o644)
             marker = installed / "DEPLOYED"; marker.write_text(f"marker-{release}\n")
+            marker.chmod(0o600)
             package = self.outputs / f"{release}.tar.xz"; package.write_text(f"package-{release}\n")
+            package.chmod(0o644)
             verifier_values[release] = {"result": "RELEASE VERIFIED", "releaseId": release,
                 "targetCommit": target, "manifestSha256": sha(manifest),
                 "indexSha256": sha(index), "apiEntrySha256": "a" * 64,
