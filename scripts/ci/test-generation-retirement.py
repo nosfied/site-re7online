@@ -754,7 +754,135 @@ class LegacyD7WorktreeClosureFixture:
         self.temp.cleanup()
 
 
+class LegacyP00InstalledBatchFixture:
+    def __init__(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="legacy-p00-installed-")
+        self.root = Path(self.temp.name)
+        self.control = self.root / "control"; self.control.mkdir(mode=0o700)
+        self.tool = self.control / "generation-retirement.py"
+        self.verifier = self.control / "converta-release.py"
+        self.dependency = self.control / "preparation_artifact_lifecycle.py"
+        shutil.copyfile(TOOL, self.tool)
+        shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", self.dependency)
+        self.tool.chmod(0o500); self.dependency.chmod(0o600)
+        self.releases = []
+        verifier_values = {}
+        for index, cache in enumerate((True, False, False, True), 1):
+            release = f"immutable-p00-{index}"
+            target = f"{index}" * 40
+            installed = self.root / "releases" / release
+            (installed / "api-runtime").mkdir(parents=True)
+            (installed / "frontend-runtime").mkdir()
+            (installed / "api-runtime/app").write_text(f"api-{index}\n")
+            (installed / "frontend-runtime/app").write_text(f"frontend-{index}\n")
+            if cache:
+                (installed / "frontend-runtime/.next/cache").mkdir(parents=True)
+                (installed / "frontend-runtime/.next/cache/item").write_text("derived\n")
+            manifest = installed / "manifest.json"; manifest.write_text(f"manifest-{index}\n"); manifest.chmod(0o644)
+            index_file = installed / "index.sha256"; index_file.write_text(f"index-{index}\n"); index_file.chmod(0o644)
+            marker = installed / "DEPLOYED"; marker.write_text(f"marker-{index}\n"); marker.chmod(0o600)
+            package = self.root / f"{release}.tar.xz"; package.write_text(f"package-{index}\n"); package.chmod(0o644)
+            verification = {"result": "RELEASE VERIFIED", "releaseId": release,
+                "targetCommit": target, "manifestSha256": sha(manifest),
+                "indexSha256": sha(index_file), "apiEntrySha256": "a" * 64,
+                "buildId": f"build-{index}", "indexEntries": 2}
+            verifier_values[release] = verification
+            self.releases.append({"releaseId": release, "targetCommit": target,
+                "installedReleasePath": str(installed),
+                "package": {"path": str(package), "sha256": sha(package)},
+                "manifestSha256": sha(manifest), "indexSha256": sha(index_file),
+                "deployedMarkerSha256": sha(marker), "runtimeCacheOverlay": cache})
+        self.verifier.write_text(
+            "#!/usr/bin/env python3\nimport json,sys\nvalues=" + repr(verifier_values) +
+            "\nrid=sys.argv[sys.argv.index('--release-id')+1]\nv=dict(values[rid])\n"
+            "if '--legacy-p00-runtime-cache-overlay' in sys.argv:\n"
+            " v['runtimeCacheOverlay']={'path':'frontend-runtime/.next/cache','classification':'EPHEMERAL_RUNTIME_CACHE','state':'ACTIVE_DEPENDENCY'}\n"
+            "print(json.dumps(v))\n")
+        self.verifier.chmod(0o500)
+        self.graph = self.root / "graph.private.json"
+        private_json(self.graph, {"activeReleases": ["immutable-active"],
+            "rollbackReleases": ["immutable-return"], "immediateRollbackReleases":
+            {"api": "immutable-return", "frontend": "immutable-return"},
+            "transitiveReturnReleases": [], "candidateReleases": [],
+            "installedVerifiedReleases": [item["releaseId"] for item in self.releases]})
+        self.evidence = []
+        for index in range(3):
+            path = self.root / f"evidence-{index}.private.json"
+            private_json(path, {"state": "DEPLOYED", "ordinal": index})
+            self.evidence.append({"path": str(path), "sha256": sha(path),
+                                  "expected": {"state": "DEPLOYED", "ordinal": index}})
+        self.output = self.root / "qualification.private.json"
+        self.binding = {"schemaVersion": 1, "batchId": "fixture-p00",
+            "canonicalVerifierSha256": sha(self.verifier),
+            "sourceGraph": {"path": str(self.graph), "sha256": sha(self.graph)},
+            "releases": tuple(self.releases), "chainEvidence": tuple(self.evidence)}
+        spec = importlib.util.spec_from_file_location("legacy_p00_copied_consumer", self.tool)
+        assert spec and spec.loader
+        self.module = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.module)
+
+    def qualify(self):
+        output = io.StringIO()
+        with patch.object(self.module, "LEGACY_P00_INSTALLED_BATCH", self.binding), \
+                patch.object(self.module, "canonical_release_verifier", return_value=self.verifier), \
+                redirect_stdout(output):
+            self.module.qualify_legacy_p00_installed_batch(
+                SimpleNamespace(proof_output=self.output))
+        return json.loads(output.getvalue())
+
+    def refresh_graph(self, value):
+        private_json(self.graph, value)
+        self.binding["sourceGraph"] = {"path": str(self.graph), "sha256": sha(self.graph)}
+
+    def close(self):
+        self.temp.cleanup()
+
+
 class GenerationRetirementTest(unittest.TestCase):
+    def test_legacy_p00_installed_batch_qualifies_only_inventory_releases(self):
+        fixture = LegacyP00InstalledBatchFixture()
+        try:
+            result = fixture.qualify()
+            self.assertEqual(result["result"], "LEGACY_P00_INSTALLED_BATCH_QUALIFIED")
+            self.assertEqual(result["releaseCount"], 4)
+            proof = json.loads(fixture.output.read_text())
+            self.assertEqual({item["classification"] for item in proof["releases"]},
+                             {"RETIREMENT_READY"})
+            self.assertFalse(proof["authorizationGranted"])
+            self.assertFalse(proof["executionPermitted"])
+            self.assertEqual(proof["destructiveCommands"], 0)
+            self.assertGreater(proof["totalAllocatedBytes"], 0)
+        finally:
+            fixture.close()
+
+    def test_legacy_p00_installed_batch_denies_reference_private_data_and_chain_drift(self):
+        fixture = LegacyP00InstalledBatchFixture()
+        try:
+            graph = json.loads(fixture.graph.read_text())
+            graph["activeReleases"].append(fixture.releases[0]["releaseId"])
+            fixture.refresh_graph(graph)
+            with self.assertRaisesRegex(fixture.module.Denied, "legacy_p00_release_referenced"):
+                fixture.qualify()
+        finally:
+            fixture.close()
+
+        fixture = LegacyP00InstalledBatchFixture()
+        try:
+            private = Path(fixture.releases[0]["installedReleasePath"]) / "api-runtime/.data"
+            private.mkdir()
+            with self.assertRaisesRegex(fixture.module.Denied, "legacy_p00_private_data_present"):
+                fixture.qualify()
+        finally:
+            fixture.close()
+
+        fixture = LegacyP00InstalledBatchFixture()
+        try:
+            fixture.binding["chainEvidence"] = ({**fixture.evidence[0],
+                "expected": {"state": "FAILED"}}, *fixture.evidence[1:])
+            with self.assertRaisesRegex(fixture.module.Denied, "legacy_p00_chain_divergence"):
+                fixture.qualify()
+        finally:
+            fixture.close()
+
     def test_legacy_d7_worktree_closure_authenticates_joint_batch_without_authority(self):
         fixture = LegacyD7WorktreeClosureFixture()
         try:

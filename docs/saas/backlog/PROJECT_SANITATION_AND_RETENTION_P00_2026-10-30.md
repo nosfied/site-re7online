@@ -1255,3 +1255,76 @@ Isso não a qualifica: os três potenciais permanecem, respectivamente,
 `988.524.544`, `988.528.640` e `988.508.160` bytes; bytes qualificados nesta rodada:
 `0`; bytes efetivamente recuperados: `0`. Nenhum request, `audit`, `prepare` ou
 `execute` foi criado ou executado.
+
+#### Qualificação consolidada P00 — 07/11/2026
+
+Esta seção substitui o encaminhamento de buscas individuais acima. A leitura
+dirigida localizou os originais de ativação de `ec2`, `ef7`, `3630` e `d7`, além
+dos originais a959 já registrados. Portanto, não permanece correto afirmar que a
+sucessão `ef7 → 3630`, a ativação d7 ou a ativação a959 estão ausentes. O lifecycle
+privado histórico das quatro gerações continua ausente; ele não foi sintetizado.
+
+O fluxo novo `qualify-legacy-p00-installed-batch` é uma prova derivada e fechada,
+não um lifecycle histórico nem autorização. Ele fixa o grafo
+`ceff32cf664d14382b0209a30ac556012c2cd2a484d5039d04fa2f1c14f47224`, os quatro
+caminhos, targets, pacotes, manifests, índices e markers, e autentica a cadeia por
+componente `a62 → ec2`, `ec2(api) → ef7`, `ef7(api) → 3630`,
+`3630(api)+ec2(frontend) → d7` e `d7(api+frontend) → a959`. As provas novas desta
+rodada são a verificação canônica direta dos quatro pacotes e árvores e a prova
+derivada emitida em fixture isolada. Os receipts, registros e ativações originais
+continuam sendo as autoridades históricas.
+
+| Geração / caminho literal presente | Bytes físicos observados | Veredito desta rodada | Evidência e impedimento remanescente |
+| --- | ---: | --- | --- |
+| `/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z` | 988.524.544 | **dependente de regra para o legado** | pacote `346246ce…fc18`, manifest `ec677da8…218e`, índice `92a62cc5…7952` e árvore passam no verificador; ativação `1da6cc4b…339a` e preflight `0ec17142…597b` comprovam API `ef7 → 3630`; d7 comprova sucessão. Falta integrar/materializar contrato e lifecycle derivados pelo fluxo fechado. |
+| `/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z` | 988.606.464 | **dependente de regra para o legado** | pacote `b75500e6…519`, manifest `dcc3c1a4…85d6`, índice `fcd7a0be…b6f4`; 34.349 entradas conferem. Os 61.440 B extras são somente cache subordinado. Ativação d7 `a119f623…79af` e sucessão a959 `3567a10a…dc8`/`991d549a…4240` estão autenticadas. Falta a mesma materialização derivada, sem reescrever o lifecycle ausente. |
+| `/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z` | 988.528.640 | **dependente de regra para o legado** | pacote `a8715c8d…b4ad`, manifest `b9aa1c53…f5e6`, índice `22b790da…4241`; árvore só diverge por cache runtime confinado. Preflight `23ef53b2…b82e`, ativação `45808ec5…511f`, ef7 e d7 fecham a sucessão dos dois componentes. Falta materialização derivada. |
+| `/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z` | 988.508.160 | **dependente de regra para o legado** | pacote `c5bb0b94…351c`, manifest `f6660e61…97aa`, índice `9f8ffc1e…bb74` e árvore passam estritamente. Preflight `c39675ef…10f0`, ativação `f8073f00…8d2` e 3630 fecham a sucessão API. O `DENY` terminal de `ef7db111-prep` continua preservado e não integra este candidato. |
+| `/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z` | 988.495.872 | **preservado** | contém `api-runtime/.data` físico; pai privado não pode receber comando. A cópia anterior sem `-vps`, o incoming de 147.972.096 B e as preparações a62 permanecem sem closure própria e fora do lote. |
+| `/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z` | 985.571.328 | **preservado** | contém `api-runtime/.data` físico. Incoming de 166.449.152 B e checksum permanecem inventário sem disposição autenticada. |
+
+O verificador canônico agora possui a exceção fechada
+`--legacy-p00-runtime-cache-overlay`, aceita somente as identidades exatas d7/ec2
+e somente `frontend-runtime/.next/cache`; arquivo extra fora dessa subárvore,
+release diferente, symlink, modo gravável ou conteúdo privado continuam negando.
+Os bytes finais do verificador proposto têm SHA-256
+`8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec`;
+os descriptors legados versionados foram atualizados para vincular esse mesmo
+consumidor, sem alterar as evidências históricas privadas.
+O próprio script final foi transmitido por stdin e executado em leitura na VPS:
+d7 retornou `RELEASE VERIFIED` com dez entradas de cache, e ec2 retornou
+`RELEASE VERIFIED` com seis; nenhum arquivo foi materializado ou alterado nessa
+prova.
+O consumidor copiado fora do checkout comprovou quatro classificações
+`RETIREMENT_READY`, mas emitiu somente
+`LEGACY_P00_INSTALLED_BATCH_QUALIFICATION`, com `authorizationGranted=false`,
+`executionPermitted=false`, zero comandos e próximo passo obrigatório
+`CANONICAL_CONTRACT_LIFECYCLE_MATERIALIZATION`. Referência operacional, `.data`,
+drift da cadeia ou divergência pacote/árvore negam antes de produzir a prova.
+
+Os demais escopos não entram na soma: os 34 filhos históricos de
+`/opt/re7online/deploy-control` continuam na tabela literal de 06/11, sem receipt
+de disposição próprio (#352 previne apenas novas alocações); os pais de
+`build-output` preservam pacote/manifest/índice/evidência, enquanto os runtimes já
+retirados são terminais; `/opt/re7online/release-sources/freeform-window-af26`
+(130.396.160 B) e `freeform-window-af26-cumulative-20261002` (1.879.433.216 B)
+são fontes únicas preservadas; preparações e receipts terminais permanecem
+evidência e não são efeitos repetíveis. O perfil `ef7db111-prep` continua
+terminal `DENY` e integralmente excluído.
+
+Medição fresca: 8.181.280.768 B e 8.752.642 inodes disponíveis. O gate do build
+`36b94c6d` exige 9.663.676.416 B; déficit atual 1.482.395.648 B. Os quatro
+caminhos legados somam 3.954.167.808 B físicos observados. Como a regra ainda não
+foi integrada/materializada na VPS, **bytes aptos pelo fluxo vigente: 0**,
+**bytes dependentes da regra versionada: 3.954.167.808**, **bytes recuperados: 0**.
+Se a regra for integrada e a recaptura canônica mantiver o veredito, o saldo bruto
+projetado será 12.135.448.576 B, 2.471.772.160 B acima do gate. Reservando
+16.777.216 B para a custódia compacta e o fechamento, o ganho líquido conservador
+é 3.937.390.592 B e a folga projetada é 2.454.994.944 B.
+
+O lote completo para a próxima etapa canônica é exatamente, e somente, `3630`,
+`d7`, `ec2` e `ef7` nos quatro caminhos literais da tabela. Ele ainda não está
+selado: após integração da regra, requer materialização privada (inclusive a cópia
+`0600` do registro Git a959 já autenticado), `audit`, plano por
+SHA e `prepare` próprios. Nenhum request produtivo, retirada ou build foi iniciado
+nesta rodada.

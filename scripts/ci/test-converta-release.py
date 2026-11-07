@@ -646,6 +646,31 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assert_denied(package_result,
                            "forbidden_release_entry:frontend-runtime/.next/cache")
 
+    def test_p00_cache_overlay_is_closed_to_known_releases_and_denies_external_drift(self) -> None:
+        release_id, target = next(iter(MODULE.P00_LEGACY_RUNTIME_CACHE_RELEASES.items()))
+        root = self.base / "p00-cache" / release_id
+        root.parent.mkdir()
+        shutil.copytree(self.release, root, symlinks=True)
+        manifest = json.loads((root / "manifest.json").read_text())
+        manifest["releaseId"] = release_id; manifest["targetCommit"] = target
+        (root / "manifest.json").write_text(
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n")
+        marker = root / "DEPLOYED"; write(marker, '{"state":"DEPLOYED"}\n', 0o600)
+        cache = root / "frontend-runtime/.next/cache"
+        write(cache / "webpack/state.bin", "derived\n", 0o600); cache.chmod(0o755)
+        args = ("verify", "--release-root", str(root), "--target", target,
+                "--release-id", release_id, "--components", COMPONENTS,
+                "--deployed-marker-sha256", hashlib.sha256(marker.read_bytes()).hexdigest(),
+                "--legacy-p00-runtime-cache-overlay")
+        accepted = invoke(*args)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(json.loads(accepted.stdout)["runtimeCacheOverlay"]["path"],
+                         "frontend-runtime/.next/cache")
+        write(root / "frontend-runtime/unclassified.extra", "drift\n", 0o600)
+        self.assert_denied(invoke(*args), "release_index_inventory")
+        wrong = list(args); wrong[wrong.index("--release-id") + 1] = "immutable-unknown"
+        self.assert_denied(invoke(*wrong), "legacy_p00_runtime_cache_overlay_binding")
+
     def test_runtime_removal_denied(self) -> None:
         root = self.copy_release("missing")
         (root / "api-runtime/dist/index.js").unlink()
