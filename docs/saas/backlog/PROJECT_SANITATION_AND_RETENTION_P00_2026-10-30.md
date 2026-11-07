@@ -1049,7 +1049,7 @@ Nenhum request, plano ou intenção novos foi produzido.
 | `worker-package-audit` | Audit v5 terminal `DENY` por `DISPOSITION_TREE_DIRECTORY_IDENTITY`, plano `57eda79930ec4f24dcc56bccd6f46e9996f3855386264267d80b8071d18302ea`. |
 | `ef7db111-prep` | Audit terminal `DENY`; resultado parcial sem autorização de retirada. |
 | Worktrees históricos de `deploy-control` | 0 B qualificados; #352 cobre somente novos worktrees. |
-| `build-output` | Runtimes derivados ausentes na enumeração dirigida; pacotes, manifestos, índices e evidências protegidos pelos contratos vigentes. |
+| `build-output` | Os runtimes d7 são efeitos terminais autenticados; os demais runtimes derivados já encerrados permanecem irrepetíveis. Pacotes, manifestos, índices e evidências residuais continuam preservados. |
 
 As seis gerações com análise aberta na seção de 03/11 são escopo de
 reconciliação documental. Reaproveitar inventários, contratos e receipts para
@@ -1057,3 +1057,74 @@ identificar um artefato literal ainda presente, sua autoridade preservada,
 a lacuna de evidência resolúvel e a classe admitida pelo executor vigente.
 Sem candidato qualificado, o build de `36b94c6d` continua bloqueado pelo gate
 de capacidade.
+
+### Piloto documental d7 — efeitos terminais e entrada `RELEASE_RUNTIME`
+
+Leitura dirigida em 06/11/2026, sem request, `audit`, `prepare` ou alteração da
+VPS. O receipt
+`/opt/re7online/backups/converta-persistent/retention-receipts/p00-capacity-recovery-9b2169d4-20261030T121840Z/execution-receipt.private.json`,
+SHA-256 `97a121df8fab427ada569652c7d9f45ee04fe4d9a5c93c032daa65dfd1b817f8`,
+foi reaberto com o journal `command-journal.private.jsonl`, SHA-256
+`9baa07a07f14bdc00e2c62d1374547dd41e8ed534d6968ed554d346e596dc338`.
+O vínculo terminal é exato:
+
+| Ordinal | Efeito autenticado | Bytes físicos selados | Resultado |
+| ---: | --- | ---: | --- |
+| 2 | `/opt/re7online/build-output/immutable-d7de6453-vps-20261024T221500Z-producer/immutable-d7de6453-vps-20261024T221500Z/frontend-runtime` | 645.029.888 | `ATTEMPT → RESULT(0) → VERIFIED`; ausente e irrepetível |
+| 3 | `/opt/re7online/build-output/immutable-d7de6453-vps-20261024T221500Z-producer/immutable-d7de6453-vps-20261024T221500Z/api-runtime` | 337.100.800 | `ATTEMPT → RESULT(0) → VERIFIED`; ausente e irrepetível |
+
+Os dois efeitos somam 982.130.688 bytes. O ordinal 1 do mesmo receipt pertence ao
+cache npm e não compõe a geração d7. O output-pai permanece com 154.484.736 bytes
+e conserva pacote, manifesto e índice; não é candidato integral. O fechamento do
+worktree d7 continua registrado no lote conjunto d7/3630, mas esta rodada não
+recuperou um binding consumível com caminho e SHA de receipt/journal para esse
+efeito. A afirmação histórica não substitui esse binding numa closure nova.
+
+`PROTECTED_TRANSITIVE` era a classificação da fotografia do inventário
+`f9acb9a9c51aa78f76d6c9820dbc18b8f5ba853980a916427d62d540da65b728`.
+No grafo vigente
+`/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-17cc77a8-vps-20261104T141039Z-api-frontend-c206959c-v3-once/generation-release-graph.final.private.json`,
+SHA-256 `ceff32cf664d14382b0209a30ac556012c2cd2a484d5039d04fa2f1c14f47224`,
+d7 consta somente em `installedVerifiedReleases`. Não consta em ativo, rollback,
+rollback imediato, retorno transitivo ou candidato. Preserva-se a negativa do
+reconciliador de grafo: uma entrada d7 nega em
+`release_reconciliation_entry_identity`, pois não há papel operacional aberto a
+encerrar. Isso não transforma inventário em elegibilidade de retirada.
+
+O verificador canônico `converta-release.py`, SHA-256
+`da62e006cb92d3409cb042971611fcd1849a193fd7fda1645972ebce9f634973`,
+foi executado em leitura sobre
+`/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z`. A verificação
+estrita negou em `forbidden_release_entry:frontend-runtime/.next/cache`; a
+comparação dirigida subsequente esclareceu integralmente o delta sem flexibilizar
+o verificador:
+
+- 34.349 entradas do índice: zero ausentes e zero divergências de tipo, modo,
+  tamanho, SHA-256 ou destino de symlink;
+- 30.922 arquivos, 880.051.412 bytes lógicos, foram conferidos pelo hash do índice;
+- dez extras, todos confinados a `frontend-runtime/.next/cache`: seis diretórios
+  `0755` e quatro arquivos `0644`, 30.176 bytes lógicos e 61.440 bytes físicos;
+- zero extras fora do cache, zero symlinks extras/absolutos/escapando da release e
+  zero nomes extras associados a `.data`, ambiente, sessão, autenticação,
+  credencial, uploads ou banco; `api-runtime/.data` está ausente;
+- a release mede 988.606.464 bytes físicos. Pacote, manifesto, índice, marker e
+  release conservaram as identidades autenticadas.
+
+Essa prova classifica todos os extras observados como cache derivado, mas não
+supre o primeiro pré-requisito do consumidor. A entrada direta de
+`RELEASE_RUNTIME` exige `generation-artifacts.private.json`,
+`generation-lifecycle.private.json` terminal e `generation-review.private.json`
+no output canônico. d7 preserva o contrato específico
+`d7-capacity-binding-contract.private.json`, SHA-256
+`6b9234fb9cc20050f946c0728e59d2aee358d5207d1402a934622387a8409f81`,
+que autentica os runtimes derivados, mas contém somente `schemaVersion`,
+`releaseId`, `targetCommit` e `artifacts`; não possui `generationId`, estado,
+writer lock, classes, política privada ou lifecycle exigidos pelo contrato de
+geração. Os três arquivos canônicos estão fisicamente ausentes. Também falta o
+triplo vinculável `prior-intent`/`prior-receipt`/`prior-journal` do fechamento do
+worktree literal `/opt/re7online/build-worktrees/immutable-d7de6453-vps-20261024T221500Z-source`.
+O cache extra precisará de classificação explícita confinada ao pai; a exceção
+existente para cache f160 não se aplica a d7. Portanto, nenhuma adaptação ou
+descriptor legado foi proposto: o piloto encerra em
+`DENY_BEFORE_PREPARE / GENERATION_CONTRACT_MISSING`, com potencial físico da
+release ainda condicionado e ganho qualificado de 0 B.
