@@ -3539,7 +3539,8 @@ def _b96_terminal_release_runtime_proof(value: Any, release: str,
     expected_events = [
         {"event": "ATTEMPT", "ordinal": ordinal, "path": str(installed),
          "argv": expected_argv},
-        {"event": "RESULT", "ordinal": ordinal, "exitCode": 0},
+        {"event": "RESULT", "ordinal": ordinal, "exitCode": 0,
+         "stdoutSha256": digest_bytes(b""), "stderrSha256": digest_bytes(b"")},
         {"event": "VERIFIED", "ordinal": ordinal, "absent": True},
     ]
     if (not isinstance(ordinal, int) or command.get("argv") != expected_argv or

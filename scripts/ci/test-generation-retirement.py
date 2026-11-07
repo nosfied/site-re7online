@@ -2238,7 +2238,9 @@ class GenerationRetirementTest(unittest.TestCase):
                             {"event": "ATTEMPT", "ordinal": command["ordinal"],
                              "path": command["path"], "argv": command["argv"]},
                             {"event": "RESULT", "ordinal": command["ordinal"],
-                             "exitCode": 0},
+                             "exitCode": 0,
+                             "stdoutSha256": MODULE.digest_bytes(b""),
+                             "stderrSha256": MODULE.digest_bytes(b"")},
                             {"event": "VERIFIED", "ordinal": command["ordinal"],
                              "absent": True},
                         ])
