@@ -2140,7 +2140,7 @@ class GenerationRetirementTest(unittest.TestCase):
     def test_release_graph_reconciliation_uses_emitted_chain_and_active_selection(self):
         fixture = Fixture(active=False, rollback=True, candidate=False, installed=True,
                           deployed=False,
-                          release_id="immutable-708f018c-vps-20261027T152109Z")
+                          release_id="immutable-aa9527cc-vps-20261029T193925Z")
         try:
             materialized = fixture.root / "materialized-reconciliation-control"
             materialized.mkdir(mode=0o700)
@@ -2185,17 +2185,130 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(json.loads(receipt_path.read_text())["commandLogSha256"],
                              sha(journal_path))
 
-            active_api = "immutable-current-api"
-            active_frontend = "immutable-current-frontend"
-            immediate_api = "immutable-immediate-api"
-            immediate_frontend = "immutable-immediate-frontend"
+            active_api = active_frontend = "immutable-17cc77a8-vps-20261104T141039Z"
+            immediate_api = immediate_frontend = "immutable-785bde80-vps-20261103T103429Z"
+            transitive = "immutable-a959129e-vps-20261024T234109Z"
+            private_release_ids = [
+                "immutable-0fdec120-vps-20261025T021904Z",
+                "immutable-708f018c-vps-20261027T152109Z",
+                "immutable-75404a21-vps-20261028T132111Z",
+                "immutable-911a9708-vps-20261102T221325Z",
+                "immutable-fa63994a-vps-20261030T164701Z",
+            ]
+            b96_release = MODULE.B96_TERMINAL_RELEASE
+
+            def terminal_entry(release_id: str, *, private: bool = False,
+                               absent_runtime: bool = False):
+                target = hashlib.sha1(release_id.encode()).hexdigest()
+                installed = fixture.releases_root / release_id
+                installed.mkdir(mode=0o755)
+                (installed / "app").write_text(release_id + "\n")
+                if private:
+                    data = installed / "api-runtime" / ".data"
+                    data.mkdir(parents=True, mode=0o700)
+                    (data / "tenant.private").write_text("fixture\n")
+                info = installed.lstat()
+                artifact = {"path": str(installed), "releaseId": release_id,
+                    "targetCommit": target, "expectedType": "directory",
+                    "initialIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                    "observedIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                    **MODULE.structural_metrics(installed), "digest": {"structural": "fixture"},
+                    "class": "RELEASE_RUNTIME", "state": "ROLLBACK_DEPENDENCY",
+                    "retirableOn": "fixture", "dependencies": []}
+                contract = fixture.evidence_root / f"{release_id}-contract.json"
+                lifecycle = fixture.evidence_root / f"{release_id}-lifecycle.json"
+                review = fixture.evidence_root / f"{release_id}-review.json"
+                private_json(contract, {"schemaVersion": 1, "generationId": release_id,
+                    "releaseId": release_id, "targetCommit": target, "state": "COMPLETE",
+                    "writerLockPath": str(fixture.writer_lock),
+                    "classes": sorted(MODULE.PRESERVE_CLASSES | MODULE.DERIVED_CLASSES |
+                                      {"RELEASE_RUNTIME"}),
+                    "artifacts": [artifact],
+                    "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"})
+                private_json(lifecycle, {"schemaVersion": 1, "generationId": release_id,
+                    "targetCommit": target, "state": "COMPLETE"})
+
+                def link(label: str, reconciliation, commands, removed):
+                    intent = fixture.evidence_root / f"{release_id}-{label}-intent.json"
+                    journal = fixture.evidence_root / f"{release_id}-{label}-journal.jsonl"
+                    receipt = fixture.evidence_root / f"{release_id}-{label}-receipt.json"
+                    events = []
+                    for command in commands:
+                        events.extend([
+                            {"event": "ATTEMPT", "ordinal": command["ordinal"],
+                             "path": command["path"], "argv": command["argv"]},
+                            {"event": "RESULT", "ordinal": command["ordinal"],
+                             "exitCode": 0},
+                            {"event": "VERIFIED", "ordinal": command["ordinal"],
+                             "absent": True},
+                        ])
+                    journal.write_bytes(b"".join(
+                        json.dumps(event, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+                        for event in events)); journal.chmod(0o600)
+                    private_json(intent, {"generationId": release_id,
+                        "releaseId": release_id, "targetCommit": target,
+                        "contractSha256": sha(contract), "lifecycleSha256": sha(lifecycle),
+                        "rootPolicySha256": sha(fixture.policy),
+                        "reconciliation": reconciliation, "artifacts": [artifact],
+                        "commands": commands})
+                    completed = len(reconciliation["completed"]) + len(commands)
+                    private_json(receipt, {"schemaVersion": 1, "state": "SANITIZED",
+                        "failurePredicate": None, "attemptedCommands": len(commands),
+                        "completedCommands": completed, "removedPaths": removed,
+                        "intentSha256": sha(intent), "commandLogSha256": sha(journal),
+                        "automaticRetry": False, "remainingDerivedPaths": [],
+                        "freshObservation": {}, "lock": {
+                            "canonicalHeldThroughReceiptFsync": True,
+                            "writerHeldThroughReceiptFsync": True}})
+                    return intent, receipt, journal
+
+                first = link("first", {"chain": [], "completed": []}, [], [])
+                closure = [{"intent": {"path": str(first[0]), "sha256": sha(first[0])},
+                    "receipt": {"path": str(first[1]), "sha256": sha(first[1])},
+                    "journal": {"path": str(first[2]), "sha256": sha(first[2])}}]
+                if absent_runtime:
+                    first_binding = {"intentSha256": sha(first[0]),
+                                     "receiptSha256": sha(first[1]),
+                                     "journalSha256": sha(first[2])}
+                    command = {"ordinal": 1, "path": str(installed),
+                        "class": "RELEASE_RUNTIME",
+                        "argv": ["/usr/bin/rm", "-r", "--", str(installed)],
+                        "literal": f"/usr/bin/rm -r -- {installed}",
+                        "allocatedBytes": artifact["allocatedBytes"],
+                        "eligibilityAtPrepare": "RETIREMENT_READY"}
+                    shutil.rmtree(installed)
+                    second = link("final", {"chain": [first_binding], "completed": []},
+                                  [command], [str(installed)])
+                    closure.append({"intent": {"path": str(second[0]),
+                                                "sha256": sha(second[0])},
+                        "receipt": {"path": str(second[1]), "sha256": sha(second[1])},
+                        "journal": {"path": str(second[2]), "sha256": sha(second[2])}})
+                    final_receipt = second[1]
+                else:
+                    final_receipt = first[1]
+                private_json(review, {"schemaVersion": 2, "generationId": release_id,
+                    "lifecycleSha256": sha(lifecycle), "state": "SANITIZED",
+                    "reviewer": "fixture-owner", "reason": "terminal fixture",
+                    "evidenceSha256": sha(final_receipt)})
+                return {"releaseId": release_id, "installedReleasePath": str(installed),
+                    "expectedRole": "rollbackReleases",
+                    "decision": ("PRESERVE_PRIVATE_DATA" if private else
+                                 "CLOSE_OPERATIONAL_DEPENDENCY"),
+                    "contract": {"path": str(contract), "sha256": sha(contract)},
+                    "lifecycle": {"path": str(lifecycle), "sha256": sha(lifecycle)},
+                    "review": {"path": str(review), "sha256": sha(review)},
+                    "closure": {"kind": "CANONICAL_RETIREMENT", "chain": closure}}
+
+            private_entries = [terminal_entry(release_id, private=True)
+                               for release_id in private_release_ids]
+            b96_entry = terminal_entry(b96_release, absent_runtime=True)
             source = {
-                "activeReleases": [active_api, active_frontend],
-                "rollbackReleases": [immediate_api, immediate_frontend, fixture.release_id],
-                "transitiveReturnReleases": [], "candidateReleases": [],
-                "installedVerifiedReleases": [active_api, active_frontend,
-                                               immediate_api, immediate_frontend,
-                                               fixture.release_id],
+                "activeReleases": [active_api],
+                "rollbackReleases": sorted([immediate_api, fixture.release_id, b96_release] +
+                                            private_release_ids),
+                "transitiveReturnReleases": [transitive], "candidateReleases": [],
+                "installedVerifiedReleases": sorted([active_api, immediate_api, transitive,
+                                               fixture.release_id] + private_release_ids),
                 "supersededCandidates": [],
                 "immediateRollbackReleases": {
                     "api": immediate_api, "frontend": immediate_frontend},
@@ -2304,7 +2417,8 @@ class GenerationRetirementTest(unittest.TestCase):
                     "closure": {"kind": "CANONICAL_RETIREMENT", "chain": [{
                         "intent": {"path": str(fixture.intent), "sha256": sha(fixture.intent)},
                         "receipt": {"path": str(receipt_path), "sha256": sha(receipt_path)},
-                        "journal": {"path": str(journal_path), "sha256": sha(journal_path)}}]}}]})
+                        "journal": {"path": str(journal_path), "sha256": sha(journal_path)}}]}}
+                    ] + private_entries + [b96_entry]})
 
             def reconcile(name: str, request_path: Path = request):
                 return invoke_tool(copied_tool, "reconcile-release-graph",
@@ -2319,8 +2433,11 @@ class GenerationRetirementTest(unittest.TestCase):
             successor = fixture.evidence_root / "accepted-graph.json"
             successor_value = json.loads(successor.read_text())
             self.assertNotIn(fixture.release_id, successor_value["rollbackReleases"])
+            self.assertNotIn(b96_release, successor_value["rollbackReleases"])
             self.assertEqual(successor_value["immediateRollbackReleases"], {
                 "api": immediate_api, "frontend": immediate_frontend})
+            self.assertEqual(successor_value["activeReleases"], [active_api])
+            self.assertEqual(successor_value["transitiveReturnReleases"], [transitive])
             accepted_receipt = json.loads(
                 (fixture.evidence_root / "accepted-receipt.json").read_text())
             self.assertEqual(accepted_receipt["activationEvidence"]["api"]["kind"],
@@ -2330,6 +2447,52 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(
                 accepted_receipt["activationEvidence"]["frontend"]["immediateRollback"],
                 immediate_frontend)
+
+            b96_path = fixture.releases_root / b96_release
+            b96_path.mkdir(mode=0o755)
+            reappeared = reconcile("b96-reappeared")
+            self.assertEqual(reappeared.returncode, 2)
+            self.assertIn("release_reconciliation_absent_runtime_reappeared",
+                          reappeared.stderr)
+            b96_path.rmdir()
+
+            derivatives_only = json.loads(request.read_text())
+            derivative_entry = derivatives_only["entries"][-1]
+            final_link = derivative_entry["closure"]["chain"][-1]
+            final_intent = fixture.evidence_root / "b96-derived-only-intent.json"
+            final_intent_value = json.loads(Path(final_link["intent"]["path"]).read_text())
+            final_intent_value["commands"][0]["class"] = "DERIVED_OUTPUT_RUNTIME"
+            private_json(final_intent, final_intent_value)
+            final_receipt = fixture.evidence_root / "b96-derived-only-terminal-receipt.json"
+            final_receipt_value = json.loads(Path(final_link["receipt"]["path"]).read_text())
+            final_receipt_value["intentSha256"] = sha(final_intent)
+            private_json(final_receipt, final_receipt_value)
+            final_review = fixture.evidence_root / "b96-derived-only-review.json"
+            final_review_value = json.loads(Path(derivative_entry["review"]["path"]).read_text())
+            final_review_value["evidenceSha256"] = sha(final_receipt)
+            private_json(final_review, final_review_value)
+            final_link["intent"] = {"path": str(final_intent), "sha256": sha(final_intent)}
+            final_link["receipt"] = {"path": str(final_receipt), "sha256": sha(final_receipt)}
+            derivative_entry["review"] = {"path": str(final_review),
+                                           "sha256": sha(final_review)}
+            derivatives_only_path = fixture.evidence_root / "b96-derived-only-request.json"
+            private_json(derivatives_only_path, derivatives_only)
+            denied = reconcile("b96-derived-only", derivatives_only_path)
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("release_reconciliation_absent_runtime_effect", denied.stderr)
+
+            live_request = json.loads(request.read_text())
+            live_operational = fixture.evidence_root / "b96-live-operational.json"
+            live_operational_value = json.loads(operational_path.read_text())
+            live_operational_value["dependencies"] = [str(b96_path)]
+            private_json(live_operational, live_operational_value)
+            live_request["operationalState"] = {"path": str(live_operational),
+                                                 "sha256": sha(live_operational)}
+            live_request_path = fixture.evidence_root / "b96-live-request.json"
+            private_json(live_request_path, live_request)
+            denied = reconcile("b96-live", live_request_path)
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("release_reconciliation_dependency_still_open", denied.stderr)
 
             accepted_projection = fixture.evidence_root / "accepted-projection.json"
             live_pm2 = fixture.evidence_root / "live-pm2"
@@ -2366,6 +2529,11 @@ class GenerationRetirementTest(unittest.TestCase):
                           captured["protectedGraphPaths"])
             self.assertIn(str(fixture.releases_root / immediate_frontend),
                           captured["protectedGraphPaths"])
+            self.assertIn(str(fixture.releases_root / transitive),
+                          captured["protectedGraphPaths"])
+            for release_id in private_release_ids:
+                self.assertIn(str(fixture.releases_root / release_id),
+                              captured["protectedGraphPaths"])
 
             def denied_projection(name: str, mutate):
                 receipt_value = json.loads(

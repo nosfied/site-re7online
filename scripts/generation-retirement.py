@@ -3224,6 +3224,7 @@ RECONCILIATION_TERMINAL_RECEIPTS = {"SANITIZED", "DEPLOYED_SANITIZED"}
 RECONCILIATION_INCOMPLETE_RECEIPTS = {
     "QUARANTINED", "RETENTION_INCOMPLETE", "DEPLOYED_RETENTION_INCOMPLETE",
 }
+B96_TERMINAL_RELEASE = "immutable-b96eb779-vps-20261028T025159Z"
 
 
 def _closed_file_binding(value: Any, label: str) -> tuple[Path, str, bytes]:
@@ -3509,6 +3510,48 @@ def _canonical_retirement_closure(value: Any, release: str, target: str,
     return {"kind": "CANONICAL_RETIREMENT", "chain": normalized}
 
 
+def _b96_terminal_release_runtime_proof(value: Any, release: str,
+                                        installed: Path) -> None:
+    """Authenticate the one historical absence allowed outside graph inventory."""
+    if (release != B96_TERMINAL_RELEASE or installed.name != B96_TERMINAL_RELEASE or
+            not isinstance(value, dict) or value.get("kind") != "CANONICAL_RETIREMENT" or
+            not isinstance(value.get("chain"), list) or len(value["chain"]) != 2):
+        deny("release_reconciliation_absent_inventory_identity")
+    final = value["chain"][-1]
+    if not isinstance(final, dict) or set(final) != {"intent", "receipt", "journal"}:
+        deny("release_reconciliation_absent_inventory_identity")
+    _, intent_sha, intent_raw = _closed_file_binding(final["intent"], f"{release}:final-intent")
+    _, _, receipt_raw = _closed_file_binding(final["receipt"], f"{release}:final-receipt")
+    _, journal_sha, journal_raw = _closed_file_binding(final["journal"], f"{release}:final-journal")
+    intent = object_json(intent_raw, f"{release}:final-intent")
+    receipt = object_json(receipt_raw, f"{release}:final-receipt")
+    matches = [command for command in intent.get("commands", [])
+               if isinstance(command, dict) and
+               command.get("class") == "RELEASE_RUNTIME" and
+               command.get("path") == str(installed)]
+    if len(matches) != 1:
+        deny("release_reconciliation_absent_runtime_effect")
+    command = matches[0]
+    ordinal = command.get("ordinal")
+    expected_argv = ["/usr/bin/rm", "-r", "--", str(installed)]
+    events = [event for event in _read_journal(journal_raw)
+              if event.get("ordinal") == ordinal]
+    expected_events = [
+        {"event": "ATTEMPT", "ordinal": ordinal, "path": str(installed),
+         "argv": expected_argv},
+        {"event": "RESULT", "ordinal": ordinal, "exitCode": 0},
+        {"event": "VERIFIED", "ordinal": ordinal, "absent": True},
+    ]
+    if (not isinstance(ordinal, int) or command.get("argv") != expected_argv or
+            events != expected_events or receipt.get("state") != "SANITIZED" or
+            receipt.get("intentSha256") != intent_sha or
+            receipt.get("commandLogSha256") != journal_sha or
+            str(installed) not in receipt.get("removedPaths", [])):
+        deny("release_reconciliation_absent_runtime_effect")
+    if installed.exists() or installed.is_symlink():
+        deny("release_reconciliation_absent_runtime_reappeared")
+
+
 def _legacy_batch_closure(value: Any, release: str, target: str,
                           contract_path: Path, contract_sha: str,
                           lifecycle_sha: str, review: dict[str, Any],
@@ -3614,11 +3657,12 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
         role = entry.get("expectedRole")
         decision = entry.get("decision")
         installed = Path(str(entry.get("installedReleasePath", "")))
+        inventory_present = release in source["installedVerifiedReleases"]
         if (not isinstance(release, str) or not release or release in seen or
                 role not in {"rollbackReleases", "transitiveReturnReleases"} or
                 decision not in {"CLOSE_OPERATIONAL_DEPENDENCY", "PRESERVE_PRIVATE_DATA"} or
                 installed != release_root / release or release not in source[role] or
-                release not in source["installedVerifiedReleases"]):
+                (not inventory_present and release != B96_TERMINAL_RELEASE)):
             deny("release_reconciliation_entry_identity")
         seen.add(release)
         contract_path, contract_sha, contract_raw = _closed_file_binding(
@@ -3651,6 +3695,14 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
                 contract_sha, lifecycle_sha, review, operational)
         else:
             deny("release_reconciliation_closure_schema")
+        if not inventory_present:
+            if (role != "rollbackReleases" or
+                    decision != "CLOSE_OPERATIONAL_DEPENDENCY" or
+                    release in source["activeReleases"] or
+                    release in source["candidateReleases"] or
+                    release in source["transitiveReturnReleases"]):
+                deny("release_reconciliation_absent_inventory_identity")
+            _b96_terminal_release_runtime_proof(closure, release, installed)
         release_artifacts = [item for item in contract["artifacts"]
                              if item.get("class") == "RELEASE_RUNTIME" and
                              item.get("path") == str(installed)]
