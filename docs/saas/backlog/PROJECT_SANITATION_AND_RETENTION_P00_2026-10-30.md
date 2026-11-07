@@ -1153,3 +1153,52 @@ política vigente só admite a classe subordinada de cache para f160. Assim, o
 veredito permanece `DENY_BEFORE_PREPARE / GENERATION_CONTRACT_MISSING`, com o
 fechamento do worktree agora autenticável, potencial físico da release ainda
 condicionado e ganho qualificado de 0 B.
+
+#### Veredito reproduzível da geração instalada
+
+O contrato antigo `d7-capacity-binding-contract.private.json`, SHA-256
+`6b9234fb9cc20050f946c0728e59d2aee358d5207d1402a934622387a8409f81`, autentica
+somente os runtimes derivados. A comparação com `validate_contract()` termina em
+`artifact_contract_schema`: faltam `generationId`, estado terminal, writer lock,
+classes, política privada e as métricas/identidades exigidas para a release
+instalada. Ele não pode ser promovido por mudança de nome ou preenchimento de
+campos presumidos.
+
+As fontes Git preservadas sustentam parte, mas não toda a cadeia:
+
+- o registro d7
+  `TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json`, SHA-256
+  `3babb512086e6233a996e80ea5477855986a22177fc489f1d429f36fbd6043dd`,
+  vincula release, target, pacote, manifesto, índice, marker, componentes e
+  retornos anteriores;
+- o registro sucessor a959
+  `CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json`, SHA-256
+  `c0d702aabd0e3caa1d8044671de07bd1f355985fd34b3d6bb457c146a708abb6`,
+  declara d7 como predecessor de API e frontend e publica os hashes do receipt
+  `3567a10a...f353dc8` e journal `991d549a...e0804240`;
+- entretanto, o próprio registro d7 declara `privateEvidence.versioned=false` e
+  `locationPublished=false`, e o registro a959 atribui sua proveniência a relato
+  do owner, sem inspeção independente. Os bytes originais do receipt/journal de
+  ativação a959 e um lifecycle privado d7 vinculável não estão na custódia local
+  identificada. Hashes publicados sem os arquivos não permitem executar os
+  leitores existentes nem autenticar a sucessão por componente.
+
+Uma fixture com contrato canônico, lifecycle terminal e fotografia observada — d7
+somente em `installedVerifiedReleases`, fora de ativo, rollback, retorno transitivo
+e candidato — produz exatamente um comando `RELEASE_RUNTIME` com
+`eligibilityAtPrepare=RETIREMENT_READY`. A mesma entrada com o contrato histórico
+nega antes da classificação. Portanto, o grafo não é o bloqueio; a provenance da
+geração é.
+
+Não foi criado bootstrap d7. A fonte capaz de resolver a lacuna é a custódia
+autenticada dos bytes originais do receipt e journal a959 já publicados por hash,
+somada ao lifecycle privado d7 original; alternativamente, uma decisão contratual
+versionada teria de autorizar explicitamente uma derivação a partir dos registros
+Git, sem apresentá-la como lifecycle histórico. Até uma dessas provas existir,
+review nova não pode legitimar contrato/lifecycle ausentes. Os dez extras de cache
+continuam preservados; a exceção específica f160 não foi generalizada.
+
+Nesta rodada, a medição física reutilizada da release é 988.606.464 bytes, incluindo
+61.440 bytes dos dez extras de cache. Bytes qualificados: 0. Bytes efetivamente
+recuperados: 0. Os efeitos terminais anteriores do worktree e dos runtimes permanecem
+contabilizados separadamente e não foram somados de novo.

@@ -842,6 +842,48 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_d7_inventory_only_graph_would_qualify_only_with_canonical_generation_evidence(self):
+        old_runtime_contract = {"schemaVersion": 1,
+            "releaseId": "immutable-d7de6453-vps-20261024T221500Z",
+            "targetCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+            "artifacts": []}
+        with self.assertRaisesRegex(MODULE.Denied, "artifact_contract_schema"):
+            MODULE.validate_contract(old_runtime_contract)
+
+        fixture = Fixture(active=False, rollback=False, candidate=False, installed=True,
+                          deployed=False,
+                          release_id="immutable-d7de6453-vps-20261024T221500Z")
+        try:
+            other = fixture.releases_root / "immutable-current-fixture"
+            other.mkdir()
+            fixture.current.unlink(); os.symlink(other, fixture.current)
+            graph = {"activeReleases": [], "rollbackReleases": [],
+                "transitiveReturnReleases": [], "candidateReleases": [],
+                "installedVerifiedReleases": [fixture.release_id],
+                "supersededCandidates": []}
+            private_json(fixture.graph, graph)
+            operational = json.loads(fixture.operational.read_text())
+            operational.update(graph)
+            operational["currentPaths"] = [str(other)]
+            operational["deploymentState"] = {"state": "SUPERSEDED"}
+            operational["observations"]["currentLinks"] = [{
+                "path": str(fixture.current), "target": str(other)}]
+            operational["observations"]["releaseGraph"]["sha256"] = sha(fixture.graph)
+            private_json(fixture.operational, operational)
+            contract = json.loads(fixture.contract.read_text())
+            contract["artifacts"] = [item for item in contract["artifacts"]
+                if item["class"] in MODULE.PRESERVE_CLASSES | {"RELEASE_RUNTIME"}]
+            private_json(fixture.contract, contract)
+            prepared = fixture.prepare()
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            intent = json.loads(fixture.intent.read_text())
+            self.assertEqual([item["path"] for item in intent["commands"]],
+                             [str(fixture.installed_release)])
+            self.assertEqual(intent["commands"][0]["eligibilityAtPrepare"],
+                             "RETIREMENT_READY")
+        finally:
+            fixture.close()
+
     def test_rich_graph_preserves_component_rollbacks_and_denies_omission(self):
         graph = {
             "activeReleases": ["active"],
