@@ -89,6 +89,28 @@ preserva `providerAcceptance=unknown`, realiza zero chamadas ao provedor e ainda
 não foi aplicado. Os 374 destinatários posteriores permanecem fora de execução;
 aplicação, arquivamento e reabertura da guarda continuam atos separados.
 
+## Candidata b8d284b6 — preflight aprovado
+
+Em 08/11/2026, o Codex local reportou `PREFLIGHT_PASS` para
+`immutable-b8d284b6-vps-20261108T132846Z`, no escopo API + frontend.
+A candidata está instalada e inerte. A produção segue em `36b94c6d`,
+com worker preservado, retorno imediato `17cc77a8` e retorno transitivo
+`a959129e` no grafo anterior à ativação.
+
+O primeiro preflight negou em `rollback_role_reconciliation_required`.
+O reconciliador canônico encerrou somente o papel excedente de `785bde80`
+em `rollbackReleases` e preservou a release com `api-runtime/.data` como
+`PRESERVED_PRIVATE_DATA`. O recibo `63fce46a…e078` registra
+`RECONCILED_NO_EFFECT`, sem comandos destrutivos. A fotografia sucessora
+vinculou a nova intenção `dee95338…ab09` aos mesmos três derivados do build,
+com `2.010.021.888 B` de alocação prevista para retirada. A intenção anterior
+permanece como evidência da tentativa negada.
+
+O journal `7b208c94…7917` registra o preflight aprovado com `saveCount=0`.
+A próxima etapa depende da autorização explícita de ativação. Os hashes
+completos constam em [`pendingOperationalChange`](CURRENT_STATE.json).
+O plano histórico `afaf9831…` segue em trilha separada.
+
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 
 Fonte: relato do owner/Codex local, sem nova inspeção da VPS pelo editor. O lote
