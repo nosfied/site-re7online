@@ -2,38 +2,61 @@
 
 **DEPLOYED_SANITIZED / CAMPAIGN RECIPIENT CONTINUITY ACTIVE / PRODUCTION HEALTHY**
 
-## Estado vigente — continuidade de campanhas 17cc77a8 concluída
+## Estado vigente — continuidade de campanhas 36b94c6d concluída
 
-Fonte: execução canônica de 05/11/2026 e recaptura somente leitura do Codex
-local em 06/11/2026.
+Fonte: execução canônica e recaptura somente leitura do Codex local em
+07–08/11/2026.
 
-A release API+frontend `immutable-17cc77a8-vps-20261104T141039Z`, target
-`17cc77a8f1200ed970097c9c83444e4cad874a1a`, está `DEPLOYED_SANITIZED`.
+A release API+frontend `immutable-36b94c6d-vps-20261107T165118Z`, target
+`36b94c6da7a1f3e07d4a123d0629b35bea48b014`, está `DEPLOYED_SANITIZED`.
 API e frontend apontam para a release, health local/público passou, e o worker
-`e2e7f17a` foi preservado sem restart. A release anterior `785bde80` permanece
-como retorno autenticado.
+`e2e7f17a` foi preservado sem restart. A release anterior `17cc77a8` permanece
+como retorno autenticado de API e frontend.
 Os caminhos estáveis são `/opt/re7online/current/api` e
 `/opt/re7online/current/frontend`; o frontend permanece `fork_mode`, BUILD_ID
-`t7OOSSjRAmYSuPobO3mQA`.
+`jftfT1w1Kx9ULQ1MRA5eL`.
 
-A finalização executou um único `pm2 save`, validou o dump
-`b44f2a81926072508f7d56670d9a538629935fa26afb1280dcb6b8f6450c52cb`,
-criou o marker, retirou 3/3 derivados e encerrou o lock canônico. Registro:
-[CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
+A continuação autenticada da finalização executou um único `pm2 save`, validou o
+dump `9101b1c995f07ebb4032a362812d601cee453e5884f513222b4efcf8a2ada398`,
+criou o marker, retirou 3/3 derivados e encerrou o lock canônico. O journal
+terminal é `12d8db1f…5562b`, o receipt de retenção é `ea418a0f…b3fd` e o
+journal `ATTEMPT → RESULT → VERIFIED` é `9e5e2449…2768`. Registro:
+[CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json).
 
 Não repetir build, instalação, ativação, save ou retenção dessa geração. O saldo
-do pós-check somente leitura foi 8.448.696.320 bytes e 8.760.179 inodes. A alocação
-retirada foi 2.009.059.328 bytes; o aumento líquido observado na janela foi
-1.994.584.064 bytes. São métricas distintas, tomadas em checkpoints distintos, e
-o saldo não é capacidade reservada. O índice autenticado contém 34.374 entradas:
-30.947 arquivos, 3.386 diretórios e 41 symlinks. A adoção do adapter de
-`preparations` continua uma frente separada.
+terminal medido foi 10.834.006.016 bytes e 8.847.872 inodes. A intenção selada
+registrava 2.009.645.056 bytes alocados nos três derivados; o receipt não mede
+bytes, mas comprova 3/3 e a ausência dos caminhos. A variação de `df` entre os
+checkpoints pré e pós-finalização foi 2.017.529.856 bytes. São fontes e métricas
+distintas, não um ledger aritmético, e o saldo não é capacidade reservada. O
+índice autenticado contém 34.381 entradas:
+30.953 arquivos, 3.387 diretórios e 41 symlinks.
 
-A fotografia de 06/11 confirmou novamente API e frontend físicos em `17cc77a8`,
-worker `e2e7f17a`, retorno `785bde80` presente e autenticado pelo runtime manifest,
-health local `ok=true/db=ok`, health público HTTP 200 e dump PM2
-`b44f2a81926072508f7d56670d9a538629935fa26afb1280dcb6b8f6450c52cb`.
-O lock canônico de deploy estava ausente, como exige o fechamento terminal.
+A fotografia terminal confirmou API e frontend físicos em `36b94c6d`, worker
+`e2e7f17a`, retorno `17cc77a8`, health local `ok=true/db=ok`, health público
+HTTP 200 e lock canônico ausente.
+
+### Custódia de controle sucessora — OPEN, não sanitizada
+
+A custódia `36b-runtime-cache-finalize-control-c7896c3d-v1` permanece
+`OPEN / CREATION_COMPLETED`. Seu lifecycle é `557bea22…3000`, o receipt de
+materialização é `3ec9ce42…9082` e o contrato é `e90ee680…0f66`. A alocação
+realizada na criação foi 77.492.224 bytes e 3.659 inodes. A leitura posterior do
+worktree mediu 77.647.872 bytes: 155.648 bytes adicionais após a materialização.
+
+Os requests, a cópia autenticada do journal negativo, o manifesto de
+reconciliação, o contrato, o lifecycle e o receipt são evidências preservadas.
+O worktree `/opt/re7online/deploy-control/c7896c3dd0a3` e as duas cópias privadas
+do driver/finalizador nele contidas são derivados reproduzíveis com autoridade no
+commit `c7896c3d…acdc`. O consumidor aplicável é
+`deploy-control-worktree-materialize.py consume`, mas a validação fresca encontrou
+as duas cópias privadas como arquivos não rastreados. Cada cópia é byte-exatamente
+igual ao respectivo blob integrado em `c7896c3d`: driver `28eeb2f3…2f98` e wrapper
+`c87300a0…e930`. Elas são derivados reproduzíveis, não evidências únicas, e devem
+receber baixa explícita por caminho e hash antes do consumo canônico. Não há
+receipt terminal nem prova de ausência
+desse worktree; portanto somente os três derivados de build da geração recebem
+`SANITIZED`. A custódia de controle não recebe essa classificação.
 
 ### Validação funcional posterior — criação integral e incidente de execução
 
