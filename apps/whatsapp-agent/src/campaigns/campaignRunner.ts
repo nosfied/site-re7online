@@ -1,5 +1,9 @@
 import { persistVerifiedAcceptedCampaignResult } from "./campaignAcceptedResult.js";
-import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "./campaignEligibility.js";
+import {
+  campaignRecipientEligibility,
+  campaignRecipientEligibilityInBatches,
+  normalizeCampaignRecipientIdentity,
+} from "./campaignEligibility.js";
 import { campaignFailureDiagnostic } from "./campaignFailureDiagnostic.js";
 import { campaignTask, campaignOperationsAreOpen, campaignProviderAttempt, CampaignOperationsClosed } from "./campaignOperations.js";
 import crypto from "node:crypto";
@@ -647,10 +651,18 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
   const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
   const blocked: Array<{ leadId: string; reason: string }> = [];
   const seen = new Set<string>();
-  for (const lead of leads) {
+  const eligibility = await campaignRecipientEligibilityInBatches(
+    prisma,
+    params.clientId,
+    leads.map((lead) => ({
+      values: [lead.phone || lead.waIdCanonical || lead.waId],
+      channel: lead.channel,
+    }))
+  );
+  if (eligibility.length !== leads.length) throw new Error("campaign_eligibility_result_count_mismatch");
+  for (const [index, lead] of leads.entries()) {
     const authoritativeIdentity = lead.phone || lead.waIdCanonical || lead.waId;
-    const reason = await campaignRecipientEligibility(prisma, params.clientId,
-      [authoritativeIdentity], lead.channel);
+    const reason = eligibility[index];
     if (reason) { blocked.push({ leadId: lead.id, reason }); continue; }
     const rawWaId = normalizeCampaignRunRecipientWaId(authoritativeIdentity);
     const canonical = normalizeCampaignRunRecipientWaId(rawWaId);

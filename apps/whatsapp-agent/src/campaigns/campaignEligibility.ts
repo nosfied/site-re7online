@@ -174,3 +174,25 @@ export async function campaignRecipientEligibilityBatch(
     return null;
   });
 }
+
+export const CAMPAIGN_ELIGIBILITY_BATCH_SIZE = 500;
+
+export async function campaignRecipientEligibilityInBatches(
+  prisma: PrismaClient,
+  clientId: string,
+  recipients: Array<{ values: string[]; channel?: string | null }>,
+  batchSize = CAMPAIGN_ELIGIBILITY_BATCH_SIZE
+): Promise<Array<EligibilityReason | null>> {
+  if (!Number.isSafeInteger(batchSize) || batchSize <= 0) {
+    throw new Error("campaign_eligibility_batch_size_invalid");
+  }
+  const reasons: Array<EligibilityReason | null> = [];
+  for (let index = 0; index < recipients.length; index += batchSize) {
+    reasons.push(...await campaignRecipientEligibilityBatch(
+      prisma,
+      clientId,
+      recipients.slice(index, index + batchSize)
+    ));
+  }
+  return reasons;
+}

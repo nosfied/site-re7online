@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import crypto from 'node:crypto';
 import { getPrisma } from '../db.js';
-import { campaignRecipientEligibility, campaignRecipientEligibilityBatch, normalizeCampaignRecipientIdentity } from './campaignEligibility.js';
+import { campaignRecipientEligibility, campaignRecipientEligibilityBatch, campaignRecipientEligibilityInBatches, normalizeCampaignRecipientIdentity } from './campaignEligibility.js';
 import { recordContactOptOut } from './optOutRegistry.js';
 import { ensureCampaignOutboundCrmAttemptMaterialization } from './campaignOutboundConversation.js';
 import { sanitizeMailDeliveryError } from '../mail/canonicalMail.js';
@@ -69,6 +69,45 @@ test('eligibility change during template prevalidation blocks before fetch', asy
       } });
     assert.equal(result.blockedByEligibility, true); assert.equal(result.errorBody, 'operationally_excluded_contact'); assert.equal(calls, 0);
   } finally { globalThis.fetch = originalFetch; await db.$disconnect(); }
+});
+
+test('batched eligibility preserves positional reasons across 500-recipient boundaries', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const recipients = Array.from({ length: 1002 }, (_, index) => `55419${String(12000000 + index)}`);
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-batched-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.contact.create({ data: { clientId, waId: recipients[499], channel: 'whatsapp', lifecycle: 'ACTIVE', operationallyExcludedAt: new Date() } });
+    await db.contact.create({ data: { clientId, waId: recipients[500], channel: 'whatsapp', lifecycle: 'PROVISIONAL' } });
+    await recordContactOptOut({ clientId, waId: recipients[1000], source: 'synthetic' });
+    const inputs = recipients.map((waId, index) => ({
+      values: [waId],
+      channel: index === 1001 ? 'instagram' : 'whatsapp',
+    }));
+    const reasons = await campaignRecipientEligibilityInBatches(db, clientId, inputs);
+    assert.equal(reasons.length, recipients.length);
+    assert.equal(reasons[498], null);
+    assert.equal(reasons[499], 'operationally_excluded_contact');
+    assert.equal(reasons[500], 'provisional_contact');
+    assert.equal(reasons[501], null);
+    assert.equal(reasons[1000], 'active_send_blocked');
+    assert.equal(reasons[1001], 'non_whatsapp_channel');
+    assert.equal(reasons.filter(Boolean).length, 4);
+    for (const index of [498, 499, 500, 501, 1000, 1001]) {
+      assert.equal(
+        reasons[index],
+        await campaignRecipientEligibility(db, clientId, inputs[index].values, inputs[index].channel)
+      );
+    }
+    await assert.rejects(
+      campaignRecipientEligibilityInBatches(db, clientId, inputs, 0),
+      /campaign_eligibility_batch_size_invalid/
+    );
+  } finally {
+    await db.event.deleteMany({ where: { clientId } });
+    await db.contact.deleteMany({ where: { clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
 });
 
 test('CSV/manual import plan rejects anonymized input before normalization without creating CRM', async () => {

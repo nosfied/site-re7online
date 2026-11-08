@@ -1309,8 +1309,9 @@ test("dynamic CRM batch materializes 3001 recipients into four durable chunks wi
     campaignLinkCreationMs: Math.round(phase("before_enqueue") - phase("after_snapshot")),
     jobCreationMs: Math.round(phase("after_enqueue") - phase("before_enqueue")),
     materializationTotalMs: Math.round(materializationDurationMs),
-    eligibilityCalls: 3001,
-    eligibilitySqlLowerBound: 15005,
+    eligibilityInputCount: 3001,
+    eligibilityBatchSize: 500,
+    eligibilityBatchCount: 7,
     providerCalls: 0,
   }));
   assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
