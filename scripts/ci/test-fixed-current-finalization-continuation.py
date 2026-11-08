@@ -42,6 +42,31 @@ class Fixture:
         }
         private_json(self.request_path, self.request)
 
+    def runtime_cache_request(self, attempt: int = 1) -> tuple[dict[str, str], dict[str, object]]:
+        outputs = {
+            name: str(self.tx / f"runtime-cache-finalize-v1-attempt-{attempt:02d}.{name}.private.txt")
+            for name in ("stdout", "stderr", "exit")
+        }
+        self.request["action"] = "finalize_runtime_cache_continuation"
+        self.request["attemptOrdinal"] = attempt
+        self.request["evidenceOutputs"] = outputs
+        reconciliation = self.root / "runtime-cache-reconciliation.private.json"
+        private_json(reconciliation, {"schemaVersion": 1})
+        self.request["finalizeArgv"].extend([
+            "--target", "a" * 40,
+            "--transaction-root", str(self.tx),
+            "--generation-retirement-intent-sha256", "b" * 64,
+            "--runtime-cache-reconciliation", str(reconciliation),
+            "--runtime-cache-reconciliation-sha256", digest(reconciliation),
+        ])
+        private_json(self.request_path, self.request)
+        return outputs, {
+            "RUNTIME_CACHE_RELEASE": "immutable-test",
+            "RUNTIME_CACHE_TARGET": "a" * 40,
+            "RUNTIME_CACHE_TRANSACTION": self.tx,
+            "RUNTIME_CACHE_INTENT_SHA256": "b" * 64,
+        }
+
     def lock_fd(self) -> int:
         return CONTINUATION.acquire_lock(self.lock)
 
@@ -215,6 +240,45 @@ class ContinuationTests(unittest.TestCase):
         private_json(self.fixture.request_path, self.fixture.request)
         with self.assertRaisesRegex(CONTINUATION.Denied, "request_finalize_argv"):
             CONTINUATION.load_request(self.fixture.request_path, digest(self.fixture.request_path))
+
+    def test_runtime_cache_continuation_uses_three_new_exclusive_outputs(self):
+        old = self.fixture.tx / "fixed-current-finalize-continuation.stdout.private.txt"
+        old.write_text("preserved negative evidence\n"); old.chmod(0o600)
+        outputs, constants = self.fixture.runtime_cache_request()
+        with patch.multiple(CONTINUATION, **constants):
+            loaded = CONTINUATION.load_request(
+                self.fixture.request_path, digest(self.fixture.request_path))
+        lock_fd = self.fixture.lock_fd()
+
+        def runner(argv, **kwargs):
+            os.write(kwargs["stdout"], b"terminal\n")
+            return subprocess.CompletedProcess(argv, 0)
+
+        self.assertEqual(CONTINUATION.run(loaded, lock_fd, runner=runner), 0)
+        self.assertEqual(old.read_text(), "preserved negative evidence\n")
+        self.assertEqual(Path(outputs["stdout"]).read_text(), "terminal\n")
+        self.assertEqual(Path(outputs["stderr"]).read_text(), "")
+        self.assertEqual(Path(outputs["exit"]).read_text(), "0\n")
+        self.assertTrue(self.fixture.lock.is_file())
+
+    def test_runtime_cache_continuation_rejects_crossed_or_reused_outputs(self):
+        for variant in ("outside", "duplicate", "legacy"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                outputs, constants = self.fixture.runtime_cache_request()
+                if variant == "outside":
+                    self.fixture.request["evidenceOutputs"]["stdout"] = str(
+                        self.fixture.root / "outside.private.txt")
+                elif variant == "duplicate":
+                    self.fixture.request["evidenceOutputs"]["stderr"] = outputs["stdout"]
+                else:
+                    self.fixture.request["evidenceOutputs"]["exit"] = str(
+                        self.fixture.tx / "fixed-current-finalize-continuation.exit.private.txt")
+                private_json(self.fixture.request_path, self.fixture.request)
+                with patch.multiple(CONTINUATION, **constants):
+                    with self.assertRaisesRegex(CONTINUATION.Denied, "request_evidence_outputs"):
+                        CONTINUATION.load_request(
+                            self.fixture.request_path, digest(self.fixture.request_path))
 
 
 if __name__ == "__main__":

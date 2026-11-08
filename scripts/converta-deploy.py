@@ -27,6 +27,7 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
 PRIVATE_DATA_POLICY = "PRIVATE_DATA_NEVER_RETIRE"
 PRIVATE_DATA_RECONCILIATION_KIND = "LEGACY_PRIVATE_DATA_OVERLAY_FINALIZE_RECONCILIATION"
+RUNTIME_CACHE_RECONCILIATION_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
 LEGACY_0FDEC_RELEASE = "immutable-0fdec8b0-vps-20261028T224726Z"
 LEGACY_0FDEC_TARGET = "0fdec8b026b28acb42c2d95e1fe473b49b6b0a20"
 LEGACY_0FDEC_CONTRACT_SHA256 = "f3188049ea87c6f9e9ece01c4698d6e49994a13fe682cc828a0b0fc34e020c0a"
@@ -35,6 +36,38 @@ LEGACY_0FDEC_TRANSACTION = Path(
     "/opt/re7online/backups/converta-persistent/deploy-transactions/"
     "immutable-0fdec8b0-vps-20261028T224726Z-api-only-a23aded8-v1-once"
 )
+RUNTIME_CACHE_36B_RELEASE = "immutable-36b94c6d-vps-20261107T165118Z"
+RUNTIME_CACHE_36B_TARGET = "36b94c6da7a1f3e07d4a123d0629b35bea48b014"
+RUNTIME_CACHE_36B_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-36b94c6d-vps-20261107T165118Z-api-frontend-6fd93b08-v4-once"
+)
+RUNTIME_CACHE_36B_INDEX_SHA256 = "9f667f08e0b492bc397ec6317ebcc9608cbd54224cb500e47f2d4e3163a80edb"
+RUNTIME_CACHE_36B_MANIFEST_SHA256 = "97470e7f9dcb799f9554551545a384c5b2fe0b40e313149024f6672dae88d85a"
+RUNTIME_CACHE_36B_INTENT_SHA256 = "6064a4a98ede89bb085b09e4e474048d976aa9cf31a4c0cd03207be18a0c4f7c"
+RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256 = "4bb0c4265431aa433ca48e131a2202644f4fd39ca8f611a5a56314e17164a4bc"
+RUNTIME_CACHE_36B_ACCEPTANCE_SHA256 = "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
+RUNTIME_CACHE_36B_LOCK_SHA256 = "9dcff444e29797988c0b9501533e8f59d2b15d7c10e5794d4eff8469fd508cdb"
+RUNTIME_CACHE_36B_EXTRAS = {
+    "frontend-runtime/.next/cache": {"type": "directory", "mode": 0o755},
+    "frontend-runtime/.next/cache/images": {"type": "directory", "mode": 0o755},
+    "frontend-runtime/.next/cache/images/5Zf6Dt9Da6GBJFCrYyD0xu2dFAWqjPJ01EZzZ76RaCc": {
+        "type": "directory", "mode": 0o755,
+    },
+    ("frontend-runtime/.next/cache/images/5Zf6Dt9Da6GBJFCrYyD0xu2dFAWqjPJ01EZzZ76RaCc/"
+     "14400.1794095402876.PWJME0lVvfrDOLRUu2QulRp1jBxfu1J5ZOWEpf0UqF0.Vy8iMTFmYjYtMWExYjI0NWI4MjAi.webp"): {
+        "type": "file", "mode": 0o644, "size": 10558,
+        "sha256": "3d624c134955bdfac338b454bb642e951a758c1c5fbb527964e584a5fd14a85d",
+    },
+    "frontend-runtime/.next/cache/images/To4GqmXFYdIkSU_SW9FDP1_xRixDFs9QFhJLchkU4LM": {
+        "type": "directory", "mode": 0o755,
+    },
+    ("frontend-runtime/.next/cache/images/To4GqmXFYdIkSU_SW9FDP1_xRixDFs9QFhJLchkU4LM/"
+     "14400.1794095402874.Jp0Av1TKNogbcbTT52mEHKtqho7b1DeMRy2xsGKSkmw.Vy8iMWIxOGYtMWExYjI0NWI4MjAi.webp"): {
+        "type": "file", "mode": 0o644, "size": 11454,
+        "sha256": "269d00bf54ca36881b71b4d3e769841cab6a868edbd4378c472db1b06292926c",
+    },
+}
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -313,6 +346,8 @@ class Inputs:
     private_data_reconciliation: Path | None = None
     private_data_reconciliation_sha256: str | None = None
     retirement_sentinel_closure: RetirementSentinelClosureBinding | None = None
+    runtime_cache_reconciliation: Path | None = None
+    runtime_cache_reconciliation_sha256: str | None = None
 
     def binding(self) -> dict[str, Any]:
         value = {
@@ -534,10 +569,66 @@ class Driver:
             deny("pm2_version")
         return candidate
 
-    def _control_head(self) -> None:
+    def _runtime_cache_manifest(self) -> dict[str, Any]:
+        path = self.inputs.runtime_cache_reconciliation
+        expected_sha256 = self.inputs.runtime_cache_reconciliation_sha256
+        if (path is None or expected_sha256 is None or not path.is_absolute() or
+                not SHA256.fullmatch(expected_sha256)):
+            deny("runtime_cache_reconciliation_binding")
+        raw, info = stable_regular_bytes(path, required_mode=0o600)
+        if ((info.st_uid, info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(raw).hexdigest() != expected_sha256):
+            deny("runtime_cache_reconciliation_identity")
+        value = json_object(raw, path.name)
+        required = {"schemaVersion", "kind", "releaseId", "targetCommit", "transactionRoot",
+                    "indexSha256", "manifestSha256", "retirementIntentSha256",
+                    "originalControlPlane", "continuationControlPlane",
+                    "continuationDriverSha256", "negativeJournal", "acceptanceSha256",
+                    "lockSha256", "cacheEntries"}
+        if (set(value) != required or value.get("schemaVersion") != 1 or
+                value.get("kind") != RUNTIME_CACHE_RECONCILIATION_KIND):
+            deny("runtime_cache_reconciliation_schema")
+        return value
+
+    def _control_head(self, continuation_journal: dict[str, Any] | None = None) -> None:
         result = self.host.run(["git", "-C", str(self.repo), "rev-parse", "HEAD"])
-        if result.returncode or result.stdout.strip() != self.inputs.control_plane:
+        if result.returncode:
             deny("control_plane_identity")
+        observed_head = result.stdout.strip()
+        if self.inputs.runtime_cache_reconciliation is None:
+            if observed_head != self.inputs.control_plane:
+                deny("control_plane_identity")
+        else:
+            if continuation_journal is None:
+                deny("runtime_cache_continuation_command")
+            value = self._runtime_cache_manifest()
+            driver_path = Path(__file__).resolve()
+            repo_driver = self.repo / "scripts/converta-deploy.py"
+            tracked = self.host.run([
+                "git", "-C", str(self.repo), "ls-files", "--error-unmatch", "--",
+                "scripts/converta-deploy.py",
+            ])
+            committed_driver = self.host.run([
+                "git", "-C", str(self.repo), "show",
+                f"{observed_head}:scripts/converta-deploy.py",
+            ])
+            committed_driver_sha256 = (
+                hashlib.sha256(committed_driver.stdout.encode()).hexdigest()
+                if committed_driver.returncode == 0 else None
+            )
+            if (value.get("originalControlPlane") != self.inputs.control_plane or
+                    not SHA40.fullmatch(str(value.get("continuationControlPlane", ""))) or
+                    value.get("continuationControlPlane") == self.inputs.control_plane or
+                    observed_head != value.get("continuationControlPlane") or
+                    not SHA256.fullmatch(str(value.get("continuationDriverSha256", ""))) or
+                    digest(driver_path) != value.get("continuationDriverSha256") or
+                    tracked.returncode or tracked.stdout.strip() != "scripts/converta-deploy.py" or
+                    committed_driver_sha256 != value.get("continuationDriverSha256") or
+                    not repo_driver.is_file() or repo_driver.is_symlink() or
+                    digest(repo_driver) != value.get("continuationDriverSha256") or
+                    continuation_journal.get("binding", {}).get("controlPlane") !=
+                    self.inputs.control_plane):
+                deny("runtime_cache_continuation_control_plane")
         status = self.host.run(["git", "-C", str(self.repo), "status", "--porcelain", "--untracked-files=no"])
         if status.returncode or status.stdout.strip():
             deny("control_plane_not_clean")
@@ -601,6 +692,92 @@ class Driver:
                 any(overlay[key] < 0 for key in ("ownerUid", "groupGid", "mode")) or
                 overlay["mode"] > 0o7777 or overlay["mode"] & 0o022):
             deny("private_data_reconciliation_overlay")
+        return value
+
+    def _runtime_cache_reconciliation(self, index_sha256: str, manifest_sha256: str,
+                                      observed_extras: dict[str, dict[str, Any]],
+                                      journal: dict[str, Any]) -> dict[str, Any]:
+        value = self._runtime_cache_manifest()
+        if (self.inputs.release != RUNTIME_CACHE_36B_RELEASE or
+                self.inputs.target != RUNTIME_CACHE_36B_TARGET or
+                self.inputs.transaction_root != RUNTIME_CACHE_36B_TRANSACTION or
+                index_sha256 != RUNTIME_CACHE_36B_INDEX_SHA256 or
+                manifest_sha256 != RUNTIME_CACHE_36B_MANIFEST_SHA256 or
+                self.inputs.retirement is None or
+                self.inputs.retirement.intent_sha256 != RUNTIME_CACHE_36B_INTENT_SHA256):
+            deny("runtime_cache_reconciliation_scope")
+        expected_binding = {
+            "releaseId": self.inputs.release, "targetCommit": self.inputs.target,
+            "transactionRoot": str(self.inputs.transaction_root), "indexSha256": index_sha256,
+            "manifestSha256": manifest_sha256,
+            "retirementIntentSha256": self.inputs.retirement.intent_sha256,
+            "acceptanceSha256": RUNTIME_CACHE_36B_ACCEPTANCE_SHA256,
+            "lockSha256": RUNTIME_CACHE_36B_LOCK_SHA256,
+            "originalControlPlane": self.inputs.control_plane,
+        }
+        if any(value.get(key) != item for key, item in expected_binding.items()):
+            deny("runtime_cache_reconciliation_binding")
+        if (not SHA40.fullmatch(str(value.get("continuationControlPlane", ""))) or
+                not SHA256.fullmatch(str(value.get("continuationDriverSha256", "")))):
+            deny("runtime_cache_reconciliation_binding")
+
+        negative = value.get("negativeJournal")
+        if (not isinstance(negative, dict) or set(negative) != {"path", "sha256"} or
+                negative.get("sha256") != RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256 or
+                not isinstance(negative.get("path"), str) or
+                not Path(negative["path"]).is_absolute()):
+            deny("runtime_cache_reconciliation_negative_journal")
+        negative_raw, negative_info = stable_regular_bytes(Path(negative["path"]), required_mode=0o600)
+        if ((negative_info.st_uid, negative_info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(negative_raw).hexdigest() != negative["sha256"]):
+            deny("runtime_cache_reconciliation_negative_journal")
+        negative_journal = json_object(negative_raw, Path(negative["path"]).name)
+        if (negative_journal.get("state") != "FAILED" or
+                negative_journal.get("recoveryAction") != "finalize" or
+                negative_journal.get("saveCount") != 0 or
+                negative_journal.get("binding") != journal.get("binding") or
+                negative_journal.get("lockDigest") != value["lockSha256"]):
+            deny("runtime_cache_reconciliation_negative_state")
+        if (journal.get("state") not in {"FAILED", "FINALIZING"} or
+                (journal.get("state") == "FAILED" and journal.get("recoveryAction") != "finalize") or
+                journal.get("saveCount") not in {0, 1} or
+                journal.get("binding") != negative_journal.get("binding") or
+                journal.get("lockDigest") != value["lockSha256"]):
+            deny("runtime_cache_reconciliation_state")
+        acceptance_raw, acceptance_info = stable_regular_bytes(self.acceptance, required_mode=0o600)
+        if ((acceptance_info.st_uid, acceptance_info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(acceptance_raw).hexdigest() != value["acceptanceSha256"]):
+            deny("runtime_cache_reconciliation_acceptance")
+        lock_raw, lock_info = stable_regular_bytes(self.lock, required_mode=0o600)
+        if ((lock_info.st_uid, lock_info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(lock_raw).hexdigest() != value["lockSha256"]):
+            deny("runtime_cache_reconciliation_lock")
+
+        entries = value.get("cacheEntries")
+        if (not isinstance(entries, list) or len(entries) != 6 or
+                any(not isinstance(item, dict) or not isinstance(item.get("path"), str)
+                    for item in entries)):
+            deny("runtime_cache_reconciliation_entries")
+        declared = {item["path"]: item for item in entries}
+        if set(declared) != set(RUNTIME_CACHE_36B_EXTRAS) or len(declared) != len(entries):
+            deny("runtime_cache_reconciliation_entries")
+        for item in entries:
+            kind = item.get("type")
+            allowed = {"path", "type", "mode"}
+            if kind == "file": allowed |= {"size", "sha256"}
+            elif kind != "directory": deny("runtime_cache_reconciliation_entry_type")
+            if (set(item) != allowed or item.get("mode") not in {0o644, 0o755} or
+                    (kind == "directory" and item["mode"] != 0o755) or
+                    (kind == "file" and (item["mode"] != 0o644 or
+                     not isinstance(item.get("size"), int) or item["size"] < 0 or
+                     not SHA256.fullmatch(str(item.get("sha256", "")))))):
+                deny("runtime_cache_reconciliation_entry")
+        sealed = {path: {"path": path, **metadata}
+                  for path, metadata in RUNTIME_CACHE_36B_EXTRAS.items()}
+        if declared != sealed:
+            deny("runtime_cache_reconciliation_sealed_entries")
+        if observed_extras != declared:
+            deny("runtime_cache_reconciliation_inventory")
         return value
 
     def _private_data_contract(self, continuation_journal: dict[str, Any] | None = None
@@ -760,18 +937,34 @@ class Driver:
             current_identity = (current.st_dev, current.st_ino, current.st_mode,
                                 current.st_size, current.st_mtime_ns, current.st_ctime_ns)
             if current_identity != identity: deny(f"release_entry_changed:{relative}")
-        if set(observed) != set(expected):
+        missing = set(expected) - set(observed)
+        extras = set(observed) - set(expected)
+        if missing:
             deny("release_index_inventory")
         for relative, item in expected.items():
             if observed[relative] != item:
                 deny(f"release_index_mismatch:{relative}")
+        runtime_cache = None
+        if extras:
+            if continuation_journal is None:
+                deny("release_index_inventory")
+            manifest_raw, _ = stable_regular_bytes(self.release_root / "manifest.json")
+            runtime_cache = self._runtime_cache_reconciliation(
+                hashlib.sha256(raw).hexdigest(), hashlib.sha256(manifest_raw).hexdigest(),
+                {relative: observed[relative] for relative in extras}, continuation_journal)
+        elif self.inputs.runtime_cache_reconciliation is not None:
+            deny("runtime_cache_reconciliation_unnecessary")
         overlay_after = self._private_data_overlay(continuation_journal)
         stable = ("present", "path", "classification", "state", "rootIdentity",
                   "ownerUid", "groupGid", "mode")
         if any(overlay_after.get(key) != overlay.get(key) for key in stable):
             deny("private_data_overlay_changed")
-        return {"sha256": hashlib.sha256(raw).hexdigest(), "entries": len(expected),
-                "privateDataOverlay": overlay_after}
+        result = {"sha256": hashlib.sha256(raw).hexdigest(), "entries": len(expected),
+                  "privateDataOverlay": overlay_after}
+        if runtime_cache is not None:
+            result["runtimeCacheReconciliationSha256"] = self.inputs.runtime_cache_reconciliation_sha256
+            result["runtimeCacheEntries"] = len(extras)
+        return result
 
     def _release(self, continuation_journal: dict[str, Any] | None = None) -> dict[str, Any]:
         if not SHA40.fullmatch(self.inputs.target):
@@ -805,9 +998,13 @@ class Driver:
             runtime = self.release_root / RUNTIME_DIR[component]
             if not runtime.is_dir():
                 deny(f"release_runtime_missing:{component}")
-        return {"manifestSha256": manifest_sha, "indexSha256": index["sha256"],
-                "indexEntries": index["entries"],
-                "privateDataOverlay": index["privateDataOverlay"]}
+        result = {"manifestSha256": manifest_sha, "indexSha256": index["sha256"],
+                  "indexEntries": index["entries"],
+                  "privateDataOverlay": index["privateDataOverlay"]}
+        if "runtimeCacheReconciliationSha256" in index:
+            result["runtimeCacheReconciliationSha256"] = index["runtimeCacheReconciliationSha256"]
+            result["runtimeCacheEntries"] = index["runtimeCacheEntries"]
+        return result
 
     def _rollback_release(self, component: str, identity: dict[str, Any]) -> Path:
         root = self.releases / identity["releaseId"]
@@ -2017,7 +2214,7 @@ class Driver:
         try:
             if self._external_lock_active():
                 self._ensure_lock(journal)
-            self._control_head(); self._authenticated_runtime_manifest()
+            self._control_head(journal); self._authenticated_runtime_manifest()
             release = self._release(continuation_journal=journal)
             self._validate_private_data_continuity(journal, release)
             final_readiness: dict[str, Any] = {}
@@ -2151,12 +2348,17 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--generation-retirement-deployment-lock", type=Path, required=True)
     parser.add_argument("--private-data-reconciliation", type=Path)
     parser.add_argument("--private-data-reconciliation-sha256")
+    parser.add_argument("--runtime-cache-reconciliation", type=Path)
+    parser.add_argument("--runtime-cache-reconciliation-sha256")
     parser.add_argument("--retirement-sentinel-closure", type=Path)
     parser.add_argument("--retirement-sentinel-closure-sha256")
     args = parser.parse_args()
     if ((args.private_data_reconciliation is None) !=
             (args.private_data_reconciliation_sha256 is None)):
         deny("private_data_reconciliation_binding")
+    if ((args.runtime_cache_reconciliation is None) !=
+            (args.runtime_cache_reconciliation_sha256 is None)):
+        deny("runtime_cache_reconciliation_binding")
     if ((args.retirement_sentinel_closure is None) !=
             (args.retirement_sentinel_closure_sha256 is None)):
         deny("retirement_sentinel_closure_binding")
@@ -2177,7 +2379,9 @@ def parse() -> tuple[str, Inputs]:
                                 args.runtime_manifest_sha256, retirement,
                                 args.private_data_reconciliation,
                                 args.private_data_reconciliation_sha256,
-                                sentinel_closure)
+                                sentinel_closure,
+                                args.runtime_cache_reconciliation,
+                                args.runtime_cache_reconciliation_sha256)
 
 
 def main() -> int:

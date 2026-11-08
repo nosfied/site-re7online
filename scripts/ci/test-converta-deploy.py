@@ -40,6 +40,20 @@ assert CAPACITY_SPEC and CAPACITY_SPEC.loader
 capacity = importlib.util.module_from_spec(CAPACITY_SPEC)
 CAPACITY_SPEC.loader.exec_module(capacity)
 
+CONTINUATION_SPEC = importlib.util.spec_from_file_location(
+    "fixed_current_runtime_cache_continuation",
+    ROOT / "scripts/fixed-current-finalization-continuation.py")
+assert CONTINUATION_SPEC and CONTINUATION_SPEC.loader
+continuation = importlib.util.module_from_spec(CONTINUATION_SPEC)
+CONTINUATION_SPEC.loader.exec_module(continuation)
+
+GENERATION_TEST_SPEC = importlib.util.spec_from_file_location(
+    "generation_retirement_fixture",
+    ROOT / "scripts/ci/test-generation-retirement.py")
+assert GENERATION_TEST_SPEC and GENERATION_TEST_SPEC.loader
+generation_fixture = importlib.util.module_from_spec(GENERATION_TEST_SPEC)
+GENERATION_TEST_SPEC.loader.exec_module(generation_fixture)
+
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -89,6 +103,7 @@ class FakeHost(deploy.Host):
         self.retirement_pass_fds: tuple[int, ...] = ()
         self.retirement_environment: dict[str, str] | None = None
         self.retirement_command: list[str] = []
+        self.committed_driver: str | None = None
 
     def run(self, command: list[str], *, timeout: float = 40,
             pass_fds: tuple[int, ...] = (),
@@ -97,6 +112,14 @@ class FakeHost(deploy.Host):
             return subprocess.CompletedProcess(command, 0, self.control_plane + "\n", "")
         if command[:4] == ["git", "-C", str(ROOT), "status"]:
             return subprocess.CompletedProcess(command, 0, "", "")
+        if (command[:4] == ["git", "-C", str(ROOT), "ls-files"] and
+                command[-1:] == ["scripts/converta-deploy.py"]):
+            return subprocess.CompletedProcess(command, 0, "scripts/converta-deploy.py\n", "")
+        if (command[:4] == ["git", "-C", str(ROOT), "show"] and
+                command[-1].endswith(":scripts/converta-deploy.py")):
+            return subprocess.CompletedProcess(
+                command, 0, self.committed_driver if self.committed_driver is not None
+                else (ROOT / "scripts/converta-deploy.py").read_text(), "")
         if command[-1:] == ["--version"]:
             return subprocess.CompletedProcess(command, 0, "6.0.14\n", "")
         if len(command) > 3 and command[2] == "execute" and "--intent" in command:
@@ -106,9 +129,32 @@ class FakeHost(deploy.Host):
             self.retirement_command = list(command)
             receipt_root = Path(command[command.index("--receipt-root") + 1])
             receipt_root.mkdir(mode=0o700)
+            intent_path = Path(command[command.index("--intent") + 1])
+            intent = json.loads(intent_path.read_text())
+            commands = intent.get("commands", [])
+            journal = receipt_root / "execution-journal.private.jsonl"
+            events: list[dict[str, Any]] = []
+            for item in commands:
+                events.extend((
+                    {"event": "ATTEMPT", "ordinal": item["ordinal"],
+                     "path": item["path"], "argv": item["argv"]},
+                    {"event": "RESULT", "ordinal": item["ordinal"], "exitCode": 0},
+                    {"event": "VERIFIED", "ordinal": item["ordinal"], "absent": True},
+                ))
+            journal.write_text("".join(json.dumps(event, sort_keys=True,
+                                                   separators=(",", ":")) + "\n"
+                                       for event in events))
+            journal.chmod(0o600)
             receipt = receipt_root / "execution-receipt.private.json"
             intent_sha = command[command.index("--intent-sha256") + 1]
-            put(receipt, {"state": "DEPLOYED_SANITIZED", "intentSha256": intent_sha})
+            put(receipt, {"state": "DEPLOYED_SANITIZED", "intentSha256": intent_sha,
+                          "commandLogSha256": sha(journal),
+                          "attemptedCommands": len(commands),
+                          "completedCommands": len(commands),
+                          "removedPaths": [item["path"] for item in commands]})
+            review = Path(command[command.index("--review-output") + 1])
+            put(review, {"schemaVersion": 2, "state": "SANITIZED",
+                         "evidenceSha256": sha(receipt)})
             return subprocess.CompletedProcess(command, 0, json.dumps({
                 "result": "DEPLOYED_SANITIZED", "receiptSha256": sha(receipt),
             }) + "\n", "")
@@ -320,9 +366,9 @@ class DeployFixture(unittest.TestCase):
             pass
         self.temporary.cleanup()
 
-    def _driver(self) -> FixtureDriver:
+    def _driver(self, repo: Path = ROOT) -> FixtureDriver:
         driver = FixtureDriver(
-            self.inputs, host=self.host, repo=ROOT, releases=self.releases,
+            self.inputs, host=self.host, repo=repo, releases=self.releases,
             stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2,
             clock=lambda: 1234567890.0,
         )
@@ -525,6 +571,99 @@ class DeployFixture(unittest.TestCase):
             "LEGACY_0FDEC_CONTRACT_SHA256": contract_sha,
             "LEGACY_0FDEC_RETIREMENT_INTENT_SHA256": self.retirement.intent_sha256,
             "LEGACY_0FDEC_TRANSACTION": self.transaction,
+        }
+        return self.driver, manifest, constants
+
+    def runtime_cache_finalize(self, *, repo: Path = ROOT, prepare_transaction: bool = True,
+                               continuation_control_plane: str | None = None,
+                               preserve_retirement: bool = False,
+                               ) -> tuple[FixtureDriver, Path, dict[str, Any]]:
+        driver = self.driver
+        if prepare_transaction:
+            driver.preflight(); driver.activate(); self.acceptance()
+        root = self.releases / self.candidate
+        paths = sorted(deploy.RUNTIME_CACHE_36B_EXTRAS)
+        files = [path for path in paths if path.endswith(".webp")]
+        for relative in paths:
+            target = root / relative
+            if relative in files:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(("cache:" + relative).encode())
+                target.chmod(0o644)
+            else:
+                target.mkdir(parents=True, exist_ok=True)
+                target.chmod(0o755)
+
+        if not preserve_retirement:
+            contract_sha = sha(self.generation_contract)
+            commands = [
+                {"ordinal": ordinal, "path": str(path),
+                 "argv": ["/usr/bin/rm", "-r", "--", str(path)]}
+                for ordinal, path in enumerate((
+                    self.base / "build-worktree",
+                    self.base / "derived-api-runtime",
+                    self.base / "derived-frontend-runtime"), 1)
+            ]
+            put(self.retirement.intent, {"contractSha256": contract_sha, "commands": commands})
+            self.retirement = replace(self.retirement, intent_sha256=sha(self.retirement.intent))
+            self.inputs = replace(self.inputs, retirement=self.retirement)
+
+        journal = json.loads(driver.journal.read_text())
+        journal["binding"] = self.inputs.binding()
+        journal["state"] = "FAILED"
+        journal["failure"] = "release_index_inventory"
+        journal["recoveryAction"] = "finalize"
+        journal["saveCount"] = 0
+        put(driver.journal, journal)
+        negative = self.base / "negative-journal.authenticated.private.json"
+        negative.write_bytes(driver.journal.read_bytes()); negative.chmod(0o600)
+
+        entries: list[dict[str, Any]] = []
+        for relative in paths:
+            target = root / relative
+            info = target.lstat()
+            item: dict[str, Any] = {"path": relative, "mode": stat.S_IMODE(info.st_mode)}
+            if target.is_dir():
+                item["type"] = "directory"
+            else:
+                item.update(type="file", size=info.st_size, sha256=sha(target))
+            entries.append(item)
+        manifest = self.base / "runtime-cache-reconciliation.private.json"
+        continuation_control_plane = continuation_control_plane or "d" * 40
+        put(manifest, {
+            "schemaVersion": 1, "kind": deploy.RUNTIME_CACHE_RECONCILIATION_KIND,
+            "releaseId": self.candidate, "targetCommit": self.target,
+            "transactionRoot": str(self.transaction),
+            "indexSha256": sha(root / "index.sha256"),
+            "manifestSha256": sha(root / "manifest.json"),
+            "retirementIntentSha256": self.retirement.intent_sha256,
+            "originalControlPlane": self.control_plane,
+            "continuationControlPlane": continuation_control_plane,
+            "continuationDriverSha256": sha(ROOT / "scripts/converta-deploy.py"),
+            "negativeJournal": {"path": str(negative), "sha256": sha(negative)},
+            "acceptanceSha256": sha(driver.acceptance), "lockSha256": sha(self.lock),
+            "cacheEntries": entries,
+        })
+        self.inputs = replace(
+            self.inputs, runtime_cache_reconciliation=manifest,
+            runtime_cache_reconciliation_sha256=sha(manifest))
+        self.driver = self._driver(repo)
+        if repo == ROOT:
+            self.host.control_plane = continuation_control_plane
+        constants = {
+            "RUNTIME_CACHE_36B_RELEASE": self.candidate,
+            "RUNTIME_CACHE_36B_TARGET": self.target,
+            "RUNTIME_CACHE_36B_TRANSACTION": self.transaction,
+            "RUNTIME_CACHE_36B_INDEX_SHA256": sha(root / "index.sha256"),
+            "RUNTIME_CACHE_36B_MANIFEST_SHA256": sha(root / "manifest.json"),
+            "RUNTIME_CACHE_36B_INTENT_SHA256": self.retirement.intent_sha256,
+            "RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256": sha(negative),
+            "RUNTIME_CACHE_36B_ACCEPTANCE_SHA256": sha(driver.acceptance),
+            "RUNTIME_CACHE_36B_LOCK_SHA256": sha(self.lock),
+            "RUNTIME_CACHE_36B_EXTRAS": {
+                item["path"]: {key: value for key, value in item.items() if key != "path"}
+                for item in entries
+            },
         }
         return self.driver, manifest, constants
 
@@ -1113,6 +1252,384 @@ class DriverTests(DeployFixture):
         self.assertEqual(str(deploy.LEGACY_0FDEC_TRANSACTION),
                          "/opt/re7online/backups/converta-persistent/deploy-transactions/"
                          "immutable-0fdec8b0-vps-20261028T224726Z-api-only-a23aded8-v1-once")
+
+    def test_36b_runtime_cache_continuation_finishes_once_with_three_derivatives(self) -> None:
+        driver, _, constants = self.runtime_cache_finalize()
+        commands = json.loads(self.retirement.intent.read_text())["commands"]
+        self.assertEqual(len(commands), 3)
+        with patch.multiple(deploy, **constants):
+            driver.finalize()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+        receipt = self.base / "retirement-receipt/execution-receipt.private.json"
+        receipt_value = json.loads(receipt.read_text())
+        self.assertEqual(receipt_value["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(receipt_value["completedCommands"], 3)
+        self.assertEqual(len(receipt_value["removedPaths"]), 3)
+        events = (self.base / "retirement-receipt/execution-journal.private.jsonl").read_text().splitlines()
+        self.assertEqual(len(events), 9)
+        self.assertEqual(json.loads(self.retirement.review_output.read_text())["state"], "SANITIZED")
+
+    def test_36b_runtime_cache_continuation_recovers_save_without_duplicate(self) -> None:
+        driver, _, constants = self.runtime_cache_finalize()
+        self.external_lock(); driver.failpoints.add("after_save")
+        with patch.multiple(deploy, **constants), patch.dict(
+                os.environ, {deploy.EXTERNAL_LOCK_ENV: "1"}):
+            with self.assertRaisesRegex(deploy.Denied, "injected:after_save"):
+                driver.finalize()
+            self.assertEqual(driver._journal_read()["state"], "FAILED")
+            self.assertEqual(driver._journal_read()["saveCount"], 0)
+            driver.finalize()
+        terminal_journal = driver._journal_read()
+        self.assertEqual(terminal_journal["state"], "DEPLOYED_SANITIZED", terminal_journal)
+        self.assertEqual(terminal_journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_36b_wrapper_recovers_after_save_across_real_control_plane_heads(self) -> None:
+        control = self.base / "successor-control"
+        scripts = control / "scripts"; scripts.mkdir(parents=True)
+        shutil.copyfile(ROOT / "scripts/pm2-definition-env-allowlist.v1.json",
+                        scripts / "pm2-definition-env-allowlist.v1.json")
+        (scripts / "converta-deploy.py").write_text("# original control plane\n")
+        subprocess.run(["git", "init", "-q", str(control)], check=True)
+        subprocess.run(["git", "-C", str(control), "config", "user.email", "fixture@example.test"], check=True)
+        subprocess.run(["git", "-C", str(control), "config", "user.name", "Fixture"], check=True)
+        subprocess.run(["git", "-C", str(control), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(control), "commit", "-q", "-m", "original"], check=True)
+        original_head = subprocess.run(
+            ["git", "-C", str(control), "rev-parse", "HEAD"], check=True,
+            capture_output=True, text=True).stdout.strip()
+
+        real_retirement = generation_fixture.Fixture(release_id=self.candidate)
+        self.addCleanup(real_retirement.close)
+        contract = json.loads(real_retirement.contract.read_text())
+        contract["artifacts"] = [
+            item for item in contract["artifacts"] if item["class"] != "DERIVED_STAGING"
+        ]
+        generation_fixture.private_json(real_retirement.contract, contract)
+        prepared = real_retirement.prepare()
+        self.assertEqual(prepared.returncode, 0, (prepared.stdout, prepared.stderr))
+        real_intent = json.loads(real_retirement.intent.read_text())
+        self.assertEqual(len(real_intent["commands"]), 3)
+        authorization = real_retirement.authorize("36b-runtime-cache-once")
+        retirement_control = real_retirement.root / "retirement-control"
+        retirement_control.mkdir(mode=0o700)
+        real_tool = retirement_control / "generation-retirement.py"
+        real_dependency = retirement_control / "preparation_artifact_lifecycle.py"
+        shutil.copyfile(ROOT / "scripts/generation-retirement.py", real_tool)
+        shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", real_dependency)
+        real_tool.chmod(0o600); real_dependency.chmod(0o600)
+        receipt_parent = real_retirement.evidence_root / "finalize-receipts"
+        receipt_parent.mkdir(mode=0o700)
+        self.retirement = deploy.RetirementBinding(
+            real_tool, sha(real_tool), real_retirement.intent, sha(real_retirement.intent),
+            authorization, sha(authorization), real_retirement.operational,
+            sha(real_retirement.operational), real_retirement.policy,
+            sha(real_retirement.policy), receipt_parent / "retirement-3-of-3",
+            real_retirement.review, self.lock,
+        )
+        self.generation_contract = real_retirement.contract
+
+        runtime = json.loads(self.runtime_manifest.read_text())
+        runtime["controlPlaneSha"] = original_head
+        put(self.runtime_manifest, runtime)
+        self.control_plane = original_head
+        self.inputs = replace(
+            self.inputs, control_plane=original_head,
+            runtime_manifest_sha256=sha(self.runtime_manifest), retirement=self.retirement)
+        original_run = self.host.run
+
+        def real_git(command: list[str], *, timeout: float = 40,
+                     pass_fds: tuple[int, ...] = (), env: dict[str, str] | None = None
+                     ) -> subprocess.CompletedProcess[str]:
+            if command and command[0] == "git":
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False)
+            if (len(command) > 3 and Path(command[1]) == real_tool and
+                    command[2] == "execute"):
+                self.host.retirement_calls += 1
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False,
+                                      pass_fds=pass_fds, env=env)
+            return original_run(command, timeout=timeout, pass_fds=pass_fds, env=env)
+
+        self.host.run = real_git  # type: ignore[method-assign]
+        self.driver = self._driver(control)
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+
+        shutil.copyfile(ROOT / "scripts/converta-deploy.py", scripts / "converta-deploy.py")
+        subprocess.run(["git", "-C", str(control), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(control), "commit", "-q", "-m", "successor"], check=True)
+        successor_head = subprocess.run(
+            ["git", "-C", str(control), "rev-parse", "HEAD"], check=True,
+            capture_output=True, text=True).stdout.strip()
+        self.assertNotEqual(original_head, successor_head)
+        driver, manifest, deploy_constants = self.runtime_cache_finalize(
+            repo=control, prepare_transaction=False,
+            continuation_control_plane=successor_head, preserve_retirement=True)
+        real_retirement.pm2_state.write_text(json.dumps(list(self.host.rows.values())))
+
+        custody = self.base / "continuation-custody"; custody.mkdir(mode=0o700)
+        copied_driver = custody / "converta-deploy.py"
+        shutil.copyfile(ROOT / "scripts/converta-deploy.py", copied_driver)
+        copied_driver.chmod(0o600)
+        copied_wrapper = custody / "fixed-current-finalization-continuation.py"
+        shutil.copyfile(ROOT / "scripts/fixed-current-finalization-continuation.py", copied_wrapper)
+        copied_wrapper.chmod(0o600)
+        finalize_argv = [
+            "/usr/bin/python3", "-B", str(copied_driver), "finalize",
+            "--release", self.candidate, "--target", self.target,
+            "--control-plane", original_head, "--components", "api,frontend",
+            "--runtime-manifest", str(self.runtime_manifest),
+            "--runtime-manifest-sha256", sha(self.runtime_manifest),
+            "--transaction-root", str(self.transaction),
+            "--generation-retirement-tool", str(self.retirement.tool),
+            "--generation-retirement-tool-sha256", self.retirement.tool_sha256,
+            "--generation-retirement-intent", str(self.retirement.intent),
+            "--generation-retirement-intent-sha256", self.retirement.intent_sha256,
+            "--generation-retirement-authorization", str(self.retirement.authorization),
+            "--generation-retirement-authorization-sha256",
+            self.retirement.authorization_sha256,
+            "--generation-retirement-operational-state", str(self.retirement.operational_state),
+            "--generation-retirement-operational-state-sha256",
+            self.retirement.operational_state_sha256,
+            "--generation-retirement-root-policy", str(self.retirement.root_policy),
+            "--generation-retirement-root-policy-sha256", self.retirement.root_policy_sha256,
+            "--generation-retirement-receipt-root", str(self.retirement.receipt_root),
+            "--generation-retirement-review-output", str(self.retirement.review_output),
+            "--generation-retirement-deployment-lock", str(self.retirement.deployment_lock),
+            "--runtime-cache-reconciliation", str(manifest),
+            "--runtime-cache-reconciliation-sha256", sha(manifest),
+        ]
+        failpoint = custody / "fail-after-save.once"
+        failpoint.write_text("after_save\n"); failpoint.chmod(0o600)
+        save_log = custody / "pm2-save.calls"
+        fixture_config = custody / "subprocess-fixture.private.json"
+        serialized_constants = {
+            name: (str(value) if isinstance(value, Path) else value)
+            for name, value in deploy_constants.items()
+        }
+        put(fixture_config, {
+            "driver": str(copied_driver), "wrapper": str(copied_wrapper),
+            "repo": str(control),
+            "testModule": str(Path(__file__).resolve()),
+            "controlPlane": successor_head, "node": str(self.node),
+            "rows": list(self.host.rows.values()), "dump": str(self.dump),
+            "pm2": str(self.pm2), "releases": str(self.releases),
+            "stable": {name: str(path) for name, path in self.stable.items()},
+            "lock": str(self.lock), "retirementTool": str(real_tool),
+            "failpoint": str(failpoint), "saveLog": str(save_log),
+            "constants": serialized_constants,
+            "wrapperConstants": {
+                "RUNTIME_CACHE_RELEASE": self.candidate,
+                "RUNTIME_CACHE_TARGET": self.target,
+                "RUNTIME_CACHE_TRANSACTION": str(self.transaction),
+                "RUNTIME_CACHE_INTENT_SHA256": self.retirement.intent_sha256,
+            },
+        })
+        fixture_python = custody / "fixture-python"
+        fixture_python.mkdir(mode=0o700)
+        (fixture_python / "sitecustomize.py").write_text("""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+config_path = os.environ.get("RE7_FINALIZE_SUBPROCESS_FIXTURE")
+if config_path:
+    config = json.loads(Path(config_path).read_text())
+
+    def install_fixture(frame, event, argument):
+        if event != "call" or frame.f_code.co_name != "main":
+            return install_fixture
+        executable = Path(frame.f_code.co_filename).resolve()
+        if executable == Path(config["wrapper"]).resolve():
+            sys.settrace(None)
+            for name, value in config["wrapperConstants"].items():
+                frame.f_globals[name] = Path(value) if name == "RUNTIME_CACHE_TRANSACTION" else value
+            return None
+        if executable != Path(config["driver"]).resolve():
+            return install_fixture
+        sys.settrace(None)
+        globals_ = frame.f_globals
+        spec = importlib.util.spec_from_file_location("deploy_subprocess_fixture", config["testModule"])
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        host = module.FakeHost(config["controlPlane"], Path(config["node"]))
+        host.rows = {row["name"]: row for row in config["rows"]}
+        host.process_cwds = {
+            row["pid"]: Path(row["pm2_env"]["pm_cwd"]).resolve()
+            for row in host.rows.values()
+        }
+        host.dump = Path(config["dump"])
+        original_run = host.run
+
+        def run(command, *, timeout=40, pass_fds=(), env=None):
+            if command and command[0] == "git":
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False)
+            if (len(command) > 3 and Path(command[1]) == Path(config["retirementTool"]) and
+                    command[2] == "execute"):
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False,
+                                      pass_fds=pass_fds, env=env)
+            return original_run(command, timeout=timeout, pass_fds=pass_fds, env=env)
+
+        host.run = run
+        original_mutate = host.pm2_mutate
+
+        def mutate(pm2, args):
+            original_mutate(pm2, args)
+            if args == ["save"]:
+                with open(config["saveLog"], "a", encoding="utf-8") as stream:
+                    stream.write("save\\n")
+
+        host.pm2_mutate = mutate
+        original_driver = globals_["Driver"]
+        denied = globals_["Denied"]
+
+        class SubprocessDriver(original_driver):
+            def _ticks(self, pid):
+                return pid * 100
+
+            def _failpoint(self, name):
+                marker = Path(config["failpoint"])
+                if name == "after_save" and marker.exists():
+                    marker.unlink()
+                    raise denied("injected:after_save")
+
+        def driver_factory(inputs):
+            return SubprocessDriver(
+                inputs, host=host, repo=Path(config["repo"]),
+                releases=Path(config["releases"]),
+                stable={name: Path(path) for name, path in config["stable"].items()},
+                lock=Path(config["lock"]), dump=Path(config["dump"]),
+                pm2=Path(config["pm2"]), clock=lambda: 1234567890.0)
+
+        globals_["Driver"] = driver_factory
+        for name, value in config["constants"].items():
+            globals_[name] = Path(value) if name == "RUNTIME_CACHE_36B_TRANSACTION" else value
+        return None
+
+    sys.settrace(install_fixture)
+""")
+        def request_for(attempt: int) -> dict[str, Any]:
+            return {
+                "schemaVersion": 1, "action": "finalize_runtime_cache_continuation",
+                "attemptOrdinal": attempt, "lockPath": str(self.lock),
+                "transactionRoot": str(self.transaction), "driver": str(copied_driver),
+                "driverSha256": sha(copied_driver),
+                "evidenceOutputs": {
+                    name: str(self.transaction /
+                              f"runtime-cache-finalize-v1-attempt-{attempt:02d}.{name}.private.txt")
+                    for name in ("stdout", "stderr", "exit")
+                },
+                "finalizeArgv": [
+                    *finalize_argv,
+                ],
+            }
+
+        def invoke(attempt: int) -> subprocess.CompletedProcess[str]:
+            request = request_for(attempt)
+            request_path = custody / f"attempt-{attempt:02d}.request.private.json"
+            put(request_path, request)
+            environment = dict(os.environ)
+            environment.update(
+                PYTHONPATH=str(fixture_python),
+                RE7_FINALIZE_SUBPROCESS_FIXTURE=str(fixture_config))
+            return subprocess.run([
+                "/usr/bin/python3", "-B", str(copied_wrapper),
+                "--request", str(request_path),
+                "--request-sha256", sha(request_path),
+            ], text=True, capture_output=True, check=False, env=environment)
+
+        first = invoke(1)
+        self.assertEqual(first.returncode, 2, (first.stdout, first.stderr))
+        self.assertIn("finalize_exit:2", first.stderr)
+        self.assertTrue(self.lock.is_file())
+        second = invoke(2)
+        self.assertEqual(second.returncode, 0, (second.stdout, second.stderr))
+        self.assertFalse(self.lock.exists())
+        self.assertEqual(save_log.read_text().splitlines(), ["save"])
+        self.assertEqual((self.transaction /
+            "runtime-cache-finalize-v1-attempt-01.exit.private.txt").read_text(), "2\n")
+        self.assertEqual((self.transaction /
+            "runtime-cache-finalize-v1-attempt-02.exit.private.txt").read_text(), "0\n")
+        self.assertIn("DEPLOYED_SANITIZED", (self.transaction /
+            "runtime-cache-finalize-v1-attempt-02.stdout.private.txt").read_text())
+        terminal_journal = json.loads(driver.journal.read_text())
+        self.assertEqual(terminal_journal["state"], "DEPLOYED_SANITIZED", terminal_journal)
+        self.assertEqual(terminal_journal["saveCount"], 1)
+        for attempt in (1, 2):
+            for name in ("stdout", "stderr", "exit"):
+                self.assertTrue((self.transaction /
+                    f"runtime-cache-finalize-v1-attempt-{attempt:02d}.{name}.private.txt").is_file())
+        for item in real_intent["commands"]:
+            self.assertFalse(Path(item["path"]).exists())
+        receipt_path = receipt_parent / "retirement-3-of-3/execution-receipt.private.json"
+        receipt = json.loads(receipt_path.read_text())
+        self.assertEqual(receipt["completedCommands"], 3)
+        self.assertEqual(receipt["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(json.loads(real_retirement.review.read_text())["state"], "SANITIZED")
+
+    def test_36b_runtime_cache_continuation_denies_inventory_and_crossed_evidence(self) -> None:
+        variants = ("cache_altered", "extra", "symlink", "indexed_missing",
+                    "indexed_divergent", "crossed_evidence", "successor_head",
+                    "successor_driver", "successor_blob")
+        for variant in variants:
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                driver, manifest, constants = self.runtime_cache_finalize()
+                root = self.releases / self.candidate
+                payload = json.loads(manifest.read_text())
+                cache_files = [item for item in payload["cacheEntries"] if item["type"] == "file"]
+                if variant == "cache_altered":
+                    (root / cache_files[0]["path"]).write_text("altered\n")
+                elif variant == "extra":
+                    (root / "frontend-runtime/.next/cache/new-extra").write_text("extra\n")
+                elif variant == "symlink":
+                    path = root / cache_files[0]["path"]
+                    path.unlink(); path.symlink_to(root / cache_files[1]["path"])
+                elif variant == "indexed_missing":
+                    (root / "api-runtime/dist/index.js").unlink()
+                elif variant == "indexed_divergent":
+                    (root / "api-runtime/dist/index.js").write_text("divergent\n")
+                elif variant == "crossed_evidence":
+                    negative = Path(payload["negativeJournal"]["path"])
+                    crossed = json.loads(negative.read_text())
+                    crossed["binding"]["target"] = "f" * 40
+                    put(negative, crossed)
+                    payload["negativeJournal"]["sha256"] = sha(negative)
+                    put(manifest, payload)
+                    self.inputs = replace(
+                        self.inputs, runtime_cache_reconciliation_sha256=sha(manifest))
+                    driver = self._driver()
+                    constants["RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256"] = sha(negative)
+                elif variant == "successor_head":
+                    payload["continuationControlPlane"] = "e" * 40
+                    put(manifest, payload)
+                    self.inputs = replace(
+                        self.inputs, runtime_cache_reconciliation_sha256=sha(manifest))
+                    driver = self._driver()
+                elif variant == "successor_blob":
+                    self.host.committed_driver = "# tracked worktree is clean; committed blob differs\n"
+                else:
+                    payload["continuationDriverSha256"] = "f" * 64
+                    put(manifest, payload)
+                    self.inputs = replace(
+                        self.inputs, runtime_cache_reconciliation_sha256=sha(manifest))
+                    driver = self._driver()
+                with patch.multiple(deploy, **constants):
+                    with self.assertRaises(deploy.Denied):
+                        driver.finalize()
+                self.assertEqual(self.host.save_calls, 0)
+                self.assertEqual(self.host.retirement_calls, 0)
 
     def test_private_data_overlay_is_fail_closed_without_relaxing_other_inventory(self) -> None:
         for drift, predicate in (("extra", "release_index_inventory"),

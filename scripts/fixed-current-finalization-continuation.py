@@ -21,6 +21,13 @@ from typing import Any, Callable
 
 LOCK_FD = 9
 LOCK_ENV = "RE7_DEPLOYMENT_LOCK_HELD"
+RUNTIME_CACHE_RELEASE = "immutable-36b94c6d-vps-20261107T165118Z"
+RUNTIME_CACHE_TARGET = "36b94c6da7a1f3e07d4a123d0629b35bea48b014"
+RUNTIME_CACHE_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-36b94c6d-vps-20261107T165118Z-api-frontend-6fd93b08-v4-once"
+)
+RUNTIME_CACHE_INTENT_SHA256 = "6064a4a98ede89bb085b09e4e474048d976aa9cf31a4c0cd03207be18a0c4f7c"
 
 
 class Denied(RuntimeError):
@@ -62,6 +69,15 @@ def _sha256_value(value: Any) -> bool:
             all(character in "0123456789abcdef" for character in value))
 
 
+def _argv_value(argv: list[str], flag: str) -> str:
+    if argv.count(flag) != 1:
+        raise Denied(f"request_finalize_argv:{flag}")
+    index = argv.index(flag)
+    if index + 1 >= len(argv):
+        raise Denied(f"request_finalize_argv:{flag}")
+    return argv[index + 1]
+
+
 def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
     raw = stable_regular(path, modes={0o600})
     if sha256(raw) != expected_sha256:
@@ -74,8 +90,10 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
     if value.get("schemaVersion") != 1 or not common.issubset(value):
         raise Denied("request_schema")
     action = value.get("action")
-    if action == "finalize":
+    if action in {"finalize", "finalize_runtime_cache_continuation"}:
         required = common | {"driver", "driverSha256", "finalizeArgv"}
+        if action == "finalize_runtime_cache_continuation":
+            required |= {"attemptOrdinal", "evidenceOutputs"}
         if set(value) != required:
             raise Denied("request_schema")
         for name in ("lockPath", "transactionRoot", "driver"):
@@ -91,6 +109,36 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
                 any(item in {"preflight", "activate", "rollback", "restart"}
                     for item in argv[4:])):
             raise Denied("request_finalize_argv")
+        if action == "finalize_runtime_cache_continuation":
+            attempt = value.get("attemptOrdinal")
+            if not isinstance(attempt, int) or isinstance(attempt, bool) or not 1 <= attempt <= 99:
+                raise Denied("request_attempt_ordinal")
+            outputs = value.get("evidenceOutputs")
+            if not isinstance(outputs, dict) or set(outputs) != {"stdout", "stderr", "exit"}:
+                raise Denied("request_evidence_outputs")
+            transaction = Path(value["transactionRoot"])
+            if (transaction != RUNTIME_CACHE_TRANSACTION or
+                    _argv_value(argv, "--release") != RUNTIME_CACHE_RELEASE or
+                    _argv_value(argv, "--target") != RUNTIME_CACHE_TARGET or
+                    _argv_value(argv, "--transaction-root") != str(RUNTIME_CACHE_TRANSACTION) or
+                    _argv_value(argv, "--generation-retirement-intent-sha256") !=
+                    RUNTIME_CACHE_INTENT_SHA256 or
+                    not Path(_argv_value(argv, "--runtime-cache-reconciliation")).is_absolute() or
+                    not _sha256_value(_argv_value(argv, "--runtime-cache-reconciliation-sha256"))):
+                raise Denied("request_runtime_cache_scope")
+            paths: list[Path] = []
+            for name in ("stdout", "stderr", "exit"):
+                item = outputs.get(name)
+                if not isinstance(item, str) or not Path(item).is_absolute():
+                    raise Denied(f"request_path:evidenceOutputs.{name}")
+                output = Path(item)
+                expected_name = f"runtime-cache-finalize-v1-attempt-{attempt:02d}.{name}.private.txt"
+                if (output.parent != transaction or
+                        output.name != expected_name):
+                    raise Denied("request_evidence_outputs")
+                paths.append(output)
+            if len(set(paths)) != 3:
+                raise Denied("request_evidence_outputs")
     elif action == "release_terminal_lock":
         required = common | {
             "transactionJournalSha256", "lockSha256", "receiptOutput",
@@ -200,17 +248,21 @@ def _open_exclusive(path: Path) -> int:
     return fd
 
 
-def open_evidence(transaction: Path) -> tuple[dict[str, Path], tuple[int, int, int]]:
+def open_evidence(transaction: Path, outputs: dict[str, str] | None = None
+                  ) -> tuple[dict[str, Path], tuple[int, int, int]]:
     info = transaction.lstat()
     if (transaction.is_symlink() or not transaction.is_dir() or
             (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) !=
             (os.geteuid(), os.getegid(), 0o700)):
         raise Denied("transaction_root")
-    paths = {
+    paths = ({name: Path(value) for name, value in outputs.items()} if outputs is not None else {
         "stdout": transaction / "fixed-current-finalize-continuation.stdout.private.txt",
         "stderr": transaction / "fixed-current-finalize-continuation.stderr.private.txt",
         "exit": transaction / "fixed-current-finalize-continuation.exit.private.txt",
-    }
+    })
+    if set(paths) != {"stdout", "stderr", "exit"} or any(
+            path.parent != transaction for path in paths.values()):
+        raise Denied("evidence_paths")
     if any(path.exists() or path.is_symlink() for path in paths.values()):
         raise Denied("evidence_exists")
     opened: list[int] = []
@@ -332,7 +384,7 @@ def run(request: dict[str, Any], lock_fd: int, *,
     if sha256(stable_regular(driver, modes={0o500, 0o600})) != request["driverSha256"]:
         raise Denied("driver_sha256")
     transaction = Path(request["transactionRoot"])
-    _, descriptors = open_evidence(transaction)
+    _, descriptors = open_evidence(transaction, request.get("evidenceOutputs"))
     stdout_fd, stderr_fd, exit_fd = descriptors
     environment = dict(os.environ)
     environment[LOCK_ENV] = "1"
