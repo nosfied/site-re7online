@@ -24,10 +24,12 @@ journal `ATTEMPT → RESULT → VERIFIED` é `9e5e2449…2768`. Registro:
 [CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json](releases/CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json).
 
 Não repetir build, instalação, ativação, save ou retenção dessa geração. O saldo
-terminal medido foi 10.834.006.016 bytes e 8.847.872 inodes. A alocação retirada
-foi 2.009.645.056 bytes; o aumento líquido observado na janela foi
-2.017.529.856 bytes. São métricas distintas, tomadas em checkpoints distintos, e
-o saldo não é capacidade reservada. O índice autenticado contém 34.381 entradas:
+terminal medido foi 10.834.006.016 bytes e 8.847.872 inodes. A intenção selada
+registrava 2.009.645.056 bytes alocados nos três derivados; o receipt não mede
+bytes, mas comprova 3/3 e a ausência dos caminhos. A variação de `df` entre os
+checkpoints pré e pós-finalização foi 2.017.529.856 bytes. São fontes e métricas
+distintas, não um ledger aritmético, e o saldo não é capacidade reservada. O
+índice autenticado contém 34.381 entradas:
 30.953 arquivos, 3.387 diretórios e 41 symlinks.
 
 A fotografia terminal confirmou API e frontend físicos em `36b94c6d`, worker
@@ -48,9 +50,11 @@ O worktree `/opt/re7online/deploy-control/c7896c3dd0a3` e as duas cópias privad
 do driver/finalizador nele contidas são derivados reproduzíveis com autoridade no
 commit `c7896c3d…acdc`. O consumidor aplicável é
 `deploy-control-worktree-materialize.py consume`, mas a validação fresca encontrou
-as duas cópias privadas como arquivos não rastreados; elas explicam a classe do
-crescimento posterior, sem converter a diferença de blocos em ledger. Exigem disposição
-explícita antes do consumo canônico. Não há receipt terminal nem prova de ausência
+as duas cópias privadas como arquivos não rastreados. Cada cópia é byte-exatamente
+igual ao respectivo blob integrado em `c7896c3d`: driver `28eeb2f3…2f98` e wrapper
+`c87300a0…e930`. Elas são derivados reproduzíveis, não evidências únicas, e devem
+receber baixa explícita por caminho e hash antes do consumo canônico. Não há
+receipt terminal nem prova de ausência
 desse worktree; portanto somente os três derivados de build da geração recebem
 `SANITIZED`. A custódia de controle não recebe essa classificação.
 

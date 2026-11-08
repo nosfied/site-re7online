@@ -926,6 +926,16 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
 
     if release.get("target") == "36b94c6da7a1f3e07d4a123d0629b35bea48b014":
         custody = record.get("controlCustody", {})
+        capacity = record.get("capacity", {})
+        allocated_by_path = capacity.get("intentAllocatedBytesByPath", {})
+        require(capacity.get("terminalReceiptIncludesByteMeasurement") is False and
+                len(allocated_by_path) == 3 and
+                sum(allocated_by_path.values()) ==
+                capacity.get("intentAllocatedBytesForRemovedArtifacts") and
+                capacity.get("availableBytesAtTerminalClosure") -
+                capacity.get("availableBytesBeforeTerminalContinuation") ==
+                capacity.get("availableBytesDeltaObserved"),
+                "36b byte totals retain their distinct evidence sources")
         require(custody.get("state") == "OPEN" and
                 custody.get("sanitized") is False and
                 custody.get("terminalDisposition") == "SANITIZE_AFTER_USE" and
@@ -936,6 +946,14 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
                     custody.get("materializationReceiptSha256", ""))) and
                 bool(SHA256.fullmatch(custody.get("contractSha256", ""))),
                 "36b deploy-control custody remains explicitly open")
+        copies = custody.get("discardablePrivateControlCopies", [])
+        require(len(copies) == 2 and
+                all(item.get("byteEquivalentToAuthority") is True and
+                    item.get("disposition") ==
+                    "REMOVE_EXACT_COPY_BEFORE_CANONICAL_CONSUME_WITH_EXPLICIT_RECEIPT" and
+                    bool(SHA256.fullmatch(item.get("sha256", "")))
+                    for item in copies),
+                "36b private control copies have explicit authenticated disposition")
         require(retirement.get("allRemovedPathsVerifiedAbsent") is True and
                 len(retirement.get("removedPaths", [])) == 3,
                 "36b sanitized scope is limited to three absent derivatives")

@@ -92,9 +92,16 @@
     "availableBytesAtTerminalClosure": 10834006016,
     "availableInodesBeforeTerminalContinuation": 8775519,
     "availableInodesAtTerminalClosure": 8847872,
-    "netAvailableBytesIncreaseObserved": 2017529856,
+    "availableBytesDeltaObserved": 2017529856,
     "netAvailableInodesIncreaseObserved": 72353,
-    "qualifiedAllocatedBytesRemoved": 2009645056,
+    "intentAllocatedBytesForRemovedArtifacts": 2009645056,
+    "intentAllocatedBytesByPath": {
+      "/opt/re7online/build-worktrees/immutable-36b94c6d-vps-20261107T165118Z-source": 1026973696,
+      "/opt/re7online/build-output/immutable-36b94c6d-vps-20261107T165118Z-producer/immutable-36b94c6d-vps-20261107T165118Z/api-runtime": 337526784,
+      "/opt/re7online/build-output/immutable-36b94c6d-vps-20261107T165118Z-producer/immutable-36b94c6d-vps-20261107T165118Z/frontend-runtime": 645144576
+    },
+    "terminalReceiptIncludesByteMeasurement": false,
+    "terminalReceiptProof": "THREE_OF_THREE_COMMANDS_COMPLETED_AND_PATHS_VERIFIED_ABSENT",
     "measurementsAreDistinctCheckpointsNotAnArithmeticLedger": true,
     "qualifiedAllocationIsNotReportedAsNetGain": true
   },
@@ -129,11 +136,23 @@
     ],
     "discardableDerivedPath": "/opt/re7online/deploy-control/c7896c3dd0a3",
     "discardablePrivateControlCopies": [
-      "private-control-36b94c6d-v4-runtime-cache-v1/converta-deploy.py",
-      "private-control-36b94c6d-v4-runtime-cache-v1/fixed-current-finalization-continuation.py"
+      {
+        "path": "private-control-36b94c6d-v4-runtime-cache-v1/converta-deploy.py",
+        "sha256": "28eeb2f32797ed8fb827467f98b5c47bbed59d0b2609cce3288dfd0b5a792f98",
+        "authority": "scripts/converta-deploy.py@c7896c3dd0a3942bbab4b1c35497a98da745acdc",
+        "byteEquivalentToAuthority": true,
+        "disposition": "REMOVE_EXACT_COPY_BEFORE_CANONICAL_CONSUME_WITH_EXPLICIT_RECEIPT"
+      },
+      {
+        "path": "private-control-36b94c6d-v4-runtime-cache-v1/fixed-current-finalization-continuation.py",
+        "sha256": "c87300a0e14791673d39bbf61447f0ccbbdaee054f6b1633aaf28d357b07e930",
+        "authority": "scripts/fixed-current-finalization-continuation.py@c7896c3dd0a3942bbab4b1c35497a98da745acdc",
+        "byteEquivalentToAuthority": true,
+        "disposition": "REMOVE_EXACT_COPY_BEFORE_CANONICAL_CONSUME_WITH_EXPLICIT_RECEIPT"
+      }
     ],
     "sanitized": false,
-    "blocker": "UNTRACKED_PRIVATE_CONTROL_COPIES_REQUIRE_EXPLICIT_DISPOSITION_BEFORE_CANONICAL_CONSUME"
+    "blocker": "UNTRACKED_PRIVATE_CONTROL_COPIES_REQUIRE_EXPLICIT_DISPOSITION_RECEIPT_BEFORE_CANONICAL_CONSUME"
   },
   "irreversibleCheckpoint": {
     "buildRepeatForbidden": true,

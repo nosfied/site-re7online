@@ -1435,10 +1435,12 @@ vincula esse receipt. Os três caminhos comprovadamente ausentes são:
 - `/opt/re7online/build-output/immutable-36b94c6d-vps-20261107T165118Z-producer/immutable-36b94c6d-vps-20261107T165118Z/api-runtime`;
 - `/opt/re7online/build-output/immutable-36b94c6d-vps-20261107T165118Z-producer/immutable-36b94c6d-vps-20261107T165118Z/frontend-runtime`.
 
-Esses efeitos somavam 2.009.645.056 B físicos no checkpoint anterior à retirada.
-O saldo passou de 8.816.476.160 B para 10.834.006.016 B, aumento líquido observado
-de 2.017.529.856 B; inodes passaram de 8.775.519 para 8.847.872. As duas métricas
-de bytes são distintas e não formam um ledger aritmético. O journal terminal da
+Na intenção selada, os `allocatedBytes` dos efeitos eram 1.026.973.696 B para o
+worktree, 337.526.784 B para o runtime API e 645.144.576 B para o runtime frontend:
+total 2.009.645.056 B. O receipt terminal não contém medição de bytes; ele comprova
+3/3 e ausência. O saldo de `df` passou de 8.816.476.160 B para 10.834.006.016 B,
+variação observada de 2.017.529.856 B; inodes passaram de 8.775.519 para 8.847.872.
+As fontes e métricas são distintas e não formam um ledger aritmético. O journal terminal da
 transação é `12d8db1f6115de3796807c314b4ca7d3563f9675f88b3f627f04b0520195562b`,
 o dump é `9101b1c995f07ebb4032a362812d601cee453e5884f513222b4efcf8a2ada398`
 e o marker é `bc77c6422ca025eb69e4202d88309cf82b12135de06ca041ba5349d8b372c5a1`.
@@ -1456,7 +1458,13 @@ reconciliação, contrato, lifecycle e receipt são evidência. O worktree
 `/opt/re7online/deploy-control/c7896c3dd0a3` é derivado reproduzível da autoridade
 Git `c7896c3dd0a3942bbab4b1c35497a98da745acdc`; as cópias privadas do driver e do
 wrapper dentro dele também são derivadas. A recaptura encontrou essas duas cópias
-como não rastreadas. O consumidor canônico é
+como não rastreadas. O driver privado tem SHA `28eeb2f3…2f98` e é byte-exatamente
+igual a `scripts/converta-deploy.py` no commit integrado `c7896c3d`; o wrapper
+privado tem SHA `c87300a0…e930` e é byte-exatamente igual a
+`scripts/fixed-current-finalization-continuation.py` no mesmo commit. Ambos são
+derivados reproduzíveis, não evidência única. A disposição proposta para cada um
+é baixa explícita do caminho e hash antes do consumo, com receipt próprio; não se
+trata de limpeza implícita do worktree. O consumidor canônico posterior é
 `scripts/deploy-control-worktree-materialize.py consume`, que exige worktree sem
 conteúdo rastreado, não rastreado ou ignorado divergente antes de executar
 `git worktree remove` e só então fechar o lifecycle. A disposição explícita dessas
