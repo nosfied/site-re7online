@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "LOCAL_CODEX_CANONICAL_EXECUTION_AND_READ_ONLY_RECAPTURE",
+    "reportedDate": "2026-11-08",
+    "timezone": "America/Fortaleza"
+  },
+  "release": {
+    "id": "immutable-36b94c6d-vps-20261107T165118Z",
+    "target": "36b94c6da7a1f3e07d4a123d0629b35bea48b014",
+    "tree": "ee4d0dddfb5d50de263efb90981b387e982fafd0",
+    "buildId": "jftfT1w1Kx9ULQ1MRA5eL",
+    "packageSha256": "4cd571e4dd2f9efa80c53299465800cadeb9bcc317b1143d3927a8ab0f039159",
+    "manifestSha256": "97470e7f9dcb799f9554551545a384c5b2fe0b40e313149024f6672dae88d85a",
+    "indexSha256": "9f667f08e0b492bc397ec6317ebcc9608cbd54224cb500e47f2d4e3163a80edb",
+    "indexEntries": 34381,
+    "indexEntryTypes": {
+      "files": 30953,
+      "directories": 3387,
+      "symlinks": 41
+    },
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "buildCount": 1,
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "controlPlane": {
+    "transactionOriginal": "6fd93b0840d3d4df4d7bd46d1fd87db9bf1c9289",
+    "finalizationContinuationMerge": "c7896c3dd0a3942bbab4b1c35497a98da745acdc",
+    "finalizationContinuationTestedHead": "ed3251fe5636db463648fc903ebac3de6d5fd81b",
+    "finalizationContinuationTree": "2099bc2cd49d15e7d3a5838dda8a5e9913984d6e",
+    "finalizationContinuationCiRun": 42433465259
+  },
+  "runtime": {
+    "api": {"pid": 3047553, "startTicks": 123533385, "restartCount": 20, "listener": 3001},
+    "frontend": {"pid": 3047636, "startTicks": 123533853, "restartCount": 21, "listener": 3000},
+    "worker": {
+      "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "preserved": true
+    }
+  },
+  "return": {
+    "releaseId": "immutable-17cc77a8-vps-20261104T141039Z",
+    "target": "17cc77a8f1200ed970097c9c83444e4cad874a1a",
+    "apiAndFrontendAuthenticated": true
+  },
+  "finalization": {
+    "continuationRequestSha256": "2283f1842a53732ef9dc8a357a1dfcee9e28d1cfec7a3954b6df7eabe6221e41",
+    "runtimeCacheReconciliationSha256": "54bf7b44ed769e0f154aed9e3c8cb87d7cc6f82058acdc0615cc019bfe69f0af",
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "9101b1c995f07ebb4032a362812d601cee453e5884f513222b4efcf8a2ada398",
+    "dumpValidationSha256": "9101b1c995f07ebb4032a362812d601cee453e5884f513222b4efcf8a2ada398",
+    "markerSha256": "bc77c6422ca025eb69e4202d88309cf82b12135de06ca041ba5349d8b372c5a1",
+    "journalSha256": "12d8db1f6115de3796807c314b4ca7d3563f9675f88b3f627f04b0520195562b",
+    "receiptSha256": "ea418a0fbbc2575703a41b13cc1c70826976764270d0044ffdbeb8035687b3fd",
+    "acceptanceSha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
+    "terminalAtUtc": "2026-11-08T02:20:10Z",
+    "deploymentLockAbsentAfterTerminalClosure": true
+  },
+  "retirement": {
+    "execution": "FINALIZE_RUNTIME_CACHE_CONTINUATION_EXACTLY_ONCE",
+    "state": "DEPLOYED_SANITIZED",
+    "intentSha256": "6064a4a98ede89bb085b09e4e474048d976aa9cf31a4c0cd03207be18a0c4f7c",
+    "ordinals": [8, 9, 10],
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "failures": 0,
+    "automaticRetry": false,
+    "remainingDerivedArtifacts": 0,
+    "installedReleasePreserved": true,
+    "packagePreserved": true,
+    "rollbackReleasePreserved": "immutable-17cc77a8-vps-20261104T141039Z",
+    "receiptSha256": "ea418a0fbbc2575703a41b13cc1c70826976764270d0044ffdbeb8035687b3fd",
+    "journalSha256": "9e5e24492075f2f240b14268418524d63a0a1d0ea82f6a8441e52b8e7f442768",
+    "reviewSha256": "816f4e8be5544c7e0bed259381a50be11d9507a0e5e7d918aafe2bb730d32ea1",
+    "operationalStateSha256": "5ffaf7edfdbc6d89f4619a3c03249757c869ab5b521cac99c4d075320b363425",
+    "canonicalClosureValidation": "PASS",
+    "removedPaths": [
+      "/opt/re7online/build-worktrees/immutable-36b94c6d-vps-20261107T165118Z-source",
+      "/opt/re7online/build-output/immutable-36b94c6d-vps-20261107T165118Z-producer/immutable-36b94c6d-vps-20261107T165118Z/api-runtime",
+      "/opt/re7online/build-output/immutable-36b94c6d-vps-20261107T165118Z-producer/immutable-36b94c6d-vps-20261107T165118Z/frontend-runtime"
+    ],
+    "allRemovedPathsVerifiedAbsent": true
+  },
+  "capacity": {
+    "availableBytesBeforeTerminalContinuation": 8816476160,
+    "availableBytesAtTerminalClosure": 10834006016,
+    "availableInodesBeforeTerminalContinuation": 8775519,
+    "availableInodesAtTerminalClosure": 8847872,
+    "netAvailableBytesIncreaseObserved": 2017529856,
+    "netAvailableInodesIncreaseObserved": 72353,
+    "qualifiedAllocatedBytesRemoved": 2009645056,
+    "measurementsAreDistinctCheckpointsNotAnArithmeticLedger": true,
+    "qualifiedAllocationIsNotReportedAsNetGain": true
+  },
+  "health": {
+    "apiLocal": {"http": 200, "contract": {"ok": true, "db": "ok"}},
+    "apiPublic": {"http": 200, "contract": {"ok": true, "db": "ok"}},
+    "frontendLocalPaths": {"/app/login": 200, "/app/inbox": 200, "/app/crm": 200},
+    "workerPreserved": true,
+    "campaignGuard": {"open": false, "generation": 45, "taskCount": 1}
+  },
+  "controlCustody": {
+    "state": "OPEN",
+    "generationId": "36b-runtime-cache-finalize-control-c7896c3d-v1",
+    "reservationRoot": "/opt/re7online/deploy-control",
+    "worktree": "/opt/re7online/deploy-control/c7896c3dd0a3",
+    "lifecycleSha256": "557bea22007d9427f94fe383862327201c9b09dce59e9c607571895b2c0a5300",
+    "materializationReceiptSha256": "3ec9ce42615b0b05692073c179b285eb9b96e7766ca33b4e5209b247725d9082",
+    "contractSha256": "e90ee680a8e2831b9e353d8ae77873cc2337ad69ef587f6b17bcc089c87c0f66",
+    "realizedAllocationBytes": 77492224,
+    "realizedAllocationInodes": 3659,
+    "readOnlyObservedPhysicalBytes": 77647872,
+    "postMaterializationGrowthBytes": 155648,
+    "terminalDisposition": "SANITIZE_AFTER_USE",
+    "canonicalConsumer": "scripts/deploy-control-worktree-materialize.py consume",
+    "evidencePreserved": [
+      "deploy-control-worktree.contract.private.json",
+      "fixed-current-runtime-cache-finalization-request.private.json",
+      "negative-journal-v4.authenticated.private.json",
+      "runtime-cache-reconciliation.private.json",
+      "materialization-receipt.private.json",
+      "preparation-artifacts.lifecycle.private.json"
+    ],
+    "discardableDerivedPath": "/opt/re7online/deploy-control/c7896c3dd0a3",
+    "discardablePrivateControlCopies": [
+      "private-control-36b94c6d-v4-runtime-cache-v1/converta-deploy.py",
+      "private-control-36b94c6d-v4-runtime-cache-v1/fixed-current-finalization-continuation.py"
+    ],
+    "sanitized": false,
+    "blocker": "UNTRACKED_PRIVATE_CONTROL_COPIES_REQUIRE_EXPLICIT_DISPOSITION_BEFORE_CANONICAL_CONSUME"
+  },
+  "irreversibleCheckpoint": {
+    "buildRepeatForbidden": true,
+    "installationRepeatForbidden": true,
+    "activationRepeatForbidden": true,
+    "retirementRepeatForbidden": true
+  }
+}

@@ -1,11 +1,11 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API+FRONTEND 17CC77A8 DEPLOYED_SANITIZED EM 05/11/2026 / WORKER E2E7 PRESERVADO**
+**Status: CANÔNICO / API+FRONTEND 36B94C6D DEPLOYED_SANITIZED EM 08/11/2026 / WORKER E2E7 PRESERVADO**
 
 Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação. Os comandos executáveis estão
 somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
-[registro 17cc77a8 implantado e sanitizado](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
+[registro 36b94c6d implantado e sanitizado](releases/CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json).
 Preparações e executores anteriores são evidência e não autorizam repetição.
 
 ## Topologia canônica
@@ -326,10 +326,10 @@ A release 911a9708 substituiu API e frontend, preservou o worker e terminou com
 retenção 3/3; agora é o retorno autenticado da geração 785bde80.
 
 O estado ativo está autenticado por
-[`CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_RECIPIENT_CONTINUITY_17CC77A8_2026-11-05_DEPLOYED_SANITIZED.json).
-A release 17cc77a8 ativou API+frontend, preservou worker e retorno 785bde80,
-executou um único `pm2 save` e encerrou retenção 3/3. O registro não comprova
-adoção do adapter de `preparations`; essa frente permanece separada. A posição 3
+[`CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json`](releases/CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json).
+A release 36b94c6d ativou API+frontend, preservou worker e retorno 17cc77a8,
+executou um único `pm2 save` e encerrou retenção 3/3. A custódia de controle
+sucessora permanece `OPEN` e não integra o escopo sanitizado. A posição 3
 da campanha nov.02 foi reconciliada pelo plano pós-cancelamento `0ba28239…`, o
 receipt foi verificado e a tarefa arquivada sem reenvio. A campanha nov.03 está
 cancelada; o ordinal 588 permanece `unknown`, e o plano pós-cancelamento

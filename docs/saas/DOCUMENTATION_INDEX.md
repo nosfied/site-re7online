@@ -35,6 +35,9 @@
   de campanha contido no registro é a fotografia histórica do fechamento; a
   continuidade vigente está em `CAMPAIGN_OPERATIONS_READINESS.md`: nov.02
   reconciliada e nov.03 cancelada com ordinal 588 ainda incerto.
+- [Continuação de resultado incerto 36b94c6d implantada e sanitizada](releases/CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json)
+  — estado ativo de API+frontend, retorno 17cc77a8, worker preservado, save único
+  e retenção 3/3. A custódia `deploy-control` permanece `OPEN` e separada.
 - [Recuperação de rascunhos 785bde80 implantada e sanitizada](releases/CAMPAIGN_DRAFT_RECOVERY_785BDE80_2026-11-03_DEPLOYED_SANITIZED.json)
   — registro histórico da release anterior, agora retorno autenticado de 17cc77a8.
 - [Campanha integral 911a9708 implantada e sanitizada](releases/CAMPAIGN_AUDIENCE_INTEGRAL_911A9708_2026-11-02_DEPLOYED_SANITIZED.json)
