@@ -156,6 +156,27 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.write_private(output / "deploy-control-operation-receipt.private.json", operation)
         return request_value
 
+    def stage_completed_copy_disposition(self, output, request, copies):
+        for ordinal, item in enumerate(copies, 1):
+            attempt = {"schemaVersion": 1,
+                "kind": "DEPLOY_CONTROL_DERIVED_COPY_ATTEMPT",
+                "operationId": self.value["generationId"],
+                "controlPath": str(self.destination), "controlCommit": self.commit,
+                "requestSha256": self.sha(request), "ordinal": ordinal, **item}
+            attempt_raw = lifecycle.canonical(attempt)
+            self.write_private(output /
+                f"deploy-control-derived-copy-{ordinal:02d}-attempt.private.json", attempt)
+            (self.destination / item["path"]).unlink()
+            receipt = {"schemaVersion": 1,
+                "kind": "DEPLOY_CONTROL_DERIVED_COPY_SANITIZED",
+                "operationId": self.value["generationId"],
+                "controlPath": str(self.destination), "controlCommit": self.commit,
+                "requestSha256": self.sha(request),
+                "attemptSha256": hashlib.sha256(attempt_raw).hexdigest(),
+                "ordinal": ordinal, **item, "absent": True}
+            self.write_private(output /
+                f"deploy-control-derived-copy-{ordinal:02d}-receipt.private.json", receipt)
+
     def test_real_control_materialization_closes_worktree_end_to_end(self):
         materialized = self.materialize()
         output, request = self.consume_request(materialized)
@@ -309,6 +330,75 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertTrue(all((self.destination / item["path"]).exists() for item in copies))
         self.assertFalse((output /
             "deploy-control-derived-copy-02-attempt.private.json").exists())
+
+    def test_crossed_terminal_receipt_is_denied_before_any_copy_disposition(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        crossed = {"schemaVersion": 1,
+            "kind": "DEPLOY_CONTROL_OPERATION_TERMINAL_RECEIPT",
+            "operationId": "another-operation", "controlPath": str(self.destination),
+            "controlCommit": self.commit,
+            "materializationReceiptSha256": materialized["materializationReceiptSha256"],
+            "outcome": "TERMINAL_SUCCESS"}
+        self.write_private(output / "deploy-control-terminal-receipt.private.json", crossed)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_terminal_receipt_hash", result.stderr)
+        self.assertTrue(all((self.destination / item["path"]).exists() for item in copies))
+        self.assertIn(f"worktree {self.destination}",
+                      self.git("worktree", "list", "--porcelain").splitlines())
+        self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
+                         "OPEN")
+
+    def test_schema_one_resume_after_git_disposition_closes_open_lifecycle(self):
+        materialized = self.materialize()
+        output, request = self.consume_request(materialized)
+        self.stage_operation_receipt(materialized, output, request)
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove",
+                        str(self.destination)], check=True)
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["state"], "SANITIZED")
+        self.assertEqual(value["derivedCopyReceipts"], [])
+        self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
+        self.assertNotIn(f"worktree {self.destination}",
+                         self.git("worktree", "list", "--porcelain").splitlines())
+
+    def test_schema_two_resume_after_git_disposition_requires_copy_receipts(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        self.stage_completed_copy_disposition(output, request, copies)
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove",
+                        str(self.destination)], check=True)
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["state"], "SANITIZED")
+        self.assertEqual(len(value["derivedCopyReceipts"]), 2)
+        self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
+        self.assertNotIn(f"worktree {self.destination}",
+                         self.git("worktree", "list", "--porcelain").splitlines())
+
+    def test_schema_two_absent_worktree_without_copy_receipts_is_denied(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        self.stage_completed_copy_disposition(output, request, copies)
+        (output / "deploy-control-derived-copy-02-receipt.private.json").unlink()
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove",
+                        str(self.destination)], check=True)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_derived_copy_receipt", result.stderr)
+        self.assertFalse((output / "deploy-control-terminal-receipt.private.json").exists())
+        self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
+                         "OPEN")
 
     def test_absent_copy_without_durable_attempt_is_denied(self):
         materialized = self.materialize()

@@ -454,6 +454,49 @@ def dispose_derived_copies(control: Path, output: Path, operation_id: str,
     return receipts
 
 
+def validate_materialized_controls(operation_receipt: Path, operation_raw: bytes,
+                                   output: Path,
+                                   controls: list[dict[str, Any]]) -> None:
+    _, observed_operation_raw = stable_private(
+        operation_receipt, digest(operation_raw), "deploy_control_operation_receipt")
+    require(observed_operation_raw == operation_raw,
+            "deploy_control_operation_receipt")
+    for item in controls:
+        destination = output / item["destination"]
+        info = destination.lstat()
+        require((info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) ==
+                (os.geteuid(), os.getegid(), 0o600),
+                "deploy_control_output_identity")
+        stable_source(destination, item["sha256"], "deploy_control_output")
+
+
+def validate_completed_copy_receipts(control: Path, output: Path,
+                                     operation_id: str, commit: str,
+                                     request_sha: str,
+                                     copies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    receipts = []
+    for ordinal, item in enumerate(copies, 1):
+        _, attempt_raw = derived_copy_attempt(
+            operation_id, control, commit, request_sha, ordinal, item)
+        attempt_path = output / f"deploy-control-derived-copy-{ordinal:02d}-attempt.private.json"
+        receipt_path = output / f"deploy-control-derived-copy-{ordinal:02d}-receipt.private.json"
+        require(attempt_path.exists() and not attempt_path.is_symlink(),
+                "deploy_control_derived_copy_attempt_missing")
+        _, observed_attempt = stable_private(
+            attempt_path, digest(attempt_raw), "deploy_control_derived_copy_attempt")
+        require(observed_attempt == attempt_raw, "deploy_control_derived_copy_attempt")
+        _, receipt_raw = derived_copy_receipt(
+            operation_id, control, commit, request_sha, ordinal, item, attempt_raw)
+        require(receipt_path.exists() and not receipt_path.is_symlink(),
+                "deploy_control_derived_copy_receipt_missing")
+        _, observed_receipt = stable_private(
+            receipt_path, digest(receipt_raw), "deploy_control_derived_copy_receipt")
+        require(observed_receipt == receipt_raw, "deploy_control_derived_copy_receipt")
+        receipts.append({"path": str(receipt_path), "sha256": digest(receipt_raw),
+                         "ordinal": ordinal})
+    return receipts
+
+
 def consume(args: argparse.Namespace) -> dict[str, Any]:
     current, _ = stable_private(args.lifecycle, args.lifecycle_sha256,
                                 "deploy_control_lifecycle")
@@ -500,19 +543,35 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
     terminal_raw = lifecycle.canonical(terminal_value)
     bound = True
     try:
-        if operation_receipt.exists() or operation_receipt.is_symlink():
-            _, observed_operation_raw = stable_private(
-                operation_receipt, digest(operation_raw), "deploy_control_operation_receipt")
-            require(observed_operation_raw == operation_raw,
-                    "deploy_control_operation_receipt")
-            for item in controls:
-                destination = output / item["destination"]
-                info = destination.lstat()
-                require((info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) ==
-                        (os.geteuid(), os.getegid(), 0o600),
-                        "deploy_control_output_identity")
-                stable_source(destination, item["sha256"], "deploy_control_output")
-        else:
+        terminal_exists = terminal_receipt.exists() or terminal_receipt.is_symlink()
+        if terminal_exists:
+            _, observed_terminal_raw = stable_private(
+                terminal_receipt, digest(terminal_raw), "deploy_control_terminal_receipt")
+            require(observed_terminal_raw == terminal_raw,
+                    "deploy_control_terminal_receipt")
+        operation_exists = operation_receipt.exists() or operation_receipt.is_symlink()
+        if operation_exists:
+            validate_materialized_controls(operation_receipt, operation_raw, output, controls)
+        control_exists = control.exists() or control.is_symlink()
+        registered = worktree_registered(repo, control)
+        if not control_exists:
+            require(not registered, "deploy_control_disposition_incomplete")
+            require(operation_exists, "deploy_control_operation_receipt_missing")
+            disposition_receipts = validate_completed_copy_receipts(
+                control, output, current["generationId"], commit,
+                digest(request_raw), derived_copies)
+            if not terminal_exists:
+                exclusive_bytes(output, terminal_receipt, terminal_raw)
+            result = lifecycle.close_lifecycle(
+                args.lifecycle, args.lifecycle_sha256, "SANITIZED",
+                digest(terminal_raw), args.owner, args.reason)
+            return {"state": result["state"], "controlPath": str(control),
+                    "operationReceiptSha256": digest(operation_raw),
+                    "terminalReceiptSha256": digest(terminal_raw), "controls": controls,
+                    "derivedCopyReceipts": disposition_receipts}
+        require(registered, "deploy_control_consume_registration")
+        require(not terminal_exists, "deploy_control_terminal_before_disposition")
+        if not operation_exists:
             require_no_derived_copy_evidence(output, derived_copies)
             sources = validate_control_worktree(
                 repo, control, commit, controls, derived_copies)
@@ -535,13 +594,7 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
             git(repo, "worktree", "remove", str(control))
         require(not control.exists() and not control.is_symlink() and
                 not worktree_registered(repo, control), "deploy_control_disposition_incomplete")
-        if terminal_receipt.exists() or terminal_receipt.is_symlink():
-            _, observed_terminal_raw = stable_private(
-                terminal_receipt, digest(terminal_raw), "deploy_control_terminal_receipt")
-            require(observed_terminal_raw == terminal_raw,
-                    "deploy_control_terminal_receipt")
-        else:
-            exclusive_bytes(output, terminal_receipt, terminal_raw)
+        exclusive_bytes(output, terminal_receipt, terminal_raw)
         result = lifecycle.close_lifecycle(args.lifecycle, args.lifecycle_sha256, "SANITIZED",
                                            digest(terminal_raw), args.owner, args.reason)
         return {"state": result["state"], "controlPath": str(control),

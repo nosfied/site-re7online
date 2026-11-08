@@ -1317,7 +1317,13 @@ autoridade, tipo, modo ou conteúdo extra divergente preserva a árvore e regist
 o consumidor revalida todo o status Git, todas as cópias e todos os
 `ATTEMPT`/receipts antes do primeiro `unlink`; ausência sem `ATTEMPT`, conteúdo
 novo ou evidência incompatível nega sem retirar outra cópia. O schema 1 permanece
-fechado ao caso sem cópias derivadas.
+fechado ao caso sem cópias derivadas. Se a interrupção ocorrer depois de
+`git worktree remove`, a retomada não exige recriar a árvore: comprova ausência
+física e no registro Git, reautentica o receipt da operação e os controles
+preservados e, no schema 2, exige todos os `ATTEMPT`s e receipts individuais antes
+de emitir o receipt terminal e fechar o lifecycle. Receipt terminal preexistente
+é autenticado antes de qualquer retirada; receipt de outra operação nega sem
+efeito.
 
 Essa ligação cobre a operação real de extrair controles autenticados de um
 worktree transitório para uma custódia operacional. Não é executor livre e não
