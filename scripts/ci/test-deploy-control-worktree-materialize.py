@@ -97,7 +97,21 @@ class DeployControlWorktreeTests(unittest.TestCase):
             "--terminal-receipt-sha256", self.sha(receipt),
             "--owner", "fixture", "--reason", "terminal fixture")
 
-    def consume_request(self, materialized):
+    def derived_copies(self):
+        private = self.destination / "private-control"
+        private.mkdir(mode=0o700)
+        result = []
+        for name in ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py"):
+            authority = "scripts/" + name
+            path = "private-control/" + name
+            shutil.copyfile(self.destination / authority, self.destination / path)
+            (self.destination / path).chmod(0o600)
+            result.append({"path": path,
+                "sha256": self.sha(self.destination / path),
+                "authoritySource": authority})
+        return result
+
+    def consume_request(self, materialized, derived_copies=None):
         output = self.base / "private-custody"; output.mkdir(mode=0o700)
         request = self.base / "consume-request.private.json"
         controls = []
@@ -105,12 +119,15 @@ class DeployControlWorktreeTests(unittest.TestCase):
             source = "scripts/" + name
             controls.append({"source": source, "destination": source,
                 "sha256": hashlib.sha256((self.repo / source).read_bytes()).hexdigest()})
-        self.write_private(request, {"schemaVersion": 1,
+        value = {"schemaVersion": 2 if derived_copies is not None else 1,
             "kind": "DEPLOY_CONTROL_MATERIALIZE_CONTROLS",
             "operationId": self.value["generationId"],
             "controlPath": str(self.destination), "controlCommit": self.commit,
             "materializationReceiptSha256": materialized["materializationReceiptSha256"],
-            "outputRoot": str(output), "controls": controls})
+            "outputRoot": str(output), "controls": controls}
+        if derived_copies is not None:
+            value["derivedCopies"] = derived_copies
+        self.write_private(request, value)
         return output, request
 
     def consume(self, materialized, request):
@@ -122,6 +139,43 @@ class DeployControlWorktreeTests(unittest.TestCase):
             "--materialization-receipt-sha256", self.sha(materialization),
             "--request", request, "--request-sha256", self.sha(request),
             "--owner", "fixture", "--reason", "controls materialized")
+
+    def stage_operation_receipt(self, materialized, output, request):
+        request_value = json.loads(request.read_text())
+        for item in request_value["controls"]:
+            destination = output / item["destination"]
+            destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            destination.write_bytes((self.destination / item["source"]).read_bytes())
+            destination.chmod(0o600)
+        operation = {"schemaVersion": 1,
+            "kind": "DEPLOY_CONTROL_CONTROLS_MATERIALIZED",
+            "operationId": self.value["generationId"],
+            "controlPath": str(self.destination), "controlCommit": self.commit,
+            "materializationReceiptSha256": materialized["materializationReceiptSha256"],
+            "requestSha256": self.sha(request), "controls": request_value["controls"]}
+        self.write_private(output / "deploy-control-operation-receipt.private.json", operation)
+        return request_value
+
+    def stage_completed_copy_disposition(self, output, request, copies):
+        for ordinal, item in enumerate(copies, 1):
+            attempt = {"schemaVersion": 1,
+                "kind": "DEPLOY_CONTROL_DERIVED_COPY_ATTEMPT",
+                "operationId": self.value["generationId"],
+                "controlPath": str(self.destination), "controlCommit": self.commit,
+                "requestSha256": self.sha(request), "ordinal": ordinal, **item}
+            attempt_raw = lifecycle.canonical(attempt)
+            self.write_private(output /
+                f"deploy-control-derived-copy-{ordinal:02d}-attempt.private.json", attempt)
+            (self.destination / item["path"]).unlink()
+            receipt = {"schemaVersion": 1,
+                "kind": "DEPLOY_CONTROL_DERIVED_COPY_SANITIZED",
+                "operationId": self.value["generationId"],
+                "controlPath": str(self.destination), "controlCommit": self.commit,
+                "requestSha256": self.sha(request),
+                "attemptSha256": hashlib.sha256(attempt_raw).hexdigest(),
+                "ordinal": ordinal, **item, "absent": True}
+            self.write_private(output /
+                f"deploy-control-derived-copy-{ordinal:02d}-receipt.private.json", receipt)
 
     def test_real_control_materialization_closes_worktree_end_to_end(self):
         materialized = self.materialize()
@@ -140,6 +194,222 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "SANITIZED")
         self.assertEqual(lifecycle.validate_existing_lifecycles(self.controls, self.value)
                          ["reservedBytes"], 0)
+
+    def test_exact_private_copies_receive_individual_receipts_before_sanitization(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["state"], "SANITIZED")
+        self.assertEqual(len(value["derivedCopyReceipts"]), 2)
+        for ordinal, item in enumerate(copies, 1):
+            attempt = output / f"deploy-control-derived-copy-{ordinal:02d}-attempt.private.json"
+            receipt = output / f"deploy-control-derived-copy-{ordinal:02d}-receipt.private.json"
+            self.assertTrue(attempt.is_file())
+            receipt_value = json.loads(receipt.read_text())
+            self.assertEqual(receipt_value["kind"],
+                             "DEPLOY_CONTROL_DERIVED_COPY_SANITIZED")
+            self.assertEqual(receipt_value["path"], item["path"])
+            self.assertEqual(receipt_value["sha256"], item["sha256"])
+            self.assertTrue(receipt_value["absent"])
+        self.assertFalse(self.destination.exists())
+        self.assertNotIn(f"worktree {self.destination}",
+                         self.git("worktree", "list", "--porcelain").splitlines())
+
+    def test_private_copy_drift_preserves_tree_and_records_debt(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        changed = self.destination / copies[0]["path"]
+        changed.write_text("different private bytes\n"); changed.chmod(0o600)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_derived_copy_hash", result.stderr)
+        self.assertTrue(changed.exists())
+        self.assertTrue((self.destination / copies[1]["path"]).exists())
+        self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
+                         "RETENTION_DEBT")
+        self.assertEqual(json.loads((output /
+            "deploy-control-terminal-receipt.private.json").read_text())["outcome"],
+            "TERMINAL_FAILURE")
+
+    def test_unexpected_private_content_blocks_before_any_copy_disposition(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        extra = self.destination / "private-control/unique-evidence.txt"
+        extra.write_text("unique\n"); extra.chmod(0o600)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_consume_drift", result.stderr)
+        self.assertTrue(extra.exists())
+        self.assertTrue(all((self.destination / item["path"]).exists() for item in copies))
+
+    def test_resume_after_durable_copy_attempt_does_not_repeat_disposition(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        request_sha = self.sha(request)
+        first = copies[0]
+        attempt = {"schemaVersion": 1, "kind": "DEPLOY_CONTROL_DERIVED_COPY_ATTEMPT",
+            "operationId": self.value["generationId"],
+            "controlPath": str(self.destination), "controlCommit": self.commit,
+            "requestSha256": request_sha, "ordinal": 1, **first}
+        self.write_private(
+            output / "deploy-control-derived-copy-01-attempt.private.json", attempt)
+        (self.destination / first["path"]).unlink()
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.destination.exists())
+        receipt = json.loads((output /
+            "deploy-control-derived-copy-01-receipt.private.json").read_text())
+        self.assertEqual(receipt["attemptSha256"],
+                         hashlib.sha256(lifecycle.canonical(attempt)).hexdigest())
+
+    def test_resume_after_operation_receipt_denies_absence_without_attempt_before_unlink(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        missing = self.destination / copies[0]["path"]
+        missing.unlink()
+        remaining = self.destination / copies[1]["path"]
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_derived_copy_absent_without_attempt", result.stderr)
+        self.assertTrue(remaining.exists())
+        self.assertFalse((output /
+            "deploy-control-derived-copy-01-attempt.private.json").exists())
+        self.assertFalse((output /
+            "deploy-control-derived-copy-02-attempt.private.json").exists())
+
+    def test_resume_after_operation_receipt_denies_new_extra_before_unlink(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        extra = self.destination / "private-control/appeared-after-interruption.txt"
+        extra.write_text("unique evidence\n"); extra.chmod(0o600)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_consume_drift", result.stderr)
+        self.assertTrue(extra.exists())
+        self.assertTrue(all((self.destination / item["path"]).exists() for item in copies))
+        self.assertFalse((output /
+            "deploy-control-derived-copy-01-attempt.private.json").exists())
+        self.assertFalse((output /
+            "deploy-control-derived-copy-02-attempt.private.json").exists())
+
+    def test_resume_after_operation_receipt_denies_crossed_copy_receipt_before_unlink(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        first = copies[0]
+        attempt = {"schemaVersion": 1, "kind": "DEPLOY_CONTROL_DERIVED_COPY_ATTEMPT",
+            "operationId": self.value["generationId"],
+            "controlPath": str(self.destination), "controlCommit": self.commit,
+            "requestSha256": self.sha(request), "ordinal": 1, **first}
+        self.write_private(
+            output / "deploy-control-derived-copy-01-attempt.private.json", attempt)
+        crossed = {"schemaVersion": 1,
+            "kind": "DEPLOY_CONTROL_DERIVED_COPY_SANITIZED",
+            "operationId": self.value["generationId"],
+            "controlPath": str(self.destination), "controlCommit": self.commit,
+            "requestSha256": "f" * 64,
+            "attemptSha256": hashlib.sha256(lifecycle.canonical(attempt)).hexdigest(),
+            "ordinal": 1, **first, "absent": True}
+        self.write_private(
+            output / "deploy-control-derived-copy-01-receipt.private.json", crossed)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_derived_copy_receipt_hash", result.stderr)
+        self.assertTrue(all((self.destination / item["path"]).exists() for item in copies))
+        self.assertFalse((output /
+            "deploy-control-derived-copy-02-attempt.private.json").exists())
+
+    def test_crossed_terminal_receipt_is_denied_before_any_copy_disposition(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        crossed = {"schemaVersion": 1,
+            "kind": "DEPLOY_CONTROL_OPERATION_TERMINAL_RECEIPT",
+            "operationId": "another-operation", "controlPath": str(self.destination),
+            "controlCommit": self.commit,
+            "materializationReceiptSha256": materialized["materializationReceiptSha256"],
+            "outcome": "TERMINAL_SUCCESS"}
+        self.write_private(output / "deploy-control-terminal-receipt.private.json", crossed)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_terminal_receipt_hash", result.stderr)
+        self.assertTrue(all((self.destination / item["path"]).exists() for item in copies))
+        self.assertIn(f"worktree {self.destination}",
+                      self.git("worktree", "list", "--porcelain").splitlines())
+        self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
+                         "OPEN")
+
+    def test_schema_one_resume_after_git_disposition_closes_open_lifecycle(self):
+        materialized = self.materialize()
+        output, request = self.consume_request(materialized)
+        self.stage_operation_receipt(materialized, output, request)
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove",
+                        str(self.destination)], check=True)
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["state"], "SANITIZED")
+        self.assertEqual(value["derivedCopyReceipts"], [])
+        self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
+        self.assertNotIn(f"worktree {self.destination}",
+                         self.git("worktree", "list", "--porcelain").splitlines())
+
+    def test_schema_two_resume_after_git_disposition_requires_copy_receipts(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        self.stage_completed_copy_disposition(output, request, copies)
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove",
+                        str(self.destination)], check=True)
+        result = self.consume(materialized, request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["state"], "SANITIZED")
+        self.assertEqual(len(value["derivedCopyReceipts"]), 2)
+        self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
+        self.assertNotIn(f"worktree {self.destination}",
+                         self.git("worktree", "list", "--porcelain").splitlines())
+
+    def test_schema_two_absent_worktree_without_copy_receipts_is_denied(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        self.stage_operation_receipt(materialized, output, request)
+        self.stage_completed_copy_disposition(output, request, copies)
+        (output / "deploy-control-derived-copy-02-receipt.private.json").unlink()
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove",
+                        str(self.destination)], check=True)
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_derived_copy_receipt", result.stderr)
+        self.assertFalse((output / "deploy-control-terminal-receipt.private.json").exists())
+        self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
+                         "OPEN")
+
+    def test_absent_copy_without_durable_attempt_is_denied(self):
+        materialized = self.materialize()
+        copies = self.derived_copies()
+        output, request = self.consume_request(materialized, copies)
+        (self.destination / copies[0]["path"]).unlink()
+        result = self.consume(materialized, request)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy_control_consume_drift", result.stderr)
+        self.assertTrue(self.destination.exists())
+        self.assertTrue((self.destination / copies[1]["path"]).exists())
 
     def test_control_operation_failure_records_debt_before_next_allocation(self):
         materialized = self.materialize()
@@ -179,19 +449,7 @@ class DeployControlWorktreeTests(unittest.TestCase):
     def test_resume_after_operation_receipt_finishes_git_disposition_once(self):
         materialized = self.materialize()
         output, request = self.consume_request(materialized)
-        request_value = json.loads(request.read_text())
-        for item in request_value["controls"]:
-            destination = output / item["destination"]
-            destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            destination.write_bytes((self.destination / item["source"]).read_bytes())
-            destination.chmod(0o600)
-        operation = {"schemaVersion": 1,
-            "kind": "DEPLOY_CONTROL_CONTROLS_MATERIALIZED",
-            "operationId": self.value["generationId"],
-            "controlPath": str(self.destination), "controlCommit": self.commit,
-            "materializationReceiptSha256": materialized["materializationReceiptSha256"],
-            "requestSha256": self.sha(request), "controls": request_value["controls"]}
-        self.write_private(output / "deploy-control-operation-receipt.private.json", operation)
+        self.stage_operation_receipt(materialized, output, request)
         result = self.consume(materialized, request)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.destination.exists())
