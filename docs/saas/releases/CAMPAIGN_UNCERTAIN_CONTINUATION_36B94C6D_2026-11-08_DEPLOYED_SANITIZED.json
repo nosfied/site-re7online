@@ -113,11 +113,12 @@
     "campaignGuard": {"open": false, "generation": 45, "taskCount": 1}
   },
   "controlCustody": {
-    "state": "OPEN",
+    "state": "SANITIZED",
     "generationId": "36b-runtime-cache-finalize-control-c7896c3d-v1",
     "reservationRoot": "/opt/re7online/deploy-control",
     "worktree": "/opt/re7online/deploy-control/c7896c3dd0a3",
-    "lifecycleSha256": "557bea22007d9427f94fe383862327201c9b09dce59e9c607571895b2c0a5300",
+    "originalLifecycleSha256": "557bea22007d9427f94fe383862327201c9b09dce59e9c607571895b2c0a5300",
+    "lifecycleSha256": "4cc1bdbd9fb68d8610d5cc1800e7b7e7da0f5dd295f7aadaef9769f27e94304b",
     "materializationReceiptSha256": "3ec9ce42615b0b05692073c179b285eb9b96e7766ca33b4e5209b247725d9082",
     "contractSha256": "e90ee680a8e2831b9e353d8ae77873cc2337ad69ef587f6b17bcc089c87c0f66",
     "realizedAllocationBytes": 77492224,
@@ -126,13 +127,30 @@
     "postMaterializationGrowthBytes": 155648,
     "terminalDisposition": "SANITIZE_AFTER_USE",
     "canonicalConsumer": "scripts/deploy-control-worktree-materialize.py consume",
+    "consumerMerge": "def461d550ff7d43115ed87ba2cd8153470e603e",
+    "consumeRequestSha256": "400fd0752cd84dd02967476639c168caa2f00531adef372cd87982806614fdd0",
+    "operationReceiptSha256": "0a0966bac48bddc501aff3e287eadb9b280e4ced08c220e12ed638172c9d38aa",
+    "derivedCopyReceiptSha256": [
+      "79059ea73100b03fa80f11b3a8b80aa8a288337d2fe4f9d63a1f248e9d99f1b3",
+      "b4b48ced119ab50dbac84c1ece51446949173a0d2df3d1d8f52ec35cf59a8a01"
+    ],
+    "terminalReceiptSha256": "6a247a4292a6f1996926d3fed2c47ba2033b8f2e822341e905376bf374312b94",
     "evidencePreserved": [
       "deploy-control-worktree.contract.private.json",
       "fixed-current-runtime-cache-finalization-request.private.json",
       "negative-journal-v4.authenticated.private.json",
       "runtime-cache-reconciliation.private.json",
       "materialization-receipt.private.json",
-      "preparation-artifacts.lifecycle.private.json"
+      "preparation-artifacts.lifecycle.private.json",
+      "consume-request.private.json",
+      "deploy-control-operation-receipt.private.json",
+      "deploy-control-derived-copy-01-attempt.private.json",
+      "deploy-control-derived-copy-01-receipt.private.json",
+      "deploy-control-derived-copy-02-attempt.private.json",
+      "deploy-control-derived-copy-02-receipt.private.json",
+      "deploy-control-terminal-receipt.private.json",
+      "preserved-controls/converta-deploy.py",
+      "preserved-controls/fixed-current-finalization-continuation.py"
     ],
     "discardableDerivedPath": "/opt/re7online/deploy-control/c7896c3dd0a3",
     "discardablePrivateControlCopies": [
@@ -141,18 +159,30 @@
         "sha256": "28eeb2f32797ed8fb827467f98b5c47bbed59d0b2609cce3288dfd0b5a792f98",
         "authority": "scripts/converta-deploy.py@c7896c3dd0a3942bbab4b1c35497a98da745acdc",
         "byteEquivalentToAuthority": true,
-        "disposition": "REMOVE_EXACT_COPY_BEFORE_CANONICAL_CONSUME_WITH_EXPLICIT_RECEIPT"
+        "disposition": "SANITIZED_BY_EXPLICIT_RECEIPT",
+        "receiptSha256": "79059ea73100b03fa80f11b3a8b80aa8a288337d2fe4f9d63a1f248e9d99f1b3",
+        "absent": true
       },
       {
         "path": "private-control-36b94c6d-v4-runtime-cache-v1/fixed-current-finalization-continuation.py",
         "sha256": "c87300a0e14791673d39bbf61447f0ccbbdaee054f6b1633aaf28d357b07e930",
         "authority": "scripts/fixed-current-finalization-continuation.py@c7896c3dd0a3942bbab4b1c35497a98da745acdc",
         "byteEquivalentToAuthority": true,
-        "disposition": "REMOVE_EXACT_COPY_BEFORE_CANONICAL_CONSUME_WITH_EXPLICIT_RECEIPT"
+        "disposition": "SANITIZED_BY_EXPLICIT_RECEIPT",
+        "receiptSha256": "b4b48ced119ab50dbac84c1ece51446949173a0d2df3d1d8f52ec35cf59a8a01",
+        "absent": true
       }
     ],
-    "sanitized": false,
-    "blocker": "UNTRACKED_PRIVATE_CONTROL_COPIES_REQUIRE_EXPLICIT_DISPOSITION_RECEIPT_BEFORE_CANONICAL_CONSUME"
+    "derivedWorktreePresent": false,
+    "worktreeRegistrationPresent": false,
+    "untrackedPrivateControlCopiesPresent": false,
+    "terminalAvailableBytes": 10791366656,
+    "terminalAvailableInodes": 8851504,
+    "observedAvailableBytesDelta": 78004224,
+    "observedAvailableInodesDelta": 3661,
+    "sanitized": true,
+    "blocker": null,
+    "repeatPermitted": false
   },
   "irreversibleCheckpoint": {
     "buildRepeatForbidden": true,

@@ -1446,28 +1446,27 @@ o dump é `9101b1c995f07ebb4032a362812d601cee453e5884f513222b4efcf8a2ada398`
 e o marker é `bc77c6422ca025eb69e4202d88309cf82b12135de06ca041ba5349d8b372c5a1`.
 
 Esse `SANITIZED` é estritamente o escopo dos três derivados acima. A custódia de
-controle `36b-runtime-cache-finalize-control-c7896c3d-v1` permanece
-`OPEN / CREATION_COMPLETED`: lifecycle `557bea22007d9427f94fe383862327201c9b09dce59e9c607571895b2c0a5300`,
-receipt de materialização `3ec9ce42615b0b05692073c179b285eb9b96e7766ca33b4e5209b247725d9082`
-e contrato `e90ee680a8e2831b9e353d8ae77873cc2337ad69ef587f6b17bcc089c87c0f66`.
-A alocação realizada foi 77.492.224 B e 3.659 inodes. A leitura posterior mediu
-77.647.872 B no worktree, crescimento físico de 155.648 B após a materialização.
+controle `36b-runtime-cache-finalize-control-c7896c3d-v1` foi fechada depois, em
+operação separada, sem repetir a retenção da release. O consumidor integrado no
+merge `def461d550ff7d43115ed87ba2cd8153470e603e` autenticou lifecycle original
+`557bea22007d9427f94fe383862327201c9b09dce59e9c607571895b2c0a5300`, receipt
+de materialização `3ec9ce42615b0b05692073c179b285eb9b96e7766ca33b4e5209b247725d9082`
+e request schema 2 `400fd0752cd84dd02967476639c168caa2f00531adef372cd87982806614fdd0`.
 
-Na custódia persistente, request, journal negativo autenticado, manifesto de
-reconciliação, contrato, lifecycle e receipt são evidência. O worktree
-`/opt/re7online/deploy-control/c7896c3dd0a3` é derivado reproduzível da autoridade
-Git `c7896c3dd0a3942bbab4b1c35497a98da745acdc`; as cópias privadas do driver e do
-wrapper dentro dele também são derivadas. A recaptura encontrou essas duas cópias
-como não rastreadas. O driver privado tem SHA `28eeb2f3…2f98` e é byte-exatamente
-igual a `scripts/converta-deploy.py` no commit integrado `c7896c3d`; o wrapper
-privado tem SHA `c87300a0…e930` e é byte-exatamente igual a
-`scripts/fixed-current-finalization-continuation.py` no mesmo commit. Ambos são
-derivados reproduzíveis, não evidência única. A disposição proposta para cada um
-é baixa explícita do caminho e hash antes do consumo, com receipt próprio; não se
-trata de limpeza implícita do worktree. O consumidor canônico posterior é
-`scripts/deploy-control-worktree-materialize.py consume`, que exige worktree sem
-conteúdo rastreado, não rastreado ou ignorado divergente antes de executar
-`git worktree remove` e só então fechar o lifecycle. A disposição das duas cópias
-está registrada. A retirada e seus recibos continuam pendentes, por isso a
-custódia permanece `OPEN`; ela não é somada ao ganho e não autoriza retirada
-improvisada.
+As cópias privadas foram retiradas somente depois de `ATTEMPT` durável e receberam
+receipts próprios: driver `79059ea73100b03fa80f11b3a8b80aa8a288337d2fe4f9d63a1f248e9d99f1b3`
+e wrapper `b4b48ced119ab50dbac84c1ece51446949173a0d2df3d1d8f52ec35cf59a8a01`.
+O receipt da operação é `0a0966bac48bddc501aff3e287eadb9b280e4ced08c220e12ed638172c9d38aa`
+e o terminal `6a247a4292a6f1996926d3fed2c47ba2033b8f2e822341e905376bf374312b94`
+registra `TERMINAL_SUCCESS`. O lifecycle terminal
+`4cc1bdbd9fb68d8610d5cc1800e7b7e7da0f5dd295f7aadaef9769f27e94304b`
+está `SANITIZED / CLOSURE_RECORDED`; o worktree está ausente fisicamente e no
+registro Git.
+
+Os controles rastreados foram preservados em custódia privada `0600`, com os
+hashes originais `28eeb2f3…2f98` e `c87300a0…e930`. O saldo observado passou de
+10.713.362.432 para 10.791.366.656 B, ganho líquido observado de 78.004.224 B;
+os inodes livres passaram de 8.847.843 para 8.851.504. A alocação realizada de
+77.492.224 B, a leitura posterior de 77.647.872 B e a variação de `df` são fontes
+distintas e não compõem ledger aritmético. A custódia não está mais pendente e não
+deve ser consumida novamente.

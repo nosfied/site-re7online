@@ -36,27 +36,30 @@ A fotografia terminal confirmou API e frontend físicos em `36b94c6d`, worker
 `e2e7f17a`, retorno `17cc77a8`, health local `ok=true/db=ok`, health público
 HTTP 200 e lock canônico ausente.
 
-### Custódia de controle sucessora — OPEN, não sanitizada
+### Custódia de controle sucessora — SANITIZED
 
-A custódia `36b-runtime-cache-finalize-control-c7896c3d-v1` permanece
-`OPEN / CREATION_COMPLETED`. Seu lifecycle é `557bea22…3000`, o receipt de
-materialização é `3ec9ce42…9082` e o contrato é `e90ee680…0f66`. A alocação
-realizada na criação foi 77.492.224 bytes e 3.659 inodes. A leitura posterior do
-worktree mediu 77.647.872 bytes: 155.648 bytes adicionais após a materialização.
+A custódia `36b-runtime-cache-finalize-control-c7896c3d-v1` encerrou em
+`SANITIZED / CLOSURE_RECORDED` pelo consumidor integrado no merge
+`def461d550ff7d43115ed87ba2cd8153470e603e`. O lifecycle original
+`557bea22…3000`, o receipt de materialização `3ec9ce42…9082` e o contrato
+`e90ee680…0f66` permanecem preservados; o lifecycle terminal é
+`4cc1bdbd…304b`.
 
-Os requests, a cópia autenticada do journal negativo, o manifesto de
-reconciliação, o contrato, o lifecycle e o receipt são evidências preservadas.
-O worktree `/opt/re7online/deploy-control/c7896c3dd0a3` e as duas cópias privadas
-do driver/finalizador nele contidas são derivados reproduzíveis com autoridade no
-commit `c7896c3d…acdc`. O consumidor aplicável é
-`deploy-control-worktree-materialize.py consume`, mas a validação fresca encontrou
-as duas cópias privadas como arquivos não rastreados. Cada cópia é byte-exatamente
-igual ao respectivo blob integrado em `c7896c3d`: driver `28eeb2f3…2f98` e wrapper
-`c87300a0…e930`. Elas são derivados reproduzíveis, não evidências únicas, e devem
-receber baixa explícita por caminho e hash antes do consumo canônico. Não há
-receipt terminal nem prova de ausência
-desse worktree; portanto somente os três derivados de build da geração recebem
-`SANITIZED`. A custódia de controle não recebe essa classificação.
+O request schema 2 `400fd075…fdd0` vinculou exclusivamente as duas cópias
+privadas às autoridades rastreadas no commit `c7896c3d…acdc`. Os receipts
+individuais são `79059ea7…f1b3` para o driver e `b4b48ced…8a01` para o wrapper;
+o receipt da operação é `0a0966ba…8aa` e o receipt terminal
+`6a247a42…2b94` registra `TERMINAL_SUCCESS`. As autoridades preservadas mantêm
+os hashes `28eeb2f3…2f98` e `c87300a0…e930`, em arquivos privados `0600`.
+
+O worktree `/opt/re7online/deploy-control/c7896c3dd0a3` está ausente do disco e
+do registro Git. Entre as leituras imediatamente anterior e posterior ao consumo,
+o saldo passou de 10.713.362.432 para 10.791.366.656 bytes e os inodes livres de
+8.847.843 para 8.851.504: variações observadas de 78.004.224 bytes e 3.661
+inodes. A alocação original de 77.492.224 bytes e a leitura posterior do worktree
+de 77.647.872 bytes continuam métricas históricas distintas, não um ledger
+aritmético. O fechamento da custódia é separado e posterior à retenção 3/3 da
+release; nenhum efeito da release foi repetido.
 
 ### Validação funcional posterior — criação integral e incidente de execução
 
