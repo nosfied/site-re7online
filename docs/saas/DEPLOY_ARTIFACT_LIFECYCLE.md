@@ -1313,7 +1313,11 @@ exclusivo. A ausência só é aceita com esse `ATTEMPT`; depois da retirada e do
 `fsync` do diretório, cada cópia recebe receipt próprio `SANITIZED`. Somente após
 todos os receipts o fluxo remove o worktree e fecha seu lifecycle. Hash, caminho,
 autoridade, tipo, modo ou conteúdo extra divergente preserva a árvore e registra
-`RETENTION_DEBT`. O schema 1 permanece fechado ao caso sem cópias derivadas.
+`RETENTION_DEBT`. Em retomada, mesmo com receipt de materialização dos controles,
+o consumidor revalida todo o status Git, todas as cópias e todos os
+`ATTEMPT`/receipts antes do primeiro `unlink`; ausência sem `ATTEMPT`, conteúdo
+novo ou evidência incompatível nega sem retirar outra cópia. O schema 1 permanece
+fechado ao caso sem cópias derivadas.
 
 Essa ligação cobre a operação real de extrair controles autenticados de um
 worktree transitório para uma custódia operacional. Não é executor livre e não

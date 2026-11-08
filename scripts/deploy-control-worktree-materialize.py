@@ -335,6 +335,18 @@ def derived_copy_attempt(operation_id: str, control: Path, commit: str,
     return value, lifecycle.canonical(value)
 
 
+def derived_copy_receipt(operation_id: str, control: Path, commit: str,
+                         request_sha: str, ordinal: int,
+                         item: dict[str, Any], attempt_raw: bytes
+                         ) -> tuple[dict[str, Any], bytes]:
+    value = {"schemaVersion": 1, "kind": "DEPLOY_CONTROL_DERIVED_COPY_SANITIZED",
+        "operationId": operation_id, "controlPath": str(control),
+        "controlCommit": commit, "requestSha256": request_sha,
+        "attemptSha256": digest(attempt_raw), "ordinal": ordinal,
+        **item, "absent": True}
+    return value, lifecycle.canonical(value)
+
+
 def present_derived_copies(control: Path, output: Path, operation_id: str,
                            commit: str, request_sha: str,
                            copies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -345,16 +357,39 @@ def present_derived_copies(control: Path, output: Path, operation_id: str,
         _, attempt_raw = derived_copy_attempt(
             operation_id, control, commit, request_sha, ordinal, item)
         attempt_path = output / f"deploy-control-derived-copy-{ordinal:02d}-attempt.private.json"
+        _, receipt_raw = derived_copy_receipt(
+            operation_id, control, commit, request_sha, ordinal, item, attempt_raw)
+        receipt_path = output / f"deploy-control-derived-copy-{ordinal:02d}-receipt.private.json"
+        attempt_exists = attempt_path.exists() or attempt_path.is_symlink()
+        receipt_exists = receipt_path.exists() or receipt_path.is_symlink()
+        if attempt_exists:
+            _, observed = stable_private(
+                attempt_path, digest(attempt_raw), "deploy_control_derived_copy_attempt")
+            require(observed == attempt_raw, "deploy_control_derived_copy_attempt")
+        if receipt_exists:
+            _, observed = stable_private(
+                receipt_path, digest(receipt_raw), "deploy_control_derived_copy_receipt")
+            require(observed == receipt_raw, "deploy_control_derived_copy_receipt")
+        require(not receipt_exists or attempt_exists,
+                "deploy_control_derived_copy_receipt_without_attempt")
         if path.exists() or path.is_symlink():
+            require(not receipt_exists,
+                    "deploy_control_derived_copy_receipt_present_path")
             validate_derived_copy(control, item)
             present.append(item)
             continue
-        require(attempt_path.exists() and not attempt_path.is_symlink(),
+        require(attempt_exists,
                 "deploy_control_derived_copy_absent_without_attempt")
-        _, observed = stable_private(
-            attempt_path, digest(attempt_raw), "deploy_control_derived_copy_attempt")
-        require(observed == attempt_raw, "deploy_control_derived_copy_attempt")
     return present
+
+
+def require_no_derived_copy_evidence(output: Path,
+                                     copies: list[dict[str, Any]]) -> None:
+    for ordinal, _ in enumerate(copies, 1):
+        for label in ("attempt", "receipt"):
+            path = output / f"deploy-control-derived-copy-{ordinal:02d}-{label}.private.json"
+            require(not path.exists() and not path.is_symlink(),
+                    "deploy_control_derived_copy_evidence_without_operation")
 
 
 def unlink_exact_copy(path: Path, expected_sha256: str) -> None:
@@ -406,12 +441,8 @@ def dispose_derived_copies(control: Path, output: Path, operation_id: str,
             unlink_exact_copy(copy_path, item["sha256"])
         require(not copy_path.exists() and not copy_path.is_symlink(),
                 "deploy_control_derived_copy_present")
-        receipt = {"schemaVersion": 1, "kind": "DEPLOY_CONTROL_DERIVED_COPY_SANITIZED",
-            "operationId": operation_id, "controlPath": str(control),
-            "controlCommit": commit, "requestSha256": request_sha,
-            "attemptSha256": digest(attempt_raw), "ordinal": ordinal,
-            **item, "absent": True}
-        receipt_raw = lifecycle.canonical(receipt)
+        _, receipt_raw = derived_copy_receipt(
+            operation_id, control, commit, request_sha, ordinal, item, attempt_raw)
         if receipt_path.exists() or receipt_path.is_symlink():
             _, observed = stable_private(
                 receipt_path, digest(receipt_raw), "deploy_control_derived_copy_receipt")
@@ -482,16 +513,20 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
                         "deploy_control_output_identity")
                 stable_source(destination, item["sha256"], "deploy_control_output")
         else:
-            present_copies = present_derived_copies(
-                control, output, current["generationId"], commit,
-                digest(request_raw), derived_copies)
+            require_no_derived_copy_evidence(output, derived_copies)
             sources = validate_control_worktree(
-                repo, control, commit, controls, present_copies)
+                repo, control, commit, controls, derived_copies)
             require(not terminal_receipt.exists() and not terminal_receipt.is_symlink(),
                     "deploy_control_terminal_exists")
             for item, raw in sources:
                 exclusive_bytes(output, output / item["destination"], raw)
             exclusive_bytes(output, operation_receipt, operation_raw)
+        # Revalidate the entire worktree and every prior disposition record on
+        # both first execution and resume before the first unlink.
+        present_copies = present_derived_copies(
+            control, output, current["generationId"], commit,
+            digest(request_raw), derived_copies)
+        validate_control_worktree(repo, control, commit, controls, present_copies)
         disposition_receipts = dispose_derived_copies(
             control, output, current["generationId"], commit,
             digest(request_raw), derived_copies)
