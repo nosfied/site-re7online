@@ -608,6 +608,14 @@ class Driver:
                 "git", "-C", str(self.repo), "ls-files", "--error-unmatch", "--",
                 "scripts/converta-deploy.py",
             ])
+            committed_driver = self.host.run([
+                "git", "-C", str(self.repo), "show",
+                f"{observed_head}:scripts/converta-deploy.py",
+            ])
+            committed_driver_sha256 = (
+                hashlib.sha256(committed_driver.stdout.encode()).hexdigest()
+                if committed_driver.returncode == 0 else None
+            )
             if (value.get("originalControlPlane") != self.inputs.control_plane or
                     not SHA40.fullmatch(str(value.get("continuationControlPlane", ""))) or
                     value.get("continuationControlPlane") == self.inputs.control_plane or
@@ -615,6 +623,7 @@ class Driver:
                     not SHA256.fullmatch(str(value.get("continuationDriverSha256", ""))) or
                     digest(driver_path) != value.get("continuationDriverSha256") or
                     tracked.returncode or tracked.stdout.strip() != "scripts/converta-deploy.py" or
+                    committed_driver_sha256 != value.get("continuationDriverSha256") or
                     not repo_driver.is_file() or repo_driver.is_symlink() or
                     digest(repo_driver) != value.get("continuationDriverSha256") or
                     continuation_journal.get("binding", {}).get("controlPlane") !=
