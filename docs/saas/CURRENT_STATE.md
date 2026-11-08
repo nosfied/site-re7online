@@ -19,9 +19,11 @@ selada era 2.010.021.888 bytes, e a variação líquida observada foi de
 2.001.498.112 bytes. O saldo final foi de 9.507.028.992 bytes e 8.813.126 inodes.
 As custódias de controle ficaram fora da retirada 3/3.
 
-A guarda segue fechada na geração 45, com uma tarefa `persisting`.
-O plano histórico `afaf9831…` permanece em trilha separada.
-Os hashes e a origem das evidências constam no
+A guarda estava fechada na geração 45 na fotografia do deploy. A operação
+normal foi restabelecida posteriormente na geração 47, com zero tarefas e
+ledger sem falha. O plano histórico `afaf9831…` foi aplicado e a tarefa foi
+arquivada. Consulte o [fechamento da nov.03](CAMPAIGN_OPERATIONS_READINESS.md#campanha-teste-nov03--resultado-de-submissão-desconhecido).
+Os hashes e a origem das evidências do deploy constam no
 [registro terminal](releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json).
 
 ## Histórico — continuidade de campanhas 36b94c6d concluída
@@ -101,15 +103,18 @@ o plano anterior `bddc415429edd96e5e20333de12fddc3fd765866b61222d5bf3da1bb53837f
 
 ### Continuidade posterior — campanha teste nov.03
 
-A fotografia de 06/11 confirmou a campanha `cancelled`, `sentCount=587`, job
-`queued/operational_suspension` e guarda global fechada na geração 45 com uma
-tarefa `provider/persisting`. No ordinal 588 existe somente
-`campaign.message.submit_started`: não há `provider_accepted`, `metaMessageId`,
-`OutboundMessage` ou resultado terminal. O plano pós-cancelamento
-`afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041`
-preserva `providerAcceptance=unknown`, realiza zero chamadas ao provedor e ainda
-não foi aplicado. Os 374 destinatários posteriores permanecem fora de execução;
-aplicação, arquivamento e reabertura da guarda continuam atos separados.
+Em 08/11/2026, o Codex local relatou uma aplicação de `afaf9831…`, receipt
+verificado e uma execução de `ack-task`. A guarda passou de fechada na geração
+45 para fechada e sem tarefas na geração 46. Após inventário global somente
+leitura, uma abertura por CAS restabeleceu a operação normal na geração 47.
+
+O scheduler encerrou o único job reclamável como `cancelled` pelo motivo
+`campaign_status_cancelled`, sem lease remanescente ou chamada adicional à Meta.
+A campanha permaneceu `cancelled`, com `sentCount=587`. Permaneceram 588
+intenções, 587 aceites e 587 outbounds. O ordinal 588 segue com resultado
+`unknown`, sem retry, e as 374 posições posteriores seguem fora da execução.
+As evidências constam no [registro operacional](CAMPAIGN_OPERATIONS_READINESS.md#campanha-teste-nov03--resultado-de-submissão-desconhecido) e no
+[estado estruturado](CURRENT_STATE.json).
 
 ## Continuidade de 30/10/2026 — recuperação concluída; Tendência inerte
 

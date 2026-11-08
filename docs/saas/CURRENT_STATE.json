@@ -1,6 +1,6 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-11-08T14:59:43Z",
+  "updatedAtUtc": "2026-11-08T15:43:33Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json",
@@ -686,10 +686,10 @@
       }
     },
     "campaignOperations": {
-      "state": "NOV02_RECONCILED_TERMINAL_NOV03_CANCELLED_UNCERTAIN_GUARD_CLOSED",
-      "reportedOpen": false,
-      "reportedTasks": 1,
-      "reopeningInventory": "SNAPSHOT_REPORTED_ZERO_AUTOMATICALLY_ELIGIBLE_20261026T111404Z",
+      "state": "GENERAL_OPERATIONS_OPEN",
+      "reportedOpen": true,
+      "reportedTasks": 0,
+      "reopeningInventory": "ONLY_NOV03_CANCELLED_CAMPAIGN_JOB_CLAIMABLE_AT_GENERATION_46",
       "closedGuardUiAcceptance": "NOT_SEPARATELY_REPORTED",
       "controlledSend": "PASS_SINGLE_MANUAL_VIDEO_CAMPAIGN",
       "inventory": {
@@ -708,7 +708,7 @@
         "authorizationFieldScope": "AT_INVENTORY_BEFORE_LATER_OWNER_AUTHORIZATION"
       },
       "previousGuardSha256Scope": "PRE_HOMOLOGATION_ONLY",
-      "reportedGeneration": 45,
+      "reportedGeneration": 47,
       "reportedLedgerFault": null,
       "nov02Position3Reconciliation": {
         "campaignId": "5d1e71b1-d2a4-497a-9c2d-25761d94416c",
@@ -734,23 +734,44 @@
         "sentCountPreserved": 587,
         "totalRecipients": 962,
         "remainingRecipients": 374,
-        "guardGeneration": 45,
-        "guardOpen": false,
-        "guardTaskCount": 1,
-        "guardTaskKind": "provider",
-        "guardTaskPhase": "persisting",
         "bindingsSha256": "00297e653ddb7dc1870662d82731e936205a08e314bf82ed57f2dc341893113b",
         "supersededSendingPlanSha256": "3f96d2baaaf3731089d26d5a30242f86d367515b12a33f4941a8b8da21fcb2df",
-        "pendingCancelledPlanSha256": "afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041",
         "captureSha256": "c2251de346fd4e6ec0fb1c3d638293cf71f4deb66247d2274bc33e2d51a49477",
         "sanitizedOutputSha256": "16e7be19b6b4ea6a483f11b15e55cc2b30eedfc0dd781dad1e927657a55b2654",
         "providerAcceptance": "unknown",
         "providerCallsByReconciler": 0,
         "retryAllowed": false,
-        "applyExecuted": false,
-        "taskArchived": false,
-        "guardReopened": false,
-        "campaignContinuationAuthorized": false
+        "applyExecuted": true,
+        "taskArchived": true,
+        "guardReopened": true,
+        "campaignContinuationAuthorized": false,
+        "cancelledPlanSha256": "afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041",
+        "guardBeforeReconciliation": {
+          "generation": 45,
+          "open": false,
+          "taskCount": 1,
+          "taskKind": "provider",
+          "taskPhase": "persisting"
+        },
+        "receiptVerified": true,
+        "taskArchiveReason": "durable_submission_uncertain_no_retry",
+        "guardAfterArchive": {
+          "generation": 46,
+          "open": false,
+          "taskCount": 0
+        },
+        "finalJob": {
+          "status": "cancelled",
+          "reason": "campaign_status_cancelled",
+          "activeLease": false,
+          "tenantLeasePresent": false
+        },
+        "finalMessagingCounts": {
+          "submitStarted": 588,
+          "providerAccepted": 587,
+          "outbounds": 587,
+          "additionalProviderCalls": 0
+        }
       },
       "manualHomologation": {
         "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
@@ -1009,6 +1030,36 @@
       "frontendRollback": {
         "releaseId": "immutable-36b94c6d-vps-20261107T165118Z",
         "authenticated": true
+      },
+      "latestGeneralReopening": {
+        "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+        "reportedDate": "2026-11-08",
+        "state": "GENERAL_OPERATIONS_OPEN",
+        "scope": "GLOBAL",
+        "casAttempts": 1,
+        "httpStatus": 200,
+        "generationBefore": 46,
+        "generationAfter": 47,
+        "open": true,
+        "taskCount": 0,
+        "ledgerFault": null,
+        "health": {
+          "local": {
+            "ok": true,
+            "db": "ok"
+          },
+          "public": {
+            "ok": true,
+            "db": "ok"
+          }
+        },
+        "claimableJobsBefore": 1,
+        "claimableJobDisposition": "NOV03_JOB_CANCELLED_BEFORE_SEND",
+        "receiptSha256": "fe376a807750b1accc92f3a05b86af792293eec63328b5a36ae1de1f662de30d",
+        "privateCasResponseSha256": "c39c66dee36c89395976602e9f2c983e182b69e321931001578404505df600a3",
+        "precheckSha256": "cd0bf5333428f54fea8fd49e1b9a0e271c40e1eed9bb6c81dc66ac0150cef853",
+        "postcheckSha256": "8c4dd0bcd7efc681bec083f4749d911d39e2a82e81c4821ac1bd5d8d3a21541c",
+        "ledgerSha256": "0a0e4c2533a44c5a6e4b05adda88598eccb2945ec9dcf85bd4bfd352316b060a"
       }
     },
     "topology": "FIXED_CURRENT_17CC77A8_API_FRONTEND_WORKER_PRESERVED_785BDE80_ROLLBACK",
@@ -1710,14 +1761,14 @@
     "nextGate": "NONE_TERMINAL_IRREPEATABLE"
   },
   "updatedAtDate": "2026-11-08",
-  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_B8D284B6_DEPLOYED_SANITIZED",
+  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_NOV03_RECONCILED_GLOBAL_CAMPAIGN_GUARD_GENERATION_47",
   "lastOperationalChange": {
-    "state": "DEPLOYED_SANITIZED",
-    "front": "CAMPAIGN_RECIPIENT_RESULT_B8D284B6",
-    "record": "docs/saas/releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json",
+    "state": "GENERAL_OPERATIONS_OPEN",
+    "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",
+    "record": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md",
     "releaseId": "immutable-b8d284b6-vps-20261108T132846Z",
     "targetCommit": "b8d284b6b2e269e6d284dfaaadda0e79a4685572",
     "repeatBuildInstallActivationOrRetirement": false,
-    "nextFront": "CONTROL_CUSTODIES_PRESERVED_SEPARATELY"
+    "nextFront": "NORMAL_CAMPAIGN_OPERATIONS"
   }
 }

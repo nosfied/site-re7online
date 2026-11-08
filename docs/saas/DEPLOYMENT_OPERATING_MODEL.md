@@ -330,7 +330,8 @@ O fechamento anterior está documentado em
 A release 36b94c6d ativou API+frontend, preservou worker e retorno 17cc77a8,
 executou um único `pm2 save` e encerrou retenção 3/3. A custódia de controle sucessora encerrou em `SANITIZED` em etapa própria. A posição 3
 da campanha nov.02 foi reconciliada pelo plano pós-cancelamento `0ba28239…`, o
-receipt foi verificado e a tarefa arquivada sem reenvio. A campanha nov.03 está
-cancelada; o ordinal 588 permanece `unknown`, e o plano pós-cancelamento
-`afaf9831…` ainda não foi aplicado. A guarda continua fechada, e aplicação,
-arquivamento e reabertura permanecem atos independentes.
+receipt foi verificado e a tarefa arquivada sem reenvio. A nov.03 permanece
+cancelada, com o ordinal 588 em `unknown`. O plano `afaf9831…` foi aplicado
+e a tarefa arquivada. A reabertura geral foi executada por CAS separado e a
+guarda está aberta na geração 47. O [registro de campanhas](CAMPAIGN_OPERATIONS_READINESS.md#campanha-teste-nov03--resultado-de-submissão-desconhecido)
+documenta os efeitos de cada etapa.
