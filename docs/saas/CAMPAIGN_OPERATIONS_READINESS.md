@@ -1,9 +1,10 @@
 # Campanhas: disponibilidade, mídia e homologação
 
-Atualizado em 26/10/2026: **GENERAL_OPERATIONS_OPEN / IMAGE E VIDEO HOMOLOGADOS EM ESCOPO CONTROLADO**. O deploy a959 foi concluído
-conforme relatório do Codex local encaminhado pelo owner; não houve abertura da
-guarda nem envio nessa janela. O editor documental não fez nova inspeção da VPS. Os históricos continuam válidos
-no seu escopo e não são instruções para repetir recuperação ou envio.
+Estado reportado em 08/11/2026: **GENERAL_OPERATIONS_OPEN / GERAÇÃO 47**,
+com zero tarefas e ledger sem falha. As homologações de imagem e vídeo
+permanecem registradas em seus escopos controlados. Fonte do estado atual:
+relato do Codex local encaminhado pelo owner, sem inspeção independente da VPS
+pelo editor documental.
 
 ## Causa e decisão operacional
 
@@ -616,8 +617,8 @@ a este incidente. A disposição versionada específica deve:
    continuam decisões posteriores e separadas.
 
 O fluxo é `dry-run` por padrão. `apply-sql` e `ack-task` exigem autorizações
-distintas; nenhuma fase chama o provedor. Nesta entrega não há aplicação produtiva,
-arquivamento de tarefa, reabertura da guarda ou retomada de campanha.
+distintas. Ambas as fases foram concluídas uma única vez para este caso, com
+zero chamadas ao provedor, conforme o fechamento abaixo.
 
 Fotografia pós-cancelamento de 06/11/2026: a campanha está `cancelled`, com
 `sentCount=587`, job `queued/operational_suspension`, 374 destinatários posteriores
@@ -634,8 +635,29 @@ captura sanitizada SHA-256
 e saída sanitizada SHA-256
 `16e7be19b6b4ea6a483f11b15e55cc2b30eedfc0dd781dad1e927657a55b2654`.
 Ele preserva `providerAcceptance=unknown`, `providerCalls=0`, `retryAllowed=false`
-e continuidade não autorizada. O plano ainda não foi aplicado; receipt, `ack-task`
-e reabertura da guarda permanecem pendentes e separados.
+e continuidade não autorizada.
+
+Fechamento reportado em 08/11/2026 pelo Codex local. O plano pós-cancelamento
+foi aplicado uma única vez e o receipt foi verificado. O `ack-task` arquivou
+a tarefa do ordinal 588 com o motivo
+`durable_submission_uncertain_no_retry`. A guarda ficou fechada na geração 46,
+com zero tarefas e ledger sem falha.
+
+O inventário global somente leitura confirmou um único job reclamável, o da
+nov.03, sem campanhas vencidas elegíveis, lotes recuperáveis ou resultados sem
+disposição. Uma abertura por CAS retornou HTTP 200 e estabeleceu a geração 47.
+No ciclo seguinte, o scheduler encerrou o job como `cancelled`, pelo motivo
+`campaign_status_cancelled`, sem lease ativo ou lease do tenant.
+
+A campanha permaneceu cancelada, com `sentCount=587`, 588 intenções,
+587 aceites e 587 outbounds, sem chamadas adicionais à Meta. O ordinal 588
+permanece `unknown`, sem aceite, outbound ou retry. As 374 posições posteriores
+ficaram fora de execução. A guarda permanece aberta para operação normal, com
+zero tarefas, ledger sem falha e health local e público saudáveis.
+
+O receipt sanitizado da abertura tem SHA-256
+`fe376a807750b1accc92f3a05b86af792293eec63328b5a36ae1de1f662de30d`. Os demais vínculos e os hashes
+do pré-check, pós-check e ledger estão em [CURRENT_STATE.json](CURRENT_STATE.json).
 
 As correções de audiência e apresentação associadas permanecem independentes da
 reconciliação: anonimizados ficam fora da prévia, criação estática e materialização
@@ -647,8 +669,8 @@ comprovada e não é declarada corrigida por essas mudanças.
 
 ### Escopo mínimo para novas submissões incertas
 
-O fechamento global observado no ordinal 588 é histórico e permanece sujeito à
-reconciliação acima. Para novas execuções, uma resposta de transporte inconclusiva
+O fechamento global observado no ordinal 588 é histórico e foi reconciliado
+conforme registrado acima. Para novas execuções, uma resposta de transporte inconclusiva
 é isolada no menor escopo autenticável: o runner grava, ainda sob a tarefa do
 provider, `campaign.message.submission_uncertain_preserved` com aceitação
 `unknown`, zero outbound materializado e retry proibido. Somente depois da escrita
@@ -697,7 +719,7 @@ resultado ou o marcador não puderem ser persistidos e vinculados à tarefa do
 ledger, a guarda global continua fail-closed: não se infere segurança por ausência
 de registro. O plano histórico pós-cancelamento
 `afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041`
-continua separado e não é consumido por esta regra.
+foi aplicado separadamente desta regra e sua execução está encerrada.
 
 Na recuperação de uma queda entre o commit SQL do marcador e a baixa da tarefa no
 ledger, as duas transições de lease são distintas. Primeiro, a classificação
