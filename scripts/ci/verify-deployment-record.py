@@ -848,6 +848,7 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
         require(bool(SHA256.fullmatch(release.get(field, ""))),
                 f"fixed-current {field}")
     index_entry_types = release.get("indexEntryTypes", {})
+    owner_relayed_b8 = release.get("target") == "b8d284b6b2e269e6d284dfaaadda0e79a4685572"
     expected_indexes = {
         "785bde80cb8bacbbf6375337dd169247738ab0f9": {
             "total": 34372,
@@ -863,11 +864,20 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
         },
     }
     expected_index = expected_indexes.get(release.get("target"))
-    require(expected_index is not None and
-            release.get("indexEntries") == expected_index["total"] and
-            index_entry_types == expected_index["types"] and
-            sum(index_entry_types.values()) == release.get("indexEntries") and
-            release.get("buildCount") == 1 and
+    if owner_relayed_b8:
+        provenance = record.get("evidenceProvenance", {})
+        require(provenance.get("source") == "OWNER_RELAYED_LOCAL_CODEX_REPORT" and
+                provenance.get("independentVpsInspectionByDocumentationEditor") is False and
+                release.get("tree") == "8760b4f1f18026eb761c8d4964545cac44087b95" and
+                release.get("indexEntries") == 34381,
+                "b8 owner-relayed index evidence")
+    else:
+        require(expected_index is not None and
+                release.get("indexEntries") == expected_index["total"] and
+                index_entry_types == expected_index["types"] and
+                sum(index_entry_types.values()) == release.get("indexEntries"),
+                "fixed-current index contract")
+    require(release.get("buildCount") == 1 and
             release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
             bool(release.get("buildId")), "fixed-current release contract")
 
@@ -875,7 +885,7 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
     for component, port in (("api", 3001), ("frontend", 3000)):
         observed = runtime.get(component, {})
         require(positive_int(observed.get("pid")) and
-                positive_int(observed.get("startTicks")) and
+                (owner_relayed_b8 or positive_int(observed.get("startTicks"))) and
                 observed.get("listener") == port,
                 f"fixed-current {component} runtime")
     require(runtime.get("worker", {}).get("preserved") is True and
@@ -886,14 +896,18 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
     require(finalization.get("pm2SaveCount") == 1 and
             finalization.get("secondSaveExecuted") is False,
             "fixed-current save count")
-    for field in ("dumpSha256", "dumpValidationSha256", "markerSha256",
-                  "journalSha256", "receiptSha256"):
+    finalization_fields = ("dumpSha256", "markerSha256", "journalSha256")
+    if owner_relayed_b8:
+        finalization_fields += ("retirementReceiptSha256", "acceptanceSha256")
+    else:
+        finalization_fields += ("dumpValidationSha256", "receiptSha256")
+    for field in finalization_fields:
         require(bool(SHA256.fullmatch(finalization.get(field, ""))),
                 f"fixed-current finalization {field}")
 
     retirement = record.get("retirement", {})
     require(retirement.get("state") == "DEPLOYED_SANITIZED" and
-            retirement.get("ordinals") == [8, 9, 10] and
+            (owner_relayed_b8 or retirement.get("ordinals") == [8, 9, 10]) and
             retirement.get("commandsAttempted") ==
             retirement.get("commandsCompleted") == 3 and
             retirement.get("failures") == 0 and
@@ -924,6 +938,26 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
             production.get("currentMarkerSha256") ==
             finalization.get("markerSha256"), "active fixed-current evidence")
 
+    if owner_relayed_b8:
+        release_id = release["id"]
+        output = f"/opt/re7online/build-output/{release_id}-producer/{release_id}"
+        require(retirement.get("removedPaths") == [
+                    f"/opt/re7online/build-worktrees/{release_id}-source",
+                    f"{output}/api-runtime", f"{output}/frontend-runtime",
+                ] and retirement.get("allRemovedPathsVerifiedAbsent") is True and
+                retirement.get("terminalReviewState") == "SANITIZED" and
+                retirement.get("packagePreserved") is True and
+                finalization.get("retirementReceiptSha256") == retirement.get("receiptSha256") and
+                finalization.get("deploymentLockAbsentAfterTerminalClosure") is True,
+                "b8 terminal scope and evidence")
+        capacity = record.get("capacity", {})
+        require(all(positive_int(capacity.get(key)) for key in (
+                    "availableBytesBeforeFinalization", "availableBytesAtTerminalClosure",
+                    "availableBytesDeltaObserved", "intentAllocatedBytesForRemovedArtifacts",
+                )) and
+                capacity["availableBytesAtTerminalClosure"] -
+                capacity["availableBytesBeforeFinalization"] == capacity["availableBytesDeltaObserved"],
+                "b8 terminal capacity checkpoints")
     if release.get("target") == "36b94c6da7a1f3e07d4a123d0629b35bea48b014":
         custody = record.get("controlCustody", {})
         capacity = record.get("capacity", {})

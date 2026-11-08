@@ -2,7 +2,29 @@
 
 **DEPLOYED_SANITIZED / CAMPAIGN RECIPIENT CONTINUITY ACTIVE / PRODUCTION HEALTHY**
 
-## Estado vigente — continuidade de campanhas 36b94c6d concluída
+## Estado vigente — resultado por destinatário b8d284b6 concluído
+
+O Codex local reportou em 08/11/2026 o fechamento `DEPLOYED_SANITIZED` de
+`immutable-b8d284b6-vps-20261108T132846Z`, target
+`b8d284b6b2e269e6d284dfaaadda0e79a4685572`. API e frontend estão saudáveis,
+com BUILD_ID `zguwjBfQne4CTh6dLIlfq` no frontend. O worker
+`e2e7f17a` foi preservado e `36b94c6d` é o retorno autenticado dos dois
+componentes. O dump do único `pm2 save` tem SHA-256 `2fca8bcc84f897cc1f3df37996f55d92a661ddb3279009090babba6395e2d695`.
+
+A reconciliação anterior ao preflight retirou somente o papel histórico de
+`785bde80` da lista de rollbacks, preservando sua release e o overlay privado.
+Após o aceite técnico, a finalização confirmou a ausência dos três derivados
+selados e removeu o lock de deploy pelo procedimento canônico. A alocação
+selada era 2.010.021.888 bytes, e a variação líquida observada foi de
+2.001.498.112 bytes. O saldo final foi de 9.507.028.992 bytes e 8.813.126 inodes.
+As custódias de controle ficaram fora da retirada 3/3.
+
+A guarda segue fechada na geração 45, com uma tarefa `persisting`.
+O plano histórico `afaf9831…` permanece em trilha separada.
+Os hashes e a origem das evidências constam no
+[registro terminal](releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json).
+
+## Histórico — continuidade de campanhas 36b94c6d concluída
 
 Fonte: execução canônica e recaptura somente leitura do Codex local em
 07–08/11/2026.

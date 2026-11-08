@@ -220,7 +220,7 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 ## Preflight (`preflight`)
 
 1. Adquirir o lock e confirmar ausência de outra janela.
-2. Revalidar pacote/release, target, BUILD_ID, entrypoint, symlinks e retornos; autenticar o contrato do overlay literal `api-runtime/.data` e sua projeção antes de qualquer seleção.
+2. Revalidar pacote/release, target, BUILD_ID, entrypoint, symlinks e retornos; autenticar o contrato do overlay literal `api-runtime/.data` e sua projeção antes de qualquer seleção. Quando houver `immediateRollbackReleases`, confira se `rollbackReleases` contém exatamente seus valores. Se houver papel excedente, use `reconcile-release-graph` com evidência autenticada, preserve os originais e vincule a fotografia sucessora a uma nova intenção de retenção antes do preflight em destino novo.
 3. Reabrir cada insumo privado e validar tipo, symlink, hash, owner/group e modo exigido pelo driver; modo do checkout não substitui o da cópia privada. Antes da autorização, exigir pai físico do receipt `deploy:deploy 0700` e receipt ausente.
 4. Capturar PID, start ticks, CWD, script, argumentos, sockets e restart count do trio. Em `/proc/<pid>/stat`, separar pela última `) ` e usar o campo 20 da cauda; tokenizar o registro inteiro não serve quando o nome contém espaços.
 5. Confirmar health, espaço/inodes, zero trabalho impeditivo e migration.
