@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+    "reportedDate": "2026-11-08",
+    "timezone": "America/Fortaleza",
+    "independentVpsInspectionByDocumentationEditor": false
+  },
+  "release": {
+    "id": "immutable-b8d284b6-vps-20261108T132846Z",
+    "target": "b8d284b6b2e269e6d284dfaaadda0e79a4685572",
+    "tree": "8760b4f1f18026eb761c8d4964545cac44087b95",
+    "buildId": "zguwjBfQne4CTh6dLIlfq",
+    "packageSha256": "3088f8565975b1e566d36cd45d3e659b59514bf7fa63de695c74820d6cbb84e6",
+    "manifestSha256": "369e53e6584060a3fd8862d389a713ca390049d3dcac8dc8fdf837d39e0011d0",
+    "indexSha256": "9dcd28e4f7294fbcf0dfebd2776288e56366416152a20f8891ec5c3f38c5d83f",
+    "indexEntries": 34381,
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "buildCount": 1,
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "preflight": {
+    "journalSha256": "7b208c9498964b1c4d9db1113f4a3ab4ae07943de1e3e820ba419fb3460a7917",
+    "runtimeManifestSha256": "f96eb882c0ab54012885a898a4ac6f548c00a944e6ec3a2edeb70a0045a71f22",
+    "saveCount": 0,
+    "availableBytes": 7497781248,
+    "availableInodes": 8740810,
+    "state": "PREFLIGHT_PASS",
+    "graphReconciliation": {
+      "state": "RECONCILED_NO_EFFECT",
+      "successorGraphSha256": "4929ac558bbbd9ec77dc07f180781f95240e9262969eca671703b87830988bff",
+      "projectionSha256": "709d5c2aaaa09d19b5f4fceafe23e15986d7ba72e0ae364a78ae10b7c3c21483",
+      "receiptSha256": "63fce46a5e074f9dfa9c66bf06d1222a5db180d26448a8246f37fbf5e237e078",
+      "closedHistoricalRollback": "785bde80",
+      "closedHistoricalRollbackDisposition": "PRESERVED_PRIVATE_DATA",
+      "destructiveCommands": 0,
+      "requestSha256": "84d0a7f3b4aff07f476414255d395a58932a886f0c637cfa0d94aca2682319b7"
+    }
+  },
+  "runtime": {
+    "api": {
+      "pid": 3201410,
+      "listener": 3001
+    },
+    "frontend": {
+      "pid": 3201492,
+      "listener": 3000
+    },
+    "worker": {
+      "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "pid": 2233,
+      "restartCount": 0,
+      "preserved": true
+    }
+  },
+  "return": {
+    "releaseId": "immutable-36b94c6d-vps-20261107T165118Z",
+    "target": "36b94c6da7a1f3e07d4a123d0629b35bea48b014",
+    "apiAndFrontendAuthenticated": true
+  },
+  "acceptance": {
+    "requestSha256": "0aff1c52c4394bcc348b8fee6d5440ad8820c0755a582486ffb78d3b7847bfd7",
+    "acceptanceSha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
+    "smokesSha256": "420cb5ff67e5c70a24081d567ffaff09baf240ed700cc73c25c46b791b9d5302",
+    "mode": "GET_ONLY",
+    "loginHttp": 200,
+    "inboxHttp": 200,
+    "crmHttp": 200,
+    "assetHttp": 200,
+    "assetMatchesInstalled": true,
+    "apiPublicHttp": 200,
+    "apiLocalHealthy": true
+  },
+  "finalization": {
+    "activationJournalSha256": "7f6d85c40879c98109a2bd6154a8c93e11f30797accd80aee98d0957d31e5406",
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "2fca8bcc84f897cc1f3df37996f55d92a661ddb3279009090babba6395e2d695",
+    "markerSha256": "d517be55aaad39bc6f90ada1588d4b096e6b60c8dcac841a99103bf20553d06c",
+    "journalSha256": "7407d94b763139a99fce797542d30ef6ed97000f36c1a85cde203da2b48e5c8f",
+    "retirementReceiptSha256": "35c7c1283cd34700e9eb0115800ae22d9e01e840ba0c438dea34a68dfa1bbfdd",
+    "acceptanceSha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
+    "boundLockSha256": "3d22a1847d71a890f518e5799a2156094aa95d4fd4690326136b94269056a7e4",
+    "deploymentLockAbsentAfterTerminalClosure": true,
+    "emptyGlobalLockPreserved": true
+  },
+  "retirement": {
+    "state": "DEPLOYED_SANITIZED",
+    "terminalReviewState": "SANITIZED",
+    "intentSha256": "dee953389ec0a1fe452e4722cf2fd68536ecc1be0c43d68dd49a34884c26ab09",
+    "commandsSha256": "4ce4774ed79864f4a845d968890d058038aa090a6baf17376bfc1568d2f95b57",
+    "derivedPathCount": 3,
+    "plannedAllocatedBytes": 2010021888,
+    "priorIntentSha256": "71e0f94fc606f719a6a4a2474b667ad78935933a67a59eeb34d3eb4e549eb7b5",
+    "priorReviewSha256": "6a6ae3b54ea2083ab9d7004fdf23e8e2c10cfcf2c9d47c4f51cd003bb3487fce",
+    "operationalStateSha256": "26df04b949259f8e3f632e7b8307e813d0123c30863691afee058bc7df58f56a",
+    "preparationGraphSha256": "6ca9c18480bf2c036fd4818202b4189d82964352c2e3b1ae166ed385dcfd9a5c",
+    "authorizationSha256": "0605659365d01d6f2af92299a6a4b144246f41971543baac4901bf1b27ff98ef",
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "failures": 0,
+    "automaticRetry": false,
+    "remainingDerivedArtifacts": 0,
+    "installedReleasePreserved": true,
+    "packagePreserved": true,
+    "rollbackReleasePreserved": "immutable-36b94c6d-vps-20261107T165118Z",
+    "receiptSha256": "35c7c1283cd34700e9eb0115800ae22d9e01e840ba0c438dea34a68dfa1bbfdd",
+    "journalSha256": "a83ac1fa3d9849252e3efdb736e09ff699c356e54ded2c48b524822efb83ec04",
+    "reviewSha256": "a9dbed2930d7678270025aa970774afd92f73b6fe75d0fac108e075e8dc9ce2b",
+    "removedPaths": [
+      "/opt/re7online/build-worktrees/immutable-b8d284b6-vps-20261108T132846Z-source",
+      "/opt/re7online/build-output/immutable-b8d284b6-vps-20261108T132846Z-producer/immutable-b8d284b6-vps-20261108T132846Z/api-runtime",
+      "/opt/re7online/build-output/immutable-b8d284b6-vps-20261108T132846Z-producer/immutable-b8d284b6-vps-20261108T132846Z/frontend-runtime"
+    ],
+    "allRemovedPathsVerifiedAbsent": true
+  },
+  "capacity": {
+    "availableBytesBeforeFinalization": 7505530880,
+    "availableBytesAtTerminalClosure": 9507028992,
+    "availableInodesAtTerminalClosure": 8813126,
+    "availableBytesDeltaObserved": 2001498112,
+    "intentAllocatedBytesForRemovedArtifacts": 2010021888
+  },
+  "health": {
+    "apiHealthy": true,
+    "frontendHealthy": true,
+    "workerPreserved": true,
+    "campaignGuard": {
+      "open": false,
+      "generation": 45,
+      "taskCount": 1,
+      "taskPhase": "persisting"
+    }
+  },
+  "controlCustody": {
+    "includedInGenerationRetirement": false,
+    "evidencePreservedSeparately": true
+  },
+  "irreversibleCheckpoint": {
+    "buildRepeatForbidden": true,
+    "installationRepeatForbidden": true,
+    "activationRepeatForbidden": true,
+    "retirementRepeatForbidden": true
+  }
+}
