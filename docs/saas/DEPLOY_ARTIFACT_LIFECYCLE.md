@@ -1304,6 +1304,17 @@ conteúdo único — inclusive coberto por `.gitignore` — mantém a árvore e 
 alocação equivalente. Interrupção depois do receipt da operação pode retomar a
 disposição pelos mesmos bytes determinísticos, sem repetir a cópia.
 
+O request schema 2 admite somente cópias privadas derivadas enumeradas. Cada
+entrada vincula caminho relativo, SHA-256 e um controle rastreado já preservado
+como autoridade. Antes de qualquer retirada, o consumidor exige arquivo regular
+`0600`, owner do executor, bytes idênticos à autoridade, ausência de qualquer
+outro conteúdo rastreado, não rastreado ou ignorado e grava um `ATTEMPT` durável
+exclusivo. A ausência só é aceita com esse `ATTEMPT`; depois da retirada e do
+`fsync` do diretório, cada cópia recebe receipt próprio `SANITIZED`. Somente após
+todos os receipts o fluxo remove o worktree e fecha seu lifecycle. Hash, caminho,
+autoridade, tipo, modo ou conteúdo extra divergente preserva a árvore e registra
+`RETENTION_DEBT`. O schema 1 permanece fechado ao caso sem cópias derivadas.
+
 Essa ligação cobre a operação real de extrair controles autenticados de um
 worktree transitório para uma custódia operacional. Não é executor livre e não
 remove worktrees históricos. Os testes atravessam materialização, consumo, cópia,
