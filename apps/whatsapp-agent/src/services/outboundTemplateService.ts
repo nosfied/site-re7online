@@ -45,7 +45,7 @@ export type SendTemplateResult = {
   providerErrorCode?: number;
 };
 
-const RECIPIENT_DEFINITIVE_META_ERROR_CODES = new Set([130497, 131026]);
+const RECIPIENT_DEFINITIVE_META_ERROR_CODES = new Set([130497, 131026, 131049]);
 
 export function classifyTemplateProviderFailure(params: { responseReceived: boolean; errorBody?: string }) {
   if (!params.responseReceived) {

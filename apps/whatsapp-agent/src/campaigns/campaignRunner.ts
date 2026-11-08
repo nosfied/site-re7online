@@ -2025,6 +2025,9 @@ async function runCampaignInBackground(
                 providerErrorCode: result.providerErrorCode ?? null,
                 retryAllowed: false,
               });
+              if (index < waIds.length - 1) {
+                await sleep(CAMPAIGN_THROTTLE_MS);
+              }
               continue;
             }
             await prisma.campaign.updateMany({

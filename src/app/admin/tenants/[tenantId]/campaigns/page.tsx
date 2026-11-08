@@ -76,6 +76,10 @@ function getStatusClasses(status: string) {
       return "bg-slate-500/20 text-slate-200";
     case "failed":
       return "bg-red-500/20 text-red-200";
+    case "unknown":
+      return "bg-fuchsia-500/20 text-fuchsia-200";
+    case "not_submitted":
+      return "bg-zinc-500/20 text-zinc-200";
     default:
       return "bg-white/10 text-white/80";
   }
@@ -138,6 +142,10 @@ function getMetaStatusLabel(status: string) {
       return "Entregue";
     case "failed":
       return "Falha";
+    case "unknown":
+      return "Resultado incerto";
+    case "not_submitted":
+      return "Não submetido";
     case "sent":
     default:
       return "Enviada";

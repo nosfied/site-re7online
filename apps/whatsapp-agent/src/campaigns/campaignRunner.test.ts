@@ -1851,6 +1851,50 @@ test("known recipient provider failure is recorded and later recipients continue
   assert.equal(campaignOperationsStatus().open, true); assert.equal(campaignOperationsStatus().tasks.length, 0);
 });
 
+test("Meta 131049 rejects only its recipient while later recipients and another tenant continue", async (t) => {
+  createOpenCampaignOperationsTestLedger("campaign-131049-recipient-continuity");
+  const throttles: number[] = [];
+  const restoreSleep = setCampaignRunnerSleepForTests(async (ms) => { throttles.push(ms); });
+  t.after(restoreSleep);
+  const clientId = crypto.randomUUID(), clientKey = `recipient-131049-${clientId}`;
+  const otherClientId = crypto.randomUUID(), otherClientKey = `recipient-131049-other-${otherClientId}`;
+  const templateName = `recipient_131049_${Date.now()}`, otherTemplateName = `${templateName}_other`;
+  const recipients = ["5541991100351", "5541991100352", "5541991100353"];
+  const otherRecipient = "5541991100359";
+  t.after(async () => { await cleanup(clientId).catch(() => undefined); await cleanup(otherClientId).catch(() => undefined); });
+  await prisma.client.createMany({ data: [
+    { id: clientId, clientKey, name: "Synthetic", profile: "business", features: { campaigns: true } },
+    { id: otherClientId, clientKey: otherClientKey, name: "Synthetic other", profile: "business", features: { campaigns: true } },
+  ] });
+  await prisma.template.createMany({ data: [
+    { clientId, name: templateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic" },
+    { clientId: otherClientId, name: otherTemplateName, category: "UTILITY", language: "pt_BR", status: "approved", content: "Synthetic other" },
+  ] });
+  const campaign = await prisma.campaign.create({ data: { clientId, name: "Recipient 131049 continuity", templateName, status: "sending", totalRecipients: recipients.length } });
+  const otherCampaign = await prisma.campaign.create({ data: { clientId: otherClientId, name: "Other tenant continuity", templateName: otherTemplateName, status: "sending", totalRecipients: 1 } });
+  const originalFetch = globalThis.fetch; const submitted: string[] = [];
+  globalThis.fetch = (async (_input, init) => {
+    const to = String((JSON.parse(String(init?.body ?? "{}")) as { to?: string }).to ?? "");
+    submitted.push(to);
+    if (to === recipients[1]) return new Response(JSON.stringify({ error: { code: 131049, message: "Synthetic per-recipient marketing limit" } }), { status: 400, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ messages: [{ id: `wamid.131049.${submitted.length}` }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(async () => { await drainCampaignRunnersForTests(); globalThis.fetch = originalFetch; });
+  startCampaignRun({ clientId, clientKey, campaignId: campaign.id, name: campaign.name, templateName, waIds: recipients });
+  startCampaignRun({ clientId: otherClientId, clientKey: otherClientKey, campaignId: otherCampaign.id, name: otherCampaign.name, templateName: otherTemplateName, waIds: [otherRecipient] });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  await getRunningCampaignPromiseForTests(otherCampaign.id);
+  assert.deepEqual(new Set(submitted), new Set([...recipients, otherRecipient]));
+  assert.equal(submitted.filter(value => value === recipients[1]).length, 1);
+  assert.deepEqual(await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id }, select: { status: true, sentCount: true } }), { status: "completed", sentCount: 2 });
+  assert.deepEqual(await prisma.campaign.findUniqueOrThrow({ where: { id: otherCampaign.id }, select: { status: true, sentCount: true } }), { status: "completed", sentCount: 1 });
+  const rejected = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId, messageId: `campaign.${campaign.id}.2` }, select: { status: true, errorBody: true } });
+  assert.equal(rejected.status, "FAILED"); assert.match(rejected.errorBody ?? "", /131049/);
+  assert.equal(await prisma.event.count({ where: { clientId, messageId: `campaign.${campaign.id}.2`, eventName: "campaign.message.failed" } }), 1);
+  assert.equal(campaignOperationsStatus().open, true); assert.equal(campaignOperationsStatus().tasks.length, 0);
+  assert.deepEqual(throttles, [1000, 1000]);
+});
+
 test("account or template provider failure stops the campaign without weakening the global guard", async (t) => {
   createOpenCampaignOperationsTestLedger("campaign-operation-failure");
   const clientId = crypto.randomUUID(), clientKey = `operation-failure-${clientId}`;

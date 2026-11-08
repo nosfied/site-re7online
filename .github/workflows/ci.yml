@@ -203,16 +203,16 @@ jobs:
           src/crm/crmContactsCursor.test.ts
           src/crm/crmContactsTotals.test.ts
           src/crm/crmContactsReadModelContract.test.ts
-      - name: Campaign uncertainty crash recovery and recipient result projection
+      - name: Campaign uncertainty, recipient failure continuity and result projection
         run: |
           node --import tsx --test \
-            --test-name-pattern "transport uncertainty|uncertain marker collision" \
+            --test-name-pattern "transport uncertainty|uncertain marker collision|Meta 131049" \
             src/campaigns/campaignRunner.test.ts
           node --import tsx --test \
             src/campaigns/campaignSubmissionUncertainReconciliation.test.ts \
             src/campaigns/campaignRecipientResultTruth.test.ts
           node --import tsx --test \
-            --test-name-pattern "projects valid, uncertain, valid" \
+            --test-name-pattern "projects valid, uncertain, valid|does not report an unattempted recipient as failed" \
             src/http/campaignsFeatureRoutes.test.ts
       - name: CRM phone identity and import normalization tests
         run: >-

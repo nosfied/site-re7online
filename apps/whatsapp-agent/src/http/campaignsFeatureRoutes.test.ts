@@ -19155,6 +19155,43 @@ test("campaign detail projects valid, uncertain, valid without counting uncertai
   assert.equal(detail.body.campaign.messagesMetaStatus[1]?.nonBillingReason, "provider_acceptance_unknown");
 });
 
+test("campaign detail does not report an unattempted recipient as failed", async () => {
+  const recipients = ["5541999987201", "5541999987202", "5541999987203"];
+  const campaign = await prisma.campaign.create({ data: {
+    clientId: businessClientId, name: "Campanha falha individual", templateName: "lembrete_vencimento_anuidade",
+    status: "failed", totalRecipients: 3, sentCount: 1, blockedCount: 0,
+  } });
+  await prisma.event.create({ data: {
+    clientId: businessClientId, messageId: campaign.id, requestId: `campaign-seed:${campaign.id}:not-submitted`,
+    eventName: "campaign.seed.saved", payloadJson: { campaignId: campaign.id, name: campaign.name,
+      templateName: campaign.templateName, recipients, templateParams: [] },
+  } });
+  await prisma.outboundMessage.createMany({ data: [
+    { clientId: businessClientId, waId: recipients[0], waIdCanonical: recipients[0],
+      messageId: `campaign.${campaign.id}.1`, type: "TEMPLATE" as const, status: "SENT" as const,
+      templateName: campaign.templateName, rawPayload: { campaignId: campaign.id, metaStatus: { lastStatus: "sent" } } },
+    { clientId: businessClientId, waId: recipients[1], waIdCanonical: recipients[1],
+      messageId: `campaign.${campaign.id}.2`, type: "TEMPLATE" as const, status: "FAILED" as const,
+      templateName: campaign.templateName, errorBody: '{"error":{"code":131049}}',
+      rawPayload: { campaignId: campaign.id, metaStatus: { lastStatus: "failed" } } },
+  ] });
+
+  const detail = await request<{ campaign: {
+    progress: { failedCount: number; notSubmittedCount: number; pendingCount: number };
+    metaSummary: { totalSent: number; totalFailed: number; totalNotSubmitted: number };
+    messagesMetaStatus: Array<{ status: string; nonBillingReason: string | null }>;
+  } }>("GET", `/app/campaigns/${campaign.id}`, businessAdmin);
+  assert.equal(detail.status, 200);
+  assert.deepEqual(detail.body.campaign.messagesMetaStatus.map(item => item.status), ["sent", "failed", "not_submitted"]);
+  assert.equal(detail.body.campaign.metaSummary.totalSent, 1);
+  assert.equal(detail.body.campaign.metaSummary.totalFailed, 1);
+  assert.equal(detail.body.campaign.metaSummary.totalNotSubmitted, 1);
+  assert.equal(detail.body.campaign.progress.failedCount, 1);
+  assert.equal(detail.body.campaign.progress.notSubmittedCount, 1);
+  assert.equal(detail.body.campaign.progress.pendingCount, 0);
+  assert.equal(detail.body.campaign.messagesMetaStatus[2]?.nonBillingReason, "not_submitted");
+});
+
 test("campaign detail reconciles reverse 12-digit seed with 13-digit outbound", async () => {
   const seedWaId = "554199996787";
   const outboundWaId = "5541999996787";

@@ -189,16 +189,28 @@ export function buildCampaignSeedFallbackStatusItems(
   return seed.recipients.map((waId, index) => {
     const wasSent = index < sentLimit;
     const wasBlockedOrFailed = !wasSent && index < blockedLimit;
+    const wasNeverSubmittedAfterTerminalFailure =
+      !wasSent && !wasBlockedOrFailed && campaign.status === "failed";
     return {
       waId,
       templateName: seed.templateName || campaign.templateName,
-      status: wasSent ? "sent" : !wasBlockedOrFailed && campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "not_submitted" : "pending") : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status) ? "pending" : "failed",
+      status: wasSent
+        ? "sent"
+        : wasNeverSubmittedAfterTerminalFailure
+          ? "not_submitted"
+          : !wasBlockedOrFailed && campaign.status === "cancelled"
+            ? (campaign.cancellationConfirmed ? "not_submitted" : "pending")
+            : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status)
+              ? "pending"
+              : "failed",
       sentAt: null,
       deliveredAt: null,
       billable: false,
       nonBillingReason: wasSent
         ? "status_unconfirmed"
-        : wasBlockedOrFailed
+        : wasNeverSubmittedAfterTerminalFailure
+          ? "not_submitted"
+          : wasBlockedOrFailed
           ? "failed_or_blocked"
           : campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "cancelled_before_submission" : "cancelled_result_requires_review") : ["sending", "scheduled"].includes(campaign.status) ? "awaiting_processing" : "missing_individual_history",
       pricingCategory: null,
@@ -207,7 +219,9 @@ export function buildCampaignSeedFallbackStatusItems(
       conversationId: null,
       error: wasSent
         ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
-        : wasBlockedOrFailed
+        : wasNeverSubmittedAfterTerminalFailure
+          ? "Campanha encerrada antes desta posição; nenhuma tentativa individual foi registrada."
+          : wasBlockedOrFailed
           ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
           : campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "Envios restantes encerrados sem submissão individual." : "Execução cancelada; resultado individual ainda exige revisão.") : ["sending", "scheduled"].includes(campaign.status) ? "Destinatário aguardando processamento; nenhuma submissão individual comprovada." : "Envio individual nao encontrado no historico preservado.",
     };
