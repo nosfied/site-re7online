@@ -1377,13 +1377,148 @@ class DriverTests(DeployFixture):
         copied_driver = custody / "converta-deploy.py"
         shutil.copyfile(ROOT / "scripts/converta-deploy.py", copied_driver)
         copied_driver.chmod(0o600)
-        wrapper_constants = {
-            "RUNTIME_CACHE_RELEASE": self.candidate,
-            "RUNTIME_CACHE_TARGET": self.target,
-            "RUNTIME_CACHE_TRANSACTION": self.transaction,
-            "RUNTIME_CACHE_INTENT_SHA256": self.retirement.intent_sha256,
+        copied_wrapper = custody / "fixed-current-finalization-continuation.py"
+        shutil.copyfile(ROOT / "scripts/fixed-current-finalization-continuation.py", copied_wrapper)
+        copied_wrapper.chmod(0o600)
+        finalize_argv = [
+            "/usr/bin/python3", "-B", str(copied_driver), "finalize",
+            "--release", self.candidate, "--target", self.target,
+            "--control-plane", original_head, "--components", "api,frontend",
+            "--runtime-manifest", str(self.runtime_manifest),
+            "--runtime-manifest-sha256", sha(self.runtime_manifest),
+            "--transaction-root", str(self.transaction),
+            "--generation-retirement-tool", str(self.retirement.tool),
+            "--generation-retirement-tool-sha256", self.retirement.tool_sha256,
+            "--generation-retirement-intent", str(self.retirement.intent),
+            "--generation-retirement-intent-sha256", self.retirement.intent_sha256,
+            "--generation-retirement-authorization", str(self.retirement.authorization),
+            "--generation-retirement-authorization-sha256",
+            self.retirement.authorization_sha256,
+            "--generation-retirement-operational-state", str(self.retirement.operational_state),
+            "--generation-retirement-operational-state-sha256",
+            self.retirement.operational_state_sha256,
+            "--generation-retirement-root-policy", str(self.retirement.root_policy),
+            "--generation-retirement-root-policy-sha256", self.retirement.root_policy_sha256,
+            "--generation-retirement-receipt-root", str(self.retirement.receipt_root),
+            "--generation-retirement-review-output", str(self.retirement.review_output),
+            "--generation-retirement-deployment-lock", str(self.retirement.deployment_lock),
+            "--runtime-cache-reconciliation", str(manifest),
+            "--runtime-cache-reconciliation-sha256", sha(manifest),
+        ]
+        failpoint = custody / "fail-after-save.once"
+        failpoint.write_text("after_save\n"); failpoint.chmod(0o600)
+        save_log = custody / "pm2-save.calls"
+        fixture_config = custody / "subprocess-fixture.private.json"
+        serialized_constants = {
+            name: (str(value) if isinstance(value, Path) else value)
+            for name, value in deploy_constants.items()
         }
+        put(fixture_config, {
+            "driver": str(copied_driver), "wrapper": str(copied_wrapper),
+            "repo": str(control),
+            "testModule": str(Path(__file__).resolve()),
+            "controlPlane": successor_head, "node": str(self.node),
+            "rows": list(self.host.rows.values()), "dump": str(self.dump),
+            "pm2": str(self.pm2), "releases": str(self.releases),
+            "stable": {name: str(path) for name, path in self.stable.items()},
+            "lock": str(self.lock), "retirementTool": str(real_tool),
+            "failpoint": str(failpoint), "saveLog": str(save_log),
+            "constants": serialized_constants,
+            "wrapperConstants": {
+                "RUNTIME_CACHE_RELEASE": self.candidate,
+                "RUNTIME_CACHE_TARGET": self.target,
+                "RUNTIME_CACHE_TRANSACTION": str(self.transaction),
+                "RUNTIME_CACHE_INTENT_SHA256": self.retirement.intent_sha256,
+            },
+        })
+        fixture_python = custody / "fixture-python"
+        fixture_python.mkdir(mode=0o700)
+        (fixture_python / "sitecustomize.py").write_text("""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 
+config_path = os.environ.get("RE7_FINALIZE_SUBPROCESS_FIXTURE")
+if config_path:
+    config = json.loads(Path(config_path).read_text())
+
+    def install_fixture(frame, event, argument):
+        if event != "call" or frame.f_code.co_name != "main":
+            return install_fixture
+        executable = Path(frame.f_code.co_filename).resolve()
+        if executable == Path(config["wrapper"]).resolve():
+            sys.settrace(None)
+            for name, value in config["wrapperConstants"].items():
+                frame.f_globals[name] = Path(value) if name == "RUNTIME_CACHE_TRANSACTION" else value
+            return None
+        if executable != Path(config["driver"]).resolve():
+            return install_fixture
+        sys.settrace(None)
+        globals_ = frame.f_globals
+        spec = importlib.util.spec_from_file_location("deploy_subprocess_fixture", config["testModule"])
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        host = module.FakeHost(config["controlPlane"], Path(config["node"]))
+        host.rows = {row["name"]: row for row in config["rows"]}
+        host.process_cwds = {
+            row["pid"]: Path(row["pm2_env"]["pm_cwd"]).resolve()
+            for row in host.rows.values()
+        }
+        host.dump = Path(config["dump"])
+        original_run = host.run
+
+        def run(command, *, timeout=40, pass_fds=(), env=None):
+            if command and command[0] == "git":
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False)
+            if (len(command) > 3 and Path(command[1]) == Path(config["retirementTool"]) and
+                    command[2] == "execute"):
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False,
+                                      pass_fds=pass_fds, env=env)
+            return original_run(command, timeout=timeout, pass_fds=pass_fds, env=env)
+
+        host.run = run
+        original_mutate = host.pm2_mutate
+
+        def mutate(pm2, args):
+            original_mutate(pm2, args)
+            if args == ["save"]:
+                with open(config["saveLog"], "a", encoding="utf-8") as stream:
+                    stream.write("save\\n")
+
+        host.pm2_mutate = mutate
+        original_driver = globals_["Driver"]
+        denied = globals_["Denied"]
+
+        class SubprocessDriver(original_driver):
+            def _ticks(self, pid):
+                return pid * 100
+
+            def _failpoint(self, name):
+                marker = Path(config["failpoint"])
+                if name == "after_save" and marker.exists():
+                    marker.unlink()
+                    raise denied("injected:after_save")
+
+        def driver_factory(inputs):
+            return SubprocessDriver(
+                inputs, host=host, repo=Path(config["repo"]),
+                releases=Path(config["releases"]),
+                stable={name: Path(path) for name, path in config["stable"].items()},
+                lock=Path(config["lock"]), dump=Path(config["dump"]),
+                pm2=Path(config["pm2"]), clock=lambda: 1234567890.0)
+
+        globals_["Driver"] = driver_factory
+        for name, value in config["constants"].items():
+            globals_[name] = Path(value) if name == "RUNTIME_CACHE_36B_TRANSACTION" else value
+        return None
+
+    sys.settrace(install_fixture)
+""")
         def request_for(attempt: int) -> dict[str, Any]:
             return {
                 "schemaVersion": 1, "action": "finalize_runtime_cache_continuation",
@@ -1396,53 +1531,39 @@ class DriverTests(DeployFixture):
                     for name in ("stdout", "stderr", "exit")
                 },
                 "finalizeArgv": [
-                    "/usr/bin/python3", "-B", str(copied_driver), "finalize",
-                    "--release", self.candidate, "--target", self.target,
-                    "--control-plane", original_head,
-                    "--transaction-root", str(self.transaction),
-                    "--generation-retirement-intent-sha256", self.retirement.intent_sha256,
-                    "--runtime-cache-reconciliation", str(manifest),
-                    "--runtime-cache-reconciliation-sha256", sha(manifest),
+                    *finalize_argv,
                 ],
             }
 
-        def invoke(attempt: int, *, fail_after_save: bool) -> int:
+        def invoke(attempt: int) -> subprocess.CompletedProcess[str]:
             request = request_for(attempt)
             request_path = custody / f"attempt-{attempt:02d}.request.private.json"
             put(request_path, request)
-            if fail_after_save:
-                driver.failpoints.add("after_save")
+            environment = dict(os.environ)
+            environment.update(
+                PYTHONPATH=str(fixture_python),
+                RE7_FINALIZE_SUBPROCESS_FIXTURE=str(fixture_config))
+            return subprocess.run([
+                "/usr/bin/python3", "-B", str(copied_wrapper),
+                "--request", str(request_path),
+                "--request-sha256", sha(request_path),
+            ], text=True, capture_output=True, check=False, env=environment)
 
-            def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-                with patch.dict(os.environ, {deploy.EXTERNAL_LOCK_ENV: "1"}):
-                    try:
-                        driver.finalize()
-                    except deploy.Denied as error:
-                        os.write(kwargs["stderr"], (str(error) + "\n").encode())
-                        return subprocess.CompletedProcess(argv, 2)
-                return subprocess.CompletedProcess(argv, 0)
-            canonical_run = continuation.run
-
-            def cli_run(request_value: dict[str, Any], lock_fd: int) -> int:
-                return canonical_run(request_value, lock_fd, runner=runner)
-
-            with (patch.multiple(continuation, **wrapper_constants),
-                  patch.object(continuation, "run", side_effect=cli_run),
-                  patch.object(sys, "argv", [
-                      "fixed-current-finalization-continuation.py",
-                      "--request", str(request_path),
-                      "--request-sha256", sha(request_path),
-                  ])):
-                return continuation.main()
-
-        with patch.multiple(deploy, **deploy_constants):
-            self.assertEqual(invoke(1, fail_after_save=True), 2)
-            self.assertTrue(self.lock.is_file())
-            self.assertEqual(invoke(2, fail_after_save=False), 0)
+        first = invoke(1)
+        self.assertEqual(first.returncode, 2, (first.stdout, first.stderr))
+        self.assertIn("finalize_exit:2", first.stderr)
+        self.assertTrue(self.lock.is_file())
+        second = invoke(2)
+        self.assertEqual(second.returncode, 0, (second.stdout, second.stderr))
         self.assertFalse(self.lock.exists())
-        self.assertEqual(self.host.save_calls, 1)
-        self.assertEqual(self.host.retirement_calls, 1)
-        terminal_journal = driver._journal_read()
+        self.assertEqual(save_log.read_text().splitlines(), ["save"])
+        self.assertEqual((self.transaction /
+            "runtime-cache-finalize-v1-attempt-01.exit.private.txt").read_text(), "2\n")
+        self.assertEqual((self.transaction /
+            "runtime-cache-finalize-v1-attempt-02.exit.private.txt").read_text(), "0\n")
+        self.assertIn("DEPLOYED_SANITIZED", (self.transaction /
+            "runtime-cache-finalize-v1-attempt-02.stdout.private.txt").read_text())
+        terminal_journal = json.loads(driver.journal.read_text())
         self.assertEqual(terminal_journal["state"], "DEPLOYED_SANITIZED", terminal_journal)
         self.assertEqual(terminal_journal["saveCount"], 1)
         for attempt in (1, 2):
