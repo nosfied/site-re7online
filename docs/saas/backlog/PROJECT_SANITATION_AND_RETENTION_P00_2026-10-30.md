@@ -1467,6 +1467,7 @@ derivados reproduzíveis, não evidência única. A disposição proposta para c
 trata de limpeza implícita do worktree. O consumidor canônico posterior é
 `scripts/deploy-control-worktree-materialize.py consume`, que exige worktree sem
 conteúdo rastreado, não rastreado ou ignorado divergente antes de executar
-`git worktree remove` e só então fechar o lifecycle. A disposição explícita dessas
-cópias ainda não existe; por isso a custódia não é declarada `SANITIZED`, não é
-somada ao ganho e não autoriza retirada improvisada.
+`git worktree remove` e só então fechar o lifecycle. A disposição das duas cópias
+está registrada. A retirada e seus recibos continuam pendentes, por isso a
+custódia permanece `OPEN`; ela não é somada ao ganho e não autoriza retirada
+improvisada.
