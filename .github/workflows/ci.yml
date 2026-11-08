@@ -212,7 +212,7 @@ jobs:
             src/campaigns/campaignSubmissionUncertainReconciliation.test.ts \
             src/campaigns/campaignRecipientResultTruth.test.ts
           node --import tsx --test \
-            --test-name-pattern "projects valid, uncertain, valid|does not report an unattempted recipient as failed|distinguishes unresolved submission intent" \
+            --test-name-pattern "projects valid, uncertain, valid|does not report an unattempted recipient as failed|distinguishes unresolved submission intent|projects unresolved submission intent across both ninth-digit aliases" \
             src/http/campaignsFeatureRoutes.test.ts
       - name: CRM phone identity and import normalization tests
         run: >-

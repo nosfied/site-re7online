@@ -38120,14 +38120,15 @@ async function buildCampaignRecipientReadModel(
     if (!/^[1-9]\d*$/.test(positionText)) return [];
     const position = Number(positionText);
     const expectedWaId = draftSeed.recipients[position - 1];
+    const submittedWaId = event.waId ?? "";
     const payload = event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
       ? event.payloadJson as Record<string, unknown> : {};
     if (!expectedWaId || event.requestId !== `campaign-message-submit-started:${campaign.id}:${position}` ||
       payload.campaignId !== campaign.id || payload.templateName !== campaign.templateName ||
       typeof payload.campaignRunId !== "string" || payload.campaignRunId.length === 0 ||
-      payload.waIdLast4 !== expectedWaId.slice(-4) || payload.waIdLength !== expectedWaId.length ||
+      payload.waIdLast4 !== submittedWaId.slice(-4) || payload.waIdLength !== submittedWaId.length ||
       !campaignRecipientIdentitiesMatch(
-        campaignRecipientIdentityCandidates(event.waId ?? ""),
+        campaignRecipientIdentityCandidates(submittedWaId),
         campaignRecipientIdentityCandidates(expectedWaId),
       )) return [];
     return [{

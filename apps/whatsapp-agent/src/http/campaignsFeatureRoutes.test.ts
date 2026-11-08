@@ -19232,6 +19232,54 @@ test("campaign detail distinguishes unresolved submission intent from a never at
   assert.equal(detail.body.campaign.progress.pendingCount, 0);
 });
 
+test("campaign detail projects unresolved submission intent across both ninth-digit aliases", async () => {
+  const aliases = [
+    { label: "12-to-13", seedWaId: "554199996787", submittedWaId: "5541999996787" },
+    { label: "13-to-12", seedWaId: "5541999996787", submittedWaId: "554199996787" },
+  ];
+  for (const [caseIndex, alias] of aliases.entries()) {
+    const recipients = [`55419999874${caseIndex}1`, alias.seedWaId, `55419999874${caseIndex}3`];
+    const campaignRunId = crypto.randomUUID();
+    const campaign = await prisma.campaign.create({ data: {
+      clientId: businessClientId, name: `Campanha alias ${alias.label}`,
+      templateName: "lembrete_vencimento_anuidade", status: "failed",
+      totalRecipients: 3, sentCount: 1, blockedCount: 0,
+    } });
+    await prisma.event.createMany({ data: [
+      { clientId: businessClientId, messageId: campaign.id,
+        requestId: `campaign-seed:${campaign.id}:${alias.label}`, eventName: "campaign.seed.saved",
+        payloadJson: { campaignId: campaign.id, name: campaign.name,
+          templateName: campaign.templateName, recipients, templateParams: [] } },
+      { clientId: businessClientId, waId: alias.submittedWaId, messageId: `campaign.${campaign.id}.2`,
+        requestId: `campaign-message-submit-started:${campaign.id}:2`, eventName: "campaign.message.submit_started",
+        payloadJson: { campaignId: campaign.id, campaignRunId, templateName: campaign.templateName,
+          waIdLast4: alias.submittedWaId.slice(-4), waIdLength: alias.submittedWaId.length,
+          runtimeVersionAtSubmission: 1, conversationUpdatedAtAtSubmission: null } },
+    ] });
+    await prisma.outboundMessage.create({ data: {
+      clientId: businessClientId, waId: recipients[0], waIdCanonical: recipients[0],
+      messageId: `campaign.${campaign.id}.1`, type: "TEMPLATE", status: "SENT",
+      templateName: campaign.templateName, rawPayload: { campaignId: campaign.id, metaStatus: { lastStatus: "sent" } },
+    } });
+
+    const detail = await request<{ campaign: {
+      progress: { uncertainCount: number; failedCount: number; notSubmittedCount: number };
+      metaSummary: { totalSent: number; totalFailed: number; totalUncertain: number; totalNotSubmitted: number };
+      messagesMetaStatus: Array<{ status: string; nonBillingReason: string | null }>;
+    } }>("GET", `/app/campaigns/${campaign.id}`, businessAdmin);
+    assert.equal(detail.status, 200, alias.label);
+    assert.deepEqual(detail.body.campaign.messagesMetaStatus.map(item => item.status),
+      ["sent", "unknown", "not_submitted"], alias.label);
+    assert.equal(detail.body.campaign.messagesMetaStatus[1]?.nonBillingReason,
+      "submission_started_without_terminal_result", alias.label);
+    assert.deepEqual(detail.body.campaign.metaSummary, { ...detail.body.campaign.metaSummary,
+      totalSent: 1, totalFailed: 0, totalUncertain: 1, totalNotSubmitted: 1 }, alias.label);
+    assert.equal(detail.body.campaign.progress.uncertainCount, 1, alias.label);
+    assert.equal(detail.body.campaign.progress.failedCount, 0, alias.label);
+    assert.equal(detail.body.campaign.progress.notSubmittedCount, 1, alias.label);
+  }
+});
+
 test("campaign detail reconciles reverse 12-digit seed with 13-digit outbound", async () => {
   const seedWaId = "554199996787";
   const outboundWaId = "5541999996787";
