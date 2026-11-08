@@ -936,24 +936,48 @@ def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
                 capacity.get("availableBytesBeforeTerminalContinuation") ==
                 capacity.get("availableBytesDeltaObserved"),
                 "36b byte totals retain their distinct evidence sources")
-        require(custody.get("state") == "OPEN" and
-                custody.get("sanitized") is False and
+        require(custody.get("state") == "SANITIZED" and
+                custody.get("sanitized") is True and
                 custody.get("terminalDisposition") == "SANITIZE_AFTER_USE" and
                 custody.get("canonicalConsumer") ==
                 "scripts/deploy-control-worktree-materialize.py consume" and
-                bool(SHA256.fullmatch(custody.get("lifecycleSha256", ""))) and
-                bool(SHA256.fullmatch(
-                    custody.get("materializationReceiptSha256", ""))) and
-                bool(SHA256.fullmatch(custody.get("contractSha256", ""))),
-                "36b deploy-control custody remains explicitly open")
+                custody.get("consumerMerge") ==
+                "def461d550ff7d43115ed87ba2cd8153470e603e" and
+                custody.get("derivedWorktreePresent") is False and
+                custody.get("worktreeRegistrationPresent") is False and
+                custody.get("untrackedPrivateControlCopiesPresent") is False and
+                custody.get("repeatPermitted") is False and
+                custody.get("blocker") is None and
+                custody.get("originalLifecycleSha256") ==
+                "557bea22007d9427f94fe383862327201c9b09dce59e9c607571895b2c0a5300" and
+                custody.get("lifecycleSha256") ==
+                "4cc1bdbd9fb68d8610d5cc1800e7b7e7da0f5dd295f7aadaef9769f27e94304b" and
+                custody.get("materializationReceiptSha256") ==
+                "3ec9ce42615b0b05692073c179b285eb9b96e7766ca33b4e5209b247725d9082" and
+                custody.get("consumeRequestSha256") ==
+                "400fd0752cd84dd02967476639c168caa2f00531adef372cd87982806614fdd0" and
+                custody.get("operationReceiptSha256") ==
+                "0a0966bac48bddc501aff3e287eadb9b280e4ced08c220e12ed638172c9d38aa" and
+                custody.get("terminalReceiptSha256") ==
+                "6a247a4292a6f1996926d3fed2c47ba2033b8f2e822341e905376bf374312b94" and
+                custody.get("derivedCopyReceiptSha256") == [
+                    "79059ea73100b03fa80f11b3a8b80aa8a288337d2fe4f9d63a1f248e9d99f1b3",
+                    "b4b48ced119ab50dbac84c1ece51446949173a0d2df3d1d8f52ec35cf59a8a01",
+                ] and
+                bool(SHA256.fullmatch(custody.get("contractSha256", ""))) and
+                custody.get("observedAvailableBytesDelta") == 78004224 and
+                custody.get("observedAvailableInodesDelta") == 3661,
+                "36b deploy-control custody has terminal authenticated closure")
         copies = custody.get("discardablePrivateControlCopies", [])
         require(len(copies) == 2 and
                 all(item.get("byteEquivalentToAuthority") is True and
                     item.get("disposition") ==
-                    "REMOVE_EXACT_COPY_BEFORE_CANONICAL_CONSUME_WITH_EXPLICIT_RECEIPT" and
-                    bool(SHA256.fullmatch(item.get("sha256", "")))
+                    "SANITIZED_BY_EXPLICIT_RECEIPT" and
+                    item.get("absent") is True and
+                    bool(SHA256.fullmatch(item.get("sha256", ""))) and
+                    bool(SHA256.fullmatch(item.get("receiptSha256", "")))
                     for item in copies),
-                "36b private control copies have explicit authenticated disposition")
+                "36b private control copies have terminal authenticated disposition")
         require(retirement.get("allRemovedPathsVerifiedAbsent") is True and
                 len(retirement.get("removedPaths", [])) == 3,
                 "36b sanitized scope is limited to three absent derivatives")
