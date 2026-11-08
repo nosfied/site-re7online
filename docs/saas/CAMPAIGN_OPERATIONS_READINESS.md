@@ -676,6 +676,29 @@ sobre o fallback derivado de `sentCount`. A campanha pode concluir o processamen
 dos demais destinatários sem transformar essa posição em sucesso ou autorizar seu
 reenvio.
 
+### Falhas definitivas por destinatário e posições não submetidas
+
+Os códigos Meta `130497`, `131026` e `131049` são tratados como recusas definitivas
+daquele destinatário quando chegam em uma resposta síncrona autenticada. O runner
+persiste o outbound e o evento de falha, encerra a tarefa do provider, mantém o
+intervalo entre submissões e segue para a próxima posição. Essa classificação não
+autoriza retry e não transforma falha de conta, template ou binding em falha
+individual. Outro tenant continua admitido enquanto a guarda estiver aberta.
+
+Na leitura, uma falha individual comprovada permanece `Falhou`; um marcador de
+aceitação desconhecida permanece `Resultado incerto`; e uma posição posterior sem
+intenção, outbound ou resultado individual, quando a campanha terminou em
+`failed`, aparece como `Não submetido`. Esse último estado possui contador próprio
+e não é somado a enviados nem a falhas definitivas. O fallback histórico de uma
+campanha `completed` sem evidência individual permanece inalterado.
+
+O escopo reduzido depende de evidência SQL durável e conferida. Se a intenção, o
+resultado ou o marcador não puderem ser persistidos e vinculados à tarefa do
+ledger, a guarda global continua fail-closed: não se infere segurança por ausência
+de registro. O plano histórico pós-cancelamento
+`afaf983128a092fd760d315d15ac7e12fcd4a0166f60079c792cbd45d52f4041`
+continua separado e não é consumido por esta regra.
+
 Na recuperação de uma queda entre o commit SQL do marcador e a baixa da tarefa no
 ledger, as duas transições de lease são distintas. Primeiro, a classificação
 operacional existente move o job `running` para `needs_review`, expira o lease do

@@ -570,6 +570,8 @@ function getMetaStatusClasses(status: string) {
       return "bg-indigo-600 text-white";
     case "unknown":
       return "bg-fuchsia-700 text-white";
+    case "not_submitted":
+      return "bg-zinc-600 text-white";
     case "sent":
     default:
       return "bg-slate-500 text-white";
@@ -579,7 +581,7 @@ function getMetaStatusClasses(status: string) {
 function getMetaStatusLabel(status: string) {
   switch (status) {
     case "not_submitted":
-      return "Não enviada";
+      return "Não submetido";
     case "read":
       return "Lida";
     case "delivered":
@@ -2038,7 +2040,7 @@ export default function AppCampaignsPage() {
       { id: "failed" as const, label: "Falhas" },
       { id: "pending" as const, label: "Pendentes" },
       { id: "unknown" as const, label: "Resultados incertos" },
-      { id: "not_submitted" as const, label: "Não enviados" },
+      { id: "not_submitted" as const, label: "Não submetidos" },
     ]) {
       if (
         existing.has(option.id) ||
@@ -5139,8 +5141,8 @@ export default function AppCampaignsPage() {
                       <p className="mt-1 font-semibold text-orange-100">{selectedCampaignIsBatchController ? selectedCampaign.executionBatch!.progress.blockedCount : selectedCampaign.blockedCount}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide text-white/60">{selectedCampaign.executionState?.state === "cancelled" ? "Não enviados" : "Pendentes"}</p>
-                      <p className="mt-1 font-semibold">{selectedCampaign.executionState?.state === "cancelled" ? (selectedCampaign.progress.notSubmittedCount ?? 0) : selectedCampaign.progress.pendingCount}</p>
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">{(selectedCampaign.progress.notSubmittedCount ?? 0) > 0 ? "Não submetidos" : "Pendentes"}</p>
+                      <p className="mt-1 font-semibold">{(selectedCampaign.progress.notSubmittedCount ?? 0) > 0 ? selectedCampaign.progress.notSubmittedCount : selectedCampaign.progress.pendingCount}</p>
                     </div>
                   </div>
 

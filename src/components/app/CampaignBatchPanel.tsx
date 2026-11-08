@@ -111,7 +111,7 @@ export default function CampaignBatchPanel(props: Props) {
           <p className="text-xs text-cyan-100/75">{props.sourceLabel(batch.sourceMode)} · {batch.chunkCount} lote(s) · {getCampaignPresentationLabel({ status: batch.status, executionState: batch.executionState })}</p>
           {isChild ? <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4" aria-label="Totais do conjunto">
             <div><dt>Destinatários</dt><dd>{total}</dd></div><div><dt>Processados</dt><dd>{batch.progress.sentCount}</dd></div>
-            <div><dt>Bloqueados</dt><dd>{batch.progress.blockedCount}</dd></div><div><dt>{batch.executionState?.state === "cancelled" ? "Não enviados" : "Pendentes"}</dt><dd>{batch.executionState?.state === "cancelled" ? (batch.progress.notSubmittedCount ?? 0) : batch.progress.pendingCount}</dd></div>
+            <div><dt>Bloqueados</dt><dd>{batch.progress.blockedCount}</dd></div><div><dt>{(batch.progress.notSubmittedCount ?? 0) > 0 ? "Não submetidos" : "Pendentes"}</dt><dd>{(batch.progress.notSubmittedCount ?? 0) > 0 ? batch.progress.notSubmittedCount : batch.progress.pendingCount}</dd></div>
           </dl> : null}
           {props.renderActions()}
           <p className="text-xs text-white/70">Lotes concluídos: {batch.progress.completedChunks}/{batch.chunkCount} · Progresso: {pct}%</p>

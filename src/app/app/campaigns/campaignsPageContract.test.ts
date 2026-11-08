@@ -120,6 +120,13 @@ test("campaign result exposes uncertain provider acceptance without presenting i
   assert.ok(pageSource.includes("campaign.progress.uncertainCount ?? 0"));
 });
 
+test("campaign result distinguishes recipients that were never submitted", () => {
+  assert.ok(pageSource.includes('case "not_submitted":'));
+  assert.ok(pageSource.includes('return "Não submetido"'));
+  assert.ok(pageSource.includes('{ id: "not_submitted" as const, label: "Não submetidos" }'));
+  assert.ok(pageSource.includes('(selectedCampaign.progress.notSubmittedCount ?? 0) > 0 ? "Não submetidos" : "Pendentes"'));
+});
+
 test("campaign detail result shows full recipient phone for authorized users", () => {
   assert.ok(pageSource.includes('return digits || value || "-";'));
   assert.ok(!pageSource.includes('`${digits.slice(0, 4)}****${digits.slice(-4)}`'));

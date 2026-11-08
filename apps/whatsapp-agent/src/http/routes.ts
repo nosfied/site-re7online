@@ -37728,10 +37728,11 @@ async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, cli
       const page: Array<CampaignReadSources["events"][number] & { id: string }> = await prisma.event.findMany({
         where: { clientId, eventName: { in: [
           "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked", "campaign.message.provider_accepted",
-          "campaign.message.submission_uncertain_preserved",
+          "campaign.message.submit_started", "campaign.message.submission_uncertain_preserved",
           "campaign.draft.discarded", "campaign.cancelled",
         ] }, OR: [{ messageId: { in: group } }, ...group.flatMap(id => [
           { eventName: "campaign.message.provider_accepted", payloadJson: { path: ["campaignId"], equals: id } },
+          { eventName: "campaign.message.submit_started", messageId: { startsWith: `campaign.${id}.` } },
           { eventName: "campaign.message.submission_uncertain_preserved", messageId: { startsWith: `campaign.${id}.` } },
         ])] },
         orderBy: { id: "asc" }, take: 1000,
@@ -38086,7 +38087,7 @@ async function buildCampaignRecipientReadModel(
       error: String(payload.label ?? "Destinatário bloqueado antes do envio."),
     };
   });
-  const uncertainMetaStatus: CampaignMetaStatus[] = loaded.events.flatMap((event) => {
+  const uncertainEvidence = loaded.events.flatMap((event) => {
     if (event.eventName !== "campaign.message.submission_uncertain_preserved") return [];
     const payload = event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
       ? event.payloadJson as Record<string, unknown> : {};
@@ -38099,15 +38100,48 @@ async function buildCampaignRecipientReadModel(
       payload.retryAllowed !== false || ![0, 1].includes(providerCalls) ||
       (providerCalls === 1 && event.requestId !== `campaign-message-submission-uncertain:${campaign.id}:${position}`) ||
       (providerCalls === 0 && !event.requestId?.startsWith("submission-uncertain-disposition:"))) return [];
-    return [{
+    return [{ messageId: event.messageId, status: {
       waId: expectedWaId, templateName: campaign.templateName, status: "unknown" as const,
       sentAt: event.createdAt.toISOString(), deliveredAt: null, billable: false,
       nonBillingReason: "provider_acceptance_unknown", pricingCategory: null,
       pricingBillable: null, pricingModel: null, conversationId: null,
       error: "Resultado da submissão ao provedor incerto; reenvio bloqueado.",
+    } satisfies CampaignMetaStatus }];
+  });
+  const resolvedMessageIds = new Set([
+    ...outboundMessages.map(item => item.messageId).filter((value): value is string => Boolean(value)),
+    ...uncertainEvidence.map(item => item.messageId),
+  ]);
+  const submitStartedMetaStatus: CampaignMetaStatus[] = loaded.events.flatMap((event) => {
+    if (event.eventName !== "campaign.message.submit_started" || !event.messageId ||
+      resolvedMessageIds.has(event.messageId)) return [];
+    const prefix = `campaign.${campaign.id}.`;
+    const positionText = event.messageId.startsWith(prefix) ? event.messageId.slice(prefix.length) : "";
+    if (!/^[1-9]\d*$/.test(positionText)) return [];
+    const position = Number(positionText);
+    const expectedWaId = draftSeed.recipients[position - 1];
+    const submittedWaId = event.waId ?? "";
+    const payload = event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
+      ? event.payloadJson as Record<string, unknown> : {};
+    if (!expectedWaId || event.requestId !== `campaign-message-submit-started:${campaign.id}:${position}` ||
+      payload.campaignId !== campaign.id || payload.templateName !== campaign.templateName ||
+      typeof payload.campaignRunId !== "string" || payload.campaignRunId.length === 0 ||
+      payload.waIdLast4 !== submittedWaId.slice(-4) || payload.waIdLength !== submittedWaId.length ||
+      !campaignRecipientIdentitiesMatch(
+        campaignRecipientIdentityCandidates(submittedWaId),
+        campaignRecipientIdentityCandidates(expectedWaId),
+      )) return [];
+    return [{
+      waId: expectedWaId, templateName: campaign.templateName, status: "unknown" as const,
+      sentAt: event.createdAt.toISOString(), deliveredAt: null, billable: false,
+      nonBillingReason: "submission_started_without_terminal_result", pricingCategory: null,
+      pricingBillable: null, pricingModel: null, conversationId: null,
+      error: "Submissão iniciada sem resultado terminal comprovado; reenvio bloqueado para revisão.",
     }];
   });
-  const resultItems = [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus, ...uncertainMetaStatus];
+  const uncertainMetaStatus = uncertainEvidence.map(item => item.status);
+  const resultItems = [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus,
+    ...uncertainMetaStatus, ...submitStartedMetaStatus];
   const resultIdentityCandidates = resultItems.map((item) =>
     campaignRecipientIdentityCandidates(item.waId)
   );
