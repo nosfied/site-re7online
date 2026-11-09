@@ -1484,4 +1484,7 @@ O receipt isolado não altera a classificação: somente um snapshot operacional
 posterior, autenticado, que vincule receipt e journal completos permite a leitura
 `PRESERVED_INACTIVE_EVIDENCE`. Receipt montado manualmente, varredura incompleta,
 conteúdo, referência ou identidade divergente mantêm `DENY`. Esta qualificação
-não libera bytes e o audit do cache npm permanece uma etapa posterior.
+não libera bytes e o audit do cache npm permanece uma etapa posterior. Antes da
+emissão produtiva, a prova de instalação do helper deve ser capturada e reaberta
+pelo perfil fechado `empty-transaction-preservation`; a instalação isolada não
+satisfaz esse gate e o perfil não autoriza audit.
