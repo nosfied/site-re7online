@@ -84,7 +84,11 @@ export async function campaignRecipientEligibilityBatch(
   const operationalCandidates = allCandidates.length ? allCandidates : ["__no_supported_identity__"];
   const markerQueryCandidates = allMarkerCandidates.length ? allMarkerCandidates : ["__no_marker_identity__"];
 
-  const [markerRows, leads, contacts, excluded, optOut] = await Promise.all([
+  const optOutIdentities = Array.from(new Set(normalized.flatMap((recipient) =>
+    recipient.candidates.length > 0 ? recipient.identities : []
+  )));
+
+  const [markerRows, leads, contacts, optOut] = await Promise.all([
     prisma.$queryRaw<Array<{ markerDigits: string }>>(Prisma.sql`
       SELECT DISTINCT regexp_replace(marker, '[^0-9]', '', 'g') AS "markerDigits"
       FROM "Lead", LATERAL (VALUES ("waId"), ("waIdCanonical")) values(marker)
@@ -126,8 +130,7 @@ export async function campaignRecipientEligibilityBatch(
         operationallyExcludedAt: true,
       },
     }),
-    loadOperationallyExcludedWaIds(prisma, { clientId, waIds: operationalCandidates }),
-    filterOptedOutCampaignRecipients(prisma, { clientId, waIds: operationalCandidates }),
+    filterOptedOutCampaignRecipients(prisma, { clientId, waIds: optOutIdentities }),
   ]);
   const markerDigits = new Set(markerRows.map((row) => row.markerDigits).filter(Boolean));
   const blockedOptOuts = new Set(optOut.blocked.map((item) => item.waIdCanonical).filter(Boolean));
@@ -165,10 +168,9 @@ export async function campaignRecipientEligibilityBatch(
     if (matchingContacts.some((contact) => (contact.channel ?? "whatsapp").toLowerCase() !== "whatsapp")) {
       return "non_whatsapp_channel";
     }
-    if ([...candidates].some((candidate) => excluded.has(candidate))) return "operationally_excluded_contact";
     if (matchingContacts.some((contact) => contact.operationallyExcludedAt)) return "operationally_excluded_contact";
     if (matchingContacts.some((contact) => !isOperationalContactLifecycle(contact.lifecycle))) return "provisional_contact";
-    if ([...candidates].some((candidate) => blockedOptOuts.has(candidate))) return "active_send_blocked";
+    if (recipient.identities.some((identity) => blockedOptOuts.has(identity))) return "active_send_blocked";
     return null;
   });
 }

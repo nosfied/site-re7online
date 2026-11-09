@@ -135,6 +135,62 @@ test('legacy anonymization marker blocks either phone alias independently of eli
   }
 });
 
+test('batched eligibility applies the latest opt-out event for a normalized recipient', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const modern = '5541912345678';
+  const legacy = '554112345678';
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-opt-out-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.event.createMany({
+      data: [
+        {
+          clientId, waId: modern, waIdCanonical: modern, eventName: 'contact.opt_out.recorded',
+          payloadJson: {}, createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          clientId, waId: legacy, waIdCanonical: legacy, eventName: 'contact.opt_out.revoked',
+          payloadJson: {}, createdAt: new Date('2026-01-01T00:01:00Z'),
+        },
+      ],
+    });
+    const reason = await campaignRecipientEligibility(db, clientId, [modern]);
+    assert.equal(reason, null);
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [{ values: [modern] }]), [reason]);
+  } finally {
+    await db.event.deleteMany({ where: { clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
+});
+
+test('batched eligibility scopes operational exclusion to the matching contact rows', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const unrelated = { values: ['5541998765432'] };
+  const excluded = { values: ['5541991100901'] };
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-exclusion-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.contact.create({
+      data: {
+        clientId, waId: excluded.values[0], externalUserRef: ` ${unrelated.values[0]} `,
+        channel: 'whatsapp', lifecycle: 'ACTIVE', operationallyExcludedAt: new Date(),
+      },
+    });
+    const unrelatedReason = await campaignRecipientEligibility(db, clientId, unrelated.values);
+    const excludedReason = await campaignRecipientEligibility(db, clientId, excluded.values);
+    assert.equal(unrelatedReason, null);
+    assert.equal(excludedReason, 'operationally_excluded_contact');
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [unrelated]), [unrelatedReason]);
+    assert.deepEqual(
+      await campaignRecipientEligibilityInBatches(db, clientId, [unrelated, excluded]),
+      [unrelatedReason, excludedReason]
+    );
+  } finally {
+    await db.contact.deleteMany({ where: { clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
+});
+
 test('CSV/manual import plan rejects anonymized input before normalization without creating CRM', async () => {
   const db = getPrisma(), clientId = crypto.randomUUID();
   const { previewCampaignRecipientImport } = await import('./campaignRecipientImport.js');
