@@ -1478,6 +1478,8 @@ permanece preservada no lugar e não é candidata à retirada. A disposição fe
 registra somente vazio atual, identidade física fixa, ausência de referências e
 `historicalInvocationResultAuthenticated=false`. A emissão exige o observador
 privilegiado sob os locks e produz uma atestação independente `root:deploy 0440`.
+Essa atestação vincula separadamente as requisições do observador e da preservação;
+os dois hashes não são intercambiáveis.
 O receipt isolado não altera a classificação: somente um snapshot operacional
 posterior, autenticado, que vincule receipt e journal completos permite a leitura
 `PRESERVED_INACTIVE_EVIDENCE`. Receipt montado manualmente, varredura incompleta,

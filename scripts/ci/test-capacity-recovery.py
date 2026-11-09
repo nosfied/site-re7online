@@ -34,6 +34,12 @@ SUPERVISOR_SPEC = importlib.util.spec_from_file_location(
 SUPERVISOR = importlib.util.module_from_spec(SUPERVISOR_SPEC)
 assert SUPERVISOR_SPEC.loader is not None
 SUPERVISOR_SPEC.loader.exec_module(SUPERVISOR)
+OBSERVER_TOOL = Path(__file__).resolve().parents[1] / "capacity-proc-observer.py"
+OBSERVER_SPEC = importlib.util.spec_from_file_location(
+    "capacity_proc_observer_for_recovery_tests", OBSERVER_TOOL)
+OBSERVER = importlib.util.module_from_spec(OBSERVER_SPEC)
+assert OBSERVER_SPEC.loader is not None
+OBSERVER_SPEC.loader.exec_module(OBSERVER)
 
 
 def sha(path: Path) -> str:
@@ -60,10 +66,14 @@ def scan(targets=None, writers=None, complete=True, **summary):
 
 def privileged_preservation(process_scan=None):
     process_scan = process_scan or scan()
-    return process_scan, {"complete": process_scan[2], "response": {"attestation": {
+    return process_scan, {"complete": process_scan[2], "requestSha256": "d" * 64,
+        "response": {"attestation": {
         "path": str(MODULE.LEGACY_EMPTY_TRANSACTION_ATTESTATION),
         "sha256": "b" * 64,
         "observationSha256": "c" * 64,
+        "helperSha256": "a" * 64,
+        "observerRequestSha256": "d" * 64,
+        "preservationRequestSha256": "e" * 64,
         "identity": {"device": 1, "inode": 2, "uid": 0, "gid": os.getegid(),
                      "mode": "0440", "type": "regular", "size": 1,
                      "mtimeNs": 1, "ctimeNs": 1},
@@ -2843,7 +2853,7 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
             fresh, evidence = MODULE.capture_live_operational(operational)
         privileged.assert_called_once_with(
             fixture["requestValue"]["procObserver"], [str(fixture["transaction"])],
-            "preserve")
+            "preserve", preservation_request_sha=sha(fixture["request"]))
         selected = [item for item in evidence["transactions"]
                     if item["path"] == str(fixture["transaction"])]
         self.assertEqual(len(selected), 1)
@@ -3002,12 +3012,16 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
     def test_bound_receipt_without_root_owned_attestation_is_denied(self):
         fixture = self.empty_transaction_preservation_fixture("forged-attestation")
         attestation = fixture["custody"] / "privileged-emission-attestation.private.json"
+        privileged = privileged_preservation()
+        privileged[1]["response"]["attestation"]["path"] = str(attestation)
+        privileged[1]["response"]["attestation"]["preservationRequestSha256"] = sha(
+            fixture["request"])
         with mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_BINDING", fixture["binding"]), \
                 mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_RECEIPT", fixture["receipt"]), \
                 mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_JOURNAL", fixture["journal"]), \
                 mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_ATTESTATION", attestation), \
                 mock.patch.object(MODULE, "_privileged_proc_targets",
-                                  return_value=privileged_preservation()):
+                                  return_value=privileged):
             MODULE.preserve_legacy_empty_transaction(
                 fixture["request"], sha(fixture["request"]), fixture["receipt"],
                 fixture["journal"])
@@ -3024,6 +3038,47 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
                     self.assertRaisesRegex(MODULE.Denied, "FILE_READ"):
                 MODULE.capture_live_operational(operational)
         self.assertFalse(attestation.exists())
+
+    def test_real_attestation_emission_reopens_both_request_bindings(self):
+        custody = self.base / "real-attestation"; custody.mkdir(mode=0o700)
+        attestation = custody / "privileged-emission-attestation.private.json"
+        preservation_sha = "1" * 64
+        observer_request = {
+            "schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
+            "phase": "preserve", "nonce": "2" * 64,
+            "deployUid": os.geteuid(),
+            "candidatePaths": [OBSERVER.LEGACY_EMPTY_TRANSACTION],
+            "consumer": {"pid": 99, "startTicks": 1},
+            "preservationRequestSha256": preservation_sha,
+        }
+        observer_raw = OBSERVER.canonical(observer_request)
+        observer_sha = hashlib.sha256(observer_raw).hexdigest()
+        observation = {"complete": True, "references": []}
+        with mock.patch.object(OBSERVER, "LEGACY_EMPTY_TRANSACTION_ATTESTATION",
+                               attestation), mock.patch.object(os, "fchown"):
+            binding = OBSERVER.emit_preservation_attestation(
+                observer_raw, observer_request, observation,
+                {"sha256": "3" * 64}, os.getegid())
+        binding["identity"] = {**binding["identity"], "uid": 0}
+        raw = attestation.read_bytes()
+        with mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_ATTESTATION",
+                               attestation), \
+                mock.patch.object(MODULE, "deploy_identity",
+                                  return_value=(os.geteuid(), os.getegid())), \
+                mock.patch.object(MODULE, "stable_regular",
+                                  return_value=(raw, binding["identity"])):
+            value, _ = MODULE._authenticate_privileged_preservation_attestation(
+                binding, preservation_sha, observer_sha)
+            self.assertEqual(value["observerRequestSha256"], observer_sha)
+            self.assertEqual(value["preservationRequestSha256"], preservation_sha)
+            for field, changed in (("observerRequestSha256", "4" * 64),
+                                   ("preservationRequestSha256", "5" * 64)):
+                altered = {**binding, field: changed}
+                with self.subTest(field=field), self.assertRaisesRegex(
+                        MODULE.Denied,
+                        "LIVE_EMPTY_TRANSACTION_PRIVILEGED_ATTESTATION"):
+                    MODULE._authenticate_privileged_preservation_attestation(
+                        altered, preservation_sha, observer_sha)
 
     def test_both_canonical_state_files_are_ambiguous(self):
         transaction = self.window_transaction("ambiguous", "DEPLOYED", 1)

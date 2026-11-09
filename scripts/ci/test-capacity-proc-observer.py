@@ -250,6 +250,7 @@ class ProcObserverTests(unittest.TestCase):
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
         preserve = json.loads(request([OBSERVER.LEGACY_EMPTY_TRANSACTION]))
         preserve["phase"] = "preserve"
+        preserve["preservationRequestSha256"] = "1" * 64
         self.assertEqual(OBSERVER.validate_request(OBSERVER.canonical(preserve))["phase"],
                          "preserve")
         crm_paths = sorted(OBSERVER.CRM_INACTIVE_STAGING_PATHS)
@@ -285,7 +286,8 @@ class ProcObserverTests(unittest.TestCase):
             parent = Path(raw); parent.chmod(0o700)
             output = parent / "privileged-emission-attestation.private.json"
             request = {"deployUid": os.geteuid(),
-                       "candidatePaths": [OBSERVER.LEGACY_EMPTY_TRANSACTION]}
+                       "candidatePaths": [OBSERVER.LEGACY_EMPTY_TRANSACTION],
+                       "preservationRequestSha256": "1" * 64}
             observation = {"complete": True, "references": []}
             mechanism = {"sha256": "a" * 64}
             with mock.patch.object(OBSERVER, "LEGACY_EMPTY_TRANSACTION_ATTESTATION", output), \

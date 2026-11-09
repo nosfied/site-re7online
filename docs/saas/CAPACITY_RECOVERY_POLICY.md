@@ -459,7 +459,10 @@ atual, nenhuma referência operacional ou de processo observada e resultado
 histórico não autenticado. Ele não autentica a própria origem. O materializador
 posterior reabre receipt e journal, grava seus hashes no snapshot operacional
 schema 3 e o classificador exige, além desse binding externo, a atestação física
-root-owned e a sequência fechada do journal. Um JSON montado manualmente, ainda que
+root-owned e a sequência fechada do journal. A atestação distingue e vincula
+`observerRequestSha256`, calculado sobre a requisição fechada enviada ao helper, de
+`preservationRequestSha256`, calculado sobre o request do subcomando; cada hash é
+reaberto contra seu próprio documento. Um JSON montado manualmente, ainda que
 internamente coerente, permanece `LIVE_TRANSACTION_LAYOUT_UNKNOWN`. O classificador
 revalida caminho, device/inode, owner/group, modo e vazio em toda recaptura.
 Conteúdo novo, mudança de identidade, referência operacional nova, receipt,

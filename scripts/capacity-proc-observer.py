@@ -216,11 +216,19 @@ def validate_request(raw: bytes) -> dict[str, Any]:
         refuse("REQUEST_JSON")
     required = {"schemaVersion", "kind", "phase", "nonce", "deployUid",
                 "candidatePaths", "consumer"}
+    if isinstance(value, dict) and value.get("phase") == "preserve":
+        required.add("preservationRequestSha256")
     if (not isinstance(value, dict) or set(value) != required or
             value.get("schemaVersion") != 1 or
             value.get("kind") != "CAPACITY_PROC_OBSERVATION_REQUEST" or
             value.get("phase") not in {"audit", "prepare", "execute", "preserve"}):
         refuse("REQUEST_SCHEMA")
+    if (value["phase"] == "preserve" and
+            (not isinstance(value.get("preservationRequestSha256"), str) or
+             len(value["preservationRequestSha256"]) != SHA256_LENGTH or
+             any(char not in "0123456789abcdef"
+                 for char in value["preservationRequestSha256"]))):
+        refuse("PRESERVATION_REQUEST_SHA256")
     nonce = value.get("nonce")
     if (not isinstance(nonce, str) or len(nonce) != SHA256_LENGTH or
             any(char not in "0123456789abcdef" for char in nonce)):
@@ -505,7 +513,9 @@ def emit_preservation_attestation(request_raw: bytes, request: dict[str, Any],
         refuse("PRESERVATION_ATTESTATION_PRECONDITION")
     payload = {
         "schemaVersion": 1, "kind": "PRIVILEGED_PRESERVATION_ATTESTATION",
-        "requestSha256": digest(request_raw), "candidatePath": LEGACY_EMPTY_TRANSACTION,
+        "observerRequestSha256": digest(request_raw),
+        "preservationRequestSha256": request["preservationRequestSha256"],
+        "candidatePath": LEGACY_EMPTY_TRANSACTION,
         "observationSha256": digest(canonical(observation)),
         "helperSha256": mechanism["sha256"],
         "historicalInvocationResultAuthenticated": False,
@@ -536,7 +546,10 @@ def emit_preservation_attestation(request_raw: bytes, request: dict[str, Any],
     finally:
         os.close(directory)
     return {"path": str(path), "sha256": digest(raw), "identity": identity(info),
-            "observationSha256": payload["observationSha256"]}
+            "observationSha256": payload["observationSha256"],
+            "helperSha256": payload["helperSha256"],
+            "observerRequestSha256": payload["observerRequestSha256"],
+            "preservationRequestSha256": payload["preservationRequestSha256"]}
 
 
 def alarm_handler(_signum: int, _frame: Any) -> None:

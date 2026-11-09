@@ -1160,7 +1160,8 @@ def _proc_observer_installation(binding: dict[str, str]) -> dict[str, Any]:
 
 
 def _privileged_proc_targets(binding_value: Any, candidate_paths: list[str],
-                             phase: str) -> tuple[ProcessScan, dict[str, Any]]:
+                             phase: str, *, preservation_request_sha: str | None = None,
+                             ) -> tuple[ProcessScan, dict[str, Any]]:
     binding = _validate_proc_observer_binding(binding_value)
     installed = _proc_observer_installation(binding)
     consumer = {"pid": os.getpid(), "startTicks": _read_start_ticks(Path("/proc/self"))}
@@ -1169,6 +1170,12 @@ def _privileged_proc_targets(binding_value: Any, candidate_paths: list[str],
         "phase": phase, "nonce": secrets.token_hex(32), "deployUid": deploy_identity()[0],
         "candidatePaths": sorted(set(candidate_paths)), "consumer": consumer,
     }
+    if phase == "preserve":
+        if not valid_sha(preservation_request_sha):
+            deny("PROC_OBSERVER_PRESERVATION_REQUEST_BINDING")
+        request["preservationRequestSha256"] = preservation_request_sha
+    elif preservation_request_sha is not None:
+        deny("PROC_OBSERVER_PRESERVATION_REQUEST_BINDING")
     request_raw = canonical(request)
     started = time.time_ns()
     try:
@@ -1234,9 +1241,14 @@ def _privileged_proc_targets(binding_value: Any, candidate_paths: list[str],
         attestation = response.get("attestation")
         identity_value = attestation.get("identity") if isinstance(attestation, dict) else None
         if (not isinstance(attestation, dict) or set(attestation) !=
-                {"path", "sha256", "identity", "observationSha256"} or
+                {"path", "sha256", "identity", "observationSha256",
+                 "helperSha256", "observerRequestSha256",
+                 "preservationRequestSha256"} or
                 attestation.get("path") != str(LEGACY_EMPTY_TRANSACTION_ATTESTATION) or
                 not valid_sha(attestation.get("sha256")) or
+                attestation.get("helperSha256") != binding["sha256"] or
+                attestation.get("observerRequestSha256") != digest_bytes(request_raw) or
+                attestation.get("preservationRequestSha256") != preservation_request_sha or
                 attestation.get("observationSha256") != digest_bytes(canonical(observation)) or
                 not isinstance(identity_value, dict) or identity_value.get("uid") != 0 or
                 identity_value.get("gid") != deploy_identity()[1] or
@@ -1470,9 +1482,12 @@ def _empty_transaction_identity(child: Path, binding: dict[str, Any]) -> dict[st
 
 
 def _authenticate_privileged_preservation_attestation(
-        binding: dict[str, Any], request_sha: str,
+        binding: dict[str, Any], preservation_request_sha: str,
+        observer_request_sha: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if (binding.get("path") != str(LEGACY_EMPTY_TRANSACTION_ATTESTATION) or
+            binding.get("observerRequestSha256") != observer_request_sha or
+            binding.get("preservationRequestSha256") != preservation_request_sha or
             binding.get("identity", {}).get("uid") != 0 or
             binding.get("identity", {}).get("gid") != deploy_identity()[1] or
             binding.get("identity", {}).get("mode") != "0440" or
@@ -1484,7 +1499,8 @@ def _authenticate_privileged_preservation_attestation(
     value = object_json(raw, "LIVE_EMPTY_TRANSACTION_PRIVILEGED_ATTESTATION")
     expected = {
         "schemaVersion": 1, "kind": "PRIVILEGED_PRESERVATION_ATTESTATION",
-        "requestSha256": request_sha,
+        "observerRequestSha256": observer_request_sha,
+        "preservationRequestSha256": preservation_request_sha,
         "candidatePath": LEGACY_EMPTY_TRANSACTION_BINDING["path"],
         "observationSha256": binding["observationSha256"],
         "helperSha256": binding["helperSha256"],
@@ -1519,7 +1535,7 @@ def _preserved_empty_transaction(
         "schemaVersion", "kind", "dispositionId", "state", "transaction",
         "requestSha256", "operationalState", "liveEvidenceSha256",
         "processEvidenceSha256", "executorSha256", "claims", "createdAtUnix",
-        "emissionJournal", "privilegedAttestation",
+        "emissionJournal", "privilegedAttestation", "processObserverRequestSha256",
     }
     expected_claims = {
         "rootPreserved": True,
@@ -1538,12 +1554,14 @@ def _preserved_empty_transaction(
             not SHA256.fullmatch(str(receipt.get("requestSha256", ""))) or
             not SHA256.fullmatch(str(receipt.get("liveEvidenceSha256", ""))) or
             not SHA256.fullmatch(str(receipt.get("processEvidenceSha256", ""))) or
+            not SHA256.fullmatch(str(receipt.get("processObserverRequestSha256", ""))) or
             receipt.get("executorSha256") != sha256(Path(__file__).resolve()) or
             not isinstance(receipt.get("createdAtUnix"), int) or
             receipt.get("emissionJournal") != {"path": str(LEGACY_EMPTY_TRANSACTION_JOURNAL)} or
             not isinstance(receipt.get("privilegedAttestation"), dict) or
             set(receipt["privilegedAttestation"]) !=
-            {"path", "sha256", "identity", "observationSha256", "helperSha256"} or
+            {"path", "sha256", "identity", "observationSha256", "helperSha256",
+             "observerRequestSha256", "preservationRequestSha256"} or
             receipt["privilegedAttestation"].get("path") !=
             str(LEGACY_EMPTY_TRANSACTION_ATTESTATION) or
             not valid_sha(receipt["privilegedAttestation"].get("sha256")) or
@@ -1553,7 +1571,8 @@ def _preserved_empty_transaction(
         deny("LIVE_EMPTY_TRANSACTION_RECEIPT")
     attestation_binding = receipt["privilegedAttestation"]
     _attestation, attestation_identity = _authenticate_privileged_preservation_attestation(
-        attestation_binding, receipt["requestSha256"])
+        attestation_binding, receipt["requestSha256"],
+        receipt["processObserverRequestSha256"])
     try:
         events = [json.loads(line) for line in journal_raw.splitlines()]
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -1567,6 +1586,8 @@ def _preserved_empty_transaction(
                           "transaction": LEGACY_EMPTY_TRANSACTION_BINDING} or
             events[1] != {"event": "PRIVILEGED_OBSERVATION_VERIFIED",
                           "processEvidenceSha256": receipt["processEvidenceSha256"],
+                          "processObserverRequestSha256":
+                          receipt["processObserverRequestSha256"],
                           "requestSha256": receipt["requestSha256"]} or
             events[2] != {"event": "RECEIPT_COMMITTED", "receiptSha256": receipt_sha}):
         deny("LIVE_EMPTY_TRANSACTION_EMISSION_JOURNAL")
@@ -4300,7 +4321,8 @@ def preserve_legacy_empty_transaction(
         if active_references:
             deny("EMPTY_TRANSACTION_PRESERVATION_ACTIVE_REFERENCE")
         process_data, process_evidence = _privileged_proc_targets(
-            proc_observer, [candidate], "preserve")
+            proc_observer, [candidate], "preserve",
+            preservation_request_sha=request_sha)
         process_targets, _, process_complete, process_summary = process_data
         if not process_complete:
             deny("EMPTY_TRANSACTION_PRESERVATION_PROCESS_SCAN_INCOMPLETE")
@@ -4328,6 +4350,7 @@ def preserve_legacy_empty_transaction(
         append_event(journal_output, {
             "event": "PRIVILEGED_OBSERVATION_VERIFIED",
             "processEvidenceSha256": digest_bytes(canonical(process_evidence)),
+            "processObserverRequestSha256": process_evidence["requestSha256"],
             "requestSha256": request_sha,
         })
         receipt = {
@@ -4340,6 +4363,7 @@ def preserve_legacy_empty_transaction(
             "operationalState": operational_binding,
             "liveEvidenceSha256": digest_bytes(canonical(live_evidence)),
             "processEvidenceSha256": digest_bytes(canonical(process_evidence)),
+            "processObserverRequestSha256": process_evidence["requestSha256"],
             "executorSha256": sha256(Path(__file__).resolve()),
             "emissionJournal": {"path": str(journal_output)},
             "privilegedAttestation": {
