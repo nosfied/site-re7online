@@ -213,6 +213,178 @@ class Fixture:
         self.temp.cleanup()
 
 
+class FailedBuildWorktreeFixture(Fixture):
+    def __init__(self):
+        super().__init__(active=False, rollback=False, candidate=False,
+                         installed=False, deployed=False,
+                         release_id="immutable-failed-build-fixture")
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove", "--force",
+                        str(self.worktree)], check=True)
+        (self.repo / ".gitignore").write_text(
+            "node_modules/\napps/whatsapp-agent/node_modules/\nextra-ignored/\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", ".gitignore"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "fixture ignore policy"],
+                       check=True)
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "add", "--detach",
+                        str(self.worktree)], check=True, stdout=subprocess.DEVNULL)
+        self.target = subprocess.check_output(
+            ["git", "-C", str(self.worktree), "rev-parse", "HEAD"], text=True).strip()
+        self.tree = subprocess.check_output(
+            ["git", "-C", str(self.worktree), "show", "-s", "--format=%T", "HEAD"],
+            text=True).strip()
+        (self.worktree / "node_modules/pkg").mkdir(parents=True)
+        (self.worktree / "node_modules/pkg/index.js").write_text("root dependency\n")
+        (self.worktree / "apps/whatsapp-agent/node_modules/pkg").mkdir(parents=True)
+        (self.worktree / "apps/whatsapp-agent/node_modules/pkg/index.js").write_text(
+            "api dependency\n")
+
+        self.current.unlink()
+        shutil.rmtree(self.installed_release)
+        self.other_release = self.releases_root / "immutable-current-fixture"
+        self.other_release.mkdir()
+        os.symlink(self.other_release, self.current)
+        self.package.unlink()
+        shutil.rmtree(self.output / self.release_id)
+        shutil.rmtree(self.staging)
+
+        self.capacity_contract = self.evidence_root / "capacity-contract.private.json"
+        private_json(self.capacity_contract, {
+            "schemaVersion": 1, "contractId": "campaign-multibatch-setbased-a838bd33-v1",
+            "targetCommit": self.target, "releaseId": self.release_id,
+            "filesystemPath": str(self.root),
+        })
+        private_json(self.lifecycle, {
+            "schemaVersion": 1, "generationId": self.release_id,
+            "targetCommit": self.target, "state": "FAILED",
+            "dispositionState": "RETENTION_DEBT", "failureClass": "Denied",
+            "artifactContract": str(self.contract), "package": str(self.package),
+            "capacity": {"contractId": "campaign-multibatch-setbased-a838bd33-v1",
+                         "contractSha256": sha(self.capacity_contract)},
+        })
+
+        def existing_artifact(path: Path, cls: str, digest=None):
+            info = path.lstat()
+            return {"path": str(path), "releaseId": self.release_id,
+                    "targetCommit": self.target,
+                    "expectedType": "directory" if path.is_dir() else "regular_file",
+                    "initialIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                    "observedIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                    **MODULE.structural_metrics(path),
+                    "digest": digest, "class": cls, "state": "ACTIVE_DEPENDENCY",
+                    "retirableOn": "fixture", "dependencies": []}
+
+        def absent_artifact(path: Path, cls: str, expected_type: str):
+            return {"path": str(path), "releaseId": self.release_id,
+                    "targetCommit": self.target, "expectedType": expected_type,
+                    "initialIdentity": None, "observedIdentity": None,
+                    "sizeBytes": 0, "allocatedBytes": 0, "inodes": 0,
+                    "digest": None, "class": cls, "state": "ACTIVE_DEPENDENCY",
+                    "retirableOn": "fixture", "dependencies": [],
+                    "structuralSha256": None}
+
+        self.manifest = self.output / self.release_id / "manifest.json"
+        self.index = self.output / self.release_id / "index.sha256"
+        self.api = self.output / self.release_id / "api-runtime"
+        self.frontend = self.output / self.release_id / "frontend-runtime"
+        artifacts = [
+            absent_artifact(self.package, "PACKAGE_PRESERVE", "regular_file"),
+            absent_artifact(self.manifest, "PACKAGE_PRESERVE", "regular_file"),
+            absent_artifact(self.index, "PACKAGE_PRESERVE", "regular_file"),
+            existing_artifact(self.lifecycle, "EVIDENCE_PRESERVE",
+                              {"sha256": sha(self.lifecycle)}),
+            existing_artifact(self.capacity_contract, "EVIDENCE_PRESERVE",
+                              {"sha256": sha(self.capacity_contract)}),
+            absent_artifact(self.installed_release, "RELEASE_RUNTIME", "directory"),
+            existing_artifact(self.worktree, "DERIVED_WORKTREE",
+                              {"gitCommit": self.target}),
+            absent_artifact(self.api, "DERIVED_OUTPUT_RUNTIME", "directory"),
+            absent_artifact(self.frontend, "DERIVED_OUTPUT_RUNTIME", "directory"),
+        ]
+        private_json(self.contract, {
+            "schemaVersion": 1, "generationId": self.release_id,
+            "releaseId": self.release_id, "targetCommit": self.target, "state": "FAILED",
+            "writerLockPath": str(self.writer_lock),
+            "classes": sorted(MODULE.PRESERVE_CLASSES | MODULE.DERIVED_CLASSES |
+                              {"RELEASE_RUNTIME"}),
+            "artifacts": artifacts, "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+            "privateDataOverlay": {
+                "path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+            },
+        })
+
+        graph = {"activeReleases": [self.other_release.name], "rollbackReleases": [],
+                 "transitiveReturnReleases": [], "candidateReleases": [],
+                 "installedVerifiedReleases": [self.other_release.name],
+                 "supersededCandidates": []}
+        private_json(self.graph, graph)
+        operational = json.loads(self.operational.read_text())
+        operational.update({
+            "generationId": self.release_id, "releaseId": self.release_id,
+            "targetCommit": self.target, "currentPaths": [str(self.other_release)],
+            "activeReleases": [self.other_release.name], "rollbackReleases": [],
+            "transitiveReturnReleases": [], "candidateReleases": [],
+            "installedVerifiedReleases": [self.other_release.name],
+            "supersededCandidates": [], "dependencies": [],
+            "deploymentState": {"state": "PENDING"},
+        })
+        operational["observations"]["currentLinks"] = [
+            {"path": str(self.current), "target": str(self.other_release)}]
+        operational["observations"]["releaseGraph"] = {
+            "path": str(self.graph), "sha256": sha(self.graph)}
+        private_json(self.operational, operational)
+        self.cache = self.root / "npm-cache-outside-scope"
+        self.cache.mkdir(); (self.cache / "entry").write_text("preserve\n")
+        self.custody = self.root / "custody-outside-scope"
+        self.custody.mkdir(); (self.custody / "evidence").write_text("preserve\n")
+        self.binding = {
+            "schemaVersion": 1, "kind": "FAILED_BUILD_WORKTREE_A838BD33",
+            "generationId": self.release_id, "releaseId": self.release_id,
+            "targetCommit": self.target, "targetTree": self.tree,
+            "worktreePath": str(self.worktree),
+            "contract": {"path": str(self.contract), "sha256": sha(self.contract)},
+            "lifecycle": {"path": str(self.lifecycle), "sha256": sha(self.lifecycle)},
+            "capacityContract": {"path": str(self.capacity_contract),
+                                 "sha256": sha(self.capacity_contract)},
+            "packagePath": str(self.package),
+            "absentArtifactPaths": [str(path) for path in
+                                    (self.package, self.manifest, self.index,
+                                     self.api, self.frontend, self.installed_release)],
+            "ignoredPaths": ["apps/whatsapp-agent/node_modules/", "node_modules/"],
+        }
+
+    def prepare_direct(self):
+        args = SimpleNamespace(
+            contract=self.contract, contract_sha256=sha(self.contract),
+            lifecycle=self.lifecycle, lifecycle_sha256=sha(self.lifecycle),
+            operational_state=self.operational, operational_state_sha256=sha(self.operational),
+            root_policy=self.policy, root_policy_sha256=sha(self.policy),
+            deployment_lock=self.deploy_lock, intent_output=self.intent,
+            commands_output=self.commands, review_output=self.review,
+            reviewer="fixture-owner", reason="failed build worktree only",
+            legacy_review_sha256=None, prior_intent=None, prior_intent_sha256=None,
+            prior_receipt=None, prior_receipt_sha256=None,
+            prior_journal=None, prior_journal_sha256=None)
+        with patch.object(MODULE, "FAILED_BUILD_WORKTREE_BINDING", self.binding), \
+                redirect_stdout(io.StringIO()):
+            MODULE.prepare(args)
+
+    def execute_direct(self, authorization: Path, receipt_name="failed-receipt"):
+        receipt = self.evidence_root / receipt_name
+        args = SimpleNamespace(
+            intent=self.intent, intent_sha256=sha(self.intent),
+            authorization=authorization, authorization_sha256=sha(authorization),
+            operational_state=self.operational,
+            operational_state_sha256=sha(self.operational),
+            root_policy=self.policy, root_policy_sha256=sha(self.policy),
+            deployment_lock=self.deploy_lock, deployment_lock_fd=None,
+            receipt_root=receipt, review_output=self.review)
+        with patch.object(MODULE, "FAILED_BUILD_WORKTREE_BINDING", self.binding), \
+                redirect_stdout(io.StringIO()):
+            MODULE.execute(args)
+        return receipt
+
+
 class LegacyBootstrapFixture:
     def __init__(self):
         self.temp = tempfile.TemporaryDirectory(prefix="legacy-generation-bootstrap-")
@@ -838,6 +1010,108 @@ class LegacyP00InstalledBatchFixture:
 
 
 class GenerationRetirementTest(unittest.TestCase):
+    def test_failed_build_worktree_is_the_only_effect_and_closes_with_real_git(self):
+        fixture = FailedBuildWorktreeFixture()
+        try:
+            fixture.prepare_direct()
+            intent = json.loads(fixture.intent.read_text())
+            self.assertEqual(intent["failedBuildWorktreeDisposition"]["destructiveScope"],
+                             [str(fixture.worktree)])
+            self.assertEqual(len(intent["commands"]), 1)
+            self.assertEqual(intent["commands"][0]["path"], str(fixture.worktree))
+            self.assertEqual(intent["commands"][0]["argv"],
+                             ["/usr/bin/git", "-C", str(fixture.repo),
+                              "worktree", "remove", str(fixture.worktree)])
+            self.assertNotIn("--force", intent["commands"][0]["argv"])
+            authorization = fixture.authorize("failed-build-once")
+            receipt_root = fixture.execute_direct(authorization)
+            receipt = json.loads(
+                (receipt_root / "execution-receipt.private.json").read_text())
+            self.assertEqual(receipt["state"], "SANITIZED")
+            self.assertEqual(receipt["removedPaths"], [str(fixture.worktree)])
+            self.assertFalse(fixture.worktree.exists())
+            registry = subprocess.check_output(
+                ["git", "-C", str(fixture.repo), "worktree", "list", "--porcelain"],
+                text=True)
+            self.assertNotIn(str(fixture.worktree), registry)
+            self.assertTrue(fixture.output.is_dir())
+            self.assertTrue(fixture.lifecycle.is_file())
+            self.assertTrue(fixture.contract.is_file())
+            self.assertTrue(fixture.capacity_contract.is_file())
+            self.assertTrue(fixture.cache.is_dir())
+            self.assertTrue(fixture.custody.is_dir())
+            events = [json.loads(line) for line in
+                      (receipt_root / "command-results.private.jsonl").read_text().splitlines()]
+            self.assertEqual([event["event"] for event in events],
+                             ["ATTEMPT", "RESULT", "VERIFIED"])
+        finally:
+            fixture.close()
+
+    def test_failed_build_worktree_denies_binding_content_and_reference_drift(self):
+        mutations = ("contract", "lifecycle", "capacity", "package", "tracked",
+                     "ignored", "reference", "tree")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                fixture = FailedBuildWorktreeFixture()
+                try:
+                    if mutation == "contract":
+                        contract = json.loads(fixture.contract.read_text())
+                        contract["artifacts"][0]["dependencies"] = ["unexpected"]
+                        private_json(fixture.contract, contract)
+                    elif mutation == "lifecycle":
+                        lifecycle = json.loads(fixture.lifecycle.read_text())
+                        lifecycle["failureClass"] = "Other"
+                        private_json(fixture.lifecycle, lifecycle)
+                    elif mutation == "capacity":
+                        capacity = json.loads(fixture.capacity_contract.read_text())
+                        capacity["filesystemPath"] = "/unexpected"
+                        private_json(fixture.capacity_contract, capacity)
+                    elif mutation == "package":
+                        fixture.package.write_bytes(b"unexpected package")
+                    elif mutation == "tracked":
+                        (fixture.worktree / "tracked").write_text("changed\n")
+                    elif mutation == "ignored":
+                        (fixture.worktree / "extra-ignored/private").mkdir(parents=True)
+                        (fixture.worktree / "extra-ignored/private/value").write_text("private\n")
+                    elif mutation == "reference":
+                        operational = json.loads(fixture.operational.read_text())
+                        operational["dependencies"] = [str(fixture.worktree)]
+                        private_json(fixture.operational, operational)
+                    elif mutation == "tree":
+                        fixture.binding["targetTree"] = "f" * 40
+                    with patch.object(MODULE, "FAILED_BUILD_WORKTREE_BINDING",
+                                      fixture.binding), self.assertRaises(MODULE.Denied):
+                        fixture.prepare_direct()
+                    self.assertTrue(fixture.worktree.is_dir())
+                    self.assertFalse(fixture.intent.exists())
+                finally:
+                    fixture.close()
+
+    def test_failed_build_worktree_revalidates_before_execute(self):
+        for mutation in ("ignored", "registration", "reference"):
+            with self.subTest(mutation=mutation):
+                fixture = FailedBuildWorktreeFixture()
+                try:
+                    fixture.prepare_direct()
+                    authorization = fixture.authorize(f"failed-{mutation}")
+                    if mutation == "ignored":
+                        (fixture.worktree / "extra-ignored/private").mkdir(parents=True)
+                        (fixture.worktree / "extra-ignored/private/value").write_text("private\n")
+                    elif mutation == "registration":
+                        subprocess.run(["git", "-C", str(fixture.repo), "worktree", "prune"],
+                                       check=True)
+                        git_file = fixture.worktree / ".git"
+                        git_file.write_text("gitdir: /nonexistent\n")
+                    else:
+                        operational = json.loads(fixture.operational.read_text())
+                        operational["dependencies"] = [str(fixture.worktree)]
+                        private_json(fixture.operational, operational)
+                    with self.assertRaises(MODULE.Denied):
+                        fixture.execute_direct(authorization, f"denied-{mutation}")
+                    self.assertTrue(fixture.worktree.is_dir())
+                finally:
+                    fixture.close()
+
     def test_legacy_p00_installed_batch_qualifies_only_inventory_releases(self):
         fixture = LegacyP00InstalledBatchFixture()
         try:

@@ -47,6 +47,37 @@ ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDIN
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
 POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
+FAILED_BUILD_WORKTREE_BINDING = {
+    "schemaVersion": 1,
+    "kind": "FAILED_BUILD_WORKTREE_A838BD33",
+    "generationId": "immutable-a838bd33-vps-20261109T202533Z",
+    "releaseId": "immutable-a838bd33-vps-20261109T202533Z",
+    "targetCommit": "a838bd33ea00ea49be52d61e025a36320a4154c1",
+    "targetTree": "438b737c96c8e42da61cdc14e84694a4afe9dde4",
+    "worktreePath": "/opt/re7online/build-worktrees/immutable-a838bd33-vps-20261109T202533Z-source",
+    "contract": {
+        "path": "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/generation-artifacts.private.json",
+        "sha256": "ace7b547f92ce75a9b03a913693d543ca72601261fd2c57aaa1e73b4f4101e02",
+    },
+    "lifecycle": {
+        "path": "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/generation-lifecycle.private.json",
+        "sha256": "4388c11fad23111704feadbe81f73056dc8819433ed10b500c6fad0f6b860af0",
+    },
+    "capacityContract": {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/campaign-multibatch-setbased-a838bd33-build-a838bd33-v1/evidence/capacity-contract.private.json",
+        "sha256": "2fbfc0b702598f2522300ecf2a0fae69f4ccf06446d9d85d6994fb0ab35b7a06",
+    },
+    "packagePath": "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/immutable-a838bd33-vps-20261109T202533Z.tar.xz",
+    "absentArtifactPaths": [
+        "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/immutable-a838bd33-vps-20261109T202533Z.tar.xz",
+        "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/immutable-a838bd33-vps-20261109T202533Z/manifest.json",
+        "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/immutable-a838bd33-vps-20261109T202533Z/index.sha256",
+        "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/immutable-a838bd33-vps-20261109T202533Z/api-runtime",
+        "/opt/re7online/build-output/immutable-a838bd33-vps-20261109T202533Z-producer/immutable-a838bd33-vps-20261109T202533Z/frontend-runtime",
+        "/opt/re7online/releases/immutable-a838bd33-vps-20261109T202533Z",
+    ],
+    "ignoredPaths": ["apps/whatsapp-agent/node_modules/", "node_modules/"],
+}
 A959_RETENTION_EVENT_SCHEMAS = {
     "ATTEMPT": frozenset({"event", "kind", "ordinal", "path", "result"}),
     "RESULT": frozenset({"event", "exitCode", "inspectionPath", "inspectionSha256", "kind",
@@ -968,6 +999,138 @@ def path_referenced(path: str, operational: dict[str, Any]) -> bool:
     return False
 
 
+def _git_output(arguments: list[str], predicate: str) -> str:
+    result = subprocess.run(arguments, text=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    if result.returncode:
+        deny(predicate)
+    return result.stdout
+
+
+def _git_worktree_registration(repository: Path, worktree: Path) -> dict[str, str] | None:
+    raw = _git_output(["/usr/bin/git", "-C", str(repository), "worktree", "list",
+                       "--porcelain"], "failed_build_worktree_git_registry")
+    matches = []
+    for block in raw.strip().split("\n\n") if raw.strip() else []:
+        fields = {}
+        for line in block.splitlines():
+            key, _, value = line.partition(" ")
+            fields[key] = value
+        if fields.get("worktree") == str(worktree):
+            matches.append(fields)
+    if len(matches) > 1:
+        deny("failed_build_worktree_git_registry")
+    return matches[0] if matches else None
+
+
+def authenticate_failed_build_worktree_disposition(
+        contract: dict[str, Any], lifecycle: dict[str, Any], operational: dict[str, Any],
+        contract_path: Path, contract_sha256: str,
+        lifecycle_path: Path, lifecycle_sha256: str) -> dict[str, Any] | None:
+    """Authenticate the one failed build whose package never existed.
+
+    This is a closed exception for the a838 capacity denial.  It proves that
+    the only present retirable artifact is the registered Git worktree and
+    that its only ignored content is the two npm dependency directories.
+    Output evidence, custody and the npm cache are deliberately outside this
+    disposition.
+    """
+    binding = FAILED_BUILD_WORKTREE_BINDING
+    identity_fields = (
+        contract.get("generationId"), contract.get("releaseId"),
+        contract.get("targetCommit"),
+    )
+    expected_identity = (
+        binding["generationId"], binding["releaseId"], binding["targetCommit"],
+    )
+    worktrees = [item for item in contract.get("artifacts", [])
+                 if isinstance(item, dict) and item.get("class") == "DERIVED_WORKTREE"]
+    mentions_closed_scope = (identity_fields == expected_identity or
+                             any(item.get("path") == binding["worktreePath"]
+                                 for item in worktrees))
+    if not mentions_closed_scope:
+        return None
+    if (identity_fields != expected_identity or len(worktrees) != 1 or
+            worktrees[0].get("path") != binding["worktreePath"] or
+            contract_path != Path(binding["contract"]["path"]) or
+            contract_sha256 != binding["contract"]["sha256"] or
+            lifecycle_path != Path(binding["lifecycle"]["path"]) or
+            lifecycle_sha256 != binding["lifecycle"]["sha256"]):
+        deny("failed_build_worktree_binding")
+    if (lifecycle.get("generationId") != binding["generationId"] or
+            lifecycle.get("targetCommit") != binding["targetCommit"] or
+            lifecycle.get("state") != "FAILED" or
+            lifecycle.get("dispositionState") != "RETENTION_DEBT" or
+            lifecycle.get("failureClass") != "Denied" or
+            lifecycle.get("artifactContract") != str(contract_path) or
+            lifecycle.get("package") != binding["packagePath"] or
+            lifecycle.get("capacity", {}).get("contractSha256") !=
+            binding["capacityContract"]["sha256"]):
+        deny("failed_build_worktree_lifecycle")
+    capacity_path = Path(binding["capacityContract"]["path"])
+    capacity_raw, _ = stable_private(capacity_path, binding["capacityContract"]["sha256"])
+    capacity = object_json(capacity_raw, "failed-build-capacity-contract")
+    if (capacity.get("targetCommit") != binding["targetCommit"] or
+            capacity.get("releaseId") != binding["releaseId"] or
+            capacity.get("contractId") != "campaign-multibatch-setbased-a838bd33-v1"):
+        deny("failed_build_worktree_capacity_contract")
+    capacity_artifacts = [item for item in contract["artifacts"]
+                          if item.get("path") == str(capacity_path)]
+    if (len(capacity_artifacts) != 1 or
+            capacity_artifacts[0].get("class") != "EVIDENCE_PRESERVE" or
+            capacity_artifacts[0].get("digest") != {
+                "sha256": binding["capacityContract"]["sha256"]}):
+        deny("failed_build_worktree_capacity_binding")
+    absent = set(binding["absentArtifactPaths"])
+    contract_paths = {item.get("path") for item in contract["artifacts"]}
+    if not absent.issubset(contract_paths):
+        deny("failed_build_worktree_absent_scope")
+    for raw_path in absent:
+        path = Path(raw_path)
+        if path.exists() or path.is_symlink():
+            deny(f"failed_build_worktree_expected_absence:{path.name}")
+    worktree = Path(binding["worktreePath"])
+    repository = Path(operational["gitRepository"])
+    if (path_referenced(str(worktree), operational) or worktree.is_symlink() or
+            not worktree.is_dir()):
+        deny("failed_build_worktree_live_or_missing")
+    registration = _git_worktree_registration(repository, worktree)
+    if (registration is None or registration.get("HEAD") != binding["targetCommit"] or
+            "detached" not in registration):
+        deny("failed_build_worktree_git_registry")
+    head = _git_output(["/usr/bin/git", "-C", str(worktree), "rev-parse", "HEAD"],
+                       "failed_build_worktree_head").strip()
+    tree = _git_output(["/usr/bin/git", "-C", str(worktree), "show", "-s",
+                        "--format=%T", "HEAD"], "failed_build_worktree_tree").strip()
+    if head != binding["targetCommit"] or tree != binding["targetTree"]:
+        deny("failed_build_worktree_git_identity")
+    status = _git_output(["/usr/bin/git", "-C", str(worktree), "status",
+                          "--porcelain=v1", "--untracked-files=all"],
+                         "failed_build_worktree_status")
+    if status:
+        deny("failed_build_worktree_checkout_dirty")
+    ignored_raw = _git_output(["/usr/bin/git", "-C", str(worktree), "status",
+                               "--porcelain=v1", "--ignored=matching"],
+                              "failed_build_worktree_ignored")
+    ignored = sorted(line[3:] for line in ignored_raw.splitlines()
+                     if line.startswith("!! "))
+    if (ignored != sorted(binding["ignoredPaths"]) or
+            len(ignored_raw.splitlines()) != len(ignored)):
+        deny("failed_build_worktree_ignored_scope")
+    authenticate_artifact(worktrees[0])
+    return {
+        "schemaVersion": binding["schemaVersion"], "kind": binding["kind"],
+        "generationId": binding["generationId"], "targetCommit": binding["targetCommit"],
+        "targetTree": binding["targetTree"], "worktreePath": binding["worktreePath"],
+        "contractSha256": binding["contract"]["sha256"],
+        "lifecycleSha256": binding["lifecycle"]["sha256"],
+        "capacityContractSha256": binding["capacityContract"]["sha256"],
+        "absentArtifactPaths": sorted(absent),
+        "ignoredPaths": sorted(binding["ignoredPaths"]),
+        "destructiveScope": [binding["worktreePath"]],
+    }
+
+
 def authenticate_artifact(artifact: dict[str, Any]) -> None:
     path = Path(artifact["path"])
     if not path.exists() and not path.is_symlink():
@@ -1171,7 +1334,8 @@ def canonical_review_destination(review: Path, contract: Path, lifecycle: Path,
         stable_private(review)
 
 
-def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: dict[str, Any]) -> str:
+def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: dict[str, Any],
+             failed_build_worktree: dict[str, Any] | None = None) -> str:
     kind = artifact["class"]
     release = contract["releaseId"]
     path = artifact["path"]
@@ -1179,6 +1343,17 @@ def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: di
         return "ACTIVE_DEPENDENCY"
     if kind == F160_CACHE_CLASS:
         return "ACTIVE_DEPENDENCY"
+    if failed_build_worktree is not None:
+        if path == failed_build_worktree["worktreePath"]:
+            if kind != "DERIVED_WORKTREE" or path_referenced(path, operational):
+                deny("failed_build_worktree_classification")
+            return "RETIREMENT_READY"
+        if path in set(failed_build_worktree["absentArtifactPaths"]):
+            if kind not in {"DERIVED_OUTPUT_RUNTIME", "RELEASE_RUNTIME"}:
+                # Missing PACKAGE_PRESERVE entries were already handled above:
+                # they remain preserved evidence of a package that never existed.
+                return "ACTIVE_DEPENDENCY"
+            return "SANITIZED"
     if kind == "RELEASE_RUNTIME":
         if release_runtime_private_dependency(artifact, contract):
             return "ACTIVE_DEPENDENCY"
@@ -2892,12 +3067,19 @@ def prepare(args: argparse.Namespace) -> None:
     writer_fd = acquire_existing_lock(Path(contract["writerLockPath"]))
     try:
         fresh = capture_fresh_operational(operational)
+        failed_build_worktree = authenticate_failed_build_worktree_disposition(
+            contract, lifecycle, operational, args.contract, args.contract_sha256,
+            args.lifecycle, args.lifecycle_sha256)
+        failed_absent_paths = (set(failed_build_worktree["absentArtifactPaths"])
+                               if failed_build_worktree is not None else set())
         classified = []
         commands = []
         for artifact in contract["artifacts"]:
-            if artifact["path"] not in reconciled_paths:
+            if (artifact["path"] not in reconciled_paths and
+                    artifact["path"] not in failed_absent_paths):
                 authenticate_artifact(artifact)
-            state = "SANITIZED" if artifact["path"] in reconciled_paths else classify(artifact, contract, operational)
+            state = ("SANITIZED" if artifact["path"] in reconciled_paths else
+                     classify(artifact, contract, operational, failed_build_worktree))
             if (artifact["class"] == "RELEASE_RUNTIME" and
                     state in {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY"} and
                     not Path(artifact["path"]).is_dir()):
@@ -2943,6 +3125,8 @@ def prepare(args: argparse.Namespace) -> None:
                                   "automaticRetry": False, "force": False, "prune": False,
                                   "globExpansion": False, "receiptFsync": True},
         }
+        if failed_build_worktree is not None:
+            intent["failedBuildWorktreeDisposition"] = failed_build_worktree
         intent_raw = canonical(intent)
         commands_raw = ("\n".join(command["literal"] for command in commands) + ("\n" if commands else "")).encode()
         write_exclusive(args.commands_output, commands_raw)
@@ -2996,7 +3180,9 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation",
                 "rootPolicySha256", "reviewOutput", "reconciliation"}
     required.add("legacyMigration")
-    if (set(intent) != required or intent.get("schemaVersion") != 3 or
+    optional = {"failedBuildWorktreeDisposition"}
+    if (not required.issubset(intent) or not set(intent).issubset(required | optional) or
+            intent.get("schemaVersion") != 3 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
             intent.get("authorizationGranted") is not False):
         deny("intent_schema")
@@ -3026,6 +3212,14 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
     by_path = {item.get("path"): item for item in artifacts if isinstance(item, dict)}
     if len(by_path) != len(artifacts):
         deny("intent_artifacts")
+    failed_build_worktree = intent.get("failedBuildWorktreeDisposition")
+    if failed_build_worktree is not None:
+        if (not isinstance(failed_build_worktree, dict) or
+                failed_build_worktree.get("kind") !=
+                FAILED_BUILD_WORKTREE_BINDING["kind"] or
+                failed_build_worktree.get("destructiveScope") !=
+                [failed_build_worktree.get("worktreePath")]):
+            deny("intent_failed_build_worktree")
     validate_reconciliation(intent.get("reconciliation"), artifacts, require_absent=True)
     literals = []
     previous_ordinal = 0
@@ -3083,8 +3277,10 @@ def execute(args: argparse.Namespace) -> None:
         deny("intent_lifecycle_artifact")
     lifecycle_path = Path(lifecycle_artifacts[0]["path"])
     contract_path = lifecycle_path.parent / "generation-artifacts.private.json"
-    stable_private(contract_path, intent["contractSha256"])
-    stable_private(lifecycle_path, intent["lifecycleSha256"])
+    persisted_contract_raw, _ = stable_private(contract_path, intent["contractSha256"])
+    persisted_lifecycle_raw, _ = stable_private(lifecycle_path, intent["lifecycleSha256"])
+    persisted_contract = object_json(persisted_contract_raw, "artifact-contract")
+    persisted_lifecycle = object_json(persisted_lifecycle_raw, "generation-lifecycle")
     canonical_review_destination(args.review_output, contract_path, lifecycle_path, policy)
     if str(args.review_output) != intent["reviewOutput"]:
         deny("intent_review_output")
@@ -3099,6 +3295,14 @@ def execute(args: argparse.Namespace) -> None:
         # ATTEMPT. A stale prepare snapshot cannot authorize a deletion.
         validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
         fresh = capture_fresh_operational(operational)
+        failed_build_worktree = authenticate_failed_build_worktree_disposition(
+            persisted_contract, persisted_lifecycle, operational,
+            contract_path, intent["contractSha256"],
+            lifecycle_path, intent["lifecycleSha256"])
+        if failed_build_worktree != intent.get("failedBuildWorktreeDisposition"):
+            deny("intent_failed_build_worktree_binding")
+        failed_absent_paths = (set(failed_build_worktree["absentArtifactPaths"])
+                               if failed_build_worktree is not None else set())
         if operational["deploymentState"]["state"] == "DEPLOYED":
             release = intent["releaseId"]
             if (release not in operational["activeReleases"] or
@@ -3110,7 +3314,8 @@ def execute(args: argparse.Namespace) -> None:
             intent["reconciliation"], intent["artifacts"], require_absent=True)
         reconciled_paths = _reconciliation_absent_paths(reconciliation)
         for artifact in intent["artifacts"]:
-            if artifact["path"] not in reconciled_paths:
+            if (artifact["path"] not in reconciled_paths and
+                    artifact["path"] not in failed_absent_paths):
                 authenticate_artifact(artifact)
             elif Path(artifact["path"]).exists() or Path(artifact["path"]).is_symlink():
                 deny("reconciled_path_reappeared")
@@ -3129,7 +3334,8 @@ def execute(args: argparse.Namespace) -> None:
             execution_contract = {**contract_identity, "artifacts": intent["artifacts"]}
             executable = []
             for item in commands:
-                state = classify(by_path[item["path"]], execution_contract, operational)
+                state = classify(by_path[item["path"]], execution_contract, operational,
+                                 failed_build_worktree)
                 if item["class"] == "RELEASE_RUNTIME" and state != "RETIREMENT_READY":
                     deny("release_runtime_no_longer_retirable")
                 if state == "RETIREMENT_READY":
@@ -3147,11 +3353,17 @@ def execute(args: argparse.Namespace) -> None:
                     deny(f"retirement_command:{item['ordinal']}:exit_{result.returncode}")
                 if Path(item["path"]).exists() or Path(item["path"]).is_symlink():
                     deny(f"retirement_path_remains:{item['ordinal']}")
+                if (failed_build_worktree is not None and
+                        item["path"] == failed_build_worktree["worktreePath"] and
+                        _git_worktree_registration(Path(operational["gitRepository"]),
+                                                   Path(item["path"])) is not None):
+                    deny(f"retirement_worktree_registration_remains:{item['ordinal']}")
                 completed += 1; removed.append(item["path"])
                 append_event(journal, {"event": "VERIFIED", "ordinal": item["ordinal"], "absent": True})
             removed_set = set(removed) | reconciled_paths
             for artifact in intent["artifacts"]:
-                if artifact["path"] not in removed_set:
+                if (artifact["path"] not in removed_set and
+                        artifact["path"] not in failed_absent_paths):
                     authenticate_artifact(artifact)
             fresh_final = capture_fresh_operational(operational)
             if fresh_final != fresh_before_attempt:
