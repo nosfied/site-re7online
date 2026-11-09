@@ -1112,6 +1112,36 @@ class GenerationRetirementTest(unittest.TestCase):
                 finally:
                     fixture.close()
 
+    def test_failed_build_worktree_rejects_omitted_or_added_command_before_attempt(self):
+        for mutation in ("omitted", "added"):
+            with self.subTest(mutation=mutation):
+                fixture = FailedBuildWorktreeFixture()
+                try:
+                    fixture.prepare_direct()
+                    intent = json.loads(fixture.intent.read_text())
+                    if mutation == "omitted":
+                        intent["commands"] = []
+                    else:
+                        duplicate = dict(intent["commands"][0])
+                        duplicate["ordinal"] += 1
+                        intent["commands"].append(duplicate)
+                    literals = [item["literal"] for item in intent["commands"]]
+                    commands_raw = ("\n".join(literals) + ("\n" if literals else "")).encode()
+                    intent["commandsSha256"] = MODULE.digest_bytes(commands_raw)
+                    private_json(fixture.intent, intent)
+                    authorization = fixture.authorize(f"failed-{mutation}-scope")
+                    with self.assertRaisesRegex(
+                            MODULE.Denied, "intent_failed_build_worktree_commands"):
+                        fixture.execute_direct(authorization, f"denied-{mutation}-scope")
+                    self.assertTrue(fixture.worktree.is_dir())
+                    self.assertIn(str(fixture.worktree), subprocess.check_output(
+                        ["git", "-C", str(fixture.repo), "worktree", "list", "--porcelain"],
+                        text=True))
+                    self.assertFalse((fixture.evidence_root /
+                                      f"denied-{mutation}-scope").exists())
+                finally:
+                    fixture.close()
+
     def test_legacy_p00_installed_batch_qualifies_only_inventory_releases(self):
         fixture = LegacyP00InstalledBatchFixture()
         try:

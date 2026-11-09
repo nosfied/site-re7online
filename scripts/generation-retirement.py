@@ -3243,6 +3243,12 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
     commands_raw = ("\n".join(literals) + ("\n" if literals else "")).encode()
     if digest_bytes(commands_raw) != intent.get("commandsSha256"):
         deny("intent_commands_hash")
+    if failed_build_worktree is not None:
+        expected_scope = failed_build_worktree["destructiveScope"]
+        if ([item["path"] for item in commands] != expected_scope or
+                len(commands) != 1 or
+                commands[0]["class"] != "DERIVED_WORKTREE"):
+            deny("intent_failed_build_worktree_commands")
     return commands
 
 
@@ -3396,6 +3402,14 @@ def execute(args: argparse.Namespace) -> None:
                 path = Path(artifact["path"])
                 if path.exists() or path.is_symlink():
                     remaining.append(artifact["path"])
+        if failed_build_worktree is not None:
+            worktree_path = failed_build_worktree["worktreePath"]
+            worktree = Path(worktree_path)
+            repository = Path(operational["gitRepository"])
+            if ((worktree.exists() or worktree.is_symlink() or
+                    _git_worktree_registration(repository, worktree) is not None) and
+                    worktree_path not in remaining):
+                remaining.append(worktree_path)
         receipt_state = ("DEPLOYED_SANITIZED" if operational["deploymentState"]["state"] == "DEPLOYED"
                          else "SANITIZED") if not remaining else (
                          "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED"
