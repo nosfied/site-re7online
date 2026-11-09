@@ -245,6 +245,34 @@ class CapacityRecoveryTests(unittest.TestCase):
         (protected / "probe-pm2").symlink_to(protected / "probe-pm2-home")
         (self.transactions / "preflight-7e968da7-20261023T164304Z").mkdir(mode=0o700)
 
+    def empty_transaction_preservation_fixture(self, suffix="pass"):
+        transaction = self.transactions / (
+            "immutable-36b94c6d-vps-20261107T165118Z-api-frontend-"
+            f"b58ed195-v3-once-{suffix}")
+        transaction.mkdir(mode=0o700)
+        info = transaction.lstat()
+        binding = {
+            "path": str(transaction), "device": info.st_dev, "inode": info.st_ino,
+            "ownerUid": info.st_uid, "groupGid": info.st_gid, "mode": "0700",
+        }
+        custody = self.base / f"empty-transaction-preservation-{suffix}"
+        custody.mkdir(mode=0o700)
+        receipt = custody / "preservation-receipt.private.json"
+        request = custody / "request.private.json"
+        request_value = {
+            "schemaVersion": 1,
+            "kind": "LEGACY_EMPTY_TRANSACTION_PRESERVATION_REQUEST",
+            "dispositionId": MODULE.LEGACY_EMPTY_TRANSACTION_DISPOSITION_ID,
+            "transaction": binding,
+            "operationalState": {"path": str(self.operational),
+                                 "sha256": sha(self.operational)},
+            "receiptOutput": str(receipt),
+        }
+        private_json(request, request_value)
+        return {"transaction": transaction, "binding": binding, "custody": custody,
+                "receipt": receipt, "request": request,
+                "requestValue": request_value}
+
     def npm_candidate(self, path=None, principals=None):
         return {"class": "NPM_CACHE_MAINTENANCE", "path": str(path or self.cache)}
 
@@ -2752,6 +2780,133 @@ print(json.dumps({'leafCount':result['leafCount'],'regularLeafCount':result['reg
         with self.assertRaisesRegex(MODULE.Denied, "LIVE_TRANSACTION_LAYOUT_UNKNOWN"):
             MODULE.capture_live_operational(operational)
 
+    def test_exact_empty_transaction_preservation_emits_limited_receipt_and_reopens(self):
+        fixture = self.empty_transaction_preservation_fixture()
+        with mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_BINDING", fixture["binding"]), \
+                mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_RECEIPT", fixture["receipt"]), \
+                mock.patch.object(MODULE, "_proc_targets", return_value=scan()):
+            receipt = MODULE.preserve_legacy_empty_transaction(
+                fixture["request"], sha(fixture["request"]), fixture["receipt"])
+            self.assertEqual(receipt["state"], "PRESERVED_INACTIVE_EVIDENCE")
+            self.assertFalse(receipt["claims"]["historicalInvocationResultAuthenticated"])
+            self.assertEqual(receipt["claims"]["activeOperationalReferences"], [])
+            self.assertEqual(receipt["claims"]["activeProcessReferences"], [])
+            self.assertTrue(fixture["transaction"].is_dir())
+            self.assertEqual(list(fixture["transaction"].iterdir()), [])
+            operational = MODULE.validate_operational(self.operational.read_bytes())
+            fresh, evidence = MODULE.capture_live_operational(operational)
+        selected = [item for item in evidence["transactions"]
+                    if item["path"] == str(fixture["transaction"])]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["format"],
+                         "LEGACY_EMPTY_TRANSACTION_PRESERVATION_V1")
+        self.assertEqual(selected[0]["state"], "PRESERVED_INACTIVE_EVIDENCE")
+        self.assertNotIn(str(fixture["transaction"]), fresh["openTransactionPaths"])
+
+    def test_empty_transaction_preservation_denies_identity_content_and_references(self):
+        cases = ("identity", "content", "operational-reference", "process-reference")
+        original_operational = self.operational.read_bytes()
+        for case in cases:
+            with self.subTest(case=case):
+                self.operational.write_bytes(original_operational)
+                self.operational.chmod(0o600)
+                fixture = self.empty_transaction_preservation_fixture(case)
+                binding = dict(fixture["binding"])
+                process_data = scan()
+                predicate = ""
+                current = None
+                if case == "identity":
+                    binding["inode"] += 1
+                    fixture["requestValue"]["transaction"] = binding
+                    private_json(fixture["request"], fixture["requestValue"])
+                    predicate = "LIVE_EMPTY_TRANSACTION_IDENTITY"
+                elif case == "content":
+                    extra = fixture["transaction"] / "unexpected.private.txt"
+                    extra.write_text("private\n"); extra.chmod(0o600)
+                    predicate = "LIVE_EMPTY_TRANSACTION_CONTENT"
+                elif case == "operational-reference":
+                    current = self.base / f"current-{case}"
+                    current.symlink_to(fixture["transaction"])
+                    operational = json.loads(self.operational.read_text())
+                    operational["liveObservations"]["currentLinks"] = [
+                        {"path": str(current), "target": str(fixture["transaction"])}]
+                    private_json(self.operational, operational)
+                    fixture["requestValue"]["operationalState"]["sha256"] = sha(self.operational)
+                    private_json(fixture["request"], fixture["requestValue"])
+                    predicate = "EMPTY_TRANSACTION_PRESERVATION_ACTIVE_REFERENCE"
+                else:
+                    process_data = scan(targets=[
+                        (1234, 77, "cwd", str(fixture["transaction"]))])
+                    predicate = "EMPTY_TRANSACTION_PRESERVATION_ACTIVE_PROCESS_REFERENCE"
+                with mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_BINDING", binding), \
+                        mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_RECEIPT", fixture["receipt"]), \
+                        mock.patch.object(MODULE, "_proc_targets", return_value=process_data), \
+                        self.assertRaisesRegex(MODULE.Denied, predicate):
+                    MODULE.preserve_legacy_empty_transaction(
+                        fixture["request"], sha(fixture["request"]), fixture["receipt"])
+                self.assertFalse(fixture["receipt"].exists())
+                self.assertTrue(fixture["transaction"].exists())
+                if current is not None:
+                    current.unlink()
+                shutil.rmtree(fixture["transaction"])
+
+    def test_empty_transaction_preservation_denies_incomplete_process_scan(self):
+        fixture = self.empty_transaction_preservation_fixture("incomplete-proc")
+        with mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_BINDING", fixture["binding"]), \
+                mock.patch.object(MODULE, "LEGACY_EMPTY_TRANSACTION_RECEIPT", fixture["receipt"]), \
+                mock.patch.object(MODULE, "_proc_targets", return_value=scan(complete=False)), \
+                self.assertRaisesRegex(
+                    MODULE.Denied, "EMPTY_TRANSACTION_PRESERVATION_PROCESS_SCAN_INCOMPLETE"):
+            MODULE.preserve_legacy_empty_transaction(
+                fixture["request"], sha(fixture["request"]), fixture["receipt"])
+        self.assertFalse(fixture["receipt"].exists())
+
+    def test_preserved_empty_transaction_denies_later_identity_content_or_reference(self):
+        original_operational = self.operational.read_bytes()
+        for case in ("identity", "content", "reference", "receipt"):
+            with self.subTest(case=case):
+                self.operational.write_bytes(original_operational)
+                self.operational.chmod(0o600)
+                fixture = self.empty_transaction_preservation_fixture("later-" + case)
+                with mock.patch.object(
+                        MODULE, "LEGACY_EMPTY_TRANSACTION_BINDING", fixture["binding"]), \
+                        mock.patch.object(
+                            MODULE, "LEGACY_EMPTY_TRANSACTION_RECEIPT", fixture["receipt"]), \
+                        mock.patch.object(MODULE, "_proc_targets", return_value=scan()):
+                    MODULE.preserve_legacy_empty_transaction(
+                        fixture["request"], sha(fixture["request"]), fixture["receipt"])
+                current = None
+                if case == "identity":
+                    fixture["transaction"].chmod(0o750)
+                    predicate = "LIVE_EMPTY_TRANSACTION_IDENTITY"
+                elif case == "content":
+                    extra = fixture["transaction"] / "late.private.txt"
+                    extra.write_text("late\n"); extra.chmod(0o600)
+                    predicate = "LIVE_EMPTY_TRANSACTION_CONTENT"
+                elif case == "reference":
+                    current = self.base / "late-current"
+                    current.symlink_to(fixture["transaction"])
+                    operational_value = json.loads(self.operational.read_text())
+                    operational_value["liveObservations"]["currentLinks"] = [
+                        {"path": str(current), "target": str(fixture["transaction"])}]
+                    private_json(self.operational, operational_value)
+                    predicate = "LIVE_EMPTY_TRANSACTION_ACTIVE_REFERENCE"
+                else:
+                    receipt_value = json.loads(fixture["receipt"].read_text())
+                    receipt_value["executorSha256"] = "0" * 64
+                    private_json(fixture["receipt"], receipt_value)
+                    predicate = "LIVE_EMPTY_TRANSACTION_RECEIPT"
+                with mock.patch.object(
+                        MODULE, "LEGACY_EMPTY_TRANSACTION_BINDING", fixture["binding"]), \
+                        mock.patch.object(
+                            MODULE, "LEGACY_EMPTY_TRANSACTION_RECEIPT", fixture["receipt"]), \
+                        self.assertRaisesRegex(MODULE.Denied, predicate):
+                    operational = MODULE.validate_operational(self.operational.read_bytes())
+                    MODULE.capture_live_operational(operational)
+                if current is not None:
+                    current.unlink()
+                shutil.rmtree(fixture["transaction"])
+
     def test_both_canonical_state_files_are_ambiguous(self):
         transaction = self.window_transaction("ambiguous", "DEPLOYED", 1)
         private_json(transaction / "transaction.v1.private.json", {
@@ -3980,6 +4135,9 @@ with m.ExactNameRegistry(parent) as registry:
             "execute": ["--intent", "/intent", "--intent-sha256", "a" * 64,
                         "--authorization", "/authorization", "--authorization-sha256",
                         "b" * 64, "--receipt-root", "/receipt"],
+            "preserve-empty-transaction": [
+                "--request", "/request", "--request-sha256", "a" * 64,
+                "--receipt-output", "/receipt"],
         }
         for action, arguments in invocations.items():
             with self.subTest(action=action), \

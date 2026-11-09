@@ -219,6 +219,21 @@ LEGACY_PROTECTED_SENTINELS = {
     "api-return.private.json", "frontend-return.private.json",
 }
 EMPTY_PREFLIGHT = re.compile(r"^preflight-[0-9a-f]{8}-[0-9]{8}T[0-9]{6}Z$")
+LEGACY_EMPTY_TRANSACTION_DISPOSITION_ID = (
+    "p00-36b94c6d-b58ed195-v3-empty-transaction-preservation-v1")
+LEGACY_EMPTY_TRANSACTION_BINDING = {
+    "path": ("/opt/re7online/backups/converta-persistent/deploy-transactions/"
+             "immutable-36b94c6d-vps-20261107T165118Z-api-frontend-b58ed195-v3-once"),
+    "device": 64769,
+    "inode": 786723,
+    "ownerUid": 1000,
+    "groupGid": 1000,
+    "mode": "0700",
+}
+LEGACY_EMPTY_TRANSACTION_RECEIPT = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "p00-36b94c6d-b58ed195-v3-empty-transaction-preservation-v1/"
+    "preservation-receipt.private.json")
 NAME_REGISTRY_MAX_BYTES = 64 * 1024 * 1024
 NAME_REGISTRY_CACHE_KIB = 1024
 TAR_PROGRESS_INTERVAL = 4096
@@ -1396,7 +1411,88 @@ def _protected_json_paths(root: Path) -> list[str]:
     return sorted(paths)
 
 
-def _classify_transaction(child: Path) -> tuple[list[str], dict[str, Any]]:
+def _empty_transaction_identity(child: Path, binding: dict[str, Any]) -> dict[str, Any]:
+    if str(child) != binding.get("path"):
+        deny("LIVE_EMPTY_TRANSACTION_PATH")
+    info = physical_directory(child, "LIVE_EMPTY_TRANSACTION_IDENTITY")
+    observed = {
+        "path": str(child), "device": info.st_dev, "inode": info.st_ino,
+        "ownerUid": info.st_uid, "groupGid": info.st_gid,
+        "mode": f"0{stat.S_IMODE(info.st_mode):03o}",
+    }
+    if observed != binding:
+        deny("LIVE_EMPTY_TRANSACTION_IDENTITY")
+    try:
+        present = list(child.iterdir())
+    except OSError:
+        deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+    if present:
+        deny("LIVE_EMPTY_TRANSACTION_CONTENT")
+    after = child.lstat()
+    if ((after.st_dev, after.st_ino, after.st_uid, after.st_gid,
+         stat.S_IMODE(after.st_mode)) !=
+            (info.st_dev, info.st_ino, info.st_uid, info.st_gid,
+             stat.S_IMODE(info.st_mode))):
+        deny("LIVE_EMPTY_TRANSACTION_CHANGED")
+    return observed
+
+
+def _preserved_empty_transaction(child: Path) -> tuple[list[str], dict[str, Any]] | None:
+    if str(child) != LEGACY_EMPTY_TRANSACTION_BINDING["path"]:
+        return None
+    if (not LEGACY_EMPTY_TRANSACTION_RECEIPT.exists() and
+            not LEGACY_EMPTY_TRANSACTION_RECEIPT.is_symlink()):
+        return None
+    try:
+        receipt_sha = sha256(LEGACY_EMPTY_TRANSACTION_RECEIPT)
+    except OSError:
+        deny("LIVE_EMPTY_TRANSACTION_RECEIPT")
+    receipt_raw, receipt_identity = stable_regular(
+        LEGACY_EMPTY_TRANSACTION_RECEIPT, receipt_sha, allowed_modes={0o600})
+    receipt = object_json(receipt_raw, "LIVE_EMPTY_TRANSACTION_RECEIPT")
+    required = {
+        "schemaVersion", "kind", "dispositionId", "state", "transaction",
+        "requestSha256", "operationalState", "liveEvidenceSha256",
+        "processEvidenceSha256", "executorSha256", "claims", "createdAtUnix",
+    }
+    expected_claims = {
+        "rootPreserved": True,
+        "currentEmpty": True,
+        "activeOperationalReferences": [],
+        "activeProcessReferences": [],
+        "historicalInvocationResultAuthenticated": False,
+    }
+    operational = receipt.get("operationalState")
+    if (set(receipt) != required or receipt.get("schemaVersion") != 1 or
+            receipt.get("kind") != "LEGACY_EMPTY_TRANSACTION_PRESERVATION_RECEIPT" or
+            receipt.get("dispositionId") != LEGACY_EMPTY_TRANSACTION_DISPOSITION_ID or
+            receipt.get("state") != "PRESERVED_INACTIVE_EVIDENCE" or
+            receipt.get("transaction") != LEGACY_EMPTY_TRANSACTION_BINDING or
+            receipt.get("claims") != expected_claims or
+            not SHA256.fullmatch(str(receipt.get("requestSha256", ""))) or
+            not SHA256.fullmatch(str(receipt.get("liveEvidenceSha256", ""))) or
+            not SHA256.fullmatch(str(receipt.get("processEvidenceSha256", ""))) or
+            receipt.get("executorSha256") != sha256(Path(__file__).resolve()) or
+            not isinstance(receipt.get("createdAtUnix"), int) or
+            not isinstance(operational, dict) or set(operational) != {"path", "sha256"} or
+            not isinstance(operational.get("path"), str) or
+            not SHA256.fullmatch(str(operational.get("sha256", "")))):
+        deny("LIVE_EMPTY_TRANSACTION_RECEIPT")
+    observed = _empty_transaction_identity(child, LEGACY_EMPTY_TRANSACTION_BINDING)
+    return [], {
+        "path": str(child), "sha256": receipt_sha,
+        "state": "PRESERVED_INACTIVE_EVIDENCE",
+        "format": "LEGACY_EMPTY_TRANSACTION_PRESERVATION_V1",
+        "terminal": True, "identity": observed,
+        "receipt": {"path": str(LEGACY_EMPTY_TRANSACTION_RECEIPT),
+                    "sha256": receipt_sha,
+                    "identity": receipt_identity},
+    }
+
+
+def _classify_transaction(
+        child: Path, *, pending_empty_preservation: dict[str, Any] | None = None,
+) -> tuple[list[str], dict[str, Any]]:
     journal = child / "transaction.v1.private.json"
     window = child / "window-state.private.json"
     if journal.exists() or journal.is_symlink():
@@ -1436,6 +1532,16 @@ def _classify_transaction(child: Path) -> tuple[list[str], dict[str, Any]]:
         present = {item.name for item in child.iterdir()}
     except OSError:
         deny("LIVE_TRANSACTION_SCAN_INCOMPLETE")
+    if pending_empty_preservation is not None and str(child) == pending_empty_preservation.get("path"):
+        observed = _empty_transaction_identity(child, pending_empty_preservation)
+        return [], {"path": str(child), "sha256": digest_bytes(canonical([])),
+                    "state": "PRESERVATION_PENDING",
+                    "format": "LEGACY_EMPTY_TRANSACTION_PRESERVATION_PENDING",
+                    "terminal": True, "identity": observed}
+
+    preserved = _preserved_empty_transaction(child)
+    if preserved is not None:
+        return preserved
     if LEGACY_ROLLBACK_SENTINELS.keys() <= present:
         hashes: dict[str, str] = {}
         for name, expected in LEGACY_ROLLBACK_SENTINELS.items():
@@ -1684,6 +1790,7 @@ def crm_release_graph_source(candidates: Any) -> dict[str, str] | None:
 def capture_live_operational(
         operational: dict[str, Any], *,
         expected_direct_graph_source: dict[str, str] | None = None,
+        pending_empty_preservation: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recapture mutable operational references while both canonical locks are held."""
     observations = operational["liveObservations"]
@@ -1962,7 +2069,8 @@ def capture_live_operational(
         if (child_info.st_uid != transaction_info.st_uid or child_info.st_gid != transaction_info.st_gid or
                 stat.S_IMODE(child_info.st_mode) & 0o022):
             deny("LIVE_TRANSACTION_IDENTITY")
-        references, evidence = _classify_transaction(child)
+        references, evidence = _classify_transaction(
+            child, pending_empty_preservation=pending_empty_preservation)
         transaction_paths.extend(references)
         transaction_evidence.append(evidence)
 
@@ -1972,6 +2080,16 @@ def capture_live_operational(
     fresh["pm2DumpPaths"] = sorted(set(dump_paths))
     fresh["openTransactionPaths"] = sorted(set(transaction_paths))
     fresh["protectedGraphPaths"] = sorted(set(graph_paths))
+    preserved_empty_paths = [
+        item["path"] for item in transaction_evidence
+        if item.get("format") == "LEGACY_EMPTY_TRANSACTION_PRESERVATION_V1"
+    ]
+    for preserved_path in preserved_empty_paths:
+        if any(path_overlap(preserved_path, reference)
+               for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths",
+                           "openTransactionPaths", "protectedGraphPaths")
+               for reference in fresh[key]):
+            deny("LIVE_EMPTY_TRANSACTION_ACTIVE_REFERENCE")
     evidence = {
         "currentLinks": current_evidence,
         "pm2FingerprintSha256": pm2_fingerprint,
@@ -4026,6 +4144,101 @@ def acquire_lock(path: Path) -> int:
     return fd
 
 
+def preserve_legacy_empty_transaction(
+        request_path: Path, request_sha: str, receipt_output: Path,
+) -> dict[str, Any]:
+    request_raw, _ = stable_regular(request_path, request_sha)
+    request = object_json(request_raw, "EMPTY_TRANSACTION_PRESERVATION_REQUEST")
+    required = {"schemaVersion", "kind", "dispositionId", "transaction",
+                "operationalState", "receiptOutput"}
+    operational_binding = request.get("operationalState")
+    if (set(request) != required or request.get("schemaVersion") != 1 or
+            request.get("kind") != "LEGACY_EMPTY_TRANSACTION_PRESERVATION_REQUEST" or
+            request.get("dispositionId") != LEGACY_EMPTY_TRANSACTION_DISPOSITION_ID or
+            request.get("transaction") != LEGACY_EMPTY_TRANSACTION_BINDING or
+            request.get("receiptOutput") != str(LEGACY_EMPTY_TRANSACTION_RECEIPT) or
+            receipt_output != LEGACY_EMPTY_TRANSACTION_RECEIPT or
+            not isinstance(operational_binding, dict) or
+            set(operational_binding) != {"path", "sha256"} or
+            not isinstance(operational_binding.get("path"), str) or
+            not SHA256.fullmatch(str(operational_binding.get("sha256", "")))):
+        deny("EMPTY_TRANSACTION_PRESERVATION_REQUEST")
+    operational_path = normalized_absolute(
+        operational_binding["path"], "EMPTY_TRANSACTION_OPERATIONAL_PATH")
+    operational_raw, _ = stable_regular(
+        operational_path, operational_binding["sha256"])
+    operational = validate_operational(operational_raw)
+    if receipt_output.exists() or receipt_output.is_symlink():
+        deny("EMPTY_TRANSACTION_PRESERVATION_RECEIPT_EXISTS")
+    parent = receipt_output.parent
+    parent_info = physical_directory(parent, "EMPTY_TRANSACTION_PRESERVATION_RECEIPT_PARENT")
+    if ((parent_info.st_uid, parent_info.st_gid) != (os.geteuid(), os.getegid()) or
+            stat.S_IMODE(parent_info.st_mode) & 0o077):
+        deny("EMPTY_TRANSACTION_PRESERVATION_RECEIPT_PARENT")
+
+    held: list[int] = []
+    try:
+        for lock_path in (Path(operational["deploymentLock"]),
+                          Path(operational["writerLock"])):
+            held.append(acquire_lock(lock_path))
+        fresh, live_evidence = capture_live_operational(
+            operational,
+            pending_empty_preservation=LEGACY_EMPTY_TRANSACTION_BINDING)
+        candidate = LEGACY_EMPTY_TRANSACTION_BINDING["path"]
+        active_references = sorted({
+            reference
+            for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths",
+                        "openTransactionPaths", "protectedGraphPaths")
+            for reference in fresh[key]
+            if path_overlap(candidate, reference)
+        })
+        if active_references:
+            deny("EMPTY_TRANSACTION_PRESERVATION_ACTIVE_REFERENCE")
+        process_data = _proc_targets()
+        process_targets, _, process_complete, process_summary = process_data
+        if not process_complete:
+            deny("EMPTY_TRANSACTION_PRESERVATION_PROCESS_SCAN_INCOMPLETE")
+        process_references = [
+            {"pid": pid, "startTicks": start_ticks, "source": source}
+            for pid, start_ticks, source, target in process_targets
+            if process_target_references_candidate(candidate, target)
+        ]
+        if process_references:
+            deny("EMPTY_TRANSACTION_PRESERVATION_ACTIVE_PROCESS_REFERENCE")
+        observed = _empty_transaction_identity(
+            Path(candidate), LEGACY_EMPTY_TRANSACTION_BINDING)
+        claims = {
+            "rootPreserved": True,
+            "currentEmpty": True,
+            "activeOperationalReferences": [],
+            "activeProcessReferences": [],
+            "historicalInvocationResultAuthenticated": False,
+        }
+        receipt = {
+            "schemaVersion": 1,
+            "kind": "LEGACY_EMPTY_TRANSACTION_PRESERVATION_RECEIPT",
+            "dispositionId": LEGACY_EMPTY_TRANSACTION_DISPOSITION_ID,
+            "state": "PRESERVED_INACTIVE_EVIDENCE",
+            "transaction": observed,
+            "requestSha256": request_sha,
+            "operationalState": operational_binding,
+            "liveEvidenceSha256": digest_bytes(canonical(live_evidence)),
+            "processEvidenceSha256": digest_bytes(canonical(process_summary)),
+            "executorSha256": sha256(Path(__file__).resolve()),
+            "claims": claims,
+            "createdAtUnix": int(time.time()),
+        }
+        write_exclusive(receipt_output, canonical(receipt))
+        fsync_directory(parent)
+        return receipt
+    finally:
+        for fd in reversed(held):
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+
+
 def append_event(journal: Path, event: dict[str, Any]) -> None:
     fd = os.open(journal, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
     try:
@@ -4216,6 +4429,11 @@ def parse_args() -> argparse.Namespace:
     execute.add_argument("--authorization-sha256", required=True)
     execute.add_argument("--receipt-root", type=Path, required=True)
     execute.add_argument("--telemetry-output", type=Path, required=True)
+    preserve = actions.add_parser("preserve-empty-transaction")
+    preserve.add_argument("--request", type=Path, required=True)
+    preserve.add_argument("--request-sha256", required=True)
+    preserve.add_argument("--receipt-output", type=Path, required=True)
+    preserve.add_argument("--telemetry-output", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -4232,9 +4450,12 @@ def main() -> None:
         elif args.action == "prepare":
             result = prepare_plan(args.plan, args.plan_sha256, args.intent_output,
                                   args.commands_output, args.manifest_output)
-        else:
+        elif args.action == "execute":
             result = execute_intent(args.intent, args.intent_sha256, args.authorization,
                                     args.authorization_sha256, args.receipt_root)
+        else:
+            result = preserve_legacy_empty_transaction(
+                args.request, args.request_sha256, args.receipt_output)
         print(json.dumps(result, sort_keys=True))
         if (args.action == "audit" and
                 result.get("state") == "P00_CAPACITY_RECOVERY_AUDIT_DENY"):

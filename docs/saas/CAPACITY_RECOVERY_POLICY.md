@@ -436,6 +436,29 @@ desconhecido, sentinela divergente, JSON inválido/symlink ou qualquer layout n�
 classificado resulta em `LIVE_TRANSACTION_LAYOUT_UNKNOWN` ou negativa mais
 específica. Nenhum diretório é ignorado por idade ou ausência de journal novo.
 
+#### Preservação fechada da raiz vazia `b58ed195-v3-once`
+
+A raiz literal
+`/opt/re7online/backups/converta-persistent/deploy-transactions/immutable-36b94c6d-vps-20261107T165118Z-api-frontend-b58ed195-v3-once`
+continua sendo evidência privada preservada. A busca histórica não localizou stderr,
+código de saída ou envelope autenticado da invocação que a criou; portanto nenhuma
+disposição pode afirmar qual foi o resultado histórico daquela execução.
+
+O subcomando fechado `preserve-empty-transaction` admite somente essa raiz e a
+identidade versionada `device=64769`, `inode=786723`, `deploy:deploy 0700`. Sob os
+locks canônicos, ele recaptura current, PM2 ativo e salvo, transações e grafo,
+exige a raiz ainda vazia e uma varredura de processos completa, e nega qualquer
+referência literal à raiz. O único efeito é criar, com `O_EXCL`, um receipt privado
+na custódia literal versionada. A raiz não é movida nem removida.
+
+O receipt declara apenas `PRESERVED_INACTIVE_EVIDENCE`: raiz preservada, vazio
+atual, nenhuma referência operacional ou de processo observada e resultado
+histórico não autenticado. O classificador reabre esse receipt e revalida caminho,
+device/inode, owner/group, modo e vazio em toda recaptura. Conteúdo novo, mudança de
+identidade, referência operacional nova, receipt ausente/divergente ou outro layout
+mantém a negativa. Nenhum outro diretório `immutable-*` vazio é admitido por essa
+regra.
+
 ## Classes removíveis
 
 ### `NPM_CACHE_MAINTENANCE`
