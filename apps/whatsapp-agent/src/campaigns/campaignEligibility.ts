@@ -72,13 +72,12 @@ export async function campaignRecipientEligibilityBatch(
   const normalized = recipients.map((recipient) => {
     const classifications = recipient.values.map(classifyCrmWhatsappIdentity);
     const identities = recipient.values.map(normalizeCampaignRecipientIdentity);
-    return {
-      ...recipient,
-      classifications,
-      identities,
-      markerCandidates: Array.from(new Set(recipient.values.map(value => normalizeWaIdDigits(value)).filter(Boolean))),
-      candidates: identities.every(Boolean) ? buildCrmWhatsappIdentityCandidates(identities) : [],
-    };
+    const hasSupportedIdentities = identities.every(Boolean);
+    const candidates = hasSupportedIdentities ? buildCrmWhatsappIdentityCandidates(identities) : [];
+    const markerCandidates = hasSupportedIdentities
+      ? candidates
+      : Array.from(new Set(recipient.values.map(value => normalizeWaIdDigits(value)).filter(Boolean)));
+    return { ...recipient, classifications, identities, markerCandidates, candidates };
   });
   const allCandidates = Array.from(new Set(normalized.flatMap((recipient) => recipient.candidates)));
   const allMarkerCandidates = Array.from(new Set(normalized.flatMap((recipient) => recipient.markerCandidates)));
@@ -140,7 +139,6 @@ export async function campaignRecipientEligibilityBatch(
     if (recipient.classifications.some(value => value.status === "UNSUPPORTED_INTERNATIONAL")) return "unsupported_international_identity";
     if (recipient.identities.some((identity) => !identity)) return "invalid_whatsapp_identity";
     const candidates = new Set(recipient.candidates);
-    if ([...candidates].some((candidate) => markerDigits.has(candidate))) return "anonymized_contact";
 
     const matchingLeads = leads.filter((lead) =>
       [lead.waId, lead.waIdCanonical].some((value) => value && candidates.has(value))

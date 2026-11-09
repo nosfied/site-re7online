@@ -214,6 +214,12 @@ jobs:
           node --import tsx --test \
             --test-name-pattern "projects valid, uncertain, valid|does not report an unattempted recipient as failed|distinguishes unresolved submission intent|projects unresolved submission intent across both ninth-digit aliases" \
             src/http/campaignsFeatureRoutes.test.ts
+      - name: Campaign multibatch materialization and anonymized alias eligibility
+        run: |
+          node --import tsx --test src/campaigns/campaignEligibility.test.ts
+          node --import tsx --test \
+            --test-name-pattern "dynamic CRM batch materializes 3001|dynamic six Leads exclude five anonymized markers" \
+            src/campaigns/campaignRunner.test.ts
       - name: CRM phone identity and import normalization tests
         run: >-
           node --import tsx --test

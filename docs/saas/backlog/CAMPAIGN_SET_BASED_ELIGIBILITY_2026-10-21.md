@@ -1,6 +1,6 @@
 # Campaign recipient eligibility: set-based performance backlog
 
-Status: `DRAFT PR #364 / ELIGIBILITY PARITY FIX REQUIRED`
+Status: `DRAFT PR #364 / ELIGIBILITY PARITY VALIDATION`
 
 At the production reference `b8d284b6`, dynamic campaign materialization calls
 `campaignRecipientEligibility` once for every selected Lead. Each call performs
@@ -66,7 +66,7 @@ need and an approved execution scope. The 3,001-Lead proof covers
 materialization. Send and recovery behavior was exercised with smaller
 fixtures.
 
-## Review blocker: legacy anonymization aliases
+## Legacy anonymization alias parity
 
 A source-level probe using the candidate code and simulated Prisma queries
 reproduced a positional decision that depends on batch composition. With a
@@ -77,10 +77,11 @@ isolation and `anonymized_contact` when the legacy alias is also an input.
 The SQL marker lookup uses the union of raw input digits while the scalar
 lookup expands the supported identity before querying.
 
-Before review for merge, align the marker lookup with the per-recipient scalar
-candidate set and reproduce the case in disposable PostgreSQL. Cover the modern
-recipient alone and with the legacy alias in the same and a separate eligibility
-group. The earlier timings and CI describe the tested revision and fixtures.
+The correction uses the scalar lookup candidates for each recipient, including
+expanded aliases for supported identities and raw digits for unsupported inputs.
+The PostgreSQL regression covers the modern recipient alone, with the legacy
+alias in the same group, and across the 500-recipient boundary. The earlier
+timings and CI describe the tested revision and fixtures.
 
 ## Separate future work
 

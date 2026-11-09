@@ -110,6 +110,31 @@ test('batched eligibility preserves positional reasons across 500-recipient boun
   }
 });
 
+test('legacy anonymization marker blocks either phone alias independently of eligibility batch composition', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const modern = { values: ['5541998765432'] };
+  const legacy = { values: ['554198765432'] };
+  const marker = `anon:subject:${legacy.values[0]}`;
+  const filler = { values: ['5541991100901'] };
+  const fillers = Array.from({ length: 499 }, () => filler);
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-marker-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.lead.create({ data: { tenantId: clientId, waId: marker, waIdCanonical: marker, status: 'NURTURE' } });
+    const reason = await campaignRecipientEligibility(db, clientId, modern.values);
+    assert.equal(reason, 'anonymized_contact');
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [modern]), [reason]);
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [modern, legacy]), [reason, reason]);
+    assert.deepEqual(
+      await campaignRecipientEligibilityInBatches(db, clientId, [...fillers, modern, legacy]),
+      [...fillers.map(() => null), reason, reason]
+    );
+  } finally {
+    await db.lead.deleteMany({ where: { tenantId: clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
+});
+
 test('CSV/manual import plan rejects anonymized input before normalization without creating CRM', async () => {
   const db = getPrisma(), clientId = crypto.randomUUID();
   const { previewCampaignRecipientImport } = await import('./campaignRecipientImport.js');
