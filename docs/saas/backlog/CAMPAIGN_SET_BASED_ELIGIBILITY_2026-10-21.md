@@ -1,8 +1,8 @@
 # Campaign recipient eligibility: set-based performance backlog
 
-Status: `BACKLOG / PERFORMANCE EVIDENCE RECORDED / NO PRODUCTIVE REDESIGN`
+Status: `DRAFT PR #364 / ELIGIBILITY PARITY FIX REQUIRED`
 
-The PostgreSQL materialization path for a dynamic campaign currently calls
+At the production reference `b8d284b6`, dynamic campaign materialization calls
 `campaignRecipientEligibility` once for every selected Lead. Each call performs
 tenant-scoped checks for anonymized markers, Lead and Contact identity,
 operational exclusion, lifecycle, channel, identity conflict, and opt-out. For
@@ -32,10 +32,59 @@ correct tenant, no runner, no provider call, no outbound message, and a recorded
 diagnostic duration. The suite timeout remains protection against a stuck test;
 it is not a product latency SLA.
 
+## Bounded set-based candidate
+
+[PR #364](https://github.com/nosfied/site-re7online/pull/364) evaluates dynamic
+multibatch eligibility in groups of 500, preserves the positional decisions,
+and retains scalar revalidation immediately before each send. The group size
+bounds SQL bind usage. A single call for 3,001 Leads was rejected at 36,014
+binds against the observed limit of 32,767.
+
+| Leads | Scalar eligibility | Groups of 500 | Scalar SQL queries | Batched SQL queries |
+| ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 6,644 ms | 226 ms | 5,000 | 12 |
+| 3,001 | 15,247 ms | 601 ms | 15,006 | 45 |
+
+These are local measurements from disposable PostgreSQL 16 with synthetic data,
+a simulated provider, and network access to Meta blocked. The end-to-end
+materialization of 3,001 Leads took 3,012 ms, including 656 ms for eligibility.
+It persisted one snapshot, four links, and four jobs with chunk sizes
+`[1000, 1000, 1000, 1]`, with zero active runners, outbounds, or provider
+calls. The measured eligibility decisions matched the scalar path for the tested
+fixtures.
+
+At code revision `a4283c528085e2f49a97bcf8a2ffeb348e3297d5`, the local
+affected suite passed 45/45 and
+[CI 42516121815](https://github.com/nosfied/site-re7online/actions/runs/42516121815)
+passed 4/4. The anonymization regression expects snapshot counts
+`matchedCount=1`, `eligibleCount=1`, `blockedCount=0`, and `blocked=[]`.
+The fixture still has six stored Leads, and only the non-anonymized Lead
+reaches the simulated provider. The counts describe the selected audience.
+
+Production volume acceptance remains a separate step for an actual tenant
+need and an approved execution scope. The 3,001-Lead proof covers
+materialization. Send and recovery behavior was exercised with smaller
+fixtures.
+
+## Review blocker: legacy anonymization aliases
+
+A source-level probe using the candidate code and simulated Prisma queries
+reproduced a positional decision that depends on batch composition. With a
+stored anonymization marker whose digits match only the legacy (no ninth digit)
+alias, scalar eligibility returns `anonymized_contact` for the modern
+recipient. Batched eligibility returns `null` for that same recipient in
+isolation and `anonymized_contact` when the legacy alias is also an input.
+The SQL marker lookup uses the union of raw input digits while the scalar
+lookup expands the supported identity before querying.
+
+Before review for merge, align the marker lookup with the per-recipient scalar
+candidate set and reproduce the case in disposable PostgreSQL. Cover the modern
+recipient alone and with the legacy alias in the same and a separate eligibility
+group. The earlier timings and CI describe the tested revision and fixtures.
+
 ## Separate future work
 
-Design a tenant-scoped, set-based eligibility read model that evaluates the
-selected population once. It must preserve anonymization, operational lifecycle,
+Any follow-up to the bounded candidate must preserve anonymization, operational lifecycle,
 operational exclusion, opt-out, channel restrictions, identity conflicts, legacy
 identity behavior, and multi-tenant isolation.
 
