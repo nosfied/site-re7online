@@ -38,6 +38,13 @@ MAX_FAILURE_DETAILS = 256
 MAX_SECONDS = 12
 SHA256_LENGTH = 64
 NPM_CACHE = "/home/deploy/.npm/_cacache"
+LEGACY_EMPTY_TRANSACTION = (
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-36b94c6d-vps-20261107T165118Z-api-frontend-b58ed195-v3-once")
+LEGACY_EMPTY_TRANSACTION_ATTESTATION = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "p00-36b94c6d-b58ed195-v3-empty-transaction-preservation-v1/"
+    "privileged-emission-attestation.private.json")
 BUILD_OUTPUT_ROOT = Path("/opt/re7online/build-output")
 RUNTIME_NAMES = {"api-runtime", "frontend-runtime"}
 PREPARATIONS_ROOT = Path("/opt/re7online/backups/converta-persistent/preparations")
@@ -144,6 +151,8 @@ def canonical_candidate(value: Any) -> str:
     candidate = normalized_path(value)
     if candidate == NPM_CACHE:
         return candidate
+    if candidate == LEGACY_EMPTY_TRANSACTION:
+        return candidate
     if candidate in MANIFEST_DISPOSITION_PATHS:
         return candidate
     if candidate in DEPLOY_CONTROL_DERIVED_PATHS:
@@ -207,11 +216,19 @@ def validate_request(raw: bytes) -> dict[str, Any]:
         refuse("REQUEST_JSON")
     required = {"schemaVersion", "kind", "phase", "nonce", "deployUid",
                 "candidatePaths", "consumer"}
+    if isinstance(value, dict) and value.get("phase") == "preserve":
+        required.add("preservationRequestSha256")
     if (not isinstance(value, dict) or set(value) != required or
             value.get("schemaVersion") != 1 or
             value.get("kind") != "CAPACITY_PROC_OBSERVATION_REQUEST" or
-            value.get("phase") not in {"audit", "prepare", "execute"}):
+            value.get("phase") not in {"audit", "prepare", "execute", "preserve"}):
         refuse("REQUEST_SCHEMA")
+    if (value["phase"] == "preserve" and
+            (not isinstance(value.get("preservationRequestSha256"), str) or
+             len(value["preservationRequestSha256"]) != SHA256_LENGTH or
+             any(char not in "0123456789abcdef"
+                 for char in value["preservationRequestSha256"]))):
+        refuse("PRESERVATION_REQUEST_SHA256")
     nonce = value.get("nonce")
     if (not isinstance(nonce, str) or len(nonce) != SHA256_LENGTH or
             any(char not in "0123456789abcdef" for char in nonce)):
@@ -488,6 +505,53 @@ def installation_identity() -> dict[str, Any]:
     }
 
 
+def emit_preservation_attestation(request_raw: bytes, request: dict[str, Any],
+                                  observation: dict[str, Any], mechanism: dict[str, Any],
+                                  deploy_gid: int) -> dict[str, Any]:
+    if (request["candidatePaths"] != [LEGACY_EMPTY_TRANSACTION] or
+            not observation["complete"] or observation["references"]):
+        refuse("PRESERVATION_ATTESTATION_PRECONDITION")
+    payload = {
+        "schemaVersion": 1, "kind": "PRIVILEGED_PRESERVATION_ATTESTATION",
+        "observerRequestSha256": digest(request_raw),
+        "preservationRequestSha256": request["preservationRequestSha256"],
+        "candidatePath": LEGACY_EMPTY_TRANSACTION,
+        "observationSha256": digest(canonical(observation)),
+        "helperSha256": mechanism["sha256"],
+        "historicalInvocationResultAuthenticated": False,
+    }
+    path = LEGACY_EMPTY_TRANSACTION_ATTESTATION
+    parent = path.parent
+    parent_info = parent.lstat()
+    if (parent.is_symlink() or not stat.S_ISDIR(parent_info.st_mode) or
+            parent_info.st_uid != request["deployUid"] or
+            parent_info.st_gid != deploy_gid or stat.S_IMODE(parent_info.st_mode) & 0o077):
+        refuse("PRESERVATION_ATTESTATION_PARENT")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                 0o440)
+    try:
+        os.fchown(fd, 0, deploy_gid)
+        os.fchmod(fd, 0o440)
+        raw = canonical(payload)
+        view = memoryview(raw)
+        while view:
+            view = view[os.write(fd, view):]
+        os.fsync(fd)
+        info = os.fstat(fd)
+    finally:
+        os.close(fd)
+    directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    return {"path": str(path), "sha256": digest(raw), "identity": identity(info),
+            "observationSha256": payload["observationSha256"],
+            "helperSha256": payload["helperSha256"],
+            "observerRequestSha256": payload["observerRequestSha256"],
+            "preservationRequestSha256": payload["preservationRequestSha256"]}
+
+
 def alarm_handler(_signum: int, _frame: Any) -> None:
     raise TimeoutError("OBSERVER_TIME_LIMIT")
 
@@ -537,6 +601,9 @@ def run() -> dict[str, Any]:
         "durationMs": (time.monotonic_ns() - started_mono) // 1_000_000,
         "observation": observation,
     }
+    if request["phase"] == "preserve":
+        result["attestation"] = emit_preservation_attestation(
+            request_raw, request, observation, mechanism, deploy.pw_gid)
     raw = canonical(result)
     if len(raw) > MAX_RESPONSE_BYTES:
         refuse("RESPONSE_VOLUME")

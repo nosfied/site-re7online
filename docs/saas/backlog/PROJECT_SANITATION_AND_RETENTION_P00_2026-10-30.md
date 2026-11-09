@@ -1470,3 +1470,18 @@ os inodes livres passaram de 8.847.843 para 8.851.504. A alocação realizada de
 77.492.224 B, a leitura posterior de 77.647.872 B e a variação de `df` são fontes
 distintas e não compõem ledger aritmético. A custódia não está mais pendente e não
 deve ser consumida novamente.
+
+##### Piloto de preservação da raiz vazia b58ed195 — qualificação local
+
+A raiz literal `immutable-36b94c6d-vps-20261107T165118Z-api-frontend-b58ed195-v3-once`
+permanece preservada no lugar e não é candidata à retirada. A disposição fechada
+registra somente vazio atual, identidade física fixa, ausência de referências e
+`historicalInvocationResultAuthenticated=false`. A emissão exige o observador
+privilegiado sob os locks e produz uma atestação independente `root:deploy 0440`.
+Essa atestação vincula separadamente as requisições do observador e da preservação;
+os dois hashes não são intercambiáveis.
+O receipt isolado não altera a classificação: somente um snapshot operacional
+posterior, autenticado, que vincule receipt e journal completos permite a leitura
+`PRESERVED_INACTIVE_EVIDENCE`. Receipt montado manualmente, varredura incompleta,
+conteúdo, referência ou identidade divergente mantêm `DENY`. Esta qualificação
+não libera bytes e o audit do cache npm permanece uma etapa posterior.
