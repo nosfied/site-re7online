@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CUSTODY = ROOT.parent
 CONSUMER = ROOT / "scripts/capacity-recovery.py"
-CONSUMER_SHA256 = "55d3f04f37195af8e7b5264ff961ede975d47a31000a9cd517fc30dd5f84db6b"
+CONSUMER_SHA256 = "8c7494e24ca3754f870df4437d98ea63354ded4a6c60b8a1e2d28b5e13160647"
 PM2 = Path("/opt/re7online/backups/converta-persistent/preparations/p00-capacity-recovery-canonical-23315c43-20261030T030504Z/pm2-private/bin/pm2")
 PM2_SHA256 = "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d"
 NODE = Path("/usr/bin/node")
@@ -367,6 +367,20 @@ def materialize(profile: str = WORKER_PROFILE) -> dict[str, str]:
             "transactionsRoot": {"path": str(TRANSACTIONS), "ownerUid": tx.st_uid,
                                  "groupGid": tx.st_gid,
                                  "allowedModes": [f"{stat.S_IMODE(tx.st_mode):04o}"]}}}
+    receipt_path = consumer.LEGACY_EMPTY_TRANSACTION_RECEIPT
+    journal_path = consumer.LEGACY_EMPTY_TRANSACTION_JOURNAL
+    receipt_present = receipt_path.exists() or receipt_path.is_symlink()
+    journal_present = journal_path.exists() or journal_path.is_symlink()
+    if receipt_present != journal_present:
+        raise RuntimeError("EMPTY_TRANSACTION_DISPOSITION_INCOMPLETE")
+    if receipt_present:
+        receipt_raw, _ = read_stable(receipt_path, modes={0o600})
+        journal_raw, _ = read_stable(journal_path, modes={0o600})
+        operational["schemaVersion"] = 3
+        operational["legacyEmptyTransactionDisposition"] = {
+            "receipt": {"path": str(receipt_path), "sha256": digest(receipt_raw)},
+            "journal": {"path": str(journal_path), "sha256": digest(journal_raw)},
+        }
     operational_sha = write_exclusive(
         CUSTODY / "operational-state.schema2.private.json", consumer.canonical(operational))
     request = {"schemaVersion": 3, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",

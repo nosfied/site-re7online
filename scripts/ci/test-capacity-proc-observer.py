@@ -231,6 +231,7 @@ class ProcObserverTests(unittest.TestCase):
         for path in rejected:
             with self.subTest(path=path), self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
                 OBSERVER.validate_request(request([path]))
+
         release = "immutable-d7de6453-vps-20261024T221500Z"
         producer = f"/opt/re7online/build-output/{release}-producer/{release}"
         preparation = "/opt/re7online/backups/converta-persistent/preparations/automation-20260929T220203Z"
@@ -239,6 +240,7 @@ class ProcObserverTests(unittest.TestCase):
         hybrid_absent = ("/opt/re7online/backups/converta-persistent/preparations/"
                          "incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z")
         accepted = [OBSERVER.NPM_CACHE, producer + "/api-runtime", producer + "/frontend-runtime",
+                    OBSERVER.LEGACY_EMPTY_TRANSACTION,
                     preparation + "/api-frontend-return.private.tar.gz",
                     preparation + "/worker-return.private.tar.gz",
                     hybrid_capture + "/window/worker-minimal-b9-v3.tar.gz",
@@ -246,6 +248,10 @@ class ProcObserverTests(unittest.TestCase):
         accepted.extend(sorted(OBSERVER.MANIFEST_DISPOSITION_PATHS))
         accepted.extend(sorted(OBSERVER.DEPLOY_CONTROL_DERIVED_PATHS))
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
+        preserve = json.loads(request([OBSERVER.LEGACY_EMPTY_TRANSACTION]))
+        preserve["phase"] = "preserve"
+        self.assertEqual(OBSERVER.validate_request(OBSERVER.canonical(preserve))["phase"],
+                         "preserve")
         crm_paths = sorted(OBSERVER.CRM_INACTIVE_STAGING_PATHS)
         self.assertEqual(OBSERVER.validate_request(request(crm_paths))["candidatePaths"], crm_paths)
         worker_package_audit = (
@@ -273,6 +279,32 @@ class ProcObserverTests(unittest.TestCase):
         for path in OBSERVER.CRM_INACTIVE_STAGING_PATHS:
             with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
                 OBSERVER.validate_request(request([path + "-other"]))
+
+    def test_preservation_attestation_is_exclusive_and_requires_complete_observation(self):
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw); parent.chmod(0o700)
+            output = parent / "privileged-emission-attestation.private.json"
+            request = {"deployUid": os.geteuid(),
+                       "candidatePaths": [OBSERVER.LEGACY_EMPTY_TRANSACTION]}
+            observation = {"complete": True, "references": []}
+            mechanism = {"sha256": "a" * 64}
+            with mock.patch.object(OBSERVER, "LEGACY_EMPTY_TRANSACTION_ATTESTATION", output), \
+                    mock.patch.object(os, "fchown"):
+                binding = OBSERVER.emit_preservation_attestation(
+                    b"request\n", request, observation, mechanism, os.getegid())
+                self.assertEqual(binding["path"], str(output))
+                self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o440)
+                with self.assertRaises(FileExistsError):
+                    OBSERVER.emit_preservation_attestation(
+                        b"request\n", request, observation, mechanism, os.getegid())
+            output.unlink()
+            incomplete = {"complete": False, "references": []}
+            with mock.patch.object(OBSERVER, "LEGACY_EMPTY_TRANSACTION_ATTESTATION", output), \
+                    self.assertRaisesRegex(OBSERVER.Refused,
+                                            "PRESERVATION_ATTESTATION_PRECONDITION"):
+                OBSERVER.emit_preservation_attestation(
+                    b"request\n", request, incomplete, mechanism, os.getegid())
+            self.assertFalse(output.exists())
 
     def test_failure_detail_limit_is_explicit_and_never_implies_completeness(self):
         failures = []; truncated = [0]

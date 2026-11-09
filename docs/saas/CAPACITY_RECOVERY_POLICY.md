@@ -447,17 +447,24 @@ disposição pode afirmar qual foi o resultado histórico daquela execução.
 O subcomando fechado `preserve-empty-transaction` admite somente essa raiz e a
 identidade versionada `device=64769`, `inode=786723`, `deploy:deploy 0700`. Sob os
 locks canônicos, ele recaptura current, PM2 ativo e salvo, transações e grafo,
-exige a raiz ainda vazia e uma varredura de processos completa, e nega qualquer
-referência literal à raiz. O único efeito é criar, com `O_EXCL`, um receipt privado
-na custódia literal versionada. A raiz não é movida nem removida.
+exige a raiz ainda vazia e chama o observador privilegiado de `/proc` com o caminho
+literal e a fase fechada `preserve`; resposta incompleta ou referência literal nega
+a operação. O helper `root:root 0500` emite também uma atestação independente,
+`root:deploy 0440`, por criação exclusiva. O consumidor cria com `O_EXCL` o journal
+de emissão e o receipt privado na custódia literal versionada. A raiz não é movida
+nem removida.
 
 O receipt declara apenas `PRESERVED_INACTIVE_EVIDENCE`: raiz preservada, vazio
 atual, nenhuma referência operacional ou de processo observada e resultado
-histórico não autenticado. O classificador reabre esse receipt e revalida caminho,
-device/inode, owner/group, modo e vazio em toda recaptura. Conteúdo novo, mudança de
-identidade, referência operacional nova, receipt ausente/divergente ou outro layout
-mantém a negativa. Nenhum outro diretório `immutable-*` vazio é admitido por essa
-regra.
+histórico não autenticado. Ele não autentica a própria origem. O materializador
+posterior reabre receipt e journal, grava seus hashes no snapshot operacional
+schema 3 e o classificador exige, além desse binding externo, a atestação física
+root-owned e a sequência fechada do journal. Um JSON montado manualmente, ainda que
+internamente coerente, permanece `LIVE_TRANSACTION_LAYOUT_UNKNOWN`. O classificador
+revalida caminho, device/inode, owner/group, modo e vazio em toda recaptura.
+Conteúdo novo, mudança de identidade, referência operacional nova, receipt,
+journal ou atestação ausente/divergente, ou outro layout mantém a negativa. Nenhum
+outro diretório `immutable-*` vazio é admitido por essa regra.
 
 ## Classes removíveis
 
