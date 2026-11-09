@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import crypto from 'node:crypto';
 import { getPrisma } from '../db.js';
-import { campaignRecipientEligibility, campaignRecipientEligibilityBatch, normalizeCampaignRecipientIdentity } from './campaignEligibility.js';
+import { campaignRecipientEligibility, campaignRecipientEligibilityBatch, campaignRecipientEligibilityInBatches, normalizeCampaignRecipientIdentity } from './campaignEligibility.js';
 import { recordContactOptOut } from './optOutRegistry.js';
 import { ensureCampaignOutboundCrmAttemptMaterialization } from './campaignOutboundConversation.js';
 import { sanitizeMailDeliveryError } from '../mail/canonicalMail.js';
@@ -69,6 +69,126 @@ test('eligibility change during template prevalidation blocks before fetch', asy
       } });
     assert.equal(result.blockedByEligibility, true); assert.equal(result.errorBody, 'operationally_excluded_contact'); assert.equal(calls, 0);
   } finally { globalThis.fetch = originalFetch; await db.$disconnect(); }
+});
+
+test('batched eligibility preserves positional reasons across 500-recipient boundaries', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const recipients = Array.from({ length: 1002 }, (_, index) => `55419${String(12000000 + index)}`);
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-batched-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.contact.create({ data: { clientId, waId: recipients[499], channel: 'whatsapp', lifecycle: 'ACTIVE', operationallyExcludedAt: new Date() } });
+    await db.contact.create({ data: { clientId, waId: recipients[500], channel: 'whatsapp', lifecycle: 'PROVISIONAL' } });
+    await recordContactOptOut({ clientId, waId: recipients[1000], source: 'synthetic' });
+    const inputs = recipients.map((waId, index) => ({
+      values: [waId],
+      channel: index === 1001 ? 'instagram' : 'whatsapp',
+    }));
+    const reasons = await campaignRecipientEligibilityInBatches(db, clientId, inputs);
+    assert.equal(reasons.length, recipients.length);
+    assert.equal(reasons[498], null);
+    assert.equal(reasons[499], 'operationally_excluded_contact');
+    assert.equal(reasons[500], 'provisional_contact');
+    assert.equal(reasons[501], null);
+    assert.equal(reasons[1000], 'active_send_blocked');
+    assert.equal(reasons[1001], 'non_whatsapp_channel');
+    assert.equal(reasons.filter(Boolean).length, 4);
+    for (const index of [498, 499, 500, 501, 1000, 1001]) {
+      assert.equal(
+        reasons[index],
+        await campaignRecipientEligibility(db, clientId, inputs[index].values, inputs[index].channel)
+      );
+    }
+    await assert.rejects(
+      campaignRecipientEligibilityInBatches(db, clientId, inputs, 0),
+      /campaign_eligibility_batch_size_invalid/
+    );
+  } finally {
+    await db.event.deleteMany({ where: { clientId } });
+    await db.contact.deleteMany({ where: { clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
+});
+
+test('legacy anonymization marker blocks either phone alias independently of eligibility batch composition', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const modern = { values: ['5541998765432'] };
+  const legacy = { values: ['554198765432'] };
+  const marker = `anon:subject:${legacy.values[0]}`;
+  const filler = { values: ['5541991100901'] };
+  const fillers = Array.from({ length: 499 }, () => filler);
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-marker-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.lead.create({ data: { tenantId: clientId, waId: marker, waIdCanonical: marker, status: 'NURTURE' } });
+    const reason = await campaignRecipientEligibility(db, clientId, modern.values);
+    assert.equal(reason, 'anonymized_contact');
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [modern]), [reason]);
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [modern, legacy]), [reason, reason]);
+    assert.deepEqual(
+      await campaignRecipientEligibilityInBatches(db, clientId, [...fillers, modern, legacy]),
+      [...fillers.map(() => null), reason, reason]
+    );
+  } finally {
+    await db.lead.deleteMany({ where: { tenantId: clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
+});
+
+test('batched eligibility applies the latest opt-out event for a normalized recipient', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const modern = '5541912345678';
+  const legacy = '554112345678';
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-opt-out-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.event.createMany({
+      data: [
+        {
+          clientId, waId: modern, waIdCanonical: modern, eventName: 'contact.opt_out.recorded',
+          payloadJson: {}, createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          clientId, waId: legacy, waIdCanonical: legacy, eventName: 'contact.opt_out.revoked',
+          payloadJson: {}, createdAt: new Date('2026-01-01T00:01:00Z'),
+        },
+      ],
+    });
+    const reason = await campaignRecipientEligibility(db, clientId, [modern]);
+    assert.equal(reason, null);
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [{ values: [modern] }]), [reason]);
+  } finally {
+    await db.event.deleteMany({ where: { clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
+});
+
+test('batched eligibility scopes operational exclusion to the matching contact rows', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  const unrelated = { values: ['5541998765432'] };
+  const excluded = { values: ['5541991100901'] };
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `eligibility-exclusion-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    await db.contact.create({
+      data: {
+        clientId, waId: excluded.values[0], externalUserRef: ` ${unrelated.values[0]} `,
+        channel: 'whatsapp', lifecycle: 'ACTIVE', operationallyExcludedAt: new Date(),
+      },
+    });
+    const unrelatedReason = await campaignRecipientEligibility(db, clientId, unrelated.values);
+    const excludedReason = await campaignRecipientEligibility(db, clientId, excluded.values);
+    assert.equal(unrelatedReason, null);
+    assert.equal(excludedReason, 'operationally_excluded_contact');
+    assert.deepEqual(await campaignRecipientEligibilityInBatches(db, clientId, [unrelated]), [unrelatedReason]);
+    assert.deepEqual(
+      await campaignRecipientEligibilityInBatches(db, clientId, [unrelated, excluded]),
+      [unrelatedReason, excludedReason]
+    );
+  } finally {
+    await db.contact.deleteMany({ where: { clientId } });
+    await db.client.deleteMany({ where: { id: clientId } });
+    await db.$disconnect();
+  }
 });
 
 test('CSV/manual import plan rejects anonymized input before normalization without creating CRM', async () => {

@@ -1309,8 +1309,9 @@ test("dynamic CRM batch materializes 3001 recipients into four durable chunks wi
     campaignLinkCreationMs: Math.round(phase("before_enqueue") - phase("after_snapshot")),
     jobCreationMs: Math.round(phase("after_enqueue") - phase("before_enqueue")),
     materializationTotalMs: Math.round(materializationDurationMs),
-    eligibilityCalls: 3001,
-    eligibilitySqlLowerBound: 15005,
+    eligibilityInputCount: 3001,
+    eligibilityBatchSize: 500,
+    eligibilityBatchCount: 7,
     providerCalls: 0,
   }));
   assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
@@ -1627,9 +1628,16 @@ test("dynamic six Leads exclude five anonymized markers before snapshot/provider
   assert.deepEqual(links.map(link => link.recipientCount), [1]);
   assert.deepEqual(metaRecipients, [waIds[0]]);
   const snapshot = await prisma.event.findFirstOrThrow({ where: { clientId, eventName: "campaign.dynamic_batch_snapshot.created" } });
-  assert.equal((snapshot.payloadJson as { matchedCount: number }).matchedCount, 6);
-  assert.equal((snapshot.payloadJson as { eligibleCount: number }).eligibleCount, 1);
-  assert.equal((snapshot.payloadJson as { blockedCount: number }).blockedCount, 5);
+  const payload = snapshot.payloadJson as {
+    matchedCount: number;
+    eligibleCount: number;
+    blockedCount: number;
+    blocked: Array<{ leadId: string; reason: string }>;
+  };
+  assert.equal(payload.matchedCount, 1);
+  assert.equal(payload.eligibleCount, 1);
+  assert.equal(payload.blockedCount, 0);
+  assert.deepEqual(payload.blocked, []);
   assert.equal(await prisma.lead.count({ where: { tenantId: clientId } }), 6);
 });
 

@@ -72,20 +72,23 @@ export async function campaignRecipientEligibilityBatch(
   const normalized = recipients.map((recipient) => {
     const classifications = recipient.values.map(classifyCrmWhatsappIdentity);
     const identities = recipient.values.map(normalizeCampaignRecipientIdentity);
-    return {
-      ...recipient,
-      classifications,
-      identities,
-      markerCandidates: Array.from(new Set(recipient.values.map(value => normalizeWaIdDigits(value)).filter(Boolean))),
-      candidates: identities.every(Boolean) ? buildCrmWhatsappIdentityCandidates(identities) : [],
-    };
+    const hasSupportedIdentities = identities.every(Boolean);
+    const candidates = hasSupportedIdentities ? buildCrmWhatsappIdentityCandidates(identities) : [];
+    const markerCandidates = hasSupportedIdentities
+      ? candidates
+      : Array.from(new Set(recipient.values.map(value => normalizeWaIdDigits(value)).filter(Boolean)));
+    return { ...recipient, classifications, identities, markerCandidates, candidates };
   });
   const allCandidates = Array.from(new Set(normalized.flatMap((recipient) => recipient.candidates)));
   const allMarkerCandidates = Array.from(new Set(normalized.flatMap((recipient) => recipient.markerCandidates)));
   const operationalCandidates = allCandidates.length ? allCandidates : ["__no_supported_identity__"];
   const markerQueryCandidates = allMarkerCandidates.length ? allMarkerCandidates : ["__no_marker_identity__"];
 
-  const [markerRows, leads, contacts, excluded, optOut] = await Promise.all([
+  const optOutIdentities = Array.from(new Set(normalized.flatMap((recipient) =>
+    recipient.candidates.length > 0 ? recipient.identities : []
+  )));
+
+  const [markerRows, leads, contacts, optOut] = await Promise.all([
     prisma.$queryRaw<Array<{ markerDigits: string }>>(Prisma.sql`
       SELECT DISTINCT regexp_replace(marker, '[^0-9]', '', 'g') AS "markerDigits"
       FROM "Lead", LATERAL (VALUES ("waId"), ("waIdCanonical")) values(marker)
@@ -127,8 +130,7 @@ export async function campaignRecipientEligibilityBatch(
         operationallyExcludedAt: true,
       },
     }),
-    loadOperationallyExcludedWaIds(prisma, { clientId, waIds: operationalCandidates }),
-    filterOptedOutCampaignRecipients(prisma, { clientId, waIds: operationalCandidates }),
+    filterOptedOutCampaignRecipients(prisma, { clientId, waIds: optOutIdentities }),
   ]);
   const markerDigits = new Set(markerRows.map((row) => row.markerDigits).filter(Boolean));
   const blockedOptOuts = new Set(optOut.blocked.map((item) => item.waIdCanonical).filter(Boolean));
@@ -140,7 +142,6 @@ export async function campaignRecipientEligibilityBatch(
     if (recipient.classifications.some(value => value.status === "UNSUPPORTED_INTERNATIONAL")) return "unsupported_international_identity";
     if (recipient.identities.some((identity) => !identity)) return "invalid_whatsapp_identity";
     const candidates = new Set(recipient.candidates);
-    if ([...candidates].some((candidate) => markerDigits.has(candidate))) return "anonymized_contact";
 
     const matchingLeads = leads.filter((lead) =>
       [lead.waId, lead.waIdCanonical].some((value) => value && candidates.has(value))
@@ -167,10 +168,31 @@ export async function campaignRecipientEligibilityBatch(
     if (matchingContacts.some((contact) => (contact.channel ?? "whatsapp").toLowerCase() !== "whatsapp")) {
       return "non_whatsapp_channel";
     }
-    if ([...candidates].some((candidate) => excluded.has(candidate))) return "operationally_excluded_contact";
     if (matchingContacts.some((contact) => contact.operationallyExcludedAt)) return "operationally_excluded_contact";
     if (matchingContacts.some((contact) => !isOperationalContactLifecycle(contact.lifecycle))) return "provisional_contact";
-    if ([...candidates].some((candidate) => blockedOptOuts.has(candidate))) return "active_send_blocked";
+    if (recipient.identities.some((identity) => blockedOptOuts.has(identity))) return "active_send_blocked";
     return null;
   });
+}
+
+export const CAMPAIGN_ELIGIBILITY_BATCH_SIZE = 500;
+
+export async function campaignRecipientEligibilityInBatches(
+  prisma: PrismaClient,
+  clientId: string,
+  recipients: Array<{ values: string[]; channel?: string | null }>,
+  batchSize = CAMPAIGN_ELIGIBILITY_BATCH_SIZE
+): Promise<Array<EligibilityReason | null>> {
+  if (!Number.isSafeInteger(batchSize) || batchSize <= 0) {
+    throw new Error("campaign_eligibility_batch_size_invalid");
+  }
+  const reasons: Array<EligibilityReason | null> = [];
+  for (let index = 0; index < recipients.length; index += batchSize) {
+    reasons.push(...await campaignRecipientEligibilityBatch(
+      prisma,
+      clientId,
+      recipients.slice(index, index + batchSize)
+    ));
+  }
+  return reasons;
 }
