@@ -469,6 +469,13 @@ Conteúdo novo, mudança de identidade, referência operacional nova, receipt,
 journal ou atestação ausente/divergente, ou outro layout mantém a negativa. Nenhum
 outro diretório `immutable-*` vazio é admitido por essa regra.
 
+A instalação do helper não é prova autorreferente. Antes de emitir o receipt, o
+materializador integrado deve consumir o relatório completo pelo perfil fechado
+`empty-transaction-preservation`, autenticar o par instalador/helper e o predecessor
+CRM, criar exclusivamente `helper-installation-proof.private.json` e reabri-lo por
+`helper_binding()`. Esse perfil é somente de captura e não admite materialização de
+audit ou candidatos.
+
 ## Classes removíveis
 
 ### `NPM_CACHE_MAINTENANCE`

@@ -32,6 +32,8 @@ EF7_HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b
 EF7_INSTALLER_SHA256 = "757dc2f20e649a985d36fa5a82b32e2273efeb9ffea9cd62f45757dcf8073785"
 CRM_HELPER_SHA256 = "fb83ba7c15fbac564a4bbe0d7d1bfd0d0a8ba2e79231d8b133e67b12a8c86d6f"
 CRM_INSTALLER_SHA256 = "4618d34dc0192048a7631d930c03684804daf03cd60fa65d97e8258a3da6ba97"
+EMPTY_TRANSACTION_HELPER_SHA256 = "7522ceb4e8ab0594b6b5b57a2b74ea8fe38251d34d726c4ae0ef040da225718a"
+EMPTY_TRANSACTION_INSTALLER_SHA256 = "b70f56734b402014790c630629cede69d88ff3e30811a0c759a260acacf49c49"
 # Compatibility names retain the proven worker profile for callers/tests that
 # invoke helper_binding() without an explicit profile contract.
 HELPER_SHA256 = WORKER_HELPER_SHA256
@@ -66,6 +68,7 @@ TARGET_AVAILABLE_BYTES = 9663676416
 WORKER_PROFILE = "worker-package-audit"
 EF7_PROFILE = "ef7db111-deploy-control"
 CRM_PROFILE = "inactive-crm-staging"
+EMPTY_TRANSACTION_PROFILE = "empty-transaction-preservation"
 EF7_MINIMUM_RECOVERY_BYTES = 949141504
 CRM_MINIMUM_RECOVERY_BYTES = 1299951616
 
@@ -89,10 +92,21 @@ def profile_contract(profile: str) -> dict[str, Any]:
                 "minimumRecoveryBytes": CRM_MINIMUM_RECOVERY_BYTES,
                 "installerSha256": CRM_INSTALLER_SHA256,
                 "helperSha256": CRM_HELPER_SHA256,
+                "installationPredecessor": {
+                    "path": str(HELPER), "sha256": EF7_HELPER_SHA256,
+                    "device": 64769, "inode": 803452,
+                    "uid": 0, "gid": 0, "mode": "0500"},
                 "sourceGraph": {"path": CRM_SOURCE_GRAPH,
                                 "sha256": CRM_SOURCE_GRAPH_SHA256},
                 "candidates": [{"class": "CLOSED_INACTIVE_CRM_STAGING_TREE",
                                 "path": str(path)} for path in CRM_CANDIDATES]}
+    if profile == EMPTY_TRANSACTION_PROFILE:
+        return {"installerSha256": EMPTY_TRANSACTION_INSTALLER_SHA256,
+                "helperSha256": EMPTY_TRANSACTION_HELPER_SHA256,
+                "installationPredecessor": {
+                    "path": str(HELPER), "sha256": CRM_HELPER_SHA256,
+                    "device": 64769, "inode": 835066,
+                    "uid": 0, "gid": 0, "mode": "0500"}}
     raise RuntimeError("PROFILE_DENY")
 
 
@@ -220,7 +234,7 @@ def _installation_record(line: str, label: str, path: Path, sha256: str,
 
 
 def capture_helper_proof(profile: str) -> dict[str, str]:
-    if profile != CRM_PROFILE:
+    if profile not in {CRM_PROFILE, EMPTY_TRANSACTION_PROFILE}:
         raise RuntimeError("HELPER_PROOF_CAPTURE_PROFILE")
     contract = profile_contract(profile)
     report_raw, report_info = read_stable(HELPER_INSTALLATION_REPORT, modes={0o600})
@@ -236,9 +250,8 @@ def capture_helper_proof(profile: str) -> dict[str, str]:
     if len(lines) == 2 and lines[0].startswith("RECOVERED|"):
         installed_line = lines[0]
     elif len(lines) == 3 and lines[0] == (
-            "BEFORE|{path}|{sha256}|{uid}:{gid}|0500|64769:803452".format(
-                path=HELPER, sha256=EF7_HELPER_SHA256,
-                uid=HELPER_UID, gid=HELPER_GID)) and \
+            "BEFORE|{path}|{sha256}|{uid}:{gid}|{mode}|{device}:{inode}".format(
+                **contract["installationPredecessor"])) and \
             lines[1].startswith("INSTALLED|"):
         installed_line = lines[1]
     else:
@@ -425,7 +438,8 @@ def main(argv: list[str]) -> int:
         selected_profile = argv[1]
         action = "materialize"
     elif len(argv) == 3 and argv[0] == "--capture-helper-proof" and \
-            argv[1] == "--profile" and argv[2] == CRM_PROFILE:
+            argv[1] == "--profile" and \
+            argv[2] in {CRM_PROFILE, EMPTY_TRANSACTION_PROFILE}:
         selected_profile = argv[2]
         action = "capture-helper-proof"
     else:

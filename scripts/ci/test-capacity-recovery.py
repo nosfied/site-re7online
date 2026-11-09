@@ -1598,6 +1598,23 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(crm["candidates"], [
             {"class": "CLOSED_INACTIVE_CRM_STAGING_TREE", "path": str(path)}
             for path in materializer.CRM_CANDIDATES])
+        empty = materializer.profile_contract(
+            materializer.EMPTY_TRANSACTION_PROFILE)
+        self.assertEqual(empty, {
+            "installerSha256": materializer.EMPTY_TRANSACTION_INSTALLER_SHA256,
+            "helperSha256": materializer.EMPTY_TRANSACTION_HELPER_SHA256,
+            "installationPredecessor": {
+                "path": str(materializer.HELPER),
+                "sha256": materializer.CRM_HELPER_SHA256,
+                "device": 64769, "inode": 835066,
+                "uid": 0, "gid": 0, "mode": "0500"},
+        })
+        scripts = Path(__file__).resolve().parents[1]
+        self.assertEqual(sha(scripts / "capacity-proc-observer.py"),
+                         materializer.EMPTY_TRANSACTION_HELPER_SHA256)
+        self.assertEqual(
+            sha(scripts / "install-capacity-proc-observer-empty-transaction.py"),
+            materializer.EMPTY_TRANSACTION_INSTALLER_SHA256)
         with self.assertRaisesRegex(RuntimeError, "PROFILE_DENY"):
             materializer.profile_contract("/opt/re7online/deploy-control")
 
@@ -2000,6 +2017,108 @@ class CapacityRecoveryTests(unittest.TestCase):
                                        "HELPER_INSTALLATION_REPORT_BINDING"):
             materializer.capture_helper_proof(materializer.CRM_PROFILE)
         self.assertFalse(proof.exists())
+
+    def test_empty_transaction_installer_report_becomes_closed_private_proof(self):
+        source = Path(__file__).resolve().parents[1]
+        installer_path = source / "install-capacity-proc-observer-empty-transaction.py"
+        materializer_path = source / "capacity-recovery-worker-package-materialize.py"
+        installer_spec = importlib.util.spec_from_file_location(
+            "empty_transaction_proof_installer", installer_path)
+        installer = importlib.util.module_from_spec(installer_spec)
+        assert installer_spec.loader is not None
+        installer_spec.loader.exec_module(installer)
+        materializer_spec = importlib.util.spec_from_file_location(
+            "empty_transaction_proof_materializer", materializer_path)
+        materializer = importlib.util.module_from_spec(materializer_spec)
+        assert materializer_spec.loader is not None
+        materializer_spec.loader.exec_module(materializer)
+
+        custody = self.base / "empty-transaction-helper-proof"
+        custody.mkdir(mode=0o700)
+        control = custody / "control"
+        scripts = control / "scripts"
+        scripts.mkdir(parents=True)
+        consumer = scripts / "capacity-recovery.py"
+        shutil.copy2(source / "capacity-recovery.py", consumer)
+        consumer.chmod(0o644)
+        helper = custody / "capacity-proc-observer.py"
+        shutil.copy2(source / "capacity-proc-observer.py", helper)
+        helper.chmod(0o500)
+        sudoers = custody / "re7online-capacity-proc-observer"
+        sudoers.write_bytes(b"closed sudoers\n")
+        sudoers.chmod(0o440)
+        report = custody / "helper-installation-report.private.txt"
+        proof = custody / "helper-installation-proof.private.json"
+        info = helper.lstat()
+        uid, gid = os.geteuid(), os.getegid()
+        result = {
+            "installationState": "INSTALLED", "path": str(helper),
+            "sha256": sha(helper),
+            "previous": {"path": str(helper),
+                "sha256": materializer.CRM_HELPER_SHA256,
+                "device": 64769, "inode": 835066,
+                "uid": 0, "gid": 0, "mode": "0500"},
+            "identity": {"device": info.st_dev, "inode": info.st_ino,
+                         "uid": uid, "gid": gid, "mode": "0500"},
+            "sudoersSha256": materializer.SUDOERS_SHA256,
+        }
+        installer_stdout = io.StringIO()
+        with mock.patch.object(installer, "install", return_value=result), \
+                mock.patch.object(installer, "SUDOERS", sudoers), \
+                mock.patch.object(installer, "SUDOERS_SHA256",
+                                  materializer.SUDOERS_SHA256), \
+                mock.patch.object(sys, "stdout", installer_stdout):
+            installer.main()
+        report.write_text(installer_stdout.getvalue())
+        report.chmod(0o600)
+
+        patches = {"CUSTODY": custody, "ROOT": control, "CONSUMER": consumer,
+            "CONSUMER_SHA256": sha(consumer), "HELPER": helper,
+            "SUDOERS": sudoers, "HELPER_INSTALLATION_REPORT": report,
+            "HELPER_PROOF": proof, "EMPTY_TRANSACTION_INSTALLER_SHA256":
+            sha(installer_path), "EMPTY_TRANSACTION_HELPER_SHA256": sha(helper),
+            "HELPER_UID": uid, "HELPER_GID": gid,
+            "SUDOERS_UID": 0, "SUDOERS_GID": 0}
+        captured_stdout = io.StringIO()
+        with mock.patch.multiple(materializer, **patches), \
+                mock.patch.object(sys, "stdout", captured_stdout):
+            self.assertEqual(materializer.main([
+                "--capture-helper-proof", "--profile",
+                materializer.EMPTY_TRANSACTION_PROFILE]), 0)
+            binding, proof_sha = materializer.helper_binding(
+                sha(installer_path), sha(helper))
+            with self.assertRaises(SystemExit):
+                materializer.main([
+                    "--profile", materializer.EMPTY_TRANSACTION_PROFILE])
+        captured = json.loads(captured_stdout.getvalue())
+        self.assertEqual(binding, {"path": str(helper), "sha256": sha(helper)})
+        self.assertEqual(captured["helperProofSha256"], proof_sha)
+        self.assertEqual(captured["reportSha256"], sha(report))
+        value = json.loads(proof.read_text())
+        self.assertEqual(value["installerSha256"], sha(installer_path))
+        self.assertEqual(value["helper"]["identity"], result["identity"])
+
+        proof.unlink()
+        report.write_text(report.read_text().replace("64769:835066", "64769:835067"))
+        report.chmod(0o600)
+        with mock.patch.multiple(materializer, **patches), \
+                self.assertRaisesRegex(RuntimeError,
+                                       "HELPER_INSTALLATION_REPORT_STATE"):
+            materializer.capture_helper_proof(
+                materializer.EMPTY_TRANSACTION_PROFILE)
+        self.assertFalse(proof.exists())
+
+        identity = result["identity"]
+        report.write_text(
+            f"RECOVERED|{helper}|{sha(helper)}|{uid}:{gid}|0500|"
+            f"{identity['device']}:{identity['inode']}\n"
+            f"PRESERVED|{sudoers}|{materializer.SUDOERS_SHA256}|0:0|0440\n")
+        report.chmod(0o600)
+        with mock.patch.multiple(materializer, **patches):
+            recovered = materializer.capture_helper_proof(
+                materializer.EMPTY_TRANSACTION_PROFILE)
+        self.assertEqual(recovered["helperProofSha256"], sha(proof))
+        self.assertEqual(recovered["helperSha256"], sha(helper))
 
     def test_ef7_materializer_schema3_to_real_audit_outside_checkout(self):
         fixture = self.ef7_fixture("ef7-materializer-e2e")
