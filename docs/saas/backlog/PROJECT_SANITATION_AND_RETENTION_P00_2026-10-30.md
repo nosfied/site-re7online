@@ -1488,3 +1488,26 @@ não libera bytes e o audit do cache npm permanece uma etapa posterior. Antes da
 emissão produtiva, a prova de instalação do helper deve ser capturada e reaberta
 pelo perfil fechado `empty-transaction-preservation`; a instalação isolada não
 satisfaz esse gate e o perfil não autoriza audit.
+
+##### Dívida do build abortado a838bd33 — disposição fechada do worktree
+
+O produtor encerrou `immutable-a838bd33-vps-20261109T202533Z` em
+`FAILED/RETENTION_DEBT` no checkpoint `after_api_npm_ci`, antes de pacote,
+manifesto ou índice. A fotografia física atribuiu 987.512.832 B ao worktree,
+24.576 B ao output de evidência, 122.880 B à custódia e 341.946.368 B ao cache npm.
+Os quatro resíduos explicam 1.329.606.656 B dos 1.332.482.048 B consumidos na
+janela; 2.875.392 B permaneceram como oscilação não atribuída.
+
+O consumidor qualifica exclusivamente o caminho
+`/opt/re7online/build-worktrees/immutable-a838bd33-vps-20261109T202533Z-source`.
+O binding exige lifecycle `4388c11f…60af0`, inventário `ace7b547…1e02` e contrato
+de capacidade `2fbfc0b7…b7a06`, além do target `a838bd33…54c1` e da árvore
+`438b737c…dde4`. O ensaio isolado usa Git real e prova um único efeito sem
+`--force`, ausência física e no registro Git, com output, custódia e cache
+preservados. Drift de hash, pacote reaparecido, checkout alterado, ignorado extra,
+referência operacional ou registro Git divergente negam antes da retirada.
+
+Os 987.512.832 B permanecem apenas potenciais até `prepare`, intenção revisada,
+`AUTHORIZE_ONCE`, receipt terminal e nova medição. A projeção anterior de
+9.687.744.512 B deixa somente 24.068.096 B sobre o gate então vigente; portanto a
+retirada fecha a dívida, mas não autoriza automaticamente outro build.

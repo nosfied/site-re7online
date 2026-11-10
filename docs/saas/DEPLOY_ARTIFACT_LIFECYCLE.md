@@ -442,6 +442,17 @@ hashes e capacidade, sem ambiente ou segredo. `FAILED`, `COMPLETE` ou uma geraç
 substituída exigem classificação imediata como host obrigatório, custódia off-host
 verificada ou pendência. Substituição nunca equivale a autorização para retirar.
 
+O build abortado `immutable-a838bd33-vps-20261109T202533Z` possui uma disposição
+fechada somente para seu `DERIVED_WORKTREE`. Ela autentica os hashes do lifecycle
+`FAILED/RETENTION_DEBT`, do inventário e do contrato de capacidade, exige pacote,
+manifesto, índice, release e runtimes ausentes, e reabre o registro Git, HEAD e
+árvore. O checkout precisa estar limpo e conter exatamente os dois ignorados
+`node_modules/` e `apps/whatsapp-agent/node_modules/`. Qualquer outro ignorado,
+untracked, drift, referência operacional ou mudança de binding nega antes do
+comando. A única operação admissível é `git worktree remove` sem `--force`; output,
+custódia e cache npm ficam fora do efeito. O executor revalida tudo sob os locks e
+só conclui depois de comprovar ausência física e no registro Git.
+
 `PENDING_RETENTION_REVIEW` é parte do encerramento do deploy, não backlog eventual.
 Enquanto uma geração anterior estiver nesse estado, não iniciar novo build que crie
 cópias dispensáveis sem justificativa operacional registrada e novo orçamento de
