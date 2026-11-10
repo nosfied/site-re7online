@@ -1686,6 +1686,184 @@ def canonical_release_verifier() -> Path:
     return Path(__file__).resolve().with_name("converta-release.py")
 
 
+def verify_external_handoff(args: argparse.Namespace) -> None:
+    """Verify an inert installation and a single completed builder retirement."""
+    raw, _ = stable_private(args.handoff, args.handoff_sha256)
+    handoff = object_json(raw, "external-handoff")
+    fields = {"schemaVersion", "builderPolicy", "contract", "lifecycle",
+              "intent", "authorization", "receipt", "journal", "installation",
+              "packagePath", "canonicalVerifierSha256"}
+    if (set(handoff) != fields or handoff.get("schemaVersion") != 1 or
+            not SHA256.fullmatch(str(handoff.get("canonicalVerifierSha256", "")))):
+        deny("external_handoff_schema")
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    local_policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    evidence_input(args.handoff, local_policy)
+    bindings = {key: _closed_file_binding(handoff[key], f"external_handoff:{key}")
+                for key in ("builderPolicy", "contract", "lifecycle", "intent",
+                            "authorization", "receipt", "journal", "installation")}
+    _, builder_policy_sha, builder_policy_raw = bindings["builderPolicy"]
+    builder = validate_root_policy(builder_policy_raw, builder_policy_sha)["canonicalRoots"]
+    contract = object_json(bindings["contract"][2], "external-builder-contract")
+    lifecycle = object_json(bindings["lifecycle"][2], "external-builder-lifecycle")
+    installation = object_json(bindings["installation"][2], "external-installation")
+    validate_contract(contract)
+    release, target = contract["releaseId"], contract["targetCommit"]
+    if (not isinstance(release, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", release) or
+            not isinstance(target, str) or not re.fullmatch(r"[0-9a-f]{40}", target) or
+            contract["generationId"] != release or contract["state"] != "COMPLETE" or
+            lifecycle.get("schemaVersion") != 1 or lifecycle.get("generationId") != release or
+            lifecycle.get("targetCommit") != target or lifecycle.get("state") != "COMPLETE"):
+        deny("external_handoff_generation")
+    hashes = {key: lifecycle.get(key) for key in ("packageSha256", "manifestSha256", "indexSha256")}
+    if any(not isinstance(value, str) or not SHA256.fullmatch(value) for value in hashes.values()):
+        deny("external_handoff_producer_hashes")
+    outputs = Path(builder["outputs"])
+    payload = Path(str(lifecycle.get("releaseRoot", "")))
+    _strict_child(payload, outputs, "external_handoff_builder_output")
+    origin_package = payload.parent / f"{release}.tar.xz"
+    if (payload.name != release or lifecycle.get("package") != str(origin_package) or
+            lifecycle.get("artifactContract") != str(payload.parent / "generation-artifacts.private.json") or
+            contract["writerLockPath"] != str(outputs / ".generation-build.lock")):
+        deny("external_handoff_builder_identity")
+    protected = {
+        origin_package: ("PACKAGE_PRESERVE", hashes["packageSha256"]),
+        payload / "manifest.json": ("PACKAGE_PRESERVE", hashes["manifestSha256"]),
+        payload / "index.sha256": ("PACKAGE_PRESERVE", hashes["indexSha256"]),
+        payload.parent / "generation-lifecycle.private.json": ("EVIDENCE_PRESERVE", bindings["lifecycle"][1]),
+    }
+    by_path = {Path(item["path"]): item for item in contract["artifacts"]}
+    if any(by_path.get(path, {}).get("class") != kind or
+           by_path[path].get("digest") != {"sha256": sha}
+           for path, (kind, sha) in protected.items()):
+        deny("external_handoff_producer_artifacts")
+    runtime = Path(builder["releases"]) / release
+    if ([item["path"] for item in contract["artifacts"] if item["class"] == "RELEASE_RUNTIME"] !=
+            [str(runtime)] or by_path[runtime].get("digest") != {"indexSha256": hashes["indexSha256"]}):
+        deny("external_handoff_builder_runtime")
+    worktrees = [item for item in contract["artifacts"] if item["class"] == "DERIVED_WORKTREE"]
+    runtimes = {Path(item["path"]) for item in contract["artifacts"]
+                if item["class"] == "DERIVED_OUTPUT_RUNTIME"}
+    staging = [item for item in contract["artifacts"] if item["class"] == "DERIVED_STAGING"]
+    if (len(worktrees) != 1 or worktrees[0].get("digest") != {"gitCommit": target} or
+            runtimes != {payload / "api-runtime", payload / "frontend-runtime"} or
+            any(by_path[path].get("digest") != {"indexSha256": hashes["indexSha256"]} for path in runtimes) or
+            len(staging) != 1 or staging[0].get("state") != "SANITIZED" or
+            staging[0].get("removedAtProducerCompletion") is not True or
+            staging[0].get("digest") != {"packageSha256": hashes["packageSha256"]} or
+            any(item["class"] == "PRIVATE_DATA_NEVER_RETIRE" for item in contract["artifacts"])):
+        deny("external_handoff_builder_scope")
+    _strict_child(Path(worktrees[0]["path"]), Path(builder["worktrees"]), "external_handoff_builder_worktree")
+    _strict_child(Path(staging[0]["path"]), outputs, "external_handoff_builder_staging")
+    if Path(staging[0]["path"]).parent != outputs:
+        deny("external_handoff_builder_staging")
+    intent = object_json(bindings["intent"][2], "external-builder-intent")
+    auth = object_json(bindings["authorization"][2], "external-builder-authorization")
+    receipt = object_json(bindings["receipt"][2], "external-builder-receipt")
+    if (intent.get("reconciliation") != {"chain": [], "completed": [], "subordinateAbsences": []} or
+            intent.get("legacyMigration") is not None or "failedBuildWorktreeDisposition" in intent or
+            (intent.get("generationId"), intent.get("releaseId"), intent.get("targetCommit"),
+             intent.get("contractSha256"), intent.get("lifecycleSha256")) !=
+            (release, release, target, bindings["contract"][1], bindings["lifecycle"][1])):
+        deny("external_handoff_intent_binding")
+    commands = validate_intent(intent, {"canonicalRoots": builder,
+                                       "controlPlaneArtifacts": intent.get("controlPlaneArtifacts"),
+                                       "gitRepository": builder["repository"]}, builder_policy_sha)
+    expected = [(ordinal, item) for ordinal, item in enumerate(contract["artifacts"], 1)
+                if item["class"] in {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
+    paths = [item["path"] for _, item in expected]
+    if ([(item["ordinal"], item["path"]) for item in commands] !=
+            [(ordinal, item["path"]) for ordinal, item in expected] or
+            [{key: value for key, value in item.items() if key != "retentionState"}
+             for item in intent["artifacts"]] != contract["artifacts"] or
+            [item["allocatedBytes"] for item in commands] != [item["allocatedBytes"] for _, item in expected] or
+            intent["executionContract"]["writerLock"] != contract["writerLockPath"]):
+        deny("external_handoff_command_scope")
+    if (set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+            auth.get("intentSha256") != bindings["intent"][1] or auth.get("approvedPaths") != paths or
+            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+        deny("external_handoff_authorization")
+    if (receipt.get("schemaVersion") != 1 or receipt.get("state") != "SANITIZED" or
+            receipt.get("intentSha256") != bindings["intent"][1] or
+            receipt.get("commandLogSha256") != bindings["journal"][1] or
+            receipt.get("remainingDerivedPaths") != [] or receipt.get("removedPaths") != paths or
+            receipt.get("attemptedCommands") != len(paths) or receipt.get("completedCommands") != len(paths) or
+            receipt.get("failurePredicate", "missing") is not None or receipt.get("automaticRetry") is not False or
+            receipt.get("lock") != {"canonicalHeldThroughReceiptFsync": True, "writerHeldThroughReceiptFsync": True}):
+        deny("external_handoff_retention_incomplete")
+    events = _read_journal(bindings["journal"][2])
+    if len(events) != 3 * len(commands):
+        deny("external_handoff_journal_scope")
+    for offset, command in enumerate(commands):
+        attempt, result, verified = events[3 * offset:3 * offset + 3]
+        ordinal = command["ordinal"]
+        if (attempt != {"event": "ATTEMPT", "ordinal": ordinal, "path": command["path"], "argv": command["argv"]} or
+                set(result) != {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"} or
+                result.get("event") != "RESULT" or result.get("ordinal") != ordinal or
+                any(not SHA256.fullmatch(str(result[key])) for key in ("stdoutSha256", "stderrSha256")) or
+                type(result.get("exitCode")) is not int or result["exitCode"] != 0 or
+                verified != {"event": "VERIFIED", "ordinal": ordinal, "absent": True}):
+            deny("external_handoff_journal_order")
+    local_releases = authenticate_policy_root(local_policy, "releases")[0]
+    installed = local_releases / release
+    physical_keys = ROOT_KEYS - {"evidence"}
+    source_roots = [Path(builder[key]) for key in physical_keys]
+    destination_roots = [Path(local_policy["canonicalRoots"][key]) for key in physical_keys]
+    if any(source == destination or source in destination.parents or destination in source.parents
+           for source in source_roots for destination in destination_roots):
+        deny("external_handoff_host_roots_overlap")
+    for path, _, _ in bindings.values():
+        evidence_input(path, local_policy)
+    if (installation.get("result") != "RELEASE INSTALLED" or
+            installation.get("releaseId") != release or installation.get("targetCommit") != target or
+            installation.get("releasePath") != str(installed) or
+            any(installation.get(key) != value for key, value in hashes.items())):
+        deny("external_handoff_installation_binding")
+    package = Path(str(handoff["packagePath"]))
+    if package.name != origin_package.name:
+        deny("external_handoff_package_name")
+    evidence_input(package, local_policy)
+    stable_external_package(package, hashes["packageSha256"])
+    if _path_has_symlink(installed, local_releases):
+        deny("external_handoff_installation_path")
+    verification = _run_legacy_verifier(
+        {"targetCommit": target, "releaseId": release, "canonicalVerifierSha256": handoff["canonicalVerifierSha256"],
+         "manifest": {"sha256": hashes["manifestSha256"]}, "index": {"sha256": hashes["indexSha256"]}},
+        ["--release-root", str(installed)], "external_handoff_installation_verification")
+    if any(verification.get(key) != installation.get(key)
+           for key in ("apiEntrySha256", "buildId", "indexEntries")):
+        deny("external_handoff_installed_payload")
+    print(canonical({"result": "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED", "releaseId": release,
+                     "targetCommit": target, "handoffSha256": args.handoff_sha256,
+                     "builderReceiptSha256": bindings["receipt"][1],
+                     "installationSha256": bindings["installation"][1], **hashes}).decode().strip())
+
+
+def stable_external_package(path: Path, expected_sha: str) -> None:
+    try:
+        before = path.lstat()
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                stat.S_IMODE(before.st_mode) & 0o022):
+            deny("external_handoff_package_identity")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if not stat.S_ISREG(opened.st_mode):
+                deny("external_handoff_package_identity")
+            digest = hashlib.sha256()
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+            after = path.lstat()
+    except OSError:
+        deny("external_handoff_package_read")
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
+                             item.st_mtime_ns, item.st_ctime_ns)
+    if (identity(before) != identity(opened) or
+            identity(before) != identity(after) or digest.hexdigest() != expected_sha):
+        deny("external_handoff_package_hash_or_drift")
+
+
 def validate_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[str, Any]:
     if digest_bytes(raw) != expected_sha256:
         deny("legacy_descriptor_hash")
@@ -4005,6 +4183,11 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
+    handoff_parser = commands.add_parser("verify-external-handoff")
+    for name in ("handoff", "root-policy"):
+        handoff_parser.add_argument(f"--{name}", type=Path, required=True)
+        handoff_parser.add_argument(f"--{name}-sha256", required=True)
+    handoff_parser.set_defaults(handler=verify_external_handoff)
     bootstrap_parser = commands.add_parser("bootstrap-legacy")
     bootstrap_parser.add_argument("--descriptor", type=Path, required=True)
     bootstrap_parser.add_argument("--descriptor-sha256", required=True)

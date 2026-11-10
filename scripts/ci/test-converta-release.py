@@ -354,6 +354,153 @@ class ReleaseProducerTest(unittest.TestCase):
             if final.exists():
                 shutil.rmtree(final)
 
+    def test_external_handoff_requires_builder_closure_and_reverifies_installed_release(self) -> None:
+        retirement_tool = ROOT / "scripts/generation-retirement.py"
+        with tempfile.TemporaryDirectory(prefix="external-handoff-receiver-") as directory:
+            receiver = Path(directory)
+            policy = json.loads(self.root_policy.read_bytes())
+            for key, definition in policy["canonicalRoots"].items():
+                entry = definition[0] if key == "evidence" else definition
+                path = receiver / key
+                path.mkdir(mode=0o700 if key == "evidence" else 0o755)
+                entry.update(path=str(path), allowedModes=["0700" if key == "evidence" else "0755"])
+            evidence = receiver / "evidence"
+            receiver_policy = receiver / "policy.private.json"
+            write(receiver_policy, json.dumps(policy), 0o600)
+            bind = lambda path: {"path": str(path), "sha256": MODULE.sha256_bytes(path.read_bytes())}
+            package = evidence / self.package.name
+            shutil.copyfile(self.package, package)
+            install = invoke("install", "--package", str(package), "--target", self.target,
+                             "--release-id", self.release_id, "--components", COMPONENTS,
+                             "--installed-releases-root", str(receiver / "releases"),
+                             "--root-policy", str(receiver_policy),
+                             "--root-policy-sha256", bind(receiver_policy)["sha256"])
+            self.assertEqual(install.returncode, 0, install.stderr)
+            installation = evidence / "installation.private.json"
+            write(installation, install.stdout, 0o600)
+            contract = self.output_a / "generation-artifacts.private.json"
+            lifecycle = self.output_a / "generation-lifecycle.private.json"
+            producer = json.loads(contract.read_bytes())
+            roots = json.loads(self.root_policy.read_bytes())["canonicalRoots"]
+            source_roots = {key: ([item["path"] for item in value] if key == "evidence" else value["path"])
+                            for key, value in roots.items()}
+            # The builder closure is synthetic. Build, transport, install and
+            # verification use the real producer and distinct receiver roots.
+            commands = []
+            events = []
+            for ordinal, artifact in enumerate(producer["artifacts"], 1):
+                kind = artifact["class"]
+                path = artifact["path"]
+                if kind == "DERIVED_WORKTREE":
+                    argv = ["/usr/bin/git", "-C", source_roots["repository"], "worktree", "remove", path]
+                elif kind == "DERIVED_OUTPUT_RUNTIME":
+                    argv = ["/usr/bin/rm", "-r", "--", path]
+                else:
+                    continue
+                commands.append({"ordinal": ordinal, "path": path, "class": kind, "argv": argv,
+                                 "literal": " ".join(argv), "allocatedBytes": artifact["allocatedBytes"],
+                                 "eligibilityAtPrepare": "RETIREMENT_READY"})
+                events.extend([{"event": "ATTEMPT", "ordinal": ordinal, "path": path, "argv": argv},
+                               {"event": "RESULT", "ordinal": ordinal, "exitCode": 0,
+                                "stdoutSha256": MODULE.sha256_bytes(b""), "stderrSha256": MODULE.sha256_bytes(b"")},
+                               {"event": "VERIFIED", "ordinal": ordinal, "absent": True}])
+            paths = [item["path"] for item in commands]
+            intent = evidence / "intent.private.json"
+            write(intent, json.dumps({
+                "schemaVersion": 3, "generationId": self.release_id, "releaseId": self.release_id,
+                "targetCommit": self.target, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+                "authorizationGranted": False, "contractSha256": bind(contract)["sha256"],
+                "lifecycleSha256": bind(lifecycle)["sha256"], "operationalStateSha256": "f" * 64,
+                "rootPolicySha256": self.root_policy_sha, "canonicalRoots": source_roots,
+                "reviewOutput": str(self.output_a / "generation-review.private.json"),
+                "controlPlaneArtifacts": [], "freshObservation": {}, "legacyMigration": None,
+                "reconciliation": {"chain": [], "completed": [], "subordinateAbsences": []},
+                "artifacts": [{**item, "retentionState": "RETIREMENT_READY" if item["path"] in paths
+                               else item["state"]} for item in producer["artifacts"]],
+                "commands": commands, "commandsSha256": MODULE.sha256_bytes(
+                    "".join(item["literal"] + "\n" for item in commands).encode()),
+                "executionContract": {"canonicalLock": str(self.base / ".deployment-window.lock"),
+                                      "writerLock": producer["writerLockPath"], "attemptBeforeCommand": True,
+                                      "stopOnFirstFailure": True, "automaticRetry": False, "force": False,
+                                      "prune": False, "globExpansion": False, "receiptFsync": True},
+            }), 0o600)
+            auth = evidence / "authorization.private.json"
+            write(auth, json.dumps({"schemaVersion": 1, "authorizationId": "fixture-once",
+                                    "decision": "AUTHORIZE_ONCE", "intentSha256": bind(intent)["sha256"],
+                                    "approvedPaths": paths, "owner": "fixture"}), 0o600)
+            journal = evidence / "journal.private.jsonl"
+            write(journal, "".join(json.dumps(event) + "\n" for event in events), 0o600)
+            receipt = evidence / "receipt.private.json"
+            receipt_value = {"schemaVersion": 1, "state": "SANITIZED", "failurePredicate": None,
+                             "attemptedCommands": 3, "completedCommands": 3, "removedPaths": paths,
+                             "intentSha256": bind(intent)["sha256"], "commandLogSha256": bind(journal)["sha256"],
+                             "automaticRetry": False, "remainingDerivedPaths": [],
+                             "lock": {"canonicalHeldThroughReceiptFsync": True,
+                                      "writerHeldThroughReceiptFsync": True}}
+            write(receipt, json.dumps(receipt_value), 0o600)
+            for original in (self.root_policy, contract, lifecycle):
+                copy = evidence / original.name
+                shutil.copyfile(original, copy)
+                copy.chmod(0o600)
+            manifest = evidence / "handoff.private.json"
+            descriptor = {
+                "schemaVersion": 1, "builderPolicy": bind(evidence / self.root_policy.name),
+                "contract": bind(evidence / contract.name), "lifecycle": bind(evidence / lifecycle.name),
+                "intent": bind(intent), "authorization": bind(auth), "receipt": bind(receipt),
+                "journal": bind(journal), "installation": bind(installation), "packagePath": str(package),
+                "canonicalVerifierSha256": bind(PRODUCER)["sha256"],
+            }
+
+            def verify(value: dict, policy_path: Path = receiver_policy) -> subprocess.CompletedProcess[str]:
+                write(manifest, json.dumps(value), 0o600)
+                return subprocess.run(
+                    [sys.executable, str(retirement_tool), "verify-external-handoff",
+                     "--handoff", str(manifest), "--handoff-sha256", bind(manifest)["sha256"],
+                     "--root-policy", str(policy_path), "--root-policy-sha256", bind(policy_path)["sha256"]],
+                    text=True, capture_output=True)
+
+            result = verify(descriptor)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["result"], "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED")
+            with self.subTest("missing builder evidence"):
+                denied = verify({key: value for key, value in descriptor.items() if key != "receipt"})
+                self.assertEqual(denied.returncode, 2, denied.stderr)
+                self.assertIn("external_handoff_schema", denied.stderr)
+            with self.subTest("same host"):
+                overlapping = receiver / "overlapping-policy.private.json"
+                overlapping_policy = json.loads(receiver_policy.read_bytes())
+                overlapping_policy["canonicalRoots"]["releases"] = roots["releases"]
+                write(overlapping, json.dumps(overlapping_policy), 0o600)
+                denied = verify(descriptor, overlapping)
+                self.assertEqual(denied.returncode, 2, denied.stderr)
+                self.assertIn("external_handoff_host_roots_overlap", denied.stderr)
+            with self.subTest("incomplete receipt with matching hash"):
+                write(receipt, json.dumps({**receipt_value, "remainingDerivedPaths": paths[1:]}), 0o600)
+                denied = verify({**descriptor, "receipt": bind(receipt)})
+                self.assertEqual(denied.returncode, 2, denied.stderr)
+                self.assertIn("external_handoff_retention_incomplete", denied.stderr)
+                write(receipt, json.dumps(receipt_value), 0o600)
+            with self.subTest("journal reordered with matching hashes"):
+                old_journal = journal.read_text()
+                write(journal, "".join(json.dumps(event) + "\n" for event in events[1:] + events[:1]), 0o600)
+                write(receipt, json.dumps({**receipt_value, "commandLogSha256": bind(journal)["sha256"]}), 0o600)
+                denied = verify({**descriptor, "receipt": bind(receipt), "journal": bind(journal)})
+                self.assertEqual(denied.returncode, 2, denied.stderr)
+                self.assertIn("external_handoff_journal_order", denied.stderr)
+                write(journal, old_journal, 0o600)
+                write(receipt, json.dumps(receipt_value), 0o600)
+            with self.subTest("installed runtime drift"):
+                entry = receiver / "releases" / self.release_id / "api-runtime/dist/index.js"
+                entry.write_bytes(entry.read_bytes() + b"// changed\n")
+                denied = verify(descriptor)
+                self.assertEqual(denied.returncode, 2, denied.stderr)
+                self.assertIn("external_handoff_installation_verification", denied.stderr)
+            with self.subTest("package drift"):
+                package.write_bytes(b"changed")
+                denied = verify(descriptor)
+                self.assertEqual(denied.returncode, 2, denied.stderr)
+                self.assertIn("external_handoff_package_hash_or_drift", denied.stderr)
+
     def test_recovery_install_reuses_exact_staging_without_reextracting(self) -> None:
         final = self.releases / self.release_id
         staged = self.releases / f".{self.release_id}.installing"

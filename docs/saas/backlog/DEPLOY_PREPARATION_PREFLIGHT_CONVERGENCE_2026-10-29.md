@@ -367,6 +367,26 @@ segue o [runbook](../DEPLOY_RUNBOOK.md).
    o pico de disco, o saldo e a disposição por host. Promover a rota a
    procedimento normal externo somente depois de comprovar esse fechamento.
 
+### Conferência de evidências antes do preflight
+
+`generation-retirement.py verify-external-handoff` valida a passagem em leitura.
+Recebe `--handoff`, `--handoff-sha256`, `--root-policy` e
+`--root-policy-sha256`. O handoff privado schema 1 vincula por caminho e SHA-256
+as cópias do `builderPolicy`, `contract`, `lifecycle`, `intent`,
+`authorization`, `receipt`, `journal` e do stdout integral de `install` em
+`installation`. `packagePath` identifica o pacote local em custódia e
+`canonicalVerifierSha256` fixa o verificador do control plane aprovado.
+Os hashes esperados devem vir da custódia autenticada de cada host.
+
+O perfil inicial exige uma única retirada concluída dos três derivados do builder,
+com os três comandos registrados no journal. A prova é comparada com os caminhos
+originais, sem consultar esses caminhos a partir da VPS. O verificador relê
+o SHA do pacote por streaming e confere a instalação inerte já existente.
+`EXTERNAL_HANDOFF_EVIDENCE_VERIFIED` encerra apenas essa conferência.
+A emissão de evidência no builder e o consumo no preflight e na finalização
+continuam pendentes de integração. O teste usa fechamento sintético e executa
+build, cópia, instalação e verificação reais em duas raízes descartáveis.
+
 ## Fechamento da janela fa63994a e dívida remanescente
 
 A janela terminou em `DEPLOYED_SANITIZED`, mas não prova que o procedimento normal
