@@ -462,6 +462,7 @@ class ReleaseProducerTest(unittest.TestCase):
             result = verify(descriptor)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["result"], "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED")
+            self.check_external_retirement_route(receiver, receiver_policy, policy, manifest, bind)
             with self.subTest("missing builder evidence"):
                 denied = verify({key: value for key, value in descriptor.items() if key != "receipt"})
                 self.assertEqual(denied.returncode, 2, denied.stderr)
@@ -500,6 +501,100 @@ class ReleaseProducerTest(unittest.TestCase):
                 denied = verify(descriptor)
                 self.assertEqual(denied.returncode, 2, denied.stderr)
                 self.assertIn("external_handoff_package_hash_or_drift", denied.stderr)
+
+    def check_external_retirement_route(self, receiver, policy_path, policy, manifest, bind) -> None:
+        evidence = receiver / "evidence"
+        output = receiver / "outputs"
+        for path in (receiver / ".deployment-window.lock", output / ".generation-build.lock"):
+            write(path, "", 0o600)
+        lock = receiver / ".deployment-window.lock"
+        pm2 = receiver / "pm2"
+        write(pm2, "#!/bin/sh\nprintf '[]\\n'\n", 0o700)
+        dump = evidence / "dump.pm2"
+        write(dump, "[]\n", 0o600)
+        graph = evidence / "graph.private.json"
+        operational = evidence / "operational.private.json"
+        installed = receiver / "releases" / self.release_id
+        previous = receiver / "releases" / "immutable-fixture-previous"
+        previous.mkdir()
+        current = receiver / "current-api"
+        current.symlink_to(previous)
+        roots = {key: ([item["path"] for item in value] if key == "evidence" else value["path"])
+                 for key, value in policy["canonicalRoots"].items()}
+        control = evidence / "control.py"
+        write(control, "# fixture\n", 0o600)
+
+        def snapshot(deployed):
+            active = installed if deployed else previous
+            graph_value = {"activeReleases": [active.name], "rollbackReleases": [previous.name],
+                           "transitiveReturnReleases": [], "candidateReleases": [] if deployed else [self.release_id],
+                           "installedVerifiedReleases": [self.release_id], "supersededCandidates": []}
+            write(graph, json.dumps(graph_value), 0o600)
+            write(operational, json.dumps({
+                "schemaVersion": 2, "generationId": self.release_id, "releaseId": self.release_id,
+                "targetCommit": self.target, "gitRepository": roots["repository"], "canonicalRoots": roots,
+                "currentPaths": [str(active)], "pm2LivePaths": [], "pm2DumpPaths": [], "dependencies": [],
+                "controlPlaneArtifacts": [{**bind(control), "copied": True}], **graph_value,
+                "deploymentState": {"state": "DEPLOYED" if deployed else "PENDING"},
+                "observations": {"currentLinks": [{"path": str(current), "target": str(active)}],
+                                 "pm2": {**bind(pm2), "fingerprintSha256": MODULE.sha256_bytes(b"[]\n")},
+                                 "dump": bind(dump), "releaseGraph": bind(graph)},
+            }), 0o600)
+
+        def retirement(command, **inputs):
+            argv = [sys.executable, str(ROOT / "scripts/generation-retirement.py"), command]
+            for name, value in {"root-policy": policy_path, **inputs}.items():
+                argv.extend([f"--{name.replace('_', '-')}", str(value)])
+                if name in {"root-policy", "handoff", "contract", "lifecycle", "operational_state",
+                            "intent", "authorization"}:
+                    argv.extend([f"--{name.replace('_', '-')}-sha256", bind(value)["sha256"]])
+            return subprocess.run(argv, text=True, capture_output=True)
+
+        materialized = retirement("materialize-external-retirement", handoff=manifest)
+        self.assertEqual(materialized.returncode, 0, materialized.stderr)
+        projection = json.loads(materialized.stdout)
+        contract = Path(projection["contract"])
+        lifecycle = Path(projection["lifecycle"])
+        review = contract.parent / "generation-review.private.json"
+        intent = evidence / "local-intent.private.json"
+        commands = evidence / "local-commands.private.txt"
+        snapshot(deployed=False)
+        prepared = retirement("prepare", contract=contract, lifecycle=lifecycle,
+                              operational_state=operational, deployment_lock=lock, intent_output=intent,
+                              commands_output=commands, review_output=review,
+                              reviewer="fixture", reason="external import")
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        self.assertEqual(commands.read_bytes(), b"")
+        authorization = evidence / "local-authorization.private.json"
+        auth = {"schemaVersion": 1, "authorizationId": "fixture", "decision": "AUTHORIZE_ONCE",
+                "intentSha256": bind(intent)["sha256"], "approvedPaths": [], "owner": "fixture"}
+        write(authorization, json.dumps({**auth, "approvedPaths": [str(installed)]}), 0o600)
+        denied = retirement("check-external-retirement", intent=intent, authorization=authorization,
+                            deployment_lock=lock)
+        self.assertEqual(denied.returncode, 2, denied.stderr)
+        self.assertIn("external_projection_authorization", denied.stderr)
+        write(authorization, json.dumps(auth), 0o600)
+        checked = retirement("check-external-retirement", intent=intent, authorization=authorization,
+                             deployment_lock=lock)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["result"], "EXTERNAL_RETIREMENT_READY")
+        current.unlink()
+        current.symlink_to(installed)
+        snapshot(deployed=True)
+        marker = installed / "DEPLOYED"
+        write(marker, json.dumps({"release": self.release_id, "target": self.target,
+                                  "accepted": "ACEITE TÉCNICO PASS", "dumpSha256": bind(dump)["sha256"]}), 0o600)
+        receipt = evidence / "local-receipt"
+        executed = retirement("execute", intent=intent, authorization=authorization, operational_state=operational,
+                              deployment_lock=lock, receipt_root=receipt, review_output=review)
+        self.assertEqual(executed.returncode, 0, executed.stderr)
+        closure = json.loads((receipt / "execution-receipt.private.json").read_bytes())
+        self.assertEqual(closure["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(closure["attemptedCommands"], 0)
+        self.assertEqual(closure["removedPaths"], [])
+        self.assertEqual((receipt / "command-results.private.jsonl").read_bytes(), b"")
+        self.assertEqual(json.loads(review.read_bytes())["state"], "SANITIZED")
+        marker.unlink()
 
     def test_recovery_install_reuses_exact_staging_without_reextracting(self) -> None:
         final = self.releases / self.release_id

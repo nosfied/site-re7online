@@ -1253,6 +1253,33 @@ class Driver:
                 set(rollbacks) != set(immediate.values())):
             deny("rollback_role_reconciliation_required")
 
+    def _check_external_retirement(self, binding: RetirementBinding) -> None:
+        raw, _ = stable_regular_bytes(binding.intent, required_mode=0o600)
+        if hashlib.sha256(raw).hexdigest() != binding.intent_sha256:
+            deny("generation_retirement_hash:intent")
+        intent = json_object(raw, binding.intent.name)
+        if ("externalHandoff" not in intent and
+                binding.review_output.parent.name != f"{self.inputs.release}-external-import"):
+            return
+        self._authenticate_retirement()
+        result = self.host.run(
+            [sys.executable, str(binding.tool), "check-external-retirement",
+             "--intent", str(binding.intent), "--intent-sha256", binding.intent_sha256,
+             "--authorization", str(binding.authorization), "--authorization-sha256", binding.authorization_sha256,
+             "--deployment-lock", str(binding.deployment_lock),
+             "--root-policy", str(binding.root_policy), "--root-policy-sha256", binding.root_policy_sha256],
+            timeout=180)
+        if result.returncode:
+            deny("external_retirement_verification")
+        report = json_object(result.stdout.encode(), "external-retirement")
+        expected = {"result": "EXTERNAL_RETIREMENT_READY", "releaseId": self.inputs.release,
+                    "targetCommit": self.inputs.target, "intentSha256": binding.intent_sha256,
+                    "installedPath": str(self.release_root),
+                    "manifestSha256": digest(self.release_root / "manifest.json"),
+                    "indexSha256": digest(self.release_root / "index.sha256")}
+        if report != expected:
+            deny("external_retirement_identity")
+
     @staticmethod
     def _closed_file_binding(value: Any, label: str) -> tuple[Path, str, bytes]:
         if (not isinstance(value, dict) or set(value) != {"path", "sha256"} or
@@ -1413,6 +1440,11 @@ class Driver:
             previous_releases.add(release_id)
         active = set(value.get("activeReleases", [])) - previous_releases
         active.add(self.inputs.release)
+        for component in set(COMPONENTS) - set(affected):
+            preserved_release = previous_by_component.get(component)
+            if not isinstance(preserved_release, str) or not preserved_release:
+                deny("generation_retirement_previous_release")
+            active.add(preserved_release)
         immediate = value.get("immediateRollbackReleases")
         if immediate is not None and (not isinstance(immediate, dict) or
                                       set(immediate) != set(COMPONENTS) or
@@ -1621,6 +1653,7 @@ class Driver:
             deny("generation_retirement_lock_mismatch")
         retirement = self._authenticate_retirement()
         self._require_reconciled_component_rollbacks(retirement)
+        self._check_external_retirement(retirement)
         if self.journal.exists():
             deny("transaction_exists")
         if self.inputs.transaction_root.exists():
@@ -2048,6 +2081,8 @@ class Driver:
         journal = self._journal_read()
         if journal["state"] != "PREFLIGHT_PASS":
             deny("activate_state")
+        if self.inputs.retirement is not None:
+            self._check_external_retirement(self.inputs.retirement)
         self._control_head(); runtime_manifest = self._authenticated_runtime_manifest()
         release = self._release()
         self._validate_private_data_continuity(journal, release)
@@ -2217,6 +2252,8 @@ class Driver:
             self._control_head(journal); self._authenticated_runtime_manifest()
             release = self._release(continuation_journal=journal)
             self._validate_private_data_continuity(journal, release)
+            if journal["saveCount"] == 0 and self.inputs.retirement is not None:
+                self._check_external_retirement(self.inputs.retirement)
             final_readiness: dict[str, Any] = {}
             for component in COMPONENTS:
                 selected = component in self.inputs.components

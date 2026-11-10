@@ -1686,7 +1686,7 @@ def canonical_release_verifier() -> Path:
     return Path(__file__).resolve().with_name("converta-release.py")
 
 
-def verify_external_handoff(args: argparse.Namespace) -> None:
+def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: bool) -> dict[str, Any]:
     """Verify an inert installation and a single completed builder retirement."""
     raw, _ = stable_private(args.handoff, args.handoff_sha256)
     handoff = object_json(raw, "external-handoff")
@@ -1827,17 +1827,167 @@ def verify_external_handoff(args: argparse.Namespace) -> None:
     stable_external_package(package, hashes["packageSha256"])
     if _path_has_symlink(installed, local_releases):
         deny("external_handoff_installation_path")
-    verification = _run_legacy_verifier(
-        {"targetCommit": target, "releaseId": release, "canonicalVerifierSha256": handoff["canonicalVerifierSha256"],
-         "manifest": {"sha256": hashes["manifestSha256"]}, "index": {"sha256": hashes["indexSha256"]}},
-        ["--release-root", str(installed)], "external_handoff_installation_verification")
-    if any(verification.get(key) != installation.get(key)
-           for key in ("apiEntrySha256", "buildId", "indexEntries")):
-        deny("external_handoff_installed_payload")
-    print(canonical({"result": "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED", "releaseId": release,
-                     "targetCommit": target, "handoffSha256": args.handoff_sha256,
-                     "builderReceiptSha256": bindings["receipt"][1],
-                     "installationSha256": bindings["installation"][1], **hashes}).decode().strip())
+    if verify_payload:
+        verification = _run_legacy_verifier(
+            {"targetCommit": target, "releaseId": release,
+             "canonicalVerifierSha256": handoff["canonicalVerifierSha256"],
+             "manifest": {"sha256": hashes["manifestSha256"]}, "index": {"sha256": hashes["indexSha256"]}},
+            ["--release-root", str(installed)], "external_handoff_installation_verification")
+        if any(verification.get(key) != installation.get(key)
+               for key in ("apiEntrySha256", "buildId", "indexEntries")):
+            deny("external_handoff_installed_payload")
+    else:
+        stable_regular_hash(installed / "manifest.json", hashes["manifestSha256"], "external_handoff_manifest")
+        stable_regular_hash(installed / "index.sha256", hashes["indexSha256"], "external_handoff_index")
+    return {"releaseId": release, "targetCommit": target, "installedPath": str(installed),
+            "handoffSha256": args.handoff_sha256, "builderReceiptSha256": bindings["receipt"][1],
+            "installationSha256": bindings["installation"][1], **hashes}
+
+
+def verify_external_handoff(args: argparse.Namespace) -> None:
+    evidence = authenticate_external_handoff(args, verify_payload=True)
+    print(canonical({"result": "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED", **evidence}).decode().strip())
+
+
+def materialize_external_retirement(args: argparse.Namespace) -> None:
+    evidence = authenticate_external_handoff(args, verify_payload=True)
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    outputs = authenticate_policy_root(policy, "outputs")[0]
+    release, target = evidence["releaseId"], evidence["targetCommit"]
+    directory = outputs / f"{release}-external-import"
+    lock = outputs / ".generation-build.lock"
+    lifecycle_path = directory / "generation-lifecycle.private.json"
+    contract_path = directory / "generation-artifacts.private.json"
+    lifecycle = {"schemaVersion": 1, "generationId": release, "targetCommit": target,
+                 "state": "COMPLETE", "classification": "PENDING", "dispositionState": "OPEN",
+                 "externalHandoff": {"path": str(args.handoff), "sha256": args.handoff_sha256},
+                 "externalEvidence": evidence}
+    lifecycle_raw = canonical(lifecycle)
+    installed = Path(evidence["installedPath"])
+    info = installed.lstat()
+    identity = {"device": info.st_dev, "inode": info.st_ino}
+    metrics = structural_metrics(installed)
+    artifact_fields = {"releaseId": release, "targetCommit": target,
+                       "initialIdentity": None, "observedIdentity": None}
+    contract = {
+        "schemaVersion": 1, "generationId": release, "releaseId": release,
+        "targetCommit": target, "state": "COMPLETE", "writerLockPath": str(lock),
+        "classes": sorted(PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"}),
+        "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+        "privateDataOverlay": {"path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                               "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC"},
+        "artifacts": [
+            {**artifact_fields, "path": str(lifecycle_path), "class": "EVIDENCE_PRESERVE",
+             "expectedType": "regular_file", "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+             "dependencies": ["external_handoff"], "digest": {"sha256": digest_bytes(lifecycle_raw)},
+             "sizeBytes": len(lifecycle_raw), "allocatedBytes": 0, "inodes": 1, "structuralSha256": None},
+            {**artifact_fields, **metrics, "path": str(installed), "class": "RELEASE_RUNTIME",
+             "expectedType": "directory", "state": "CANDIDATE_PENDING_ACTIVATION",
+             "retirableOn": "OUTSIDE_ACTIVE_ROLLBACK_TRANSITIVE_GRAPH", "dependencies": ["active_rollback_graph"],
+             "initialIdentity": identity, "observedIdentity": identity, "structuralSha256": None,
+             "digest": {"indexSha256": evidence["indexSha256"]}},
+        ],
+    }
+    fd = acquire_existing_lock(lock)
+    try:
+        # The directory and both records are exclusive. A partial generation
+        # remains visible to the lifecycle inventory and must be reconciled.
+        directory.mkdir(mode=0o700)
+        fsync_dir(outputs)
+        write_exclusive(lifecycle_path, lifecycle_raw)
+        lifecycle_info = lifecycle_path.lstat()
+        lifecycle_identity = {"device": lifecycle_info.st_dev, "inode": lifecycle_info.st_ino}
+        contract["artifacts"][0].update(
+            **structural_metrics(lifecycle_path), initialIdentity=lifecycle_identity,
+            observedIdentity=lifecycle_identity)
+        contract_raw = canonical(contract)
+        write_exclusive(contract_path, contract_raw)
+    finally:
+        os.close(fd)
+    print(canonical({"result": "EXTERNAL_RETIREMENT_MATERIALIZED", "releaseId": release,
+                     "contract": str(contract_path), "contractSha256": digest_bytes(contract_raw),
+                     "lifecycle": str(lifecycle_path), "lifecycleSha256": digest_bytes(lifecycle_raw)}).decode().strip())
+
+
+def authenticate_external_projection(contract: dict[str, Any], lifecycle: dict[str, Any],
+                                     contract_path: Path, lifecycle_path: Path,
+                                     lifecycle_sha: str, args: argparse.Namespace) -> dict[str, Any]:
+    binding = lifecycle.get("externalHandoff")
+    if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+        deny("external_projection_binding")
+    evidence = authenticate_external_handoff(argparse.Namespace(
+        handoff=Path(str(binding["path"])), handoff_sha256=binding["sha256"],
+        root_policy=args.root_policy, root_policy_sha256=args.root_policy_sha256),
+        verify_payload=False)
+    release, target = evidence["releaseId"], evidence["targetCommit"]
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    outputs = Path(policy["canonicalRoots"]["outputs"])
+    if (lifecycle.get("externalEvidence") != evidence or lifecycle.get("targetCommit") != target or
+            contract["releaseId"] != release or contract["targetCommit"] != target or
+            contract_path.parent != outputs / f"{release}-external-import" or
+            contract["writerLockPath"] != str(outputs / ".generation-build.lock")):
+        deny("external_projection_identity")
+    expected = [
+        (str(lifecycle_path), "EVIDENCE_PRESERVE", {"sha256": lifecycle_sha}),
+        (evidence["installedPath"], "RELEASE_RUNTIME", {"indexSha256": evidence["indexSha256"]}),
+    ]
+    if [(item["path"], item["class"], item["digest"]) for item in contract["artifacts"]] != expected:
+        deny("external_projection_scope")
+    for artifact in contract["artifacts"]:
+        authenticate_artifact(artifact)
+    return evidence
+
+
+def check_external_retirement(args: argparse.Namespace) -> None:
+    intent_raw, _ = stable_private(args.intent, args.intent_sha256)
+    intent = object_json(intent_raw, "external-projection-intent")
+    if intent.get("commands") != [] or intent.get("externalHandoff") is None:
+        deny("external_projection_intent")
+    evidence = authenticate_external_retirement_intent(args, intent)
+    auth_raw, _ = stable_private(args.authorization, args.authorization_sha256)
+    authorization = object_json(auth_raw, "external-projection-authorization")
+    if (set(authorization) != {"schemaVersion", "authorizationId", "decision", "intentSha256",
+                               "approvedPaths", "owner"} or
+            authorization.get("schemaVersion") != 1 or authorization.get("decision") != "AUTHORIZE_ONCE" or
+            authorization.get("intentSha256") != args.intent_sha256 or authorization.get("approvedPaths") != [] or
+            not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
+        deny("external_projection_authorization")
+    print(canonical({"result": "EXTERNAL_RETIREMENT_READY", "intentSha256": args.intent_sha256,
+                     **{key: evidence[key] for key in ("releaseId", "targetCommit", "installedPath",
+                                                       "manifestSha256", "indexSha256")}}).decode().strip())
+
+
+def authenticate_external_retirement_intent(args: argparse.Namespace, intent: dict[str, Any]) -> dict[str, Any]:
+    artifacts = intent.get("artifacts")
+    if (not isinstance(artifacts, list) or len(artifacts) != 2 or
+            any(not isinstance(item, dict) or not isinstance(item.get("path"), str) for item in artifacts)):
+        deny("external_projection_intent")
+    lifecycle_path = Path(artifacts[0]["path"])
+    contract_path = lifecycle_path.parent / "generation-artifacts.private.json"
+    contract_raw, _ = stable_private(contract_path, intent["contractSha256"])
+    lifecycle_raw, _ = stable_private(lifecycle_path, intent["lifecycleSha256"])
+    contract = object_json(contract_raw, "external-projection-contract")
+    lifecycle = object_json(lifecycle_raw, "external-projection-lifecycle")
+    validate_contract(contract)
+    if (intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("authorizationGranted") is not False or
+            intent.get("rootPolicySha256") != args.root_policy_sha256 or
+            intent.get("reviewOutput") != str(lifecycle_path.parent / "generation-review.private.json") or
+            intent.get("commandsSha256") != digest_bytes(b"") or
+            intent.get("reconciliation") != {"chain": [], "completed": [], "subordinateAbsences": []} or
+            not isinstance(intent.get("executionContract"), dict) or
+            intent["executionContract"].get("canonicalLock") != str(args.deployment_lock) or
+            intent["executionContract"].get("writerLock") != contract["writerLockPath"] or
+            any(intent.get(key) != contract.get(key) for key in ("generationId", "releaseId", "targetCommit")) or
+            intent.get("externalHandoff") != lifecycle.get("externalHandoff") or
+            intent.get("commands") != [] or
+            [{key: value for key, value in item.items() if key != "retentionState"} for item in artifacts]
+            != contract["artifacts"]):
+        deny("external_projection_intent")
+    return authenticate_external_projection(contract, lifecycle, contract_path, lifecycle_path,
+                                            intent["lifecycleSha256"], args)
 
 
 def stable_external_package(path: Path, expected_sha: str) -> None:
@@ -3245,6 +3395,14 @@ def prepare(args: argparse.Namespace) -> None:
     writer_fd = acquire_existing_lock(Path(contract["writerLockPath"]))
     try:
         fresh = capture_fresh_operational(operational)
+        external = "externalHandoff" in lifecycle
+        if external:
+            authenticate_external_projection(contract, lifecycle, args.contract, args.lifecycle,
+                                             args.lifecycle_sha256, args)
+            if (contract["releaseId"] not in operational["candidateReleases"] or
+                    contract["releaseId"] not in operational["installedVerifiedReleases"] or
+                    contract["releaseId"] in operational["activeReleases"]):
+                deny("external_projection_candidate")
         failed_build_worktree = authenticate_failed_build_worktree_disposition(
             contract, lifecycle, operational, args.contract, args.contract_sha256,
             args.lifecycle, args.lifecycle_sha256)
@@ -3305,6 +3463,10 @@ def prepare(args: argparse.Namespace) -> None:
         }
         if failed_build_worktree is not None:
             intent["failedBuildWorktreeDisposition"] = failed_build_worktree
+        if external:
+            if commands:
+                deny("external_projection_command_scope")
+            intent["externalHandoff"] = lifecycle["externalHandoff"]
         intent_raw = canonical(intent)
         commands_raw = ("\n".join(command["literal"] for command in commands) + ("\n" if commands else "")).encode()
         write_exclusive(args.commands_output, commands_raw)
@@ -3358,7 +3520,7 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation",
                 "rootPolicySha256", "reviewOutput", "reconciliation"}
     required.add("legacyMigration")
-    optional = {"failedBuildWorktreeDisposition"}
+    optional = {"failedBuildWorktreeDisposition", "externalHandoff"}
     if (not required.issubset(intent) or not set(intent).issubset(required | optional) or
             intent.get("schemaVersion") != 3 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
@@ -3427,6 +3589,9 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 len(commands) != 1 or
                 commands[0]["class"] != "DERIVED_WORKTREE"):
             deny("intent_failed_build_worktree_commands")
+    if "externalHandoff" in intent and (commands or failed_build_worktree is not None or
+            intent["reconciliation"] != {"chain": [], "completed": [], "subordinateAbsences": []}):
+        deny("external_projection_command_scope")
     return commands
 
 
@@ -3479,6 +3644,16 @@ def execute(args: argparse.Namespace) -> None:
         # ATTEMPT. A stale prepare snapshot cannot authorize a deletion.
         validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
         fresh = capture_fresh_operational(operational)
+        if "externalHandoff" in intent or "externalHandoff" in persisted_lifecycle:
+            if operational["deploymentState"]["state"] != "DEPLOYED":
+                deny("external_projection_deployed_required")
+            evidence = authenticate_external_retirement_intent(args, intent)
+            marker_raw, _ = stable_private(Path(evidence["installedPath"]) / "DEPLOYED")
+            marker = object_json(marker_raw, "external-projection-marker")
+            if (marker.get("release") != evidence["releaseId"] or marker.get("target") != evidence["targetCommit"] or
+                    marker.get("accepted") != "ACEITE TÉCNICO PASS" or
+                    marker.get("dumpSha256") != fresh["dumpSha256"]):
+                deny("external_projection_marker")
         failed_build_worktree = authenticate_failed_build_worktree_disposition(
             persisted_contract, persisted_lifecycle, operational,
             contract_path, intent["contractSha256"],
@@ -4188,6 +4363,17 @@ def parser() -> argparse.ArgumentParser:
         handoff_parser.add_argument(f"--{name}", type=Path, required=True)
         handoff_parser.add_argument(f"--{name}-sha256", required=True)
     handoff_parser.set_defaults(handler=verify_external_handoff)
+    materialize_parser = commands.add_parser("materialize-external-retirement")
+    check_parser = commands.add_parser("check-external-retirement")
+    for operation_parser, input_name in ((materialize_parser, "handoff"), (check_parser, "intent")):
+        for name in (input_name, "root-policy"):
+            operation_parser.add_argument(f"--{name}", type=Path, required=True)
+            operation_parser.add_argument(f"--{name}-sha256", required=True)
+    check_parser.add_argument("--authorization", type=Path, required=True)
+    check_parser.add_argument("--authorization-sha256", required=True)
+    check_parser.add_argument("--deployment-lock", type=Path, required=True)
+    materialize_parser.set_defaults(handler=materialize_external_retirement)
+    check_parser.set_defaults(handler=check_external_retirement)
     bootstrap_parser = commands.add_parser("bootstrap-legacy")
     bootstrap_parser.add_argument("--descriptor", type=Path, required=True)
     bootstrap_parser.add_argument("--descriptor-sha256", required=True)

@@ -383,9 +383,26 @@ com os três comandos registrados no journal. A prova é comparada com os caminh
 originais, sem consultar esses caminhos a partir da VPS. O verificador relê
 o SHA do pacote por streaming e confere a instalação inerte já existente.
 `EXTERNAL_HANDOFF_EVIDENCE_VERIFIED` encerra apenas essa conferência.
-A emissão de evidência no builder e o consumo no preflight e na finalização
-continuam pendentes de integração. O teste usa fechamento sintético e executa
-build, cópia, instalação e verificação reais em duas raízes descartáveis.
+
+1. Com a prova real do builder em custódia, usar `materialize-external-retirement`
+   com os mesmos argumentos do verificador. A projeção exclusiva no output
+   canônico local contém lifecycle e contrato novos, com a release instalada e
+   a referência à evidência original. Nenhum caminho remoto se torna alvo local.
+2. Rodar o `prepare` canônico com fotografia fresca que vincule a release como
+   candidata e instalada verificada. A intenção precisa ter zero comandos.
+   A autorização local usa `AUTHORIZE_ONCE` com `approvedPaths=[]` e o SHA
+   dessa intenção. A autorização de ativação pertence à janela de produção.
+3. O driver reabre a intenção, a autorização e a prova externa no preflight,
+   antes de trocar a API e antes do primeiro save. O fechamento relê a prova
+   sob os locks canônicos e exige grafo ativo, marker e dump correspondentes.
+   O receipt local registra zero comandos e o frontend preservado mantém a
+   sua release no grafo ativo, inclusive quando compartilha o retorno da API.
+
+O ensaio usa prova sintética de retirada no builder, build e instalação reais
+em duas raízes descartáveis e execução real da retenção local sem comandos. A
+troca API-only e a checagem antes do save são exercitadas com PM2 simulado.
+O piloto depende do receipt e do journal reais do builder. Preservar a
+instalação inerte até a conclusão desse gate e do preflight na VPS.
 
 ## Fechamento da janela fa63994a e dívida remanescente
 
