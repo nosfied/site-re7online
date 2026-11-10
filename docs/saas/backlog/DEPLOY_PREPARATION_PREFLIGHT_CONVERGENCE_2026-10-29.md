@@ -417,6 +417,61 @@ vinculado ao original antes do novo prepare. A correção preventiva não autent
 a retirada anterior nem autoriza substituir hashes para aceitar drift. Preservar a
 instalação inerte até a conclusão desse gate e do preflight na VPS.
 
+### Preservação autorizada do builder sem baseline histórico
+
+Quando não existe inventário anterior detalhado, a alternativa implementada é
+preservar os três derivados e registrar a dívida; não apagar o resíduo nem
+reconstruir o baseline. O contrato e o lifecycle originais permanecem intactos.
+A rota destrutiva abaixo continua exigindo a prova histórica completa.
+
+No builder, criar uma custódia exclusiva e um request privado schema 1 com
+`contract`, `lifecycle` e `rootPolicy` como pares `path`/`sha256`, o
+`deploymentLock` existente, `responsible`, `expiresAtUtc` futuro em UTC e `reason`.
+Usar os caminhos reais e hashes da geração v2; não substituir documentos originais.
+O consumidor autentica as raízes e a identidade original do worktree, mede seu
+estado atual e exige que os dois runtimes continuem idênticos ao contrato.
+A medida `retainedBytes` soma conservadoramente os blocos físicos por raiz;
+`historicalInventoryEquivalence=false` declara a ausência da equivalência histórica.
+
+```sh
+python3 -B scripts/generation-retirement.py prepare-builder-preservation \
+  --request <request> --request-sha256 <sha> --intent-output <intenção>
+python3 -B scripts/generation-retirement.py record-builder-preservation \
+  --intent <intenção> --intent-sha256 <sha> \
+  --authorization <autorização> --authorization-sha256 <sha> \
+  --receipt-root <destino-exclusivo>
+```
+
+Entre os comandos, revisar a intenção de zero comandos e vincular uma autorização
+schema 1 `AUTHORIZE_ONCE`, com `authorizationId`, `owner`, `intentSha256` e
+`approvedPaths=[]`. O registro revalida a captura sob os dois locks existentes,
+arquiva a review anterior quando presente e emite receipt e journal privados.
+A nova review `PRESERVE_OVERRIDE` vincula responsável, bytes, prazo e receipt.
+Os originais, o worktree com o bytecode e os dois runtimes não são retirados.
+Divergência ou destino de receipt já existente encerra a execução; não há retry.
+
+Copiar para custódia privada na VPS as provas originais e os novos intent,
+autorização, receipt, journal e review, autenticando cada SHA. O handoff schema 2
+mantém os campos do schema 1 e acrescenta o binding `review`. Ele exige a cadeia
+`PRESERVATION_OBSERVED → PRESERVATION_AUTHORIZED → PRESERVATION_RECORDED`,
+zero comandos destrutivos, responsável e prazo futuro. A verificação do pacote e
+da instalação permanece integral e independente da preservação.
+
+Prosseguir com `verify-external-handoff`, `materialize-external-retirement` e
+`prepare` locais existentes. A intenção e a autorização locais também têm zero
+comandos e `approvedPaths=[]`. O driver reabre a prova no preflight, antes da
+ativação e antes do save; o fechamento usa a continuação canônica e seu lock herdado.
+O resultado esperado é `DEPLOYED_RETENTION_INCOMPLETE`, `saveCount=1`, receipt
+local com `externalRetentionDebt` e review `QUARANTINED`, nunca `SANITIZED`.
+A dívida continua sujeita a disposição própria; o prazo não autoriza exclusão.
+
+A regressão integrada exercita produtor, pacote, instalação, provas, projeção,
+preflight, ativação API-only, aceite, continuação de finalização e retenção reais
+em raízes descartáveis, com PM2 e processos simulados. Verifica o exit code do
+executor real, um único save, liberação terminal do lock e frontend/worker
+preservados. O marker novo `DEPLOYED` usa `0600`, conforme o verificador.
+Isso qualifica o código; somente evidências produtivas comprovam a entrega na VPS.
+
 ### Disposição do bytecode e contrato sucessor
 
 O consumidor existente oferece `prepare-worktree-residue` e

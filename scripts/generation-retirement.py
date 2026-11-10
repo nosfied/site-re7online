@@ -2108,6 +2108,234 @@ def canonical_release_verifier() -> Path:
     return Path(__file__).resolve().with_name("converta-release.py")
 
 
+def preservation_deadline(value: Any) -> None:
+    try:
+        expires = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        deny("builder_preservation_expiry")
+    if (expires.tzinfo is None or expires.utcoffset() != dt.timedelta(0) or
+            expires <= dt.datetime.now(dt.timezone.utc)):
+        deny("builder_preservation_expiry")
+
+
+def preservation_snapshot(request: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    fields = {"schemaVersion", "contract", "lifecycle", "rootPolicy",
+              "deploymentLock", "responsible", "expiresAtUtc", "reason"}
+    if (set(request) != fields or request.get("schemaVersion") != 1 or
+            any(not isinstance(request.get(key), str) or not request[key].strip()
+                for key in ("responsible", "reason")) or
+            not Path(str(request["deploymentLock"])).is_absolute()):
+        deny("builder_preservation_request")
+    preservation_deadline(request["expiresAtUtc"])
+    _, contract_sha, contract_raw = _closed_file_binding(request["contract"], "preservation:contract")
+    _, lifecycle_sha, lifecycle_raw = _closed_file_binding(request["lifecycle"], "preservation:lifecycle")
+    contract = object_json(contract_raw, "builder-preservation-contract")
+    lifecycle = object_json(lifecycle_raw, "builder-preservation-lifecycle")
+    validate_contract(contract)
+    if (contract["state"] != "COMPLETE" or
+            not re.fullmatch(r"immutable-[0-9a-f]{8}-external-[0-9]{8}T[0-9]{6}Z", contract["releaseId"]) or
+            lifecycle.get("state") != "COMPLETE" or lifecycle.get("generationId") != contract["generationId"] or
+            lifecycle.get("targetCommit") != contract["targetCommit"]):
+        deny("builder_preservation_generation")
+    policy = residue_policy(request)
+    for root_name in ("repository", "worktrees", "outputs", "releases"):
+        authenticate_policy_root(policy, root_name)
+    operational = {"canonicalRoots": policy["canonicalRoots"]}
+    validate_artifact_roots(contract, operational, policy)
+    observed = []
+    for artifact in contract["artifacts"]:
+        path = Path(artifact["path"])
+        if artifact["class"] == "DERIVED_WORKTREE":
+            info = path.lstat()
+            if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                    artifact["observedIdentity"] != {"device": info.st_dev, "inode": info.st_ino}):
+                deny("builder_preservation_worktree_identity")
+        else:
+            authenticate_artifact(artifact)
+        if artifact["class"] in {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}:
+            if not path.is_dir() or path.is_symlink():
+                deny("builder_preservation_path")
+            info = path.lstat()
+            observed.append({"path": str(path), "class": artifact["class"],
+                             "identity": {"device": info.st_dev, "inode": info.st_ino},
+                             **structural_metrics(path)})
+        elif artifact["class"] in DERIVED_CLASSES and not (
+                artifact["class"] == "DERIVED_STAGING" and
+                artifact.get("removedAtProducerCompletion") is True and
+                not path.exists() and not path.is_symlink()):
+            deny("builder_preservation_scope")
+    if [item["class"] for item in observed] != ["DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_OUTPUT_RUNTIME"]:
+        deny("builder_preservation_scope")
+    review = Path(request["contract"]["path"]).parent / "generation-review.private.json"
+    review_sha = digest_bytes(stable_private(review)[0]) if review.exists() or review.is_symlink() else None
+    snapshot = {"releaseId": contract["releaseId"], "targetCommit": contract["targetCommit"],
+                "contractSha256": contract_sha, "lifecycleSha256": lifecycle_sha,
+                "historicalInventoryEquivalence": False, "artifacts": observed,
+                "retainedBytes": sum(item["allocatedBytes"] for item in observed),
+                "accounting": "CONSERVATIVE_SUM_OF_PER_ROOT_PHYSICAL_BYTES",
+                "previousReviewSha256": review_sha}
+    return contract, operational, snapshot
+
+
+def prepare_builder_preservation(args: argparse.Namespace) -> None:
+    request_raw, _ = stable_private(args.request, args.request_sha256)
+    request = object_json(request_raw, "builder-preservation-request")
+    _, _, original_raw = _closed_file_binding(request.get("contract"), "preservation:contract")
+    original = object_json(original_raw, "builder-preservation-contract")
+    lock = acquire_existing_lock(Path(str(request.get("deploymentLock", ""))))
+    try:
+        writer = acquire_existing_lock(Path(original["writerLockPath"]))
+        try:
+            _, operational, snapshot = preservation_snapshot(request)
+            evidence_destination(args.intent_output, operational)
+            intent = {"schemaVersion": 1, "kind": "PRESERVE_EXTERNAL_BUILDER",
+                      "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION", "request": request,
+                      "snapshot": snapshot, "commands": []}
+            write_exclusive(args.intent_output, canonical(intent))
+            print(canonical({"result": "BUILDER_PRESERVATION_PREPARED",
+                             "intentSha256": digest_bytes(canonical(intent)), "commands": [],
+                             "retainedBytes": snapshot["retainedBytes"]}).decode().strip())
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
+
+
+def record_builder_preservation(args: argparse.Namespace) -> None:
+    intent_raw, _ = stable_private(args.intent, args.intent_sha256)
+    authorization_raw, _ = stable_private(args.authorization, args.authorization_sha256)
+    intent = object_json(intent_raw, "builder-preservation-intent")
+    auth = object_json(authorization_raw, "builder-preservation-authorization")
+    if (set(intent) != {"schemaVersion", "kind", "state", "request", "snapshot", "commands"} or
+            intent["schemaVersion"] != 1 or intent["kind"] != "PRESERVE_EXTERNAL_BUILDER" or
+            intent["state"] != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or intent["commands"] != [] or
+            set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+            auth.get("intentSha256") != args.intent_sha256 or auth.get("approvedPaths") != [] or
+            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+        deny("builder_preservation_authorization")
+    request = intent["request"]
+    _, _, original_raw = _closed_file_binding(request["contract"], "preservation:contract")
+    original = object_json(original_raw, "builder-preservation-contract")
+    lock = acquire_existing_lock(Path(request["deploymentLock"]))
+    try:
+        writer = acquire_existing_lock(Path(original["writerLockPath"]))
+        try:
+            contract, operational, snapshot = preservation_snapshot(request)
+            if snapshot != intent["snapshot"]:
+                deny("builder_preservation_prepare_drift")
+            evidence_destination(args.receipt_root, operational)
+            review = Path(request["contract"]["path"]).parent / "generation-review.private.json"
+            canonical_review_destination(review, Path(request["contract"]["path"]),
+                                         Path(request["lifecycle"]["path"]), residue_policy(request))
+            args.receipt_root.mkdir(mode=0o700)
+            if snapshot["previousReviewSha256"] is not None:
+                prior_raw, _ = stable_private(review, snapshot["previousReviewSha256"])
+                write_exclusive(args.receipt_root / "previous-review.private.json", prior_raw)
+            journal = args.receipt_root / "preservation-journal.private.jsonl"
+            write_exclusive(journal, b"")
+            events = [
+                {"event": "PRESERVATION_OBSERVED", "intentSha256": args.intent_sha256,
+                 "snapshotSha256": digest_bytes(canonical(snapshot))},
+                {"event": "PRESERVATION_AUTHORIZED", "authorizationSha256": args.authorization_sha256},
+                {"event": "PRESERVATION_RECORDED", "destructiveCommands": 0},
+            ]
+            for event in events:
+                append_event(journal, event)
+            receipt = {"schemaVersion": 1, "state": "PRESERVED_RETENTION_DEBT",
+                       "intentSha256": args.intent_sha256, "authorizationSha256": args.authorization_sha256,
+                       "journalSha256": digest_bytes(journal.read_bytes()),
+                       "snapshotSha256": digest_bytes(canonical(snapshot)),
+                       "historicalInventoryEquivalence": False, "destructiveCommands": 0,
+                       "retainedBytes": snapshot["retainedBytes"], "responsible": request["responsible"],
+                       "expiresAtUtc": request["expiresAtUtc"],
+                       "preservedPaths": [item["path"] for item in snapshot["artifacts"]]}
+            receipt_raw = canonical(receipt)
+            write_exclusive(args.receipt_root / "preservation-receipt.private.json", receipt_raw)
+            value = {"schemaVersion": 2, "generationId": contract["generationId"],
+                     "lifecycleSha256": request["lifecycle"]["sha256"], "state": "PRESERVE_OVERRIDE",
+                     "reviewer": auth["owner"], "reason": request["reason"],
+                     "evidenceSha256": digest_bytes(receipt_raw), "retainedBytes": snapshot["retainedBytes"],
+                     "responsible": request["responsible"], "expiresAtUtc": request["expiresAtUtc"]}
+            replace_private(review, canonical(value))
+            stable_private(review, digest_bytes(canonical(value)))
+            print(canonical({"result": receipt["state"], "receiptSha256": digest_bytes(receipt_raw),
+                             "reviewSha256": digest_bytes(canonical(value)), "destructiveCommands": 0}).decode().strip())
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
+
+
+def authenticate_builder_preservation(bindings: dict[str, Any], contract: dict[str, Any],
+                                      builder_policy_sha: str) -> dict[str, Any]:
+    intent = object_json(bindings["intent"][2], "builder-preservation-intent")
+    authorization = object_json(bindings["authorization"][2], "builder-preservation-authorization")
+    receipt = object_json(bindings["receipt"][2], "builder-preservation-receipt")
+    review = object_json(bindings["review"][2], "builder-preservation-review")
+    if (set(intent) != {"schemaVersion", "kind", "state", "request", "snapshot", "commands"} or
+            intent["schemaVersion"] != 1 or intent["kind"] != "PRESERVE_EXTERNAL_BUILDER" or
+            intent["state"] != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or intent["commands"] != []):
+        deny("builder_preservation_intent")
+    request, snapshot = intent["request"], intent["snapshot"]
+    preservation_deadline(request.get("expiresAtUtc"))
+    if (request.get("schemaVersion") != 1 or
+            any(not isinstance(request.get(key), str) or not request[key].strip() for key in ("responsible", "reason")) or
+            request.get("contract", {}).get("sha256") != bindings["contract"][1] or
+            request.get("lifecycle", {}).get("sha256") != bindings["lifecycle"][1] or
+            request.get("rootPolicy", {}).get("sha256") != builder_policy_sha or
+            snapshot.get("releaseId") != contract["releaseId"] or snapshot.get("targetCommit") != contract["targetCommit"] or
+            snapshot.get("contractSha256") != bindings["contract"][1] or
+            snapshot.get("lifecycleSha256") != bindings["lifecycle"][1] or
+            snapshot.get("historicalInventoryEquivalence") is not False or
+            snapshot.get("accounting") != "CONSERVATIVE_SUM_OF_PER_ROOT_PHYSICAL_BYTES"):
+        deny("builder_preservation_binding")
+    expected = [item for item in contract["artifacts"] if item["class"] in
+                {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
+    observations = snapshot.get("artifacts")
+    if (not isinstance(observations, list) or len(expected) != 3 or len(observations) != 3 or
+            [(item.get("path"), item.get("class")) for item in observations] !=
+            [(item["path"], item["class"]) for item in expected]):
+        deny("builder_preservation_scope")
+    for original, observed in zip(expected, observations):
+        if (set(observed) != {"path", "class", "identity", "sizeBytes", "allocatedBytes", "inodes", "structuralSha256"} or
+                observed["identity"] != original["observedIdentity"] or
+                any(type(observed[key]) is not int or observed[key] < 0 for key in ("sizeBytes", "allocatedBytes", "inodes")) or
+                not SHA256.fullmatch(str(observed["structuralSha256"]))):
+            deny("builder_preservation_snapshot")
+        if original["class"] != "DERIVED_WORKTREE" and any(observed[key] != original[key] for key in
+                ("sizeBytes", "allocatedBytes", "inodes", "structuralSha256")):
+            deny("builder_preservation_runtime_drift")
+    retained = sum(item["allocatedBytes"] for item in observations)
+    if (set(authorization) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+            authorization.get("schemaVersion") != 1 or authorization.get("decision") != "AUTHORIZE_ONCE" or
+            authorization.get("intentSha256") != bindings["intent"][1] or authorization.get("approvedPaths") != [] or
+            not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
+        deny("builder_preservation_authorization")
+    paths = [item["path"] for item in observations]
+    expected_events = [
+        {"event": "PRESERVATION_OBSERVED", "intentSha256": bindings["intent"][1],
+         "snapshotSha256": digest_bytes(canonical(snapshot))},
+        {"event": "PRESERVATION_AUTHORIZED", "authorizationSha256": bindings["authorization"][1]},
+        {"event": "PRESERVATION_RECORDED", "destructiveCommands": 0},
+    ]
+    if (snapshot.get("retainedBytes") != retained or _read_journal(bindings["journal"][2]) != expected_events or
+            receipt != {"schemaVersion": 1, "state": "PRESERVED_RETENTION_DEBT",
+                        "intentSha256": bindings["intent"][1], "authorizationSha256": bindings["authorization"][1],
+                        "journalSha256": bindings["journal"][1], "snapshotSha256": digest_bytes(canonical(snapshot)),
+                        "historicalInventoryEquivalence": False, "destructiveCommands": 0,
+                        "retainedBytes": retained, "responsible": request["responsible"],
+                        "expiresAtUtc": request["expiresAtUtc"], "preservedPaths": paths} or
+            review != {"schemaVersion": 2, "generationId": contract["generationId"],
+                       "lifecycleSha256": bindings["lifecycle"][1], "state": "PRESERVE_OVERRIDE",
+                       "reviewer": authorization["owner"], "reason": request["reason"],
+                       "evidenceSha256": bindings["receipt"][1], "retainedBytes": retained,
+                       "responsible": request["responsible"], "expiresAtUtc": request["expiresAtUtc"]}):
+        deny("builder_preservation_closure")
+    return {"state": "PRESERVED_RETENTION_DEBT", "responsible": request["responsible"],
+            "retainedBytes": retained, "expiresAtUtc": request["expiresAtUtc"], "preservedPaths": paths}
+
+
 def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: bool) -> dict[str, Any]:
     """Verify an inert installation and a single completed builder retirement."""
     raw, _ = stable_private(args.handoff, args.handoff_sha256)
@@ -2115,15 +2343,17 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
     fields = {"schemaVersion", "builderPolicy", "contract", "lifecycle",
               "intent", "authorization", "receipt", "journal", "installation",
               "packagePath", "canonicalVerifierSha256"}
-    if (set(handoff) != fields or handoff.get("schemaVersion") != 1 or
+    if (handoff.get("schemaVersion") not in {1, 2} or
+            set(handoff) != (fields | {"review"} if handoff.get("schemaVersion") == 2 else fields) or
             not SHA256.fullmatch(str(handoff.get("canonicalVerifierSha256", "")))):
         deny("external_handoff_schema")
     policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
     local_policy = validate_root_policy(policy_raw, args.root_policy_sha256)
     evidence_input(args.handoff, local_policy)
-    bindings = {key: _closed_file_binding(handoff[key], f"external_handoff:{key}")
-                for key in ("builderPolicy", "contract", "lifecycle", "intent",
-                            "authorization", "receipt", "journal", "installation")}
+    names = ["builderPolicy", "contract", "lifecycle", "intent", "authorization", "receipt", "journal", "installation"]
+    if handoff["schemaVersion"] == 2:
+        names.append("review")
+    bindings = {key: _closed_file_binding(handoff[key], f"external_handoff:{key}") for key in names}
     _, builder_policy_sha, builder_policy_raw = bindings["builderPolicy"]
     builder = validate_root_policy(builder_policy_raw, builder_policy_sha)["canonicalRoots"]
     contract = object_json(bindings["contract"][2], "external-builder-contract")
@@ -2179,54 +2409,58 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
     _strict_child(Path(staging[0]["path"]), outputs, "external_handoff_builder_staging")
     if Path(staging[0]["path"]).parent != outputs:
         deny("external_handoff_builder_staging")
-    intent = object_json(bindings["intent"][2], "external-builder-intent")
-    auth = object_json(bindings["authorization"][2], "external-builder-authorization")
-    receipt = object_json(bindings["receipt"][2], "external-builder-receipt")
-    if (intent.get("reconciliation") != {"chain": [], "completed": [], "subordinateAbsences": []} or
-            intent.get("legacyMigration") is not None or "failedBuildWorktreeDisposition" in intent or
-            (intent.get("generationId"), intent.get("releaseId"), intent.get("targetCommit"),
-             intent.get("contractSha256"), intent.get("lifecycleSha256")) !=
-            (release, release, target, bindings["contract"][1], bindings["lifecycle"][1])):
-        deny("external_handoff_intent_binding")
-    commands = validate_intent(intent, {"canonicalRoots": builder,
-                                       "controlPlaneArtifacts": intent.get("controlPlaneArtifacts"),
-                                       "gitRepository": builder["repository"]}, builder_policy_sha)
-    expected = [(ordinal, item) for ordinal, item in enumerate(contract["artifacts"], 1)
-                if item["class"] in {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
-    paths = [item["path"] for _, item in expected]
-    if ([(item["ordinal"], item["path"]) for item in commands] !=
-            [(ordinal, item["path"]) for ordinal, item in expected] or
-            [{key: value for key, value in item.items() if key != "retentionState"}
-             for item in intent["artifacts"]] != contract["artifacts"] or
-            [item["allocatedBytes"] for item in commands] != [item["allocatedBytes"] for _, item in expected] or
-            intent["executionContract"]["writerLock"] != contract["writerLockPath"]):
-        deny("external_handoff_command_scope")
-    if (set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
-            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
-            auth.get("intentSha256") != bindings["intent"][1] or auth.get("approvedPaths") != paths or
-            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
-        deny("external_handoff_authorization")
-    if (receipt.get("schemaVersion") != 1 or receipt.get("state") != "SANITIZED" or
-            receipt.get("intentSha256") != bindings["intent"][1] or
-            receipt.get("commandLogSha256") != bindings["journal"][1] or
-            receipt.get("remainingDerivedPaths") != [] or receipt.get("removedPaths") != paths or
-            receipt.get("attemptedCommands") != len(paths) or receipt.get("completedCommands") != len(paths) or
-            receipt.get("failurePredicate", "missing") is not None or receipt.get("automaticRetry") is not False or
-            receipt.get("lock") != {"canonicalHeldThroughReceiptFsync": True, "writerHeldThroughReceiptFsync": True}):
-        deny("external_handoff_retention_incomplete")
-    events = _read_journal(bindings["journal"][2])
-    if len(events) != 3 * len(commands):
-        deny("external_handoff_journal_scope")
-    for offset, command in enumerate(commands):
-        attempt, result, verified = events[3 * offset:3 * offset + 3]
-        ordinal = command["ordinal"]
-        if (attempt != {"event": "ATTEMPT", "ordinal": ordinal, "path": command["path"], "argv": command["argv"]} or
-                set(result) != {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"} or
-                result.get("event") != "RESULT" or result.get("ordinal") != ordinal or
-                any(not SHA256.fullmatch(str(result[key])) for key in ("stdoutSha256", "stderrSha256")) or
-                type(result.get("exitCode")) is not int or result["exitCode"] != 0 or
-                verified != {"event": "VERIFIED", "ordinal": ordinal, "absent": True}):
-            deny("external_handoff_journal_order")
+    external_debt = None
+    if handoff["schemaVersion"] == 2:
+        external_debt = authenticate_builder_preservation(bindings, contract, builder_policy_sha)
+    else:
+        intent = object_json(bindings["intent"][2], "external-builder-intent")
+        auth = object_json(bindings["authorization"][2], "external-builder-authorization")
+        receipt = object_json(bindings["receipt"][2], "external-builder-receipt")
+        if (intent.get("reconciliation") != {"chain": [], "completed": [], "subordinateAbsences": []} or
+                intent.get("legacyMigration") is not None or "failedBuildWorktreeDisposition" in intent or
+                (intent.get("generationId"), intent.get("releaseId"), intent.get("targetCommit"),
+                 intent.get("contractSha256"), intent.get("lifecycleSha256")) !=
+                (release, release, target, bindings["contract"][1], bindings["lifecycle"][1])):
+            deny("external_handoff_intent_binding")
+        commands = validate_intent(intent, {"canonicalRoots": builder,
+                                           "controlPlaneArtifacts": intent.get("controlPlaneArtifacts"),
+                                           "gitRepository": builder["repository"]}, builder_policy_sha)
+        expected = [(ordinal, item) for ordinal, item in enumerate(contract["artifacts"], 1)
+                    if item["class"] in {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
+        paths = [item["path"] for _, item in expected]
+        if ([(item["ordinal"], item["path"]) for item in commands] !=
+                [(ordinal, item["path"]) for ordinal, item in expected] or
+                [{key: value for key, value in item.items() if key != "retentionState"}
+                 for item in intent["artifacts"]] != contract["artifacts"] or
+                [item["allocatedBytes"] for item in commands] != [item["allocatedBytes"] for _, item in expected] or
+                intent["executionContract"]["writerLock"] != contract["writerLockPath"]):
+            deny("external_handoff_command_scope")
+        if (set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+                auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+                auth.get("intentSha256") != bindings["intent"][1] or auth.get("approvedPaths") != paths or
+                not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+            deny("external_handoff_authorization")
+        if (receipt.get("schemaVersion") != 1 or receipt.get("state") != "SANITIZED" or
+                receipt.get("intentSha256") != bindings["intent"][1] or
+                receipt.get("commandLogSha256") != bindings["journal"][1] or
+                receipt.get("remainingDerivedPaths") != [] or receipt.get("removedPaths") != paths or
+                receipt.get("attemptedCommands") != len(paths) or receipt.get("completedCommands") != len(paths) or
+                receipt.get("failurePredicate", "missing") is not None or receipt.get("automaticRetry") is not False or
+                receipt.get("lock") != {"canonicalHeldThroughReceiptFsync": True, "writerHeldThroughReceiptFsync": True}):
+            deny("external_handoff_retention_incomplete")
+        events = _read_journal(bindings["journal"][2])
+        if len(events) != 3 * len(commands):
+            deny("external_handoff_journal_scope")
+        for offset, command in enumerate(commands):
+            attempt, result, verified = events[3 * offset:3 * offset + 3]
+            ordinal = command["ordinal"]
+            if (attempt != {"event": "ATTEMPT", "ordinal": ordinal, "path": command["path"], "argv": command["argv"]} or
+                    set(result) != {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"} or
+                    result.get("event") != "RESULT" or result.get("ordinal") != ordinal or
+                    any(not SHA256.fullmatch(str(result[key])) for key in ("stdoutSha256", "stderrSha256")) or
+                    type(result.get("exitCode")) is not int or result["exitCode"] != 0 or
+                    verified != {"event": "VERIFIED", "ordinal": ordinal, "absent": True}):
+                deny("external_handoff_journal_order")
     local_releases = authenticate_policy_root(local_policy, "releases")[0]
     installed = local_releases / release
     physical_keys = ROOT_KEYS - {"evidence"}
@@ -2263,7 +2497,8 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
         stable_regular_hash(installed / "index.sha256", hashes["indexSha256"], "external_handoff_index")
     return {"releaseId": release, "targetCommit": target, "installedPath": str(installed),
             "handoffSha256": args.handoff_sha256, "builderReceiptSha256": bindings["receipt"][1],
-            "installationSha256": bindings["installation"][1], **hashes}
+            "installationSha256": bindings["installation"][1],
+            **({"externalRetentionDebt": external_debt} if external_debt is not None else {}), **hashes}
 
 
 def verify_external_handoff(args: argparse.Namespace) -> None:
@@ -4085,6 +4320,7 @@ def execute(args: argparse.Namespace) -> None:
     writer_fd = acquire_existing_lock(Path(intent["executionContract"]["writerLock"]))
     attempted = completed = 0
     removed: list[str] = []
+    external_debt = None
     receipt_state = "DEPLOYED_SANITIZED" if operational["deploymentState"]["state"] == "DEPLOYED" else "SANITIZED"
     try:
         # These observations happen only after both locks and before the first
@@ -4095,6 +4331,7 @@ def execute(args: argparse.Namespace) -> None:
             if operational["deploymentState"]["state"] != "DEPLOYED":
                 deny("external_projection_deployed_required")
             evidence = authenticate_external_retirement_intent(args, intent)
+            external_debt = evidence.get("externalRetentionDebt")
             marker_raw, _ = stable_private(Path(evidence["installedPath"]) / "DEPLOYED")
             marker = object_json(marker_raw, "external-projection-marker")
             if (marker.get("release") != evidence["releaseId"] or marker.get("target") != evidence["targetCommit"] or
@@ -4214,6 +4451,8 @@ def execute(args: argparse.Namespace) -> None:
                          else "SANITIZED") if not remaining else (
                          "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED"
                          else "RETENTION_INCOMPLETE")
+        if external_debt is not None:
+            receipt_state = "DEPLOYED_RETENTION_INCOMPLETE"
         journal_sha = digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b"")
         all_removed = [item["path"] for item in reconciliation["completed"]] + removed
         receipt = {"schemaVersion": 1, "state": receipt_state, "failurePredicate": None,
@@ -4226,12 +4465,15 @@ def execute(args: argparse.Namespace) -> None:
         subordinate_absences = _receipt_subordinate_absences(reconciliation)
         if subordinate_absences:
             receipt["subordinateAbsences"] = subordinate_absences
+        if external_debt is not None:
+            receipt["externalRetentionDebt"] = external_debt
         receipt_raw = canonical(receipt)
         write_exclusive(args.receipt_root / "execution-receipt.private.json", receipt_raw)
-        review_terminal = "SANITIZED" if not remaining else "QUARANTINED"
+        review_terminal = "SANITIZED" if not remaining and external_debt is None else "QUARANTINED"
         review = {"schemaVersion": 2, "generationId": intent["generationId"],
                   "lifecycleSha256": intent["lifecycleSha256"], "state": review_terminal,
-                  "reviewer": authorization["owner"], "reason": "derived artifacts retired",
+                  "reviewer": authorization["owner"],
+                  "reason": "external builder custody retained" if external_debt is not None else "derived artifacts retired",
                   "evidenceSha256": digest_bytes(receipt_raw)}
         replace_private(args.review_output, canonical(review))
         fsync_dir(args.receipt_root)
@@ -4922,6 +5164,17 @@ def parser() -> argparse.ArgumentParser:
     execute_parser.add_argument("--receipt-root", type=Path, required=True)
     execute_parser.add_argument("--review-output", type=Path, required=True)
     execute_parser.set_defaults(handler=execute)
+    preservation_prepare = commands.add_parser("prepare-builder-preservation")
+    preservation_prepare.add_argument("--request", type=Path, required=True)
+    preservation_prepare.add_argument("--request-sha256", required=True)
+    preservation_prepare.add_argument("--intent-output", type=Path, required=True)
+    preservation_prepare.set_defaults(handler=prepare_builder_preservation)
+    preservation_record = commands.add_parser("record-builder-preservation")
+    for name in ("intent", "authorization"):
+        preservation_record.add_argument(f"--{name}", type=Path, required=True)
+        preservation_record.add_argument(f"--{name}-sha256", required=True)
+    preservation_record.add_argument("--receipt-root", type=Path, required=True)
+    preservation_record.set_defaults(handler=record_builder_preservation)
     return root
 
 

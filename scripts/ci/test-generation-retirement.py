@@ -1012,6 +1012,47 @@ class LegacyP00InstalledBatchFixture:
 
 class GenerationRetirementTest(unittest.TestCase):
 
+    def test_builder_preservation_accepts_current_custody_without_prior_inventory_and_never_deletes(self):
+        fixture, residue_args, _, residue = self.residue_fixture()
+        Path(json.loads(residue_args.request.read_bytes())["baseline"]["path"]).unlink()
+        request = fixture.evidence_root / "preserve-request.private.json"
+        bind = lambda path: {"path": str(path), "sha256": sha(path)}
+        private_json(request, {
+            "schemaVersion": 1, "contract": bind(fixture.contract), "lifecycle": bind(fixture.lifecycle),
+            "rootPolicy": bind(fixture.policy), "deploymentLock": str(fixture.deploy_lock),
+            "responsible": "fixture-owner", "expiresAtUtc": "2099-01-01T00:00:00Z",
+            "reason": "retain the full builder custody",
+        })
+        intent = fixture.evidence_root / "preserve-intent.private.json"
+        originals = {path: path.read_bytes() for path in (fixture.contract, fixture.lifecycle, residue)}
+        measured = {str(path): MODULE.structural_metrics(path) for path in (fixture.worktree, fixture.api, fixture.frontend)}
+        with redirect_stdout(io.StringIO()):
+            MODULE.prepare_builder_preservation(SimpleNamespace(
+                request=request, request_sha256=sha(request), intent_output=intent))
+        self.assertEqual(json.loads(intent.read_bytes())["commands"], [])
+        auth = fixture.evidence_root / "preserve-authorization.private.json"
+        private_json(auth, {"schemaVersion": 1, "authorizationId": "preserve-only",
+                           "decision": "AUTHORIZE_ONCE", "intentSha256": sha(intent),
+                           "approvedPaths": [], "owner": "fixture-owner"})
+        args = SimpleNamespace(intent=intent, intent_sha256=sha(intent), authorization=auth,
+                               authorization_sha256=sha(auth), receipt_root=fixture.evidence_root / "preserved")
+        with patch.object(MODULE.subprocess, "run") as mutations:
+            with redirect_stdout(io.StringIO()):
+                MODULE.record_builder_preservation(args)
+            mutations.assert_not_called()
+        for path, raw in originals.items():
+            self.assertEqual(path.read_bytes(), raw)
+        self.assertEqual({str(path): MODULE.structural_metrics(path)
+                          for path in (fixture.worktree, fixture.api, fixture.frontend)}, measured)
+        receipt = json.loads((args.receipt_root / "preservation-receipt.private.json").read_bytes())
+        self.assertEqual(receipt["state"], "PRESERVED_RETENTION_DEBT")
+        self.assertFalse(receipt["historicalInventoryEquivalence"])
+        self.assertEqual(receipt["destructiveCommands"], 0)
+        review = json.loads(fixture.review.read_bytes())
+        self.assertEqual(review["state"], "PRESERVE_OVERRIDE")
+        with self.assertRaises(MODULE.Denied):
+            MODULE.record_builder_preservation(args)
+
     def residue_fixture(self):
         fixture = Fixture(candidate=True, deployed=False,
                           release_id="immutable-aaaaaaaa-external-20261110T000000Z")

@@ -260,7 +260,7 @@ def atomic_marker(path: Path, value: dict[str, Any]) -> None:
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temp = Path(temporary)
     try:
-        os.fchmod(fd, 0o644)
+        os.fchmod(fd, 0o600)
         with os.fdopen(fd, "wb", closefd=True) as stream:
             stream.write(raw); stream.flush(); os.fsync(stream.fileno())
         if path.exists():

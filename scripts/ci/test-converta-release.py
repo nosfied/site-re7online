@@ -150,7 +150,7 @@ class ReleaseProducerTest(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory(prefix="converta-release-test-")
         cls.base = Path(cls.temp.name)
         cls.repo, cls.target, cls.env = fixture_repo(cls.base)
-        cls.release_id = "immutable-fixture-20261023T000000Z"
+        cls.release_id = f"immutable-{cls.target[:8]}-external-20261023T000000Z"
         worktrees = cls.base / "build-worktrees"
         cls.outputs = cls.base / "build-output"; cls.outputs.mkdir()
         cls.releases = cls.base / "releases"; cls.releases.mkdir()
@@ -502,7 +502,259 @@ class ReleaseProducerTest(unittest.TestCase):
                 self.assertEqual(denied.returncode, 2, denied.stderr)
                 self.assertIn("external_handoff_package_hash_or_drift", denied.stderr)
 
-    def check_external_retirement_route(self, receiver, policy_path, policy, manifest, bind) -> None:
+    def test_preserved_builder_handoff_closes_with_explicit_retention_debt(self) -> None:
+        tool = ROOT / "scripts/generation-retirement.py"
+        bind = lambda path: {"path": str(path), "sha256": MODULE.sha256_bytes(path.read_bytes())}
+        custody = self.base / "evidence" / "preservation"
+        custody.mkdir(mode=0o700)
+        lock = self.base / ".deployment-window.lock"
+        write(lock, "", 0o600)
+        contract = self.output_a / "generation-artifacts.private.json"
+        lifecycle = self.output_a / "generation-lifecycle.private.json"
+        review = self.output_a / "generation-review.private.json"
+        original_review = review.read_bytes()
+        request = custody / "request.private.json"
+        write(request, json.dumps({
+            "schemaVersion": 1, "contract": bind(contract), "lifecycle": bind(lifecycle),
+            "rootPolicy": bind(self.root_policy), "deploymentLock": str(lock),
+            "responsible": "fixture-owner", "expiresAtUtc": "2099-01-01T00:00:00Z",
+            "reason": "retain source custody without historical inventory",
+        }), 0o600)
+        intent = custody / "intent.private.json"
+
+        def run(command, **inputs):
+            argv = [sys.executable, "-B", str(tool), command]
+            for key, path in inputs.items():
+                argv.extend([f"--{key.replace('_', '-')}", str(path)])
+                if key in {"request", "intent", "authorization", "handoff", "root_policy"}:
+                    argv.extend([f"--{key.replace('_', '-')}-sha256", bind(path)["sha256"]])
+            return subprocess.run(argv, text=True, capture_output=True)
+
+        prepared = run("prepare-builder-preservation", request=request, intent_output=intent)
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        self.assertEqual(json.loads(intent.read_bytes())["commands"], [])
+        authorization = custody / "authorization.private.json"
+        value = {"schemaVersion": 1, "authorizationId": "preserve-once", "decision": "AUTHORIZE_ONCE",
+                 "intentSha256": bind(intent)["sha256"], "approvedPaths": [], "owner": "fixture-owner"}
+        write(authorization, json.dumps({**value, "approvedPaths": [str(self.repo)]}), 0o600)
+        receipt_root = custody / "receipt"
+        denied = run("record-builder-preservation", intent=intent, authorization=authorization, receipt_root=receipt_root)
+        self.assertEqual(denied.returncode, 2, denied.stderr)
+        self.assertFalse(receipt_root.exists())
+        write(authorization, json.dumps(value), 0o600)
+        recorded = run("record-builder-preservation", intent=intent, authorization=authorization, receipt_root=receipt_root)
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+        self.assertEqual(json.loads(recorded.stdout)["result"], "PRESERVED_RETENTION_DEBT")
+        try:
+            # Other tests deliberately leave unrelated failed generations in outputs.
+            # Check the real producer gate against only this generation's closure.
+            with tempfile.TemporaryDirectory(prefix="preservation-review-gate-") as gate:
+                generation = Path(gate) / self.release_id
+                generation.mkdir()
+                for source in (lifecycle, review):
+                    write(generation / source.name, source.read_text(), 0o600)
+                MODULE.require_generation_reviews(Path(gate))
+            with tempfile.TemporaryDirectory(prefix="preserved-builder-receiver-") as directory:
+                receiver = Path(directory)
+                policy = json.loads(self.root_policy.read_bytes())
+                for key, definition in policy["canonicalRoots"].items():
+                    entry = definition[0] if key == "evidence" else definition
+                    destination = receiver / key
+                    destination.mkdir(mode=0o700 if key == "evidence" else 0o755)
+                    entry.update(path=str(destination), allowedModes=["0700" if key == "evidence" else "0755"])
+                receiver_policy = receiver / "policy.private.json"
+                write(receiver_policy, json.dumps(policy), 0o600)
+                evidence = receiver / "evidence"
+                package = evidence / self.package.name
+                shutil.copyfile(self.package, package)
+                installed = invoke("install", "--package", str(package), "--target", self.target,
+                                   "--release-id", self.release_id, "--components", COMPONENTS,
+                                   "--installed-releases-root", str(receiver / "releases"),
+                                   "--root-policy", str(receiver_policy),
+                                   "--root-policy-sha256", bind(receiver_policy)["sha256"])
+                self.assertEqual(installed.returncode, 0, installed.stderr)
+                installation = evidence / "installation.private.json"
+                write(installation, installed.stdout, 0o600)
+                descriptor = {"schemaVersion": 2, "installation": bind(installation),
+                              "packagePath": str(package), "canonicalVerifierSha256": bind(PRODUCER)["sha256"]}
+                for key, source in {
+                    "builderPolicy": self.root_policy, "contract": contract, "lifecycle": lifecycle,
+                    "intent": intent, "authorization": authorization, "review": review,
+                    "receipt": receipt_root / "preservation-receipt.private.json",
+                    "journal": receipt_root / "preservation-journal.private.jsonl",
+                }.items():
+                    destination = evidence / f"{key}.private.json"
+                    shutil.copyfile(source, destination)
+                    destination.chmod(0o600)
+                    descriptor[key] = bind(destination)
+                manifest = evidence / "handoff.private.json"
+                write(manifest, json.dumps(descriptor), 0o600)
+                verified = run("verify-external-handoff", handoff=manifest, root_policy=receiver_policy)
+                self.assertEqual(verified.returncode, 0, verified.stderr)
+                debt = json.loads(verified.stdout)["externalRetentionDebt"]
+                self.assertEqual(debt["state"], "PRESERVED_RETENTION_DEBT")
+                self.assertEqual(len(debt["preservedPaths"]), 3)
+                self.check_preserved_builder_driver(receiver, receiver_policy, policy, manifest, bind, debt)
+                descriptor = json.loads(manifest.read_bytes())
+                source_intent = Path(descriptor["intent"]["path"])
+                intent_value = json.loads(source_intent.read_bytes())
+                intent_value["request"]["expiresAtUtc"] = "2000-01-01T00:00:00Z"
+                write(source_intent, json.dumps(intent_value), 0o600)
+                write(manifest, json.dumps({**descriptor, "intent": bind(source_intent)}), 0o600)
+                expired = run("verify-external-handoff", handoff=manifest, root_policy=receiver_policy)
+                self.assertEqual(expired.returncode, 2, expired.stderr)
+                self.assertIn("builder_preservation_expiry", expired.stderr)
+        finally:
+            review.write_bytes(original_review)
+        self.assertTrue(self.repo.exists())
+        self.assertTrue((self.release / "api-runtime").exists())
+        self.assertTrue((self.release / "frontend-runtime").exists())
+
+    def check_preserved_builder_driver(self, receiver, policy_path, policy, manifest, bind, debt) -> None:
+        import dataclasses
+
+        spec = importlib.util.spec_from_file_location("preserved_builder_driver_tests",
+                                                      ROOT / "scripts/ci/test-converta-deploy.py")
+        driver_tests = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(driver_tests)
+        case = driver_tests.DriverTests()
+        case.setUp()
+        try:
+            # Use the already installed, verified payload in the simulated host.
+            candidate = case.releases / self.release_id
+            shutil.copytree(receiver / "releases" / self.release_id, candidate, symlinks=True)
+            local_policy = json.loads(policy_path.read_bytes())
+            local_policy["canonicalRoots"]["releases"]["path"] = str(case.releases)
+            write(policy_path, json.dumps(local_policy), 0o600)
+            handoff = json.loads(manifest.read_bytes())
+            installation = Path(handoff["installation"]["path"])
+            report = json.loads(installation.read_bytes())
+            report["releasePath"] = str(candidate)
+            write(installation, json.dumps(report), 0o600)
+            handoff["installation"] = bind(installation)
+            write(manifest, json.dumps(handoff), 0o600)
+            evidence = receiver / "evidence"
+            control = evidence / "control"
+            control.mkdir(mode=0o700)
+            for name in ("generation-retirement.py", "preparation_artifact_lifecycle.py",
+                         "converta-release.py", "converta-deploy.py"):
+                shutil.copyfile(ROOT / "scripts" / name, control / name)
+                (control / name).chmod(0o600)
+            rows = evidence / "pm2-rows.private.json"
+            write(rows, json.dumps(case.host.pm2_rows(case.pm2)), 0o600)
+            pm2_reader = evidence / "pm2-reader"
+            write(pm2_reader, "#!/usr/bin/env python3\nfrom pathlib import Path\nprint(Path(" +
+                  repr(str(rows)) + ").read_text())\n", 0o700)
+            graph = evidence / "graph.private.json"
+            graph_value = {"activeReleases": [case.rollback], "rollbackReleases": [case.rollback],
+                           "immediateRollbackReleases": {"api": case.rollback, "frontend": case.rollback},
+                           "transitiveReturnReleases": [], "candidateReleases": [self.release_id],
+                           "installedVerifiedReleases": [case.rollback, self.release_id], "supersededCandidates": []}
+            write(graph, json.dumps(graph_value), 0o600)
+            operational = evidence / "operational.private.json"
+            roots = {key: ([item["path"] for item in value] if key == "evidence" else value["path"])
+                     for key, value in local_policy["canonicalRoots"].items()}
+            write(operational, json.dumps({
+                "schemaVersion": 2, "generationId": self.release_id, "releaseId": self.release_id,
+                "targetCommit": self.target, "gitRepository": roots["repository"], "canonicalRoots": roots,
+                "currentPaths": [str(path.resolve()) for path in case.stable.values()],
+                "pm2LivePaths": [], "pm2DumpPaths": [], "dependencies": [],
+                "controlPlaneArtifacts": [{**bind(control / "generation-retirement.py"), "copied": True}],
+                **graph_value, "deploymentState": {"state": "PENDING"},
+                "observations": {
+                    "currentLinks": [{"path": str(path), "target": str(path.resolve())} for path in case.stable.values()],
+                    "pm2": {**bind(pm2_reader), "fingerprintSha256":
+                            driver_tests.deploy.Driver._retirement_pm2_fingerprint(case.host.pm2_rows(case.pm2))},
+                    "dump": bind(case.dump), "releaseGraph": bind(graph)},
+            }), 0o600)
+            writer_lock = receiver / "outputs/.generation-build.lock"
+            write(writer_lock, "", 0o600)
+            tool = control / "generation-retirement.py"
+            materialized = subprocess.run(
+                [sys.executable, "-B", str(tool), "materialize-external-retirement",
+                 "--handoff", str(manifest), "--handoff-sha256", bind(manifest)["sha256"],
+                 "--root-policy", str(policy_path), "--root-policy-sha256", bind(policy_path)["sha256"]],
+                text=True, capture_output=True)
+            self.assertEqual(materialized.returncode, 0, materialized.stderr)
+            projection = json.loads(materialized.stdout)
+            contract = Path(projection["contract"]); lifecycle = Path(projection["lifecycle"])
+            review = contract.parent / "generation-review.private.json"
+            intent = evidence / "local-intent.private.json"
+            prepared = subprocess.run(
+                [sys.executable, "-B", str(tool), "prepare",
+                 "--contract", str(contract), "--contract-sha256", bind(contract)["sha256"],
+                 "--lifecycle", str(lifecycle), "--lifecycle-sha256", bind(lifecycle)["sha256"],
+                 "--operational-state", str(operational), "--operational-state-sha256", bind(operational)["sha256"],
+                 "--root-policy", str(policy_path), "--root-policy-sha256", bind(policy_path)["sha256"],
+                 "--deployment-lock", str(case.lock), "--intent-output", str(intent),
+                 "--commands-output", str(evidence / "commands.private.txt"), "--review-output", str(review),
+                 "--reviewer", "fixture-owner", "--reason", "external preservation rollout"],
+                text=True, capture_output=True)
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            authorization = evidence / "local-authorization.private.json"
+            write(authorization, json.dumps({"schemaVersion": 1, "authorizationId": "local-once",
+                  "decision": "AUTHORIZE_ONCE", "intentSha256": bind(intent)["sha256"],
+                  "approvedPaths": [], "owner": "fixture-owner"}), 0o600)
+            binding = driver_tests.deploy.RetirementBinding(
+                tool, bind(tool)["sha256"], intent, bind(intent)["sha256"],
+                authorization, bind(authorization)["sha256"], operational, bind(operational)["sha256"],
+                policy_path, bind(policy_path)["sha256"], evidence / "local-receipt", review, case.lock)
+            case.candidate = self.release_id
+            case.retirement = binding
+            case.inputs = dataclasses.replace(case.inputs, release=self.release_id, target=self.target, retirement=binding)
+            original_run = case.host.run
+            executions = []
+
+            def run(argv, **kwargs):
+                if argv[2:3] in (["check-external-retirement"], ["execute"]):
+                    write(rows, json.dumps(case.host.pm2_rows(case.pm2)), 0o600)
+                    if argv[2] == "execute":
+                        executions.append(argv)
+                    return subprocess.run(argv, text=True, capture_output=True, **kwargs)
+                return original_run(argv, **kwargs)
+
+            case.host.run = run
+            driver = case.api_only()
+            frontend_pid = case.host.rows[driver_tests.deploy.PROCESS_NAMES["frontend"]]["pid"]
+            worker_pid = case.host.rows[driver_tests.deploy.PROCESS_NAMES["worker"]]["pid"]
+            driver.preflight(); driver.activate(); case.acceptance()
+            continuation = driver_tests.continuation
+            copied_driver = control / "converta-deploy.py"
+            continuation_request = {
+                "schemaVersion": 1, "action": "finalize", "lockPath": str(case.lock),
+                "transactionRoot": str(case.transaction), "driver": str(copied_driver),
+                "driverSha256": bind(copied_driver)["sha256"],
+                "finalizeArgv": [sys.executable, "-B", str(copied_driver), "finalize"],
+            }
+            lock_fd = continuation.acquire_lock(case.lock)
+
+            def finalize(argv, **kwargs):
+                with patch.dict(os.environ, {continuation.LOCK_ENV: kwargs["env"][continuation.LOCK_ENV]}):
+                    driver.finalize()
+                return subprocess.CompletedProcess(argv, 0)
+
+            try:
+                self.assertEqual(continuation.run(continuation_request, lock_fd, runner=finalize), 0)
+                continuation.release_terminal_lock(continuation_request, lock_fd)
+            finally:
+                os.close(lock_fd)
+            journal = driver._journal_read()
+            self.assertEqual(journal["state"], "DEPLOYED_RETENTION_INCOMPLETE")
+            self.assertEqual(journal["saveCount"], 1)
+            self.assertEqual(case.host.save_calls, 1)
+            self.assertEqual(len(executions), 1)
+            self.assertFalse(case.lock.exists())
+            self.assertEqual(journal["generationRetirement"].get("executionEvidence", {}).get("exitCode"),
+                             0, journal["generationRetirement"])
+            receipt = json.loads((binding.receipt_root / "execution-receipt.private.json").read_bytes())
+            self.assertEqual(receipt["externalRetentionDebt"], debt)
+            self.assertEqual(receipt["attemptedCommands"], 0)
+            self.assertEqual(case.host.rows[driver_tests.deploy.PROCESS_NAMES["frontend"]]["pid"], frontend_pid)
+            self.assertEqual(case.host.rows[driver_tests.deploy.PROCESS_NAMES["worker"]]["pid"], worker_pid)
+        finally:
+            case.tearDown()
+
+    def check_external_retirement_route(self, receiver, policy_path, policy, manifest, bind, debt=None) -> None:
         evidence = receiver / "evidence"
         output = receiver / "outputs"
         for path in (receiver / ".deployment-window.lock", output / ".generation-build.lock"):
@@ -589,11 +841,13 @@ class ReleaseProducerTest(unittest.TestCase):
                               deployment_lock=lock, receipt_root=receipt, review_output=review)
         self.assertEqual(executed.returncode, 0, executed.stderr)
         closure = json.loads((receipt / "execution-receipt.private.json").read_bytes())
-        self.assertEqual(closure["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(closure["state"], "DEPLOYED_RETENTION_INCOMPLETE" if debt else "DEPLOYED_SANITIZED")
         self.assertEqual(closure["attemptedCommands"], 0)
         self.assertEqual(closure["removedPaths"], [])
         self.assertEqual((receipt / "command-results.private.jsonl").read_bytes(), b"")
-        self.assertEqual(json.loads(review.read_bytes())["state"], "SANITIZED")
+        self.assertEqual(json.loads(review.read_bytes())["state"], "QUARANTINED" if debt else "SANITIZED")
+        if debt:
+            self.assertEqual(closure["externalRetentionDebt"], debt)
         marker.unlink()
 
     def test_recovery_install_reuses_exact_staging_without_reextracting(self) -> None:

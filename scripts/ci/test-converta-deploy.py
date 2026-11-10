@@ -1044,6 +1044,7 @@ class DriverTests(DeployFixture):
         self.assertEqual(self.host.retirement_calls, 1)
         marker = deploy.read_json(driver.release_root / "DEPLOYED")
         self.assertEqual(marker["components"], ["api"])
+        self.assertEqual(stat.S_IMODE((driver.release_root / "DEPLOYED").stat().st_mode), 0o600)
         graph = deploy.read_json(self.transaction / "generation-release-graph.final.private.json")
         self.assertEqual(graph["activeReleases"], sorted([self.candidate, self.rollback]))
 
@@ -1704,6 +1705,44 @@ if config_path:
         with self.assertRaisesRegex(deploy.Denied, "injected:after_save"):
             driver.finalize()
         driver.finalize()
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_api_only_preserved_builder_closes_with_debt_and_releases_lock_once(self) -> None:
+        driver = self.api_only(); driver.preflight(); driver.activate(); self.acceptance()
+        original = self.host.run
+
+        def preserve(command, **kwargs):
+            result = original(command, **kwargs)
+            if command[2:3] != ["execute"]:
+                return result
+            receipt_root = Path(command[command.index("--receipt-root") + 1])
+            receipt = receipt_root / "execution-receipt.private.json"
+            value = deploy.read_json(receipt)
+            value["state"] = "DEPLOYED_RETENTION_INCOMPLETE"
+            value["externalRetentionDebt"] = {
+                "state": "PRESERVED_RETENTION_DEBT", "responsible": "fixture-owner",
+                "retainedBytes": 1024, "expiresAtUtc": "2099-01-01T00:00:00Z",
+                "preservedPaths": ["/builder/source", "/builder/api-runtime", "/builder/frontend-runtime"],
+            }
+            put(receipt, value)
+            return subprocess.CompletedProcess(command, 0, json.dumps({
+                "result": value["state"], "receiptSha256": sha(receipt),
+            }), "")
+
+        self.host.run = preserve
+        driver.finalize()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_RETENTION_INCOMPLETE")
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+        self.assertFalse(self.lock.exists())
+        self.assertTrue((driver.release_root / "DEPLOYED").exists())
+        self.assertEqual(self.stable["frontend"].resolve(),
+                         self.releases / self.rollback / "frontend-runtime")
+        with self.assertRaisesRegex(deploy.Denied, "finalize_state"):
+            driver.finalize()
         self.assertEqual(self.host.save_calls, 1)
         self.assertEqual(self.host.retirement_calls, 1)
 
