@@ -336,10 +336,13 @@ segue o [runbook](../DEPLOY_RUNBOOK.md).
 
 ### Critérios para tornar a rota reutilizável
 
-1. Decidir a rota na admissão, antes de alocar. Conferir ferramenta, versão,
-   target e árvore, bytes e inodes em cada host. Na VPS, dimensionar pacote,
-   maior extração simultânea, margem para falha/evidência e reserva operacional.
-   Recapturar os gates antes de escrever.
+1. Decidir a rota na admissão, antes de alocar. Conferir se os consumidores de
+   preflight e finalização aceitam o vínculo previsto antes do primeiro build
+   ou upload. Quando o suporte estiver pendente, limitar um eventual piloto à
+   preparação inerte e registrar esse limite antes da alocação. Conferir
+   ferramenta, versão, target e árvore, bytes e inodes em cada host. Na VPS,
+   dimensionar pacote, maior extração simultânea, margem para falha/evidência
+   e reserva operacional. Recapturar os gates antes de escrever.
 2. Reusar o pacote já verificado da mesma geração quando íntegro e elegível.
    Copiar para destino exclusivo, conferir SHA e executar `verify --package` e
    `install` sequencialmente. Registrar o pico e comprovar a disposição dos
