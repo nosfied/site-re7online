@@ -401,7 +401,20 @@ o SHA do pacote por streaming e confere a instalação inerte já existente.
 O ensaio usa prova sintética de retirada no builder, build e instalação reais
 em duas raízes descartáveis e execução real da retenção local sem comandos. A
 troca API-only e a checagem antes do save são exercitadas com PM2 simulado.
-O piloto depende do receipt e do journal reais do builder. Preservar a
+O piloto depende do receipt e do journal reais do builder. A tentativa de
+preparação v1 parou antes da intenção porque a importação Python criou
+`scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc` no worktree
+selado. O consumidor executa agora os bytes da dependência já autenticados em
+memória, sem reabertura pelo loader ou gravação de cache. A regressão executa
+`--help` em processo isolado e confere a igualdade do inventário e dos bytes
+dos controles copiados. Invocações operacionais Python devem usar `-B`.
+
+O resíduo preexistente exige prova específica da única diferença e disposição
+autorizada. Preservar contrato, inventário e negativa originais. A retirada do
+bytecode pode alterar metadados de diretórios ancestrais, portanto deve-se
+reautenticar o inventário completo e tratar eventuais diferenças por sucessor
+vinculado ao original antes do novo prepare. A correção preventiva não autentica
+a retirada anterior nem autoriza substituir hashes para aceitar drift. Preservar a
 instalação inerte até a conclusão desse gate e do preflight na VPS.
 
 ## Fechamento da janela fa63994a e dívida remanescente

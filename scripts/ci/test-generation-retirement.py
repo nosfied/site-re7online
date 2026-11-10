@@ -1010,6 +1010,22 @@ class LegacyP00InstalledBatchFixture:
 
 
 class GenerationRetirementTest(unittest.TestCase):
+
+    def test_copied_consumer_help_preserves_control_inventory(self):
+        with tempfile.TemporaryDirectory(prefix="retirement-bytecode-") as directory:
+            control = Path(directory)
+            consumer = control / TOOL.name
+            dependency = control / "preparation_artifact_lifecycle.py"
+            shutil.copyfile(TOOL, consumer)
+            shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", dependency)
+            before = {path.name: path.read_bytes() for path in control.iterdir()}
+            result = subprocess.run(
+                [sys.executable, "-I", str(consumer), "--help"],
+                text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(sorted(path.name for path in control.iterdir()), sorted(before))
+            self.assertEqual({path.name: path.read_bytes() for path in control.iterdir()}, before)
+
     def test_failed_build_worktree_is_the_only_effect_and_closes_with_real_git(self):
         fixture = FailedBuildWorktreeFixture()
         try:

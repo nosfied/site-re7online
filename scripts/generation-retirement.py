@@ -29,7 +29,8 @@ if hashlib.sha256(_preparation_raw).hexdigest() != PREPARATION_LIFECYCLE_SHA256:
 _preparation_spec = importlib.util.spec_from_file_location(
     "preparation_artifact_lifecycle", _preparation_path)
 preparation_lifecycle = importlib.util.module_from_spec(_preparation_spec)
-_preparation_spec.loader.exec_module(preparation_lifecycle)
+# Execute the authenticated bytes without reopening the dependency or writing bytecode.
+exec(compile(_preparation_raw, str(_preparation_path), "exec"), preparation_lifecycle.__dict__)
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
 FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
