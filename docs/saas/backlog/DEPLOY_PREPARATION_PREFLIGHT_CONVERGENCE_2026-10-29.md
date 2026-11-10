@@ -417,6 +417,60 @@ vinculado ao original antes do novo prepare. A correção preventiva não autent
 a retirada anterior nem autoriza substituir hashes para aceitar drift. Preservar a
 instalação inerte até a conclusão desse gate e do preflight na VPS.
 
+### Disposição do bytecode e contrato sucessor
+
+O consumidor existente oferece `prepare-worktree-residue` e
+`execute-worktree-residue`. O perfil inicial abrange gerações externas com nome
+`immutable-<prefixo-do-target>-external-<timestamp-UTC>` e é limitado a
+`scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc` e ao
+diretório vazio que o contém. Reutiliza política de raízes, locks, observação
+operacional fresca, autorização, journal e autenticação de artefatos do
+`generation-retirement.py`.
+
+O request privado schema 1 vincula `contract`, `lifecycle`, `baseline`,
+`denial`, `operationalState` e `rootPolicy` por caminho absoluto e SHA-256.
+`deploymentLock` identifica o lock existente e `residueSha256` fixa o bytecode
+relatado. O stderr/diagnóstico original precisa conter o predicado exato de drift.
+Os bindings completos vêm da custódia operacional.
+
+O `baseline` é o inventário detalhado anterior, schema 1, com `root` e
+`entries`. Cada entrada contém `path`, `type`, `mode`, `size`, `mtimeNs`,
+`link`, `device`, `inode`, `allocatedBytes`, `uid`, `gid`, `nlink` e
+`sha256`. Os registros são ordenados como no produtor. Os hashes de conteúdo
+são SHA-256 para arquivos regulares e null para outros tipos. A reconstrução de
+blocos, inodes, tamanho e hash estrutural precisa coincidir com o artefato original.
+Esse inventário não pode ser fabricado a partir do worktree já alterado. Ausência
+de prova anterior detalhada encerra a preparação antes da intenção.
+
+`prepare-worktree-residue --request <request> --request-sha256 <sha> --intent-output <intenção>`
+enumera o worktree inteiro sob os dois locks, compara os conteúdos e metadados
+com o baseline, valida o bytecode contra a fonte autenticada e sela somente
+`/usr/bin/rm -- <worktree>/scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc`
+e `/usr/bin/rmdir -- <worktree>/scripts/__pycache__`. Além dessas duas entradas,
+somente os metadados do diretório `scripts` podem diferir. Conteúdo extra,
+modificação em outro caminho, referência operacional e binding divergente negam.
+
+A autorização usa o schema canônico com `AUTHORIZE_ONCE`, SHA da intenção e
+`approvedPaths` contendo exatamente arquivo e diretório, nessa ordem. Intenção
+e autorização usam a serialização canônica JSON do consumidor.
+`execute-worktree-residue --intent <intenção> --intent-sha256 <sha> --authorization <autorização> --authorization-sha256 <sha> --receipt-root <custódia-nova> --successor-root <outputs>/<release>-bytecode-successor`
+recaptura as provas sob locks antes do primeiro efeito e registra cada comando
+por `ATTEMPT → RESULT → VERIFIED`.
+
+Após a retirada, o consumidor enumera novamente o worktree completo e publica o
+contrato sucessor e uma cópia byte-exata do lifecycle na nova raiz. O contrato
+original permanece intacto. Somente as métricas do worktree mudam. O sucessor
+carrega a prova portátil `worktreeResidueReconciliation`, vinculando originais,
+inventário, negativa, intenção, autorização, journal e receipt. O `prepare`
+normal revalida essa prova e exige exatamente worktree, API runtime e frontend
+runtime. O executor reabre os arquivos do sucessor pelos bindings selados.
+
+Falha após efeito fecha `QUARANTINED`, preserva o journal e impede repetição.
+Uma custódia de execução existente exige reconciliação própria. O receipt desta
+disposição tem dois comandos e é distinto do receipt posterior da retirada 3/3.
+A implementação e os testes isolados não comprovam a disponibilidade do baseline
+original no builder nem substituem sua autorização de retirada.
+
 ## Fechamento da janela fa63994a e dívida remanescente
 
 A janela terminou em `DEPLOYED_SANITIZED`, mas não prova que o procedimento normal

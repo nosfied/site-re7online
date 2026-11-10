@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import fcntl
 import hashlib
 import json
+import marshal
 import os
 from pathlib import Path
 import re
@@ -508,7 +510,7 @@ def acquire_or_authenticate_lock(path: Path, inherited_fd: int | None,
 def validate_contract(value: dict[str, Any]) -> None:
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
                 "writerLockPath", "classes", "artifacts", "privateDataPolicy"}
-    optional = {"privateDataOverlay"}
+    optional = {"privateDataOverlay", "worktreeResidueReconciliation"}
     if (not required.issubset(value) or not set(value).issubset(required | optional) or
             value.get("schemaVersion") != 1 or value.get("state") not in {"COMPLETE", "FAILED"}):
         deny("artifact_contract_schema")
@@ -633,6 +635,8 @@ def validate_contract(value: dict[str, Any]) -> None:
             value["targetCommit"] == LEGACY_D436_F160_BINDINGS[value["releaseId"]]["targetCommit"] and
             f160_cache_paths != {LEGACY_D436_F160_BINDINGS[value["releaseId"]]["overlayPath"]}):
         deny("artifact_contract_f160_runtime_cache_overlay")
+    if "worktreeResidueReconciliation" in value:
+        validate_residue_proof(value)
 
 
 def _strict_child(path: Path, root: Path, predicate: str) -> None:
@@ -1221,6 +1225,423 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
     if stat.S_ISREG(info.st_mode) and isinstance(digest, dict) and digest.get("sha256"):
         if digest_bytes(path.read_bytes()) != digest["sha256"]:
             deny(f"artifact_hash:{path}")
+
+
+BYTECODE_RESIDUE = "scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc"
+BYTECODE_DIRECTORY = "scripts/__pycache__"
+INVENTORY_KEYS = {"path", "type", "mode", "size", "mtimeNs", "link", "device", "inode",
+                  "allocatedBytes", "uid", "gid", "nlink", "sha256"}
+
+
+def worktree_inventory(root: Path) -> dict[str, Any]:
+    """Record contents and metadata without following directory symlinks."""
+    records = []
+    for path in sorted([root, *root.rglob("*")], key=lambda item: os.fsencode(item.as_posix())):
+        before = path.lstat()
+        kind = ("symlink" if stat.S_ISLNK(before.st_mode) else
+                "directory" if stat.S_ISDIR(before.st_mode) else
+                "regular" if stat.S_ISREG(before.st_mode) else "other")
+        if kind == "other":
+            deny("residue_inventory_type")
+        sha = None
+        if kind == "regular":
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                opened = os.fstat(stream.fileno())
+                if (opened.st_dev, opened.st_ino, opened.st_mode) != (before.st_dev, before.st_ino, before.st_mode):
+                    deny("residue_inventory_race")
+                hasher = hashlib.sha256()
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+                sha = hasher.hexdigest()
+        after = path.lstat()
+        if ((before.st_dev, before.st_ino, before.st_mode, before.st_size, before.st_mtime_ns,
+             before.st_ctime_ns, before.st_nlink) !=
+                (after.st_dev, after.st_ino, after.st_mode, after.st_size, after.st_mtime_ns,
+                 after.st_ctime_ns, after.st_nlink)):
+            deny("residue_inventory_race")
+        records.append({
+            "path": "." if path == root else path.relative_to(root).as_posix(),
+            "type": kind, "mode": stat.S_IMODE(before.st_mode), "size": before.st_size,
+            "mtimeNs": before.st_mtime_ns, "link": os.readlink(path) if kind == "symlink" else None,
+            "device": before.st_dev, "inode": before.st_ino, "allocatedBytes": before.st_blocks * 512,
+            "uid": before.st_uid, "gid": before.st_gid, "nlink": before.st_nlink, "sha256": sha,
+        })
+    return {"schemaVersion": 1, "root": str(root), "entries": records}
+
+
+def inventory_metrics(inventory: dict[str, Any]) -> dict[str, Any]:
+    if (set(inventory) != {"schemaVersion", "root", "entries"} or inventory["schemaVersion"] != 1 or
+            not isinstance(inventory["root"], str) or not Path(inventory["root"]).is_absolute() or
+            not isinstance(inventory["entries"], list)):
+        deny("residue_inventory_schema")
+    structure = hashlib.sha256()
+    unique = set()
+    seen_paths = set()
+    total = {"sizeBytes": 0, "allocatedBytes": 0, "inodes": 0}
+    entries = inventory["entries"]
+    if any(not isinstance(item, dict) or set(item) != INVENTORY_KEYS or
+           not isinstance(item["path"], str) for item in entries):
+        deny("residue_inventory_entry")
+    ordered = sorted(entries, key=lambda item: os.fsencode(
+        Path(inventory["root"]).name + ("" if item["path"] == "." else "/" + item["path"])))
+    if entries != ordered:
+        deny("residue_inventory_order")
+    for item in entries:
+        relative = item["path"]
+        if (relative in seen_paths or (relative != "." and
+                (not relative or Path(relative).is_absolute() or ".." in Path(relative).parts or
+                 str(Path(relative)) != relative)) or
+                item["type"] not in {"regular", "directory", "symlink"} or
+                any(type(item[key]) is not int or item[key] < 0 for key in
+                    ("mode", "size", "mtimeNs", "device", "inode", "allocatedBytes", "uid", "gid", "nlink")) or
+                (item["type"] == "regular" and not SHA256.fullmatch(str(item["sha256"]))) or
+                (item["type"] != "regular" and item["sha256"] is not None) or
+                (item["type"] == "symlink" and not isinstance(item["link"], str)) or
+                (item["type"] != "symlink" and item["link"] is not None)):
+            deny("residue_inventory_entry")
+        seen_paths.add(relative)
+        structure.update(canonical({key: item[key] for key in
+                                    ("path", "type", "mode", "size", "mtimeNs", "link")}))
+        identity = item["device"], item["inode"]
+        if identity not in unique:
+            unique.add(identity)
+            total["sizeBytes"] += item["size"]
+            total["allocatedBytes"] += item["allocatedBytes"]
+            total["inodes"] += 1
+    if not entries or entries[0]["path"] != "." or entries[0]["type"] != "directory":
+        deny("residue_inventory_root")
+    return {**total, "structuralSha256": structure.hexdigest()}
+
+
+def residue_delta(baseline: dict[str, Any], observed: dict[str, Any], *, present: bool) -> list[dict[str, Any]]:
+    inventory_metrics(baseline); inventory_metrics(observed)
+    if baseline["root"] != observed["root"]:
+        deny("residue_inventory_root")
+    source = {item["path"]: item for item in baseline["entries"]}
+    current = {item["path"]: item for item in observed["entries"]}
+    additions = {BYTECODE_DIRECTORY, BYTECODE_RESIDUE} if present else set()
+    if (set(current) != set(source) | additions or
+            BYTECODE_DIRECTORY in source or BYTECODE_RESIDUE in source):
+        deny("residue_inventory_delta_scope")
+    for path, item in source.items():
+        ignored = {"size", "mtimeNs", "allocatedBytes", "nlink"} if path == "scripts" else set()
+        if ({key: value for key, value in item.items() if key not in ignored} !=
+                {key: value for key, value in current[path].items() if key not in ignored}):
+            deny(f"residue_inventory_delta:{path}")
+    if "scripts" not in source or source["scripts"]["type"] != "directory":
+        deny("residue_inventory_parent")
+    if current["scripts"]["nlink"] != source["scripts"]["nlink"] + int(present):
+        deny("residue_inventory_parent_links")
+    if present:
+        directory, residue = current[BYTECODE_DIRECTORY], current[BYTECODE_RESIDUE]
+        owner = current["scripts"]
+        if (directory["type"] != "directory" or residue["type"] != "regular" or
+                residue["nlink"] != 1 or residue["size"] > 1024 * 1024 or
+                any(item["uid"] != owner["uid"] or item["gid"] != owner["gid"] or item["mode"] & 0o022
+                    for item in (directory, residue))):
+            deny("residue_identity")
+    changed = {"scripts"} | additions
+    return [item for item in observed["entries"] if item["path"] in changed]
+
+
+def restore_residue_inventory(baseline: dict[str, Any], delta: Any, *, present: bool) -> dict[str, Any]:
+    if (not isinstance(delta, list) or
+            any(not isinstance(item, dict) or "path" not in item for item in delta)):
+        deny("residue_inventory_delta")
+    expected = {"scripts", BYTECODE_DIRECTORY, BYTECODE_RESIDUE} if present else {"scripts"}
+    if len(delta) != len(expected) or {item["path"] for item in delta} != expected:
+        deny("residue_inventory_delta")
+    entries = {item["path"]: item for item in baseline["entries"]}
+    entries.update({item["path"]: item for item in delta})
+    restored = {**baseline, "entries": sorted(entries.values(), key=lambda item: os.fsencode(
+        Path(baseline["root"]).name + ("" if item["path"] == "." else "/" + item["path"])))}
+    residue_delta(baseline, restored, present=present)
+    return restored
+
+
+def residue_commands(worktree: str) -> list[list[str]]:
+    root = Path(worktree)
+    return [["/usr/bin/rm", "--", str(root / BYTECODE_RESIDUE)],
+            ["/usr/bin/rmdir", "--", str(root / BYTECODE_DIRECTORY)]]
+
+
+def validate_residue_sources(request: dict[str, Any], sources: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    required = {"schemaVersion", "contract", "lifecycle", "baseline", "denial",
+                "operationalState", "rootPolicy", "deploymentLock", "residueSha256"}
+    if (set(request) != required or request["schemaVersion"] != 1 or
+            set(sources) != {"contract", "lifecycle", "baseline", "denial"} or
+            not SHA256.fullmatch(str(request["residueSha256"])) or
+            not Path(str(request["deploymentLock"])).is_absolute()):
+        deny("residue_request_schema")
+    documents = {}
+    for key, encoded in sources.items():
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            deny("residue_source_encoding")
+        binding = request[key]
+        if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+                not Path(str(binding["path"])).is_absolute() or digest_bytes(raw) != binding["sha256"]):
+            deny("residue_source_binding")
+        documents[key] = raw
+    contract = object_json(documents["contract"], "residue-contract")
+    if "worktreeResidueReconciliation" in contract:
+        deny("residue_nested_successor")
+    validate_contract(contract)
+    lifecycle = object_json(documents["lifecycle"], "residue-lifecycle")
+    if (not re.fullmatch(r"immutable-[0-9a-f]{8}-external-[0-9]{8}T[0-9]{6}Z", str(contract["releaseId"])) or
+            not re.fullmatch(r"[0-9a-f]{40}", str(contract["targetCommit"])) or
+            not contract["releaseId"].startswith(f"immutable-{contract['targetCommit'][:8]}-external-") or
+            contract["generationId"] != contract["releaseId"] or
+            contract["state"] != "COMPLETE" or lifecycle.get("state") != "COMPLETE" or
+            lifecycle.get("generationId") != contract["generationId"] or
+            lifecycle.get("targetCommit") != contract["targetCommit"]):
+        deny("residue_generation")
+    worktrees = [item for item in contract["artifacts"] if item["class"] == "DERIVED_WORKTREE"]
+    if len(worktrees) != 1:
+        deny("residue_worktree_scope")
+    worktree = worktrees[0]
+    baseline = object_json(documents["baseline"], "residue-baseline")
+    if (baseline.get("root") != worktree["path"] or
+            any(worktree.get(key) != value for key, value in inventory_metrics(baseline).items()) or
+            worktree.get("observedIdentity") !=
+            {key: baseline["entries"][0][key] for key in ("device", "inode")}):
+        deny("residue_baseline_contract")
+    predicate = f"artifact_drift:{worktree['path']}:sizeBytes".encode()
+    if predicate not in documents["denial"]:
+        deny("residue_denial_binding")
+    return contract, baseline
+
+
+def validate_residue_proof(successor: dict[str, Any]) -> None:
+    proof = successor["worktreeResidueReconciliation"]
+    if not isinstance(proof, dict) or set(proof) != {"intent", "authorization", "events", "receipt", "afterDelta"}:
+        deny("residue_proof_schema")
+    intent, auth, receipt = proof["intent"], proof["authorization"], proof["receipt"]
+    original, baseline = validate_residue_sources(intent["request"], intent["sources"])
+    before = restore_residue_inventory(baseline, intent["beforeDelta"], present=True)
+    after = restore_residue_inventory(baseline, proof["afterDelta"], present=False)
+    worktree = baseline["root"]
+    commands = residue_commands(worktree)
+    if next(item["sha256"] for item in before["entries"] if item["path"] == BYTECODE_RESIDUE) != intent["request"]["residueSha256"]:
+        deny("residue_proof_bytecode")
+    if (intent.get("schemaVersion") != 1 or intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("commands") != commands or
+            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+            auth.get("intentSha256") != digest_bytes(canonical(intent)) or
+            auth.get("approvedPaths") != [command[-1] for command in commands] or
+            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+        deny("residue_proof_authorization")
+    events = proof["events"]
+    if not isinstance(events, list) or len(events) != 6:
+        deny("residue_proof_journal")
+    for index, argv in enumerate(commands, 1):
+        attempt, result, verified = events[(index - 1) * 3:index * 3]
+        if (attempt != {"event": "ATTEMPT", "ordinal": index, "path": argv[-1], "argv": argv} or
+                not isinstance(result, dict) or
+                set(result) != {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"} or
+                result.get("event") != "RESULT" or result.get("ordinal") != index or
+                type(result.get("exitCode")) is not int or result["exitCode"] != 0 or
+                any(not SHA256.fullmatch(str(result[key])) for key in ("stdoutSha256", "stderrSha256")) or
+                verified != {"event": "VERIFIED", "ordinal": index, "absent": True}):
+            deny("residue_proof_journal")
+    metrics = inventory_metrics(after)
+    changed = [{**item, **metrics} if item["class"] == "DERIVED_WORKTREE" else item
+               for item in original["artifacts"]]
+    if ({key: value for key, value in successor.items() if key != "worktreeResidueReconciliation"} !=
+            {**original, "artifacts": changed} or
+            receipt != {"schemaVersion": 1, "state": "COMPLETED",
+                        "intentSha256": digest_bytes(canonical(intent)),
+                        "authorizationSha256": digest_bytes(canonical(auth)),
+                        "journalSha256": digest_bytes(b"".join(canonical(event) for event in events)),
+                        "beforeInventorySha256": digest_bytes(canonical(before)),
+                        "afterInventorySha256": digest_bytes(canonical(after)),
+                        "successorArtifactsSha256": digest_bytes(canonical(changed)),
+                        "attemptedCommands": 2, "completedCommands": 2, "automaticRetry": False}):
+        deny("residue_successor_binding")
+
+
+def authenticate_residue_request(request_path: Path, expected_sha: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, str]]:
+    raw, _ = stable_private(request_path, expected_sha)
+    request = object_json(raw, "residue-request")
+    sources = {}
+    for key in ("contract", "lifecycle", "baseline", "denial"):
+        _, _, content = _closed_file_binding(request.get(key), f"residue:{key}")
+        sources[key] = base64.b64encode(content).decode()
+    contract, baseline = validate_residue_sources(request, sources)
+    return request, contract, baseline, sources
+
+
+def residue_policy(request: dict[str, Any]) -> dict[str, Any]:
+    binding = request.get("rootPolicy")
+    if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+        deny("residue_policy_binding")
+    raw, _ = stable_policy(Path(str(binding["path"])), binding["sha256"])
+    return validate_root_policy(raw, binding["sha256"])
+
+
+def residue_observation(request: dict[str, Any], contract: dict[str, Any], baseline: dict[str, Any],
+                        *, present: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+    for key in ("contract", "lifecycle", "baseline", "denial"):
+        _closed_file_binding(request[key], f"residue:{key}")
+    policy = residue_policy(request)
+    _, _, operational_raw = _closed_file_binding(request["operationalState"], "residue:operational")
+    operational = object_json(operational_raw, "residue-operational")
+    validate_operational(operational, contract, policy)
+    validate_artifact_roots(contract, operational, policy)
+    worktree = Path(baseline["root"])
+    if path_referenced(str(worktree), operational) or _path_has_symlink(worktree, Path(policy["canonicalRoots"]["worktrees"])):
+        deny("residue_worktree_referenced")
+    for artifact in contract["artifacts"]:
+        if artifact["class"] != "DERIVED_WORKTREE":
+            authenticate_artifact(artifact)
+    observed = worktree_inventory(worktree)
+    residue_delta(baseline, observed, present=present)
+    if present:
+        residue = worktree / BYTECODE_RESIDUE
+        fd = os.open(residue, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size > 1024 * 1024:
+                deny("residue_bytecode_binding")
+            raw = stream.read(1024 * 1024 + 1)
+        source = worktree / "scripts/preparation_artifact_lifecycle.py"
+        source_raw = source.read_bytes()
+        if (digest_bytes(raw) != request["residueSha256"] or
+                digest_bytes(source_raw) != PREPARATION_LIFECYCLE_SHA256 or
+                not 16 <= len(raw) <= 1024 * 1024 or raw[:4] != importlib.util.MAGIC_NUMBER):
+            deny("residue_bytecode_binding")
+        flags = int.from_bytes(raw[4:8], "little")
+        source_info = source.lstat()
+        if (flags not in {0, 1, 3} or
+                (flags == 0 and raw[8:16] !=
+                 (int(source_info.st_mtime) & 0xffffffff).to_bytes(4, "little") +
+                 (len(source_raw) & 0xffffffff).to_bytes(4, "little")) or
+                (flags in {1, 3} and raw[8:16] != importlib.util.source_hash(source_raw))):
+            deny("residue_bytecode_header")
+        try:
+            generated = marshal.loads(raw[16:])
+            compiled = compile(source_raw, str(source), "exec", dont_inherit=True, optimize=0)
+        except (ValueError, TypeError, EOFError, OverflowError):
+            deny("residue_bytecode_content")
+        if generated != compiled:
+            deny("residue_bytecode_content")
+    return observed, capture_fresh_operational(operational)
+
+
+def prepare_worktree_residue(args: argparse.Namespace) -> None:
+    request, contract, baseline, sources = authenticate_residue_request(args.request, args.request_sha256)
+    lock = acquire_existing_lock(Path(request["deploymentLock"]))
+    try:
+        writer = acquire_existing_lock(Path(contract["writerLockPath"]))
+        try:
+            observed, fresh = residue_observation(request, contract, baseline, present=True)
+            _, _, op_raw = _closed_file_binding(request["operationalState"], "residue:operational")
+            operational = object_json(op_raw, "residue-operational")
+            evidence_destination(args.intent_output, operational)
+            intent = {"schemaVersion": 1, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+                      "request": request, "sources": sources, "beforeDelta": residue_delta(baseline, observed, present=True),
+                      "commands": residue_commands(baseline["root"]), "freshObservation": fresh}
+            write_exclusive(args.intent_output, canonical(intent))
+            print(canonical({"result": "WORKTREE_RESIDUE_PREPARED", "intentSha256": digest_bytes(canonical(intent)),
+                             "commandCount": 2, "authorizationGranted": False}).decode().strip())
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
+
+
+def execute_worktree_residue(args: argparse.Namespace) -> None:
+    intent_raw, _ = stable_private(args.intent, args.intent_sha256)
+    auth_raw, _ = stable_private(args.authorization, args.authorization_sha256)
+    intent, auth = object_json(intent_raw, "residue-intent"), object_json(auth_raw, "residue-authorization")
+    if intent_raw != canonical(intent) or auth_raw != canonical(auth):
+        deny("residue_authorization_serialization")
+    request, sources = intent["request"], intent["sources"]
+    contract, baseline = validate_residue_sources(request, sources)
+    commands = residue_commands(baseline["root"])
+    if (intent.get("schemaVersion") != 1 or intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("commands") != commands or
+            set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+            auth.get("intentSha256") != args.intent_sha256 or
+            auth.get("approvedPaths") != [item[-1] for item in commands] or
+            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+        deny("residue_authorization")
+    if args.receipt_root.exists() or args.receipt_root.is_symlink():
+        deny("residue_execution_exists_reconciliation_required")
+    lock = acquire_existing_lock(Path(request["deploymentLock"]))
+    try:
+        writer = acquire_existing_lock(Path(contract["writerLockPath"]))
+        try:
+            observed, fresh = residue_observation(request, contract, baseline, present=True)
+            if observed != restore_residue_inventory(baseline, intent["beforeDelta"], present=True):
+                deny("residue_prepare_drift")
+            _, _, op_raw = _closed_file_binding(request["operationalState"], "residue:operational")
+            operational = object_json(op_raw, "residue-operational")
+            evidence_destination(args.receipt_root, operational)
+            policy = residue_policy(request)
+            outputs = authenticate_policy_root(policy, "outputs")[0]
+            _strict_child(args.successor_root, outputs, "residue_successor_destination")
+            if (args.successor_root != outputs / f"{contract['releaseId']}-bytecode-successor" or
+                    args.successor_root.exists() or args.successor_root.is_symlink()):
+                deny("residue_successor_destination")
+            if fresh != intent["freshObservation"]:
+                deny("residue_operational_drift")
+            args.receipt_root.mkdir(mode=0o700)
+            journal = args.receipt_root / "command-results.private.jsonl"
+            write_exclusive(journal, b"")
+            attempted = completed = 0
+            try:
+                for ordinal, argv in enumerate(commands, 1):
+                    append_event(journal, {"event": "ATTEMPT", "ordinal": ordinal, "path": argv[-1], "argv": argv})
+                    attempted += 1
+                    result = subprocess.run(argv, capture_output=True)
+                    append_event(journal, {"event": "RESULT", "ordinal": ordinal, "exitCode": result.returncode,
+                                          "stdoutSha256": digest_bytes(result.stdout), "stderrSha256": digest_bytes(result.stderr)})
+                    if result.returncode or Path(argv[-1]).exists() or Path(argv[-1]).is_symlink():
+                        deny("residue_command_failed")
+                    append_event(journal, {"event": "VERIFIED", "ordinal": ordinal, "absent": True})
+                    completed += 1
+                after, final_fresh = residue_observation(request, contract, baseline, present=False)
+                if final_fresh != fresh:
+                    deny("residue_operational_drift")
+                artifacts = [{**item, **inventory_metrics(after)} if item["class"] == "DERIVED_WORKTREE" else item
+                             for item in contract["artifacts"]]
+                receipt = {"schemaVersion": 1, "state": "COMPLETED", "intentSha256": args.intent_sha256,
+                           "authorizationSha256": args.authorization_sha256,
+                           "journalSha256": digest_bytes(journal.read_bytes()),
+                           "beforeInventorySha256": digest_bytes(canonical(observed)),
+                           "afterInventorySha256": digest_bytes(canonical(after)),
+                           "successorArtifactsSha256": digest_bytes(canonical(artifacts)),
+                           "attemptedCommands": 2, "completedCommands": 2, "automaticRetry": False}
+                proof = {"intent": intent, "authorization": auth, "events": _read_journal(journal.read_bytes()),
+                         "receipt": receipt, "afterDelta": residue_delta(baseline, after, present=False)}
+                successor = {**contract, "artifacts": artifacts, "worktreeResidueReconciliation": proof}
+                validate_contract(successor)
+                args.successor_root.mkdir(mode=0o700)
+                lifecycle_raw = base64.b64decode(sources["lifecycle"], validate=True)
+                write_exclusive(args.successor_root / "generation-lifecycle.private.json", lifecycle_raw)
+                successor_raw = canonical(successor)
+                write_exclusive(args.successor_root / "generation-artifacts.private.json", successor_raw)
+                write_exclusive(args.receipt_root / "execution-receipt.private.json", canonical(receipt))
+                print(canonical({"result": "WORKTREE_RESIDUE_RECONCILED",
+                                 "successorContractSha256": digest_bytes(successor_raw),
+                                 "receiptSha256": digest_bytes(canonical(receipt)),
+                                 "attemptedCommands": 2, "completedCommands": 2}).decode().strip())
+            except BaseException as error:
+                failed = args.receipt_root / "execution-receipt.private.json"
+                if not failed.exists():
+                    write_exclusive(failed, canonical({"schemaVersion": 1, "state": "QUARANTINED",
+                        "intentSha256": args.intent_sha256, "attemptedCommands": attempted,
+                        "completedCommands": completed, "failurePredicate": str(error),
+                        "journalSha256": digest_bytes(journal.read_bytes()), "automaticRetry": False}))
+                raise
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
 
 
 def structural_metrics(path: Path) -> dict[str, Any]:
@@ -3462,6 +3883,17 @@ def prepare(args: argparse.Namespace) -> None:
                                   "automaticRetry": False, "force": False, "prune": False,
                                   "globExpansion": False, "receiptFsync": True},
         }
+        if "worktreeResidueReconciliation" in contract:
+            derived = [item for item in commands if item["class"] in
+                       {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
+            if (len(commands) != 3 or len(derived) != 3 or
+                    [item["class"] for item in commands].count("DERIVED_WORKTREE") != 1 or
+                    [item["class"] for item in commands].count("DERIVED_OUTPUT_RUNTIME") != 2):
+                deny("residue_successor_command_scope")
+            intent["residueSuccessorInputs"] = {
+                "contract": {"path": str(args.contract), "sha256": args.contract_sha256},
+                "lifecycle": {"path": str(args.lifecycle), "sha256": args.lifecycle_sha256},
+            }
         if failed_build_worktree is not None:
             intent["failedBuildWorktreeDisposition"] = failed_build_worktree
         if external:
@@ -3521,7 +3953,7 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation",
                 "rootPolicySha256", "reviewOutput", "reconciliation"}
     required.add("legacyMigration")
-    optional = {"failedBuildWorktreeDisposition", "externalHandoff"}
+    optional = {"failedBuildWorktreeDisposition", "externalHandoff", "residueSuccessorInputs"}
     if (not required.issubset(intent) or not set(intent).issubset(required | optional) or
             intent.get("schemaVersion") != 3 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
@@ -3627,10 +4059,24 @@ def execute(args: argparse.Namespace) -> None:
         deny("intent_lifecycle_artifact")
     lifecycle_path = Path(lifecycle_artifacts[0]["path"])
     contract_path = lifecycle_path.parent / "generation-artifacts.private.json"
+    successor_inputs = intent.get("residueSuccessorInputs")
+    if successor_inputs is not None:
+        if not isinstance(successor_inputs, dict) or set(successor_inputs) != {"contract", "lifecycle"}:
+            deny("residue_successor_inputs")
+        contract_path, contract_sha, _ = _closed_file_binding(successor_inputs["contract"], "residue:successor-contract")
+        lifecycle_path, lifecycle_sha, _ = _closed_file_binding(successor_inputs["lifecycle"], "residue:successor-lifecycle")
+        if (contract_sha != intent["contractSha256"] or lifecycle_sha != intent["lifecycleSha256"]):
+            deny("residue_successor_inputs")
     persisted_contract_raw, _ = stable_private(contract_path, intent["contractSha256"])
     persisted_lifecycle_raw, _ = stable_private(lifecycle_path, intent["lifecycleSha256"])
     persisted_contract = object_json(persisted_contract_raw, "artifact-contract")
     persisted_lifecycle = object_json(persisted_lifecycle_raw, "generation-lifecycle")
+    if successor_inputs is not None:
+        validate_contract(persisted_contract)
+        if ("worktreeResidueReconciliation" not in persisted_contract or
+                [{key: value for key, value in item.items() if key != "retentionState"}
+                 for item in intent["artifacts"]] != persisted_contract["artifacts"]):
+            deny("residue_successor_intent")
     canonical_review_destination(args.review_output, contract_path, lifecycle_path, policy)
     if str(args.review_output) != intent["reviewOutput"]:
         deny("intent_review_output")
@@ -4359,6 +4805,18 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
+    residue_prepare = commands.add_parser("prepare-worktree-residue")
+    residue_prepare.add_argument("--request", type=Path, required=True)
+    residue_prepare.add_argument("--request-sha256", required=True)
+    residue_prepare.add_argument("--intent-output", type=Path, required=True)
+    residue_prepare.set_defaults(handler=prepare_worktree_residue)
+    residue_execute = commands.add_parser("execute-worktree-residue")
+    for name in ("intent", "authorization"):
+        residue_execute.add_argument(f"--{name}", type=Path, required=True)
+        residue_execute.add_argument(f"--{name}-sha256", required=True)
+    residue_execute.add_argument("--receipt-root", type=Path, required=True)
+    residue_execute.add_argument("--successor-root", type=Path, required=True)
+    residue_execute.set_defaults(handler=execute_worktree_residue)
     handoff_parser = commands.add_parser("verify-external-handoff")
     for name in ("handoff", "root-policy"):
         handoff_parser.add_argument(f"--{name}", type=Path, required=True)
