@@ -442,6 +442,24 @@ blocos, inodes, tamanho e hash estrutural precisa coincidir com o artefato origi
 Esse inventário não pode ser fabricado a partir do worktree já alterado. Ausência
 de prova anterior detalhada encerra a preparação antes da intenção.
 
+No piloto a838bd33, o operador relatou em 10/11 a busca somente leitura nas
+custódias v1/v2, evidências, outputs e JSONs associados em /tmp, sem localizar o
+baseline anterior. O produtor desta geração registrou métricas e hash estrutural
+agregados. Seu índice detalhado cobre os runtimes do pacote. O novo perfil exige
+uma prova que essa produção não materializou. A negativa permanece
+`PRIOR_DETAILED_WORKTREE_INVENTORY_NOT_FOUND`.
+
+Uma nova busca nesse mesmo escopo depende de indicação concreta de outra custódia
+ou backup. Este perfil só pode retomar a geração quando houver uma prova anterior
+autenticável. Uma futura rota de reconciliação ou preservação com evidências
+atuais exige contrato e autorização próprios. O planejamento do próximo produtor
+deve incluir a emissão e custódia do baseline antes de qualquer controle importar
+módulos do worktree.
+
+A fixture de testes localiza o cache pelo `cache_from_source()` do Python que a
+executa e posiciona o bytecode sintético no caminho produtivo congelado. Assim,
+Python 3.14 pode exercitar o ensaio sem ampliar o perfil operacional 3.12.
+
 `prepare-worktree-residue --request <request> --request-sha256 <sha> --intent-output <intenção>`
 enumera o worktree inteiro sob os dois locks, compara os conteúdos e metadados
 com o baseline, valida o bytecode contra a fonte autenticada e sela somente

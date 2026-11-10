@@ -1037,7 +1037,11 @@ class GenerationRetirementTest(unittest.TestCase):
         denial.write_bytes(f"GENERATION_RETIREMENT_DENY:artifact_drift:{fixture.worktree}:sizeBytes\n".encode())
         denial.chmod(0o600)
         py_compile.compile(str(source), doraise=True)
+        generated = Path(importlib.util.cache_from_source(str(source)))
         residue = fixture.worktree / MODULE.BYTECODE_RESIDUE
+        # Model the frozen production path using the runner's bytecode format.
+        if generated != residue:
+            generated.rename(residue)
         bind = lambda path: {"path": str(path), "sha256": sha(path)}
         request = fixture.evidence_root / "residue-request.private.json"
         value = {"schemaVersion": 1, "contract": bind(fixture.contract), "lifecycle": bind(fixture.lifecycle),
@@ -1059,6 +1063,22 @@ class GenerationRetirementTest(unittest.TestCase):
                                authorization=auth, authorization_sha256=sha(auth),
                                receipt_root=fixture.evidence_root / "residue-execution",
                                successor_root=fixture.output_root / f"{fixture.release_id}-bytecode-successor")
+
+    def test_residue_fixture_supports_another_cache_tag_without_widening_production_scope(self):
+        cache_from_source = importlib.util.cache_from_source
+
+        def alternate_tag(path, **kwargs):
+            return cache_from_source(path, **kwargs).replace(sys.implementation.cache_tag, "cpython-fixture")
+
+        with patch.object(importlib.util, "cache_from_source", side_effect=alternate_tag):
+            fixture, args, _, residue = self.residue_fixture()
+        self.assertEqual(MODULE.BYTECODE_RESIDUE,
+                         "scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc")
+        self.assertTrue(residue.exists())
+        self.assertEqual(list(residue.parent.iterdir()), [residue])
+        with redirect_stdout(io.StringIO()):
+            MODULE.prepare_worktree_residue(args)
+        self.assertTrue(args.intent_output.exists())
 
     def test_residue_reconciliation_preserves_original_and_then_retires_exactly_three(self):
         fixture, args, baseline, residue = self.residue_fixture()
