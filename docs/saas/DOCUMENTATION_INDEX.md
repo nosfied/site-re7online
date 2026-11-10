@@ -129,9 +129,9 @@
 
 O checkout/runtime ativo como destino de build, `deploy-normal-release.sh`, PR #190
 e Next em `cluster_mode` estão obsoletos. O padrão autorizado é build isolado na
-VPS, com capacidade conferida; builder externo é alternativa mediante decisão
-específica. Nenhum
-documento histórico prevalece sobre o modelo operacional canônico.
+VPS, com capacidade conferida. Builder externo é alternativa mediante decisão
+específica e [qualificação entre hosts](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#build-externo-e-qualificação-entre-hosts).
+Os precedentes históricos e os limites do piloto estão reunidos nessa seção.
 - [Fechamento frontend aa9527 — consentimento visível e retenção sanitizada](releases/CONSENT_VISIBILITY_FRONTEND_AA9527_2026-10-29_DEPLOYED_SANITIZED.json)
 - [Fechamento API 754281d3 — DB-first e retenção sanitizada](releases/P00_DB_FIRST_API_754281D3_2026-10-29_DEPLOYED_SANITIZED.json)
 - [Registro ativo API-only da Tendência — fa63994a](releases/TENDENCIA_HANDOFF_FA63994A_2026-10-30_DEPLOYED_SANITIZED.json)

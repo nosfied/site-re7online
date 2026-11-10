@@ -292,9 +292,77 @@ operacional coerentes. Esta atualização documental não implementa nem encerra
   target/pacote/builder/hashes; não declarar conformidade SLSA, assinaturas ou níveis
   que o Converta ainda não implementou.
 
-Retenção automática por dependência e orçamento, armazenamento externo de artefatos
-com política de ciclo de vida e builder externo são evoluções a avaliar após esta
-entrega. Não se altera a arquitetura produtiva durante a retomada da Tendência.
+Retenção automática por dependência e orçamento e armazenamento externo de artefatos
+com política de ciclo de vida continuam como evoluções a avaliar.
+
+## Build externo e qualificação entre hosts
+
+O build externo é uma alternativa mediante decisão específica. É útil quando
+a capacidade ou o custo de preparação na VPS torna preferível produzir o pacote
+em outro host. A rota normal de build na VPS continua regida pelo
+[modelo operacional](../DEPLOYMENT_OPERATING_MODEL.md). A implantação em produção
+segue o [runbook](../DEPLOY_RUNBOOK.md).
+
+| Precedente | O que deu certo | Limite da prova |
+| --- | --- | --- |
+| [Frontend 3227b2d7, 09–11/10](../../reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md) | Build Node 20.20.0 reutilizado, tar com 23.795 arquivos e 31 symlinks, 16 cenários de navegador na extração. [Execução](../../reviews/automation-freeform-window-release-af26/frontend3227-observation-diagnostic-20261011/EXECUTION_2026-10-11.md) com aceite de UI e 46,122 s entre solicitação de parada e prontidão técnica. | Fluxo histórico frontend-only com política própria. |
+| [API Result Truth 2ed9dccc, 11/10](../../reviews/automation-freeform-window-release-af26/result-truth-api-prepared-20261011/README.md) | Base compilada reaproveitada, overlay conferido em staging e [implantação técnica concluída](../../reviews/automation-freeform-window-release-af26/result-truth-api-prepared-20261011/DEPLOYMENT_2026-10-11.md). O intervalo de contenção foi 37,824 s. | Overlay e controles históricos. Contenção é uma medição distinta da indisponibilidade percebida. |
+| Piloto a838bd33, 10/11 | Pacote imutável v2 construído no builder, verificado e instalado inertemente na VPS. 34.381 entradas, verificação em aproximadamente 74,6 s e instalação em 106,3 s. | A preparação ocorreu sem troca de runtime. O preflight atual segue bloqueado e a duração do futuro corte ainda precisa ser medida. |
+
+### Evidência do piloto a838bd33
+
+- Release `immutable-a838bd33-external-20261110T130618Z`, target
+  `a838bd33ea00ea49be52d61e025a36320a4154c1`, árvore
+  `438b737c96c8e42da61cdc14e84694a4afe9dde4` e BUILD_ID `y6yGEaAGGr5oZe93llTWD`.
+- SHA-256 do pacote `99b8ef1d6e056cc6846d6c85731bc41c53dfe251657ead62a12305d5b65ffacb`,
+  manifesto `389a1c9ead3fabab8e28b035cc0741bb090835fdb930aec6cf90b9a2afd477c3` e
+  índice `490f96946172d0248647bba16fd51248fca13098a85b156b28aecc4843980af2`.
+- A VPS alocou 148.201.472 B para o pacote e 989.118.464 B para a release instalada.
+  Verificação e instalação foram sequenciais. O staging de verificação foi
+  retirado antes da instalação e o staging desta virou a release por rename.
+  O pós-check registrou 8.289.509.376 B livres, 8.779.108 inodes livres e zero
+  staging ou transferência parcial residual. São medições da janela, sujeitas a
+  recaptura para novas escritas.
+- O lifecycle v2 `38a32f22f63c6b6b03e210e3e92a448b9abbf178bff39ca1a4a8543271c9b47f`
+  e o contrato `5e91a5d9c95b0845cc48a75e8a8f1473722c13901d1f058805f5fd70cb9faa8a`
+  vinculam as raízes e o writer lock do builder externo. A primeira tentativa
+  externa parou com `EPERM` no esbuild e mantém sua própria dívida no builder.
+- A decisão `DENY_BEFORE_PREFLIGHT / EXTERNAL_RETENTION_HANDOFF_UNSUPPORTED` foi
+  registrada antes de abrir transação. O consumidor local exigiria uma raiz
+  canônica da VPS para `RELEASE_RUNTIME`, com a negativa
+  `artifact_outside_canonical_root:RELEASE_RUNTIME`. `RELEASE VERIFIED` e
+  `RELEASE INSTALLED` comprovam a integridade local da v2. A disposição dos
+  derivados no builder é uma prova separada.
+
+### Critérios para tornar a rota reutilizável
+
+1. Decidir a rota na admissão, antes de alocar. Conferir ferramenta, versão,
+   target e árvore, bytes e inodes em cada host. Na VPS, dimensionar pacote,
+   maior extração simultânea, margem para falha/evidência e reserva operacional.
+   Recapturar os gates antes de escrever.
+2. Reusar o pacote já verificado da mesma geração quando íntegro e elegível.
+   Copiar para destino exclusivo, conferir SHA e executar `verify --package` e
+   `install` sequencialmente. Registrar o pico e comprovar a disposição dos
+   temporários antes de avançar. Para a v2 instalada, retomar da prova existente
+   após conferir novamente sua identidade.
+3. Qualificar um vínculo versionado entre o contrato, lifecycle e política de
+   raízes originais do builder, a identidade do pacote transportado e a release
+   física instalada. Preservar os documentos originais. Cada host autentica e
+   dispõe somente de caminhos e locks próprios. Vincular receipt e journal da
+   disposição no builder quando aplicáveis. Dívida ou prova ausente impede
+   declarar `SANITIZED`. A VPS opera apenas com o escopo local autenticado.
+4. Ensaiar admissão, preparo, preflight, ativação simulada, aceite e fechamento
+   com duas raízes distintas. Cobrir negativa por troca de pacote ou hash,
+   falta de prova, caminho do outro host e interrupção depois de possível efeito.
+   Conferir que a rota local existente continua passando e que a retomada usa
+   journal e receipt existentes.
+5. Com a rota qualificada e `PREFLIGHT PASS`, reservar a troca API-only deste
+   piloto para janela explicitamente autorizada após as 17h de Fortaleza.
+   Preservar frontend, worker, retorno autenticado e produção das 08h às 17h.
+   Conferir prontidão local e pública e aceite GET-only antes da finalização.
+   Registrar separadamente os tempos de preparação, de parada até prontidão,
+   o pico de disco, o saldo e a disposição por host. Promover a rota a
+   procedimento normal externo somente depois de comprovar esse fechamento.
 
 ## Fechamento da janela fa63994a e dívida remanescente
 

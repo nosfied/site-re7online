@@ -83,10 +83,12 @@ refaz inventário global nem comparação entre todas as releases. Package,
 manifest, index, evidências, releases no grafo active/rollback/transitive-return e
 qualquer `PRIVATE_DATA_NEVER_RETIRE` são invariavelmente preservados.
 
-1. Produzir e validar o pacote no builder autorizado com `converta-release.py
-   build|verify`; transferir quando o builder não for a VPS e sempre promover somente
-   o artefato imutável e seus hashes.
-2. Extrair em raiz nova e comprovar igualdade integral antes da seleção.
+1. Produzir e validar um único pacote imutável no builder autorizado com
+   `converta-release.py build|verify`. Na alternativa externa, transferir uma cópia
+   do mesmo pacote, reconferir os hashes na VPS e verificar antes de instalar.
+2. Instalar com `converta-release.py install` em raiz nova e verificar a release
+   inerte. Para origem externa, [qualificar o vínculo entre os hosts](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#build-externo-e-qualificação-entre-hosts)
+   antes do preflight. O veredito de instalação cobre apenas a integridade local.
 3. Adquirir o lock global e capturar dump PM2 e definições completas de retorno em
    arquivos privados `0600`.
 4. Criar symlinks temporários e promovê-los por rename atômico somente para os
@@ -106,8 +108,8 @@ qualquer `PRIVATE_DATA_NEVER_RETIRE` são invariavelmente preservados.
 
 ### Fronteira entre produção e ativação
 
-`converta-release.py` possui apenas `build` e `verify`. Ele exige worktree limpo no
-target, Node `v20.20.0`, saída exclusiva e `SOURCE_DATE_EPOCH`; executa Prisma antes
+`converta-release.py` oferece `build`, `verify` e `install`. O build exige worktree
+limpo no target, Node `v20.20.0`, saída exclusiva e `SOURCE_DATE_EPOCH`, executa Prisma antes
 do build da API, executa o frontend uma vez e sela API/frontend completos. Seu
 `index.sha256` usa exatamente o schema v1 conferido por `converta-deploy.py`, e o pacote só é publicado após
 fechamento, teste xz/tar, extração independente e comparação integral.
