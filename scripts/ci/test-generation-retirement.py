@@ -1050,6 +1050,55 @@ class GenerationRetirementTest(unittest.TestCase):
         fd = MODULE.acquire_existing_lock(fixture.deploy_lock); os.close(fd)
         fd = MODULE.acquire_existing_lock(fixture.writer_lock); os.close(fd)
 
+    def test_builder_preservation_accepts_only_the_policy_bound_shared_checkout(self):
+        fixture, request, args = self.builder_lock_fixture()
+        raw_policy = json.loads(fixture.policy.read_bytes())
+        roots = raw_policy["canonicalRoots"]
+        fixture.repo.chmod(0o775)
+        with self.assertRaisesRegex(MODULE.Denied, "root_policy_identity:repository"):
+            MODULE.materialize_builder_preservation_lock(args)
+
+        roots["repository"]["allowedModes"] = ["0775"]
+        private_json(fixture.policy, raw_policy)
+        value = json.loads(request.read_bytes())
+        value["rootPolicy"]["sha256"] = sha(fixture.policy)
+        private_json(request, value)
+        args.request_sha256 = sha(request)
+        policy = MODULE.validate_root_policy(fixture.policy.read_bytes(), sha(fixture.policy))
+        with self.assertRaisesRegex(MODULE.Denied, "root_policy_identity:repository"):
+            MODULE.authenticate_policy_root(policy, "repository")
+        with redirect_stdout(io.StringIO()):
+            MODULE.materialize_builder_preservation_lock(args)
+        self.assertEqual(stat.S_IMODE(fixture.repo.stat().st_mode), 0o775)
+
+        for name, path, mode, predicate in (
+            ("repository", fixture.repo, 0o777, "root_policy_identity:repository"),
+            ("outputs", fixture.output_root, 0o775, "root_policy_identity:outputs"),
+        ):
+            with self.subTest(root=name):
+                original_mode = stat.S_IMODE(path.stat().st_mode)
+                original_definition = roots[name].copy()
+                try:
+                    path.chmod(mode)
+                    roots[name]["allowedModes"] = [f"0{mode:03o}"]
+                    private_json(fixture.policy, raw_policy)
+                    value["rootPolicy"]["sha256"] = sha(fixture.policy)
+                    private_json(request, value)
+                    args.request_sha256 = sha(request)
+                    args.report_output = fixture.evidence_root / f"denied-{name}.json"
+                    with self.assertRaisesRegex(MODULE.Denied, predicate):
+                        MODULE.materialize_builder_preservation_lock(args)
+                    self.assertFalse(args.report_output.exists())
+                finally:
+                    path.chmod(original_mode)
+                    roots[name] = original_definition
+
+        roots["evidence"][0]["path"] = str(fixture.repo / "nested-evidence")
+        raw = MODULE.canonical(raw_policy)
+        policy = MODULE.validate_root_policy(raw, MODULE.digest_bytes(raw))
+        with self.assertRaisesRegex(MODULE.Denied, "builder_preservation_repository_overlap"):
+            MODULE.authenticate_policy_root(policy, "repository", preserve_builder_repository=True)
+
     def test_builder_lock_rejects_unbound_mode_symlink_and_hardlink(self):
         for kind in ("unbound", "mode", "symlink", "hardlink"):
             with self.subTest(kind=kind):
