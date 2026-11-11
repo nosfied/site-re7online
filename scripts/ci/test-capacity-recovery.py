@@ -732,6 +732,7 @@ class CapacityRecoveryTests(unittest.TestCase):
             "operationalState": {"path": str(operational), "sha256": sha(operational)},
             "candidates": candidates, "crossHostEvidence": evidence}
         return {"request": request, "attestation": attestation,
+                "builderRequest": builder_request, "operational": operational,
                 "report": report, "candidates": candidates,
                 "patches": {"BUILDER_A838BD33_TARGET": target,
                             "BUILDER_A838BD33_RELEASE": release_id,
@@ -742,6 +743,48 @@ class CapacityRecoveryTests(unittest.TestCase):
                                 "packageSha256": sha(self.package),
                                 "manifestSha256": sha(self.manifest),
                                 "indexSha256": sha(self.index)}}}
+
+    def cross_host_phase_revalidation(self, fixture, plan_sha, phase, ordinal):
+        nonce = hashlib.sha256(f"{phase}-{ordinal}".encode()).hexdigest()
+        builder_request = json.loads(fixture["builderRequest"].read_text())
+        builder_request["nonce"] = nonce
+        request_path = self.base / f"builder-{phase}-{ordinal}.private.json"
+        request_path.write_bytes(MODULE.canonical(builder_request)); request_path.chmod(0o600)
+
+        now = time.time_ns()
+        attestation = json.loads(fixture["attestation"].read_text())
+        attestation["requestSha256"] = sha(request_path)
+        attestation["nonce"] = nonce
+        attestation["capturedAtNs"] = now - 4_000_000
+        attestation["finishedAtNs"] = now - 3_000_000
+        attestation_path = self.base / f"attestation-{phase}-{ordinal}.private.json"
+        attestation_path.write_bytes(MODULE.canonical(attestation)); attestation_path.chmod(0o600)
+
+        report = json.loads(fixture["report"].read_text())
+        report["builderEvidence"]["requestSha256"] = sha(request_path)
+        report["builderEvidence"]["attestationSha256"] = sha(attestation_path)
+        report["capturedAtNs"] = now - 2_000_000
+        report["finishedAtNs"] = now - 1_000_000
+        report_path = self.base / f"vps-{phase}-{ordinal}.private.json"
+        report_path.write_bytes(MODULE.canonical(report)); report_path.chmod(0o600)
+
+        evidence = {"profile": MODULE.BUILDER_A838BD33_PROFILE,
+            "maxAgeSeconds": 300 if phase == "prepare" else 60,
+            "builderRequest": {"path": str(request_path), "sha256": sha(request_path)},
+            "builderAttestation": {"path": str(attestation_path),
+                                   "sha256": sha(attestation_path)},
+            "vpsOperationalState": {"path": str(fixture["operational"]),
+                                    "sha256": sha(fixture["operational"])},
+            "vpsCaptureReport": {"path": str(report_path), "sha256": sha(report_path)}}
+        phase_value = {"schemaVersion": 1,
+            "kind": "A838BD33_CROSS_HOST_PHASE_REVALIDATION", "phase": phase,
+            "planSha256": plan_sha,
+            "auditEvidenceSha256": MODULE.digest_bytes(
+                MODULE.canonical(fixture["request"]["crossHostEvidence"])),
+            "crossHostEvidence": evidence}
+        phase_path = self.base / f"phase-{phase}-{ordinal}.private.json"
+        phase_path.write_bytes(MODULE.canonical(phase_value)); phase_path.chmod(0o600)
+        return phase_path
 
     def test_a838bd33_cross_host_audit_passes_but_prepare_requires_fresh_two_host_proof(self):
         fixture = self.cross_host_fixture()
@@ -755,6 +798,17 @@ class CapacityRecoveryTests(unittest.TestCase):
                                        "CROSS_HOST_PHASE_REVALIDATION_REQUIRED"):
                 MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
                                     self.commands, self.seal_manifest)
+            revalidation = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            seal = MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, revalidation, sha(revalidation))
+            self.assertEqual(seal["state"], "SEALED_FOR_EXPLICIT_AUTHORIZATION")
+            intent = json.loads(self.intent.read_text())
+            self.assertEqual(intent["crossHostProfile"],
+                             MODULE.BUILDER_A838BD33_PROFILE)
+            self.assertEqual(intent["preparedCrossHostRevalidation"]["phase"],
+                             "prepare")
 
     def test_a838bd33_cross_host_audit_denies_incomplete_or_divergent_evidence(self):
         for mutation in ("incomplete", "binding", "extra-candidate"):
@@ -795,6 +849,76 @@ class CapacityRecoveryTests(unittest.TestCase):
         with mock.patch.multiple(MODULE, **fixture["patches"]), \
                 self.assertRaisesRegex(MODULE.Denied, "CROSS_HOST_EVIDENCE_STALE"):
             MODULE.audit_request(self.request, sha(self.request), self.plan)
+
+    def test_a838bd33_execute_revalidates_both_hosts_and_denies_runtime_drift_before_effect(self):
+        fixture = self.cross_host_fixture()
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]):
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+            prepare_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, prepare_evidence, sha(prepare_evidence))
+            intent = json.loads(self.intent.read_text())
+            authorization = self.base / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+                "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(self.intent),
+                "commandsSha256": intent["commandsSha256"],
+                "paths": [item["path"] for item in intent["candidates"]]})
+            execute_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "execute", 2)
+            drift = self.runtime / "late-drift.js"
+            drift.write_bytes(b"created after both-host capture"); drift.chmod(0o644)
+            receipt = self.base / "receipts/execute-drift"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE.subprocess, "run") as destructive, \
+                    self.assertRaises(SystemExit):
+                MODULE.execute_intent(
+                    self.intent, sha(self.intent), authorization,
+                    sha(authorization), receipt, execute_evidence,
+                    sha(execute_evidence))
+            destructive.assert_not_called()
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual(result["attemptedCommands"], 0)
+        self.assertEqual(result["completedCommands"], 0)
+        self.assertIn("EXECUTE_RECAPTURE_DENY:CROSS_HOST_OUTPUT_EQUIVALENCE_INCOMPLETE",
+                      result["failurePredicate"])
+        self.assertTrue(self.runtime.is_dir())
+        self.assertTrue(drift.is_file())
+
+    def test_a838bd33_prepare_and_execute_require_distinct_fresh_two_host_proofs(self):
+        fixture = self.cross_host_fixture()
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]):
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+            prepare_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, prepare_evidence, sha(prepare_evidence))
+            intent = json.loads(self.intent.read_text())
+            authorization = self.base / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+                "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(self.intent),
+                "commandsSha256": intent["commandsSha256"],
+                "paths": [item["path"] for item in intent["candidates"]]})
+            execute_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "execute", 2)
+            receipt = self.base / "receipts/execute-pass"
+            receipt.parent.mkdir(mode=0o700)
+            result = MODULE.execute_intent(
+                self.intent, sha(self.intent), authorization, sha(authorization),
+                receipt, execute_evidence, sha(execute_evidence))
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertEqual(result["attemptedCommands"], 2)
+        self.assertEqual(result["completedCommands"], 2)
+        self.assertFalse(self.runtime.exists())
+        self.assertFalse(Path(fixture["candidates"][1]["path"]).exists())
 
     def crm_staging_fixture(self):
         incoming = self.base / "crm-incoming"; incoming.mkdir(mode=0o700)

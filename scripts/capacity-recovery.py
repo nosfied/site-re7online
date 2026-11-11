@@ -136,6 +136,10 @@ CROSS_HOST_EVIDENCE_KEYS = {
     "profile", "maxAgeSeconds", "builderRequest", "builderAttestation",
     "vpsOperationalState", "vpsCaptureReport",
 }
+CROSS_HOST_REVALIDATION_KEYS = {
+    "schemaVersion", "kind", "phase", "planSha256", "auditEvidenceSha256",
+    "crossHostEvidence",
+}
 PROC_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 PROC_OBSERVER_COMMAND = (
     "/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
@@ -4500,9 +4504,118 @@ def candidate_bindings(observations: list[dict[str, Any]]) -> list[dict[str, Any
     return [candidate_binding(item) for item in observations]
 
 
+def authenticate_cross_host_phase_revalidation(
+        path: Path | None, expected_sha: str | None, plan: dict[str, Any],
+        plan_sha: str, phase: str, candidate_paths: list[str]) -> dict[str, Any]:
+    if path is None or expected_sha is None:
+        deny("CROSS_HOST_PHASE_REVALIDATION_REQUIRED")
+    raw, identity = stable_regular(path, expected_sha, allowed_modes={0o600})
+    value = object_json(raw, "CROSS_HOST_PHASE_REVALIDATION_JSON")
+    if raw != canonical(value):
+        deny("CROSS_HOST_PHASE_REVALIDATION_CANONICAL")
+    if (set(value) != CROSS_HOST_REVALIDATION_KEYS or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != "A838BD33_CROSS_HOST_PHASE_REVALIDATION" or
+            value.get("phase") != phase or value.get("planSha256") != plan_sha or
+            value.get("auditEvidenceSha256") !=
+                digest_bytes(canonical(plan["crossHostEvidence"]))):
+        deny("CROSS_HOST_PHASE_REVALIDATION_SCHEMA")
+    evidence = value.get("crossHostEvidence")
+    max_age_limit = 300 if phase == "prepare" else 60
+    if (not isinstance(evidence, dict) or
+            not isinstance(evidence.get("maxAgeSeconds"), int) or
+            evidence["maxAgeSeconds"] > max_age_limit):
+        deny("CROSS_HOST_PHASE_REVALIDATION_MAX_AGE")
+    for key in ("builderRequest", "builderAttestation", "vpsCaptureReport"):
+        if evidence.get(key, {}).get("sha256") == plan["crossHostEvidence"].get(key, {}).get("sha256"):
+            deny("CROSS_HOST_PHASE_REVALIDATION_NOT_FRESH")
+    authenticated = authenticate_a838bd33_cross_host_evidence(evidence, candidate_paths)
+    return {"path": str(path), "sha256": expected_sha, "identity": identity,
+            "phase": phase, "crossHostEvidence": evidence,
+            "authenticated": authenticated}
+
+
+def revalidate_a838bd33_cross_host_plan(
+        plan: dict[str, Any], *, plan_path: Path | None, plan_sha: str | None,
+        phase: str, check_locks: bool, include_process_evidence: bool,
+        cross_host_revalidation_path: Path | None,
+        cross_host_revalidation_sha: str | None) -> Any:
+    required = {"schemaVersion", "kind", "state", "requestSha256",
+                "minimumRecoveryBytes", "targetAvailableBytes", "qualifiedBytes",
+                "qualifiedInodes", "availableBytesBefore", "projectedAvailableBytes",
+                "minimumRecoverySatisfied", "targetAvailableSatisfied",
+                "classificationPolicy", "rootPolicy", "operationalState",
+                "liveRecapture", "deploymentLock", "writerLock", "candidates",
+                "errors", "commands", "automaticExecutionPermitted",
+                "crossHostEvidence", "phaseRevalidationRequired"}
+    if (set(plan) != required or plan.get("schemaVersion") != 4 or
+            plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or
+            plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or
+            plan.get("errors") != [] or
+            plan.get("automaticExecutionPermitted") is not False or
+            plan.get("phaseRevalidationRequired") is not True or
+            plan_path is None or plan_sha is None):
+        deny("PLAN_SCHEMA_OR_STATE")
+    candidate_paths = [item.get("observation", {}).get("path")
+                       for item in plan["candidates"]]
+    if (len(candidate_paths) != 2 or any(not isinstance(item, str)
+                                        for item in candidate_paths)):
+        deny("PLAN_CANDIDATE_PATHS")
+    phase_evidence = authenticate_cross_host_phase_revalidation(
+        cross_host_revalidation_path, cross_host_revalidation_sha, plan,
+        plan_sha, phase, candidate_paths)
+    policy, _, _ = root_policy(plan["rootPolicy"])
+    refreshed: list[dict[str, Any]] = []
+    errors: list[str] = []
+    comparisons: list[dict[str, Any]] = []
+    for item in plan["candidates"]:
+        try:
+            observed = authenticate_a838bd33_cross_host_output(
+                item["source"], policy, phase_evidence["authenticated"])
+            observed["physical"] = physical_usage([Path(observed["path"])])[observed["path"]]
+            refreshed.append(observed)
+            current = candidate_binding(observed)
+            prior = candidate_binding(item["observation"])
+            changed = sorted(key for key in current.keys() | prior.keys()
+                             if key not in current or key not in prior or
+                             current[key] != prior[key])
+            comparisons.append({"path": observed["path"], "changedFields": changed})
+            if changed:
+                errors.append(f"CANDIDATE_CHANGED:{observed['path']}")
+        except (Denied, KeyError, TypeError) as exc:
+            errors.append(str(exc))
+    if check_locks:
+        for lock in (Path(plan["deploymentLock"]), Path(plan["writerLock"])):
+            try:
+                validate_lock_free(lock)
+            except Denied as exc:
+                errors.append(str(exc))
+    if removal_commands(refreshed) != plan.get("commands"):
+        errors.append("PLAN_COMMANDS_DIVERGED")
+    process_evidence = {
+        "mechanism": BUILDER_A838BD33_PROFILE,
+        "phase": phase,
+        "revalidationBinding": {"path": str(cross_host_revalidation_path),
+                                "sha256": cross_host_revalidation_sha},
+        "crossHostEvidence": phase_evidence["crossHostEvidence"],
+        "builderObservation": phase_evidence["authenticated"]["builderObservation"],
+        "vpsObservation": phase_evidence["authenticated"]["vpsObservation"],
+        "candidateComparisons": comparisons,
+    }
+    live_recapture = {"profile": BUILDER_A838BD33_PROFILE, "phase": phase,
+                      "phaseEvidenceSha256": cross_host_revalidation_sha,
+                      "builderFinishedAtNs": process_evidence["builderObservation"]["finishedAtNs"],
+                      "vpsFinishedAtNs": process_evidence["vpsObservation"]["finishedAtNs"]}
+    base = (refreshed, sorted(set(errors)), live_recapture)
+    return (*base, process_evidence) if include_process_evidence else base
+
+
 def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
                     check_locks: bool = True, phase: str = "prepare",
-                    include_process_evidence: bool = False) -> Any:
+                    include_process_evidence: bool = False,
+                    plan_sha: str | None = None,
+                    cross_host_revalidation_path: Path | None = None,
+                    cross_host_revalidation_sha: str | None = None) -> Any:
     required = {"schemaVersion", "kind", "state", "requestSha256", "minimumRecoveryBytes",
                 "targetAvailableBytes", "qualifiedBytes", "qualifiedInodes", "availableBytesBefore",
                 "projectedAvailableBytes", "minimumRecoverySatisfied", "targetAvailableSatisfied",
@@ -4511,11 +4624,12 @@ def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
                 "commands", "automaticExecutionPermitted"}
     version = plan.get("schemaVersion")
     if version == 4:
-        # The audit proof may use two already captured hosts. Mutation phases
-        # must not reuse it: they require a new, same-request collection while
-        # each host's canonical locks are held. That adapter is intentionally
-        # a separate authorization boundary.
-        deny("CROSS_HOST_PHASE_REVALIDATION_REQUIRED")
+        return revalidate_a838bd33_cross_host_plan(
+            plan, plan_path=plan_path, plan_sha=plan_sha, phase=phase,
+            check_locks=check_locks,
+            include_process_evidence=include_process_evidence,
+            cross_host_revalidation_path=cross_host_revalidation_path,
+            cross_host_revalidation_sha=cross_host_revalidation_sha)
     if version in {2, 3}:
         required |= {"procObserver", "processObservation"}
     if version == 3:
@@ -4625,11 +4739,16 @@ def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
 
 
 def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
-                 commands_output: Path, manifest_output: Path) -> dict[str, Any]:
+                 commands_output: Path, manifest_output: Path,
+                 cross_host_revalidation_path: Path | None = None,
+                 cross_host_revalidation_sha: str | None = None) -> dict[str, Any]:
     raw, _ = stable_regular(plan_path, plan_sha)
     plan = object_json(raw, "PLAN_JSON")
     refreshed, errors, live_recapture, process_evidence = revalidate_plan(
-        plan, plan_path=plan_path, include_process_evidence=True)
+        plan, plan_path=plan_path, plan_sha=plan_sha,
+        include_process_evidence=True,
+        cross_host_revalidation_path=cross_host_revalidation_path,
+        cross_host_revalidation_sha=cross_host_revalidation_sha)
     if errors:
         result = {"state": "CAPACITY_RECOVERY_PREPARE_DENY", "errors": errors,
                   "processObservation": process_evidence}
@@ -4652,6 +4771,9 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
         intent["preparedProcessObservation"] = process_evidence
     if plan["schemaVersion"] == 3:
         intent["incrementalBatch"] = True
+    if plan["schemaVersion"] == 4:
+        intent["crossHostProfile"] = BUILDER_A838BD33_PROFILE
+        intent["preparedCrossHostRevalidation"] = process_evidence
     intent_raw = canonical(intent)
     manifest = {
         "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_SEAL_MANIFEST",
@@ -4832,7 +4954,9 @@ def validate_authorization(value: dict[str, Any], intent_sha: str,
 
 
 def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
-                   authorization_sha: str, receipt_root: Path) -> dict[str, Any]:
+                   authorization_sha: str, receipt_root: Path,
+                   cross_host_revalidation_path: Path | None = None,
+                   cross_host_revalidation_sha: str | None = None) -> dict[str, Any]:
     intent_raw, _ = stable_regular(intent_path, intent_sha)
     intent = object_json(intent_raw, "INTENT_JSON")
     required = {"schemaVersion", "kind", "state", "plan", "operationalState", "rootPolicy",
@@ -4844,10 +4968,14 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
         required |= {"procObserver", "preparedProcessObservation"}
     if version == 3:
         required |= {"incrementalBatch"}
-    if (set(intent) != required or version not in {1, 2, 3} or
+    if version == 4:
+        required |= {"crossHostProfile", "preparedCrossHostRevalidation"}
+    if (set(intent) != required or version not in {1, 2, 3, 4} or
             intent.get("kind") != "CAPACITY_RECOVERY_INTENT" or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
             (version == 3 and intent.get("incrementalBatch") is not True) or
+            (version == 4 and intent.get("crossHostProfile") !=
+             BUILDER_A838BD33_PROFILE) or
             any(intent.get(key) is not False for key in ("automaticRetry", "forceAllowed", "pruneAllowed", "pathExpansionAllowed"))):
         deny("INTENT_SCHEMA_OR_STATE")
     commands_raw = b"".join((" ".join(command) + "\n").encode() for command in intent["commands"])
@@ -4885,7 +5013,16 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
             deny("PROC_OBSERVER_BINDING_DIVERGED")
         refreshed, errors, live_recapture, process_evidence = revalidate_plan(
             plan_value, plan_path=plan_path, check_locks=False, phase="execute",
-            include_process_evidence=True)
+            include_process_evidence=True, plan_sha=intent["plan"]["sha256"],
+            cross_host_revalidation_path=cross_host_revalidation_path,
+            cross_host_revalidation_sha=cross_host_revalidation_sha)
+        if version == 4:
+            prepared = intent["preparedCrossHostRevalidation"]["crossHostEvidence"]
+            executing = process_evidence["crossHostEvidence"]
+            if any(executing[key]["sha256"] == prepared[key]["sha256"]
+                   for key in ("builderRequest", "builderAttestation",
+                               "vpsCaptureReport")):
+                deny("CROSS_HOST_EXECUTE_REVALIDATION_NOT_FRESH")
         candidates_changed = candidate_bindings(refreshed) != candidate_bindings(intent["candidates"])
         pre_attempt = {"event": "RECAPTURE_DENY" if errors or candidates_changed else "RECAPTURE_PASS",
                        "intentSha256": intent_sha,
@@ -4987,6 +5124,8 @@ def parse_args() -> argparse.Namespace:
     prepare.add_argument("--commands-output", type=Path, required=True)
     prepare.add_argument("--manifest-output", type=Path, required=True)
     prepare.add_argument("--telemetry-output", type=Path, required=True)
+    prepare.add_argument("--cross-host-revalidation", type=Path)
+    prepare.add_argument("--cross-host-revalidation-sha256")
     execute = actions.add_parser("execute")
     execute.add_argument("--intent", type=Path, required=True)
     execute.add_argument("--intent-sha256", required=True)
@@ -4994,6 +5133,8 @@ def parse_args() -> argparse.Namespace:
     execute.add_argument("--authorization-sha256", required=True)
     execute.add_argument("--receipt-root", type=Path, required=True)
     execute.add_argument("--telemetry-output", type=Path, required=True)
+    execute.add_argument("--cross-host-revalidation", type=Path)
+    execute.add_argument("--cross-host-revalidation-sha256")
     preserve = actions.add_parser("preserve-empty-transaction")
     preserve.add_argument("--request", type=Path, required=True)
     preserve.add_argument("--request-sha256", required=True)
@@ -5015,10 +5156,14 @@ def main() -> None:
             result = audit_request(args.request, args.request_sha256, args.plan_output)
         elif args.action == "prepare":
             result = prepare_plan(args.plan, args.plan_sha256, args.intent_output,
-                                  args.commands_output, args.manifest_output)
+                                  args.commands_output, args.manifest_output,
+                                  args.cross_host_revalidation,
+                                  args.cross_host_revalidation_sha256)
         elif args.action == "execute":
             result = execute_intent(args.intent, args.intent_sha256, args.authorization,
-                                    args.authorization_sha256, args.receipt_root)
+                                    args.authorization_sha256, args.receipt_root,
+                                    args.cross_host_revalidation,
+                                    args.cross_host_revalidation_sha256)
         else:
             result = preserve_legacy_empty_transaction(
                 args.request, args.request_sha256, args.receipt_output,

@@ -601,10 +601,16 @@ imediato da API. O lote deve conter exatamente os dois caminhos declarados.
 caminho, device/inode, identidade do helper, vínculo entre hosts, observação
 incompleta, referência, writer, falha de leitura ou evidência vencida negam o
 perfil. Um plano PASS desse schema permanece somente revisável:
-`phaseRevalidationRequired=true`. `prepare` e `execute` negam com
-`CROSS_HOST_PHASE_REVALIDATION_REQUIRED` até que um adaptador versionado obtenha
-novas provas ligadas à mesma requisição sob os locks de cada host. Portanto, o
-perfil não converte as capturas atuais em autorização de retirada.
+`phaseRevalidationRequired=true`. `prepare` exige uma requisição canônica de
+revalidação ligada ao SHA-256 do plano e da prova do `audit`, com nova coleta do
+builder e novo relatório da VPS, limitada a 300 segundos. A intenção preserva
+integralmente essa prova. `execute`, já sob os dois locks locais do builder,
+exige outra requisição, coleta e relatório, distintos dos usados no `audit` e no
+`prepare` e limitados a 60 segundos. A fotografia da VPS é produzida sob os
+locks daquele host. Reutilização de prova, alteração de qualquer runtime ou
+divergência operacional nega antes do primeiro `ATTEMPT`. Assim, cada fase
+revalida os dois hosts e as capturas do `audit` não se convertem isoladamente em
+autorização de retirada.
 
 ### `CLOSED_PREPARATION_DERIVED_ARCHIVE`
 
