@@ -1336,6 +1336,21 @@ de emitir o receipt terminal e fechar o lifecycle. Receipt terminal preexistente
 é autenticado antes de qualquer retirada; receipt de outra operação nega sem
 efeito.
 
+Para dívida de criação por extrapolação de bytes ou inodes, antes do receipt
+de materialização, a disposição autorizada usa
+`deploy-control-worktree-materialize.py retire-failed-materialization` com
+`--contract`, `--contract-sha256`, `--lifecycle`, `--lifecycle-sha256`,
+`--owner` e `--reason`. Executar o controle autenticado de fora da árvore
+negada. O executor confere o binding Git, a medição registrada e a ausência de
+drift ou conteúdo extra. Preserva o lifecycle original, grava a tentativa,
+remove pelo registro Git sem força e fecha por receipt somente após comprovar
+ausência física e no registro. A retomada após remoção exige a tentativa durável.
+
+A nova materialização usa contrato sucessor com novo `generationId`, o mesmo
+destino literal, orçamento medido de bytes e inodes e capacidade fresca.
+Quando a custódia original já estiver `SANITIZED`, a custódia sucessora é
+derivada do SHA do novo contrato e preserva a anterior.
+
 Essa ligação cobre a operação real de extrair controles autenticados de um
 worktree transitório para uma custódia operacional. Não é executor livre e não
 remove worktrees históricos. Os testes atravessam materialização, consumo, cópia,

@@ -456,6 +456,62 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
                          "SANITIZED")
 
+    def budget_denial(self):
+        item = self.value["preparationArtifacts"][0]
+        item["budgetBytes"] = item["operation"]["predictedBytes"] = 1
+        self.write_private(self.contract, self.value)
+        denied = self.run_tool("materialize", "--repository", self.repo,
+            "--destination", self.destination, "--commit", self.commit,
+            "--contract", self.contract, "--contract-sha256", self.sha(self.contract))
+        self.assertIn("preparation_realized_budget_exceeded", denied.stderr)
+        path = self.controls / ("." + self.destination.name + ".lifecycle")
+        return path / "preparation-artifacts.lifecycle.private.json"
+
+    def retire_failed(self, path):
+        return self.run_tool("retire-failed-materialization", "--contract", self.contract,
+            "--contract-sha256", self.sha(self.contract), "--lifecycle", path,
+            "--lifecycle-sha256", self.sha(path), "--owner", "fixture",
+            "--reason", "authorized failed budget disposition")
+
+    def test_failed_budget_disposition_then_measured_successor(self):
+        path = self.budget_denial()
+        original_sha = self.sha(path)
+        failed = json.loads(path.read_text())
+        self.assertEqual(failed["state"], "RETENTION_DEBT")
+        with self.assertRaisesRegex(ValueError, "equivalent_preparation_pending"):
+            lifecycle.validate_existing_lifecycles(self.controls, self.value)
+        retired = self.retire_failed(path)
+        self.assertEqual(retired.returncode, 0, retired.stderr)
+        self.assertEqual(json.loads(path.read_text())["state"], "SANITIZED")
+        self.assertEqual(self.sha(path.parent / "failed-materialization.lifecycle.private.json"),
+                         original_sha)
+        self.assertFalse(self.destination.exists())
+        self.assertNotIn(str(self.destination), self.git("worktree", "list", "--porcelain"))
+        closure_sha = self.sha(path)
+        item = self.value["preparationArtifacts"][0]
+        item["budgetBytes"] = item["operation"]["predictedBytes"] = (
+            failed["realized"][0]["allocatedBytes"] * 2)
+        self.value["generationId"] += "-successor"
+        self.write_private(self.contract, self.value)
+        materialized = self.materialize()
+        self.assertNotEqual(Path(materialized["lifecyclePath"]).parent, path.parent)
+        _, request = self.consume_request(materialized)
+        consumed = self.consume(materialized, request)
+        self.assertEqual(consumed.returncode, 0, consumed.stderr)
+        self.assertEqual(json.loads(Path(materialized["lifecyclePath"]).read_text())["state"],
+                         "SANITIZED")
+        self.assertEqual(self.sha(path), closure_sha)
+
+    def test_failed_budget_disposition_denies_ignored_content(self):
+        path = self.budget_denial()
+        (self.destination / "private-retain.txt").write_text("unique evidence")
+        before = self.sha(path)
+        denied = self.retire_failed(path)
+        self.assertIn("deploy_control_consume_drift", denied.stderr)
+        self.assertEqual(self.sha(path), before)
+        self.assertTrue((self.destination / "private-retain.txt").is_file())
+        self.assertFalse((path.parent / "failed-materialization-retirement-attempt.private.json").exists())
+
     def test_success_closes_only_after_external_removal(self):
         materialized = self.materialize()
         receipt = self.terminal(materialized)
