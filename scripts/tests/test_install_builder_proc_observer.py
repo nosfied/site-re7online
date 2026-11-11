@@ -32,7 +32,9 @@ class BuilderObserverInstaller(unittest.TestCase):
         self.enterContext(patch.multiple(
             installer, INSTALLER=installer_copy, SOURCE=source,
             SOURCE_SHA256=installer.digest(source.read_bytes()), TARGET_BASE=base,
-            TARGET=target, ROOT_UID=os.getuid(), ROOT_GID=os.getgid()))
+            TARGET=target,
+            TEMPORARY=target.with_name(".capacity-proc-observer.py.a838bd33.installing"),
+            ROOT_UID=os.getuid(), ROOT_GID=os.getgid()))
         self.target = target
 
     def test_install_and_recover_without_sudoers_change(self):
@@ -74,6 +76,49 @@ class BuilderObserverInstaller(unittest.TestCase):
         self.assertEqual(result["state"], "INSTALLED")
         self.assertEqual(result["helper"]["sha256"], installer.SOURCE_SHA256)
         self.assertTrue(self.target.is_file())
+
+    def test_resume_after_interrupted_temporary_write(self):
+        real_write = os.write
+        reports: list[bytes] = []
+        interrupted = False
+
+        def interrupt_file_write(descriptor, value):
+            nonlocal interrupted
+            if descriptor == 1:
+                reports.append(bytes(value))
+                return len(value)
+            if not interrupted:
+                interrupted = True
+                partial = bytes(value[:17])
+                real_write(descriptor, partial)
+                raise OSError("interrupted-before-publication")
+            return real_write(descriptor, value)
+
+        with patch.object(installer.os, "write", side_effect=interrupt_file_write), \
+                self.assertRaisesRegex(OSError, "interrupted-before-publication"):
+            installer.main()
+        self.assertEqual(reports, [])
+        self.assertFalse(self.target.exists())
+        self.assertTrue(installer.TEMPORARY.exists())
+
+        result = installer.install()
+        self.assertEqual(result["state"], "INSTALLED")
+        self.assertEqual(result["helper"]["sha256"], installer.SOURCE_SHA256)
+        self.assertTrue(self.target.is_file())
+        self.assertFalse(installer.TEMPORARY.exists())
+
+    def test_resume_after_atomic_publication_before_temporary_unlink(self):
+        installer.ensure_target_parent()
+        source_raw = installer.SOURCE.read_bytes()
+        installer.write_temporary(source_raw)
+        os.link(installer.TEMPORARY, self.target, follow_symlinks=False)
+        self.assertEqual(self.target.stat().st_nlink, 2)
+
+        result = installer.install()
+        self.assertEqual(result["state"], "RECOVERED")
+        self.assertEqual(result["helper"]["sha256"], installer.SOURCE_SHA256)
+        self.assertEqual(self.target.stat().st_nlink, 1)
+        self.assertFalse(installer.TEMPORARY.exists())
 
 
 if __name__ == "__main__":
