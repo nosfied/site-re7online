@@ -154,7 +154,7 @@ class ReleaseProducerTest(unittest.TestCase):
         worktrees = cls.base / "build-worktrees"
         cls.outputs = cls.base / "build-output"; cls.outputs.mkdir()
         cls.releases = cls.base / "releases"; cls.releases.mkdir()
-        repository = cls.base / "repository"; repository.mkdir()
+        repository = cls.base / "repository"; repository.mkdir(); repository.chmod(0o775)
         staging = cls.base / "staging"; staging.mkdir()
         evidence = cls.base / "evidence"; evidence.mkdir()
         def policy_entry(path: Path) -> dict:

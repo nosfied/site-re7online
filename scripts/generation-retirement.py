@@ -718,7 +718,8 @@ def validate_root_policy(raw: bytes, expected_sha256: str) -> dict[str, Any]:
             "definitions": definitions, "sha256": expected_sha256}
 
 
-def authenticate_policy_root(policy: dict[str, Any], key: str) -> list[Path]:
+def authenticate_policy_root(policy: dict[str, Any], key: str, *,
+                             preserve_builder_repository: bool = False) -> list[Path]:
     raw_entries = policy["definitions"][key] if key == "evidence" else [policy["definitions"][key]]
     authenticated = []
     for entry in raw_entries:
@@ -726,8 +727,17 @@ def authenticate_policy_root(policy: dict[str, Any], key: str) -> list[Path]:
         resolved = _protected_directory(path, f"root_policy_directory:{key}")
         info = resolved.lstat()
         mode = stat.S_IMODE(info.st_mode)
+        # Builder preservation only observes the checkout's directory identity.
+        # The exception cannot make it a parent of any protected artifact root.
+        shared_checkout = preserve_builder_repository and key == "repository" and mode == 0o775
+        if shared_checkout:
+            roots = policy["canonicalRoots"]
+            protected = [value for name, value in roots.items() if name not in {"repository", "evidence"}]
+            protected.extend(roots["evidence"])
+            if any(Path(value).is_relative_to(resolved) for value in protected):
+                deny("builder_preservation_repository_overlap")
         if (info.st_uid != entry["ownerUid"] or info.st_gid != entry["groupGid"] or
-                f"0{mode:03o}" not in entry["allowedModes"] or mode & 0o022):
+                f"0{mode:03o}" not in entry["allowedModes"] or (mode & 0o022 and not shared_checkout)):
             deny(f"root_policy_identity:{key}")
         _validate_ancestors(resolved.parent, entry["ownerUid"], f"root_policy_ancestor:{key}")
         authenticated.append(resolved)
@@ -2138,7 +2148,8 @@ def preservation_snapshot(request: dict[str, Any]) -> tuple[dict[str, Any], dict
             lifecycle.get("targetCommit") != contract["targetCommit"]):
         deny("builder_preservation_generation")
     policy = residue_policy(request)
-    for root_name in ("repository", "worktrees", "outputs", "releases"):
+    authenticate_policy_root(policy, "repository", preserve_builder_repository=True)
+    for root_name in ("worktrees", "outputs", "releases"):
         authenticate_policy_root(policy, root_name)
     operational = {"canonicalRoots": policy["canonicalRoots"]}
     validate_artifact_roots(contract, operational, policy)

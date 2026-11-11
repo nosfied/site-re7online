@@ -438,6 +438,12 @@ estado atual e exige que os dois runtimes continuem idênticos ao contrato.
 A medida `retainedBytes` soma conservadoramente os blocos físicos por raiz;
 `historicalInventoryEquivalence=false` declara a ausência da equivalência histórica.
 
+Na preservação do builder, o checkout pode ter modo `0775` se o modo estiver
+na política original autenticada e UID/GID coincidirem. O checkout é apenas
+observado e não pode conter uma raiz de artefatos ou evidências. As demais
+raízes e os fluxos de retirada continuam sujeitos à regra contra escrita
+por grupo ou por outros.
+
 O materializador abaixo é o único bootstrap admitido para esse perfil. Autentica a
 mesma geração e os três derivados sob o writer lock já existente. O destino é
 exatamente `.deployment-window.lock` no pai da raiz outputs autenticada. Reutiliza
