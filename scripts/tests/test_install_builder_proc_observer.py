@@ -22,9 +22,10 @@ class BuilderObserverInstaller(unittest.TestCase):
         custody = temp / "custody"
         custody.mkdir(mode=0o700)
         installer_copy = custody / INSTALLER_PATH.name
-        source = custody / "capacity-proc-observer.py"
+        source = custody / "capacity-proc-observer-builder-a838bd33.py"
         shutil.copyfile(INSTALLER_PATH, installer_copy)
-        shutil.copyfile(Path(__file__).resolve().parents[1] / "capacity-proc-observer.py", source)
+        shutil.copyfile(Path(__file__).resolve().parents[1] /
+                        "capacity-proc-observer-builder-a838bd33.py", source)
         installer_copy.chmod(0o600)
         source.chmod(0o600)
         target = base / "libexec/re7online/capacity-proc-observer.py"

@@ -11,7 +11,7 @@ from typing import Any
 
 
 INSTALLER = Path(__file__).resolve()
-SOURCE = INSTALLER.with_name("capacity-proc-observer.py")
+SOURCE = INSTALLER.with_name("capacity-proc-observer-builder-a838bd33.py")
 SOURCE_SHA256 = "30af1520bfcf1726674a57193b0f8c4b5178fc7be7aec5f0e97b982abd57630b"
 TARGET_BASE = Path("/usr/local")
 TARGET = TARGET_BASE / "libexec/re7online/capacity-proc-observer.py"

@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 
 SPEC = importlib.util.spec_from_file_location(
-    "observer", Path(__file__).resolve().parents[1] / "capacity-proc-observer.py")
+    "observer", Path(__file__).resolve().parents[1] /
+    "capacity-proc-observer-builder-a838bd33.py")
 observer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(observer)
 
