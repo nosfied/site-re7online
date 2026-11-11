@@ -124,6 +124,24 @@ def remove_interrupted_temporary() -> None:
     sync_directory(TARGET.parent)
 
 
+def sync_temporary(info: os.stat_result) -> tuple[bytes, os.stat_result]:
+    fd = os.open(TEMPORARY, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        current = os.fstat(fd)
+        if ((current.st_dev, current.st_ino) != (info.st_dev, info.st_ino) or
+                (current.st_uid, current.st_gid) != (ROOT_UID, ROOT_GID) or
+                stat.S_IMODE(current.st_mode) != 0o500 or current.st_nlink != 1):
+            raise RuntimeError("TEMPORARY_IDENTITY")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    temporary_raw, temporary = stable(TEMPORARY, SOURCE_SHA256, {0o500}, {1})
+    if ((temporary.st_dev, temporary.st_ino) != (info.st_dev, info.st_ino) or
+            (temporary.st_uid, temporary.st_gid) != (ROOT_UID, ROOT_GID)):
+        raise RuntimeError("TEMPORARY_IDENTITY")
+    return temporary_raw, temporary
+
+
 def write_temporary(source_raw: bytes) -> tuple[bytes, os.stat_result]:
     try:
         temporary_raw, temporary = stable(TEMPORARY, SOURCE_SHA256, {0o500})
@@ -134,7 +152,7 @@ def write_temporary(source_raw: bytes) -> tuple[bytes, os.stat_result]:
     else:
         if (temporary.st_uid, temporary.st_gid) != (ROOT_UID, ROOT_GID):
             raise RuntimeError("TEMPORARY_IDENTITY")
-        return temporary_raw, temporary
+        return sync_temporary(temporary)
     fd = os.open(TEMPORARY, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW |
                  os.O_CLOEXEC, 0o500)
     try:

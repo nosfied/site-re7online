@@ -107,6 +107,50 @@ class BuilderObserverInstaller(unittest.TestCase):
         self.assertTrue(self.target.is_file())
         self.assertFalse(installer.TEMPORARY.exists())
 
+    def test_resume_syncs_complete_temporary_before_atomic_publication(self):
+        real_fsync = os.fsync
+        interrupted = False
+
+        def interrupt_before_temporary_fsync(descriptor):
+            nonlocal interrupted
+            current = os.fstat(descriptor)
+            if (installer.TEMPORARY.exists() and
+                    current.st_ino == installer.TEMPORARY.stat().st_ino and
+                    not interrupted):
+                interrupted = True
+                raise OSError("interrupted-before-temporary-fsync")
+            return real_fsync(descriptor)
+
+        with patch.object(installer.os, "fsync", side_effect=interrupt_before_temporary_fsync), \
+                self.assertRaisesRegex(OSError, "interrupted-before-temporary-fsync"):
+            installer.install()
+        self.assertTrue(interrupted)
+        self.assertFalse(self.target.exists())
+        self.assertEqual(installer.TEMPORARY.read_bytes(), installer.SOURCE.read_bytes())
+
+        temporary_synced = False
+        real_link = os.link
+
+        def track_fsync(descriptor):
+            nonlocal temporary_synced
+            current = os.fstat(descriptor)
+            if (installer.TEMPORARY.exists() and
+                    current.st_ino == installer.TEMPORARY.stat().st_ino):
+                temporary_synced = True
+            return real_fsync(descriptor)
+
+        def require_sync_before_link(source, destination, **kwargs):
+            self.assertTrue(temporary_synced)
+            return real_link(source, destination, **kwargs)
+
+        with patch.object(installer.os, "fsync", side_effect=track_fsync), \
+                patch.object(installer.os, "link", side_effect=require_sync_before_link):
+            result = installer.install()
+        self.assertEqual(result["state"], "INSTALLED")
+        self.assertEqual(result["helper"]["sha256"], installer.SOURCE_SHA256)
+        self.assertTrue(self.target.is_file())
+        self.assertFalse(installer.TEMPORARY.exists())
+
     def test_resume_after_atomic_publication_before_temporary_unlink(self):
         installer.ensure_target_parent()
         source_raw = installer.SOURCE.read_bytes()
