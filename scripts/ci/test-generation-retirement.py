@@ -1099,6 +1099,44 @@ class GenerationRetirementTest(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Denied, "builder_preservation_repository_overlap"):
             MODULE.authenticate_policy_root(policy, "repository", preserve_builder_repository=True)
 
+    def test_shared_checkout_ancestor_checks_owner_group_and_protected_roots(self):
+        fixture, _, _ = self.builder_lock_fixture()
+        raw_policy = json.loads(fixture.policy.read_bytes())
+        roots = raw_policy["canonicalRoots"]
+        parent = fixture.root / "shared"
+        parent.mkdir()
+        parent.chmod(0o775)
+        repo = parent / "checkout"
+        repo.mkdir()
+        repo.chmod(0o775)
+        roots["repository"].update(path=str(repo), allowedModes=["0775"])
+
+        def authenticate():
+            raw = MODULE.canonical(raw_policy)
+            policy = MODULE.validate_root_policy(raw, MODULE.digest_bytes(raw))
+            return MODULE.authenticate_policy_root(policy, "repository", preserve_builder_repository=True)
+
+        self.assertEqual(authenticate(), [repo])
+        with patch.object(Path, "lstat", autospec=True, side_effect=Path.lstat) as lstat:
+            original = lstat.side_effect
+            def different_group(path):
+                info = original(path)
+                if path != parent:
+                    return info
+                fields = list(info)
+                fields[5] += 1
+                return os.stat_result(fields)
+            lstat.side_effect = different_group
+            with self.assertRaisesRegex(MODULE.Denied, "root_policy_ancestor:repository"):
+                authenticate()
+        parent.chmod(0o777)
+        with self.assertRaisesRegex(MODULE.Denied, "root_policy_ancestor:repository"):
+            authenticate()
+        parent.chmod(0o775)
+        roots["evidence"][0]["path"] = str(parent / "evidence")
+        with self.assertRaisesRegex(MODULE.Denied, "builder_preservation_repository_overlap"):
+            authenticate()
+
     def test_builder_lock_rejects_unbound_mode_symlink_and_hardlink(self):
         for kind in ("unbound", "mode", "symlink", "hardlink"):
             with self.subTest(kind=kind):

@@ -660,7 +660,9 @@ def _protected_directory(path: Path, predicate: str) -> Path:
     return resolved
 
 
-def _validate_ancestors(path: Path, owner_uid: int, predicate: str) -> None:
+def _validate_ancestors(path: Path, owner_uid: int, predicate: str, *,
+                        shared_repository_gid: int | None = None) -> list[Path]:
+    shared_ancestors = []
     current = path
     while True:
         try:
@@ -674,10 +676,14 @@ def _validate_ancestors(path: Path, owner_uid: int, predicate: str) -> None:
         # ancestor accepted by synthetic/offline fixtures.
         writable = mode & 0o022
         if writable and not (mode & stat.S_ISVTX):
-            deny(predicate)
+            if (shared_repository_gid is None or mode != 0o775 or
+                    (info.st_uid, info.st_gid) != (owner_uid, shared_repository_gid)):
+                deny(predicate)
+            shared_ancestors.append(current)
         if current == current.parent:
             break
         current = current.parent
+    return shared_ancestors
 
 
 def validate_root_policy(raw: bytes, expected_sha256: str) -> dict[str, Any]:
@@ -730,16 +736,21 @@ def authenticate_policy_root(policy: dict[str, Any], key: str, *,
         # Builder preservation only observes the checkout's directory identity.
         # The exception cannot make it a parent of any protected artifact root.
         shared_checkout = preserve_builder_repository and key == "repository" and mode == 0o775
+        if (info.st_uid != entry["ownerUid"] or info.st_gid != entry["groupGid"] or
+                f"0{mode:03o}" not in entry["allowedModes"] or (mode & 0o022 and not shared_checkout)):
+            deny(f"root_policy_identity:{key}")
+        shared_ancestors = _validate_ancestors(
+            resolved.parent, entry["ownerUid"], f"root_policy_ancestor:{key}",
+            shared_repository_gid=entry["groupGid"] if shared_checkout else None,
+        )
         if shared_checkout:
             roots = policy["canonicalRoots"]
             protected = [value for name, value in roots.items() if name not in {"repository", "evidence"}]
             protected.extend(roots["evidence"])
-            if any(Path(value).is_relative_to(resolved) for value in protected):
+            shared_paths = [resolved, *shared_ancestors]
+            if any(Path(value).resolve().is_relative_to(parent)
+                   for value in protected for parent in shared_paths):
                 deny("builder_preservation_repository_overlap")
-        if (info.st_uid != entry["ownerUid"] or info.st_gid != entry["groupGid"] or
-                f"0{mode:03o}" not in entry["allowedModes"] or (mode & 0o022 and not shared_checkout)):
-            deny(f"root_policy_identity:{key}")
-        _validate_ancestors(resolved.parent, entry["ownerUid"], f"root_policy_ancestor:{key}")
         authenticated.append(resolved)
     return authenticated
 
