@@ -3,13 +3,15 @@
 
 The program accepts one closed JSON request on stdin and emits one canonical JSON
 observation on stdout.  It has no deletion, subprocess, import-from-request or
-output-file capability.  Production installation is fixed to ROOT_HELPER_PATH and
-is invoked only through the literal sudoers command documented with this tool.
+output-file capability outside the existing VPS preservation mode. Installation
+is fixed to ROOT_HELPER_PATH. The builder command accepts either a direct root
+session or the one closed authenticated-sudo command pinned below.
 """
 
 from __future__ import annotations
 
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -69,6 +71,28 @@ CRM_INACTIVE_STAGING_PATHS = {
     "/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016",
 }
 PF_KTHREAD = 0x00200000
+BUILDER_ROOT = Path("/tmp/re7-external-builder-a838bd33-v2")
+BUILDER_RELEASE = "immutable-a838bd33-external-20261110T130618Z"
+BUILDER_TARGET = "a838bd33ea00ea49be52d61e025a36320a4154c1"
+BUILDER_DEVICE = 66306
+BUILDER_OUTPUT = BUILDER_ROOT / "build-output"
+BUILDER_PRODUCER = BUILDER_OUTPUT / f"{BUILDER_RELEASE}-producer"
+BUILDER_RUNTIME_ROOT = BUILDER_PRODUCER / BUILDER_RELEASE
+BUILDER_DIRECTORIES = (BUILDER_ROOT, BUILDER_OUTPUT, BUILDER_PRODUCER, BUILDER_RUNTIME_ROOT,
+                       *(BUILDER_RUNTIME_ROOT / name for name in sorted(RUNTIME_NAMES)))
+BUILDER_LOCKS = (BUILDER_ROOT / ".deployment-window.lock",
+                 BUILDER_OUTPUT / ".generation-build.lock")
+BUILDER_DIGESTS = {
+    "contractSha256": "5e91a5d9c95b0845cc48a75e8a8f1473722c13901d1f058805f5fd70cb9faa8a",
+    "packageSha256": "99b8ef1d6e056cc6846d6c85731bc41c53dfe251657ead62a12305d5b65ffacb",
+    "manifestSha256": "389a1c9ead3fabab8e28b035cc0741bb090835fdb930aec6cf90b9a2afd477c3",
+    "indexSha256": "490f96946172d0248647bba16fd51248fca13098a85b156b28aecc4843980af2",
+}
+BUILDER_SUDO_COMMAND = (
+    "/usr/bin/python3 -I -B -E -s "
+    "/usr/local/libexec/re7online/capacity-proc-observer.py "
+    "collect-builder-a838bd33"
+)
 
 
 class Refused(RuntimeError):
@@ -556,7 +580,169 @@ def alarm_handler(_signum: int, _frame: Any) -> None:
     raise TimeoutError("OBSERVER_TIME_LIMIT")
 
 
+def builder_request(raw: bytes) -> dict[str, Any]:
+    if len(raw) > MAX_REQUEST_BYTES:
+        refuse("REQUEST_VOLUME")
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        refuse("REQUEST_JSON")
+    expected = {"schemaVersion": 1, "kind": "A838BD33_BUILDER_PROC_REQUEST",
+                "targetCommit": BUILDER_TARGET, "releaseId": BUILDER_RELEASE,
+                **BUILDER_DIGESTS}
+    if (not isinstance(value, dict) or
+            set(value) != set(expected) | {"nonce", "paths", "contract"} or
+            any(value[key] != binding for key, binding in expected.items()) or
+            canonical(value) != raw):
+        refuse("BUILDER_REQUEST_SCHEMA")
+    nonce = value["nonce"]
+    if (not isinstance(nonce, str) or len(nonce) != SHA256_LENGTH or
+            any(char not in "0123456789abcdef" for char in nonce)):
+        refuse("REQUEST_NONCE")
+    paths = value["paths"]
+    if not isinstance(paths, dict) or set(paths) != {
+            str(path) for path in (*BUILDER_DIRECTORIES, *BUILDER_LOCKS)}:
+        refuse("BUILDER_PATHS")
+    for path, binding in paths.items():
+        lock = Path(path) in BUILDER_LOCKS
+        fields = {"device", "inode", "sha256"} if lock else {"device", "inode"}
+        if (not isinstance(binding, dict) or set(binding) != fields or
+                type(binding["device"]) is not int or binding["device"] != BUILDER_DEVICE or
+                type(binding["inode"]) is not int or binding["inode"] <= 0):
+            refuse("BUILDER_PATH_BINDING")
+        if lock and (not isinstance(binding["sha256"], str) or
+                     len(binding["sha256"]) != SHA256_LENGTH or
+                     any(char not in "0123456789abcdef" for char in binding["sha256"])):
+            refuse("BUILDER_LOCK_BINDING")
+    validate_builder_contract(value["contract"], paths)
+    return value
+
+
+def validate_builder_contract(raw: Any, paths: dict[str, Any]) -> None:
+    if not isinstance(raw, str) or digest(raw.encode()) != BUILDER_DIGESTS["contractSha256"]:
+        refuse("BUILDER_CONTRACT_SHA256")
+    try:
+        contract = json.loads(raw)
+    except json.JSONDecodeError:
+        refuse("BUILDER_CONTRACT_JSON")
+    if (not isinstance(contract, dict) or contract.get("targetCommit") != BUILDER_TARGET or
+            contract.get("releaseId") != BUILDER_RELEASE or
+            contract.get("writerLockPath") != str(BUILDER_LOCKS[1]) or
+            not isinstance(contract.get("artifacts"), list)):
+        refuse("BUILDER_CONTRACT_BINDING")
+    runtimes = [item for item in contract["artifacts"]
+                if isinstance(item, dict) and item.get("class") == "DERIVED_OUTPUT_RUNTIME"]
+    candidates = {str(path) for path in BUILDER_DIRECTORIES[-2:]}
+    if (len(runtimes) != len(candidates) or
+            any(not isinstance(item.get("path"), str) for item in runtimes) or
+            {item["path"] for item in runtimes} != candidates):
+        refuse("BUILDER_CONTRACT_PATHS")
+    for item in runtimes:
+        if (item.get("targetCommit") != BUILDER_TARGET or item.get("releaseId") != BUILDER_RELEASE or
+                item.get("observedIdentity") != paths[item["path"]]):
+            refuse("BUILDER_CONTRACT_RUNTIME_IDENTITY")
+
+
+def builder_path_identity(path: Path, binding: dict[str, Any], owner: tuple[int, int],
+                          *, lock: bool = False) -> dict[str, Any]:
+    info = path.lstat()
+    if (path.resolve(strict=True) != path or
+            (info.st_dev, info.st_ino) != (binding["device"], binding["inode"]) or
+            (info.st_uid, info.st_gid) != owner):
+        refuse("BUILDER_PATH_IDENTITY")
+    mode = stat.S_IMODE(info.st_mode)
+    if lock:
+        if (not stat.S_ISREG(info.st_mode) or mode != 0o600 or info.st_nlink != 1 or
+                info.st_size > 4096):
+            refuse("BUILDER_LOCK_IDENTITY")
+    elif (not stat.S_ISDIR(info.st_mode) or mode not in {0o700, 0o755} or
+          (path in (BUILDER_ROOT, BUILDER_OUTPUT) and mode != 0o700)):
+        refuse("BUILDER_DIRECTORY_IDENTITY")
+    return identity(info)
+
+
+def builder_administrative_execution(owner: tuple[int, int]) -> dict[str, Any]:
+    if os.geteuid() != 0:
+        refuse("BUILDER_ROOT_REQUIRED")
+    sudo = {key: value for key, value in os.environ.items() if key.startswith("SUDO_")}
+    if not sudo:
+        return {"mode": "DIRECT_ROOT"}
+    expected_keys = {"SUDO_UID", "SUDO_GID", "SUDO_USER", "SUDO_COMMAND"}
+    try:
+        account = pwd.getpwuid(owner[0])
+    except KeyError:
+        refuse("BUILDER_SUDO_CALLER_IDENTITY")
+    if (set(sudo) != expected_keys or sudo["SUDO_UID"] != str(owner[0]) or
+            sudo["SUDO_GID"] != str(owner[1]) or sudo["SUDO_USER"] != account.pw_name or
+            sudo["SUDO_COMMAND"] != BUILDER_SUDO_COMMAND):
+        refuse("BUILDER_SUDO_CALLER_IDENTITY")
+    return {"mode": "AUTHENTICATED_SUDO", "uid": owner[0], "gid": owner[1],
+            "user": account.pw_name, "commandSha256": digest(BUILDER_SUDO_COMMAND.encode())}
+
+
+def collect_builder(raw: bytes) -> dict[str, Any]:
+    request = builder_request(raw)
+    bindings = request["paths"]
+    root = BUILDER_ROOT.lstat()
+    owner = (root.st_uid, root.st_gid)
+    if owner[0] == 0:
+        refuse("BUILDER_OWNER")
+    paths = (*BUILDER_DIRECTORIES, *BUILDER_LOCKS)
+
+    def capture() -> dict[str, dict[str, Any]]:
+        return {str(path): builder_path_identity(
+            path, bindings[str(path)], owner, lock=path in BUILDER_LOCKS) for path in paths}
+
+    before = capture()
+    descriptors: list[int] = []
+    try:
+        for path in BUILDER_LOCKS:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+            descriptors.append(fd)
+            opened = os.fstat(fd)
+            if identity(opened) != before[str(path)] or opened.st_nlink != 1:
+                refuse("BUILDER_LOCK_IDENTITY")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                refuse("BUILDER_LOCK_BUSY")
+            if digest(os.pread(fd, 4097, 0)) != bindings[str(path)]["sha256"]:
+                refuse("BUILDER_LOCK_BINDING")
+        if capture() != before:
+            refuse("BUILDER_PATH_CHANGED")
+        candidates = [str(path) for path in BUILDER_DIRECTORIES[-2:]]
+        started = time.time_ns()
+        observation = scan_proc(candidates, owner[0])
+        if observation["complete"] is not True:
+            refuse("BUILDER_PROCESS_OBSERVATION_INCOMPLETE")
+        if observation["references"]:
+            refuse("BUILDER_PROCESS_REFERENCE")
+        if observation["activeWriters"]:
+            refuse("BUILDER_ACTIVE_WRITER")
+        if capture() != before:
+            refuse("BUILDER_PATH_CHANGED")
+        return {"schemaVersion": 1, "kind": "A838BD33_BUILDER_PROC_ATTESTATION",
+                "state": "COMPLETE", "requestSha256": digest(raw), "nonce": request["nonce"],
+                "targetCommit": BUILDER_TARGET, "releaseId": BUILDER_RELEASE, **BUILDER_DIGESTS,
+                "candidatePaths": candidates, "paths": before, "bindings": bindings,
+                "capturedAtNs": started,
+                "finishedAtNs": time.time_ns(), "observation": observation}
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
 def run() -> dict[str, Any]:
+    if sys.argv[1:] == ["collect-builder-a838bd33"]:
+        mechanism = installation_identity()
+        root = BUILDER_ROOT.lstat()
+        administrative_execution = builder_administrative_execution((root.st_uid, root.st_gid))
+        result = collect_builder(sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1))
+        result["mechanism"] = mechanism
+        result["administrativeExecution"] = administrative_execution
+        if len(canonical(result)) > MAX_RESPONSE_BYTES:
+            refuse("RESPONSE_VOLUME")
+        return result
     if len(sys.argv) != 2 or sys.argv[1] != "collect":
         refuse("ARGUMENTS")
     try:
