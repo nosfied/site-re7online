@@ -178,6 +178,19 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
             "deploy_control_destination_exists")
     reservation = lifecycle.validate_existing_lifecycles(destination.parent, contract)
     custody = destination.parent / ("." + destination.name + ".lifecycle")
+    if custody.exists() or custody.is_symlink():
+        prior = custody / "preparation-artifacts.lifecycle.private.json"
+        require(custody.resolve(strict=True) == custody and
+                stat.S_IMODE(custody.lstat().st_mode) == 0o700 and
+                prior.is_file() and not prior.is_symlink(), "deploy_control_prior_custody")
+        previous, _ = stable_private(prior, digest(prior.read_bytes()), "deploy_control_prior_lifecycle")
+        require(previous["state"] == "SANITIZED" and
+                previous["generationId"] != contract["generationId"] and
+                any(old["path"] == item["path"] and old["scope"] == item["scope"] and
+                    old["equivalenceSha256"] == item["equivalenceSha256"]
+                    for old in lifecycle.validate_artifacts(previous["preparationArtifacts"])),
+                "deploy_control_prior_lifecycle")
+        custody = custody.with_name(custody.name + "-" + digest(contract_raw))
     os.mkdir(custody, 0o700)
     lifecycle_path = custody / "preparation-artifacts.lifecycle.private.json"
     lifecycle.replace_lifecycle(lifecycle_path,
@@ -615,6 +628,80 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
         raise
 
 
+def retire_failed_materialization(args: argparse.Namespace) -> dict[str, Any]:
+    contract, contract_raw = lifecycle.stable_contract(args.contract, args.contract_sha256)
+    current, current_raw = stable_private(args.lifecycle, args.lifecycle_sha256,
+                                          "deploy_control_failed_lifecycle")
+    require(current.get("schemaVersion") == 1 and current.get("state") == "RETENTION_DEBT" and
+            current.get("event") == "CREATION_INTERRUPTED" and
+            current.get("generationId") == contract["generationId"] and
+            current.get("reservationRoot") == contract["reservationRoot"] and
+            current.get("preparationArtifacts") == contract["preparationArtifacts"],
+            "deploy_control_failed_lifecycle_binding")
+    require(args.owner.strip() and args.reason.strip(), "preparation_closure_responsibility")
+    item = lifecycle.validate_contract(contract)[0]
+    control = Path(item["path"])
+    repo = Path(item["authority"]["path"]).resolve(strict=True)
+    item, commit, tree = binding(contract, repo, control, item["scope"].removeprefix("deploy-control:"))
+    custody = args.lifecycle.parent
+    name = "." + control.name + ".lifecycle"
+    info = custody.lstat()
+    require(custody.parent == control.parent and
+            custody.name in {name, name + "-" + digest(contract_raw)} and
+            args.lifecycle.name == "preparation-artifacts.lifecycle.private.json" and
+            custody.resolve(strict=True) == custody and stat.S_ISDIR(info.st_mode) and
+            (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) ==
+            (os.geteuid(), os.getegid(), 0o700), "deploy_control_failed_custody")
+    success = custody / "materialization-receipt.private.json"
+    require(not success.exists() and not success.is_symlink(), "deploy_control_failed_receipt_present")
+    realized = current.get("realized")
+    require(isinstance(realized, list) and len(realized) == 1 and
+            realized[0].get("path") == str(control) and
+            (realized[0]["allocatedBytes"] > item["budgetBytes"] or
+             realized[0]["allocatedInodes"] > item["budgetInodes"]),
+            "deploy_control_failed_budget_evidence")
+    attempt = custody / "failed-materialization-retirement-attempt.private.json"
+    receipt = custody / "failed-materialization-retirement-receipt.private.json"
+    evidence = {"schemaVersion": 1, "kind": "DEPLOY_CONTROL_FAILED_MATERIALIZATION_RETIREMENT",
+                "contractSha256": digest(contract_raw), "lifecycleSha256": digest(current_raw),
+                "operationId": contract["generationId"], "path": str(control),
+                "commit": commit, "tree": tree, "owner": args.owner, "reason": args.reason}
+    attempt_raw = lifecycle.canonical(evidence)
+    present = control.exists() or control.is_symlink()
+    if attempt.exists() or attempt.is_symlink():
+        stable_private(attempt, digest(attempt_raw), "deploy_control_failed_attempt")
+    else:
+        require(present, "deploy_control_failed_absent_without_attempt")
+    if present:
+        require(not receipt.exists() and not receipt.is_symlink(),
+                "deploy_control_failed_receipt_present")
+        validate_control_worktree(repo, control, commit, [])
+        require(lifecycle.measure_realized(contract, enforce_budget=False) == realized,
+                "deploy_control_failed_realization_drift")
+        original = custody / "failed-materialization.lifecycle.private.json"
+        if original.exists() or original.is_symlink():
+            stable_private(original, args.lifecycle_sha256, "deploy_control_failed_original")
+        else:
+            require(lifecycle.canonical(current) == current_raw, "deploy_control_failed_original")
+            exclusive_json(original, current)
+        if not attempt.exists():
+            exclusive_json(attempt, evidence)
+        git(repo, "worktree", "remove", str(control))
+    require(not control.exists() and not control.is_symlink() and
+            not worktree_registered(repo, control), "deploy_control_failed_disposition_incomplete")
+    stable_private(custody / "failed-materialization.lifecycle.private.json",
+                   args.lifecycle_sha256, "deploy_control_failed_original")
+    result = {**evidence, "state": "SANITIZED", "attemptSha256": digest(attempt_raw)}
+    result_sha = digest(lifecycle.canonical(result))
+    if receipt.exists() or receipt.is_symlink():
+        stable_private(receipt, result_sha, "deploy_control_failed_retirement_receipt")
+    else:
+        exclusive_json(receipt, result)
+    lifecycle.close_lifecycle(args.lifecycle, args.lifecycle_sha256, "SANITIZED",
+                              result_sha, args.owner, args.reason)
+    return {**result, "retirementReceiptSha256": result_sha}
+
+
 def close(args: argparse.Namespace) -> dict[str, Any]:
     current, _ = stable_private(args.lifecycle, args.lifecycle_sha256,
                                 "deploy_control_lifecycle")
@@ -671,6 +758,13 @@ def parser() -> argparse.ArgumentParser:
     consume_parser.add_argument("--request-sha256", required=True)
     consume_parser.add_argument("--owner", required=True)
     consume_parser.add_argument("--reason", required=True)
+    retire = sub.add_parser("retire-failed-materialization")
+    retire.add_argument("--contract", type=Path, required=True)
+    retire.add_argument("--contract-sha256", required=True)
+    retire.add_argument("--lifecycle", type=Path, required=True)
+    retire.add_argument("--lifecycle-sha256", required=True)
+    retire.add_argument("--owner", required=True)
+    retire.add_argument("--reason", required=True)
     return result
 
 
@@ -678,7 +772,9 @@ def main() -> int:
     args = parser().parse_args()
     try:
         value = (materialize(args) if args.command == "materialize" else
-                 consume(args) if args.command == "consume" else close(args))
+                 consume(args) if args.command == "consume" else
+                 retire_failed_materialization(args) if args.command == "retire-failed-materialization" else
+                 close(args))
         print(lifecycle.canonical(value).decode(), end="")
         return 0
     except (OSError, ValueError, json.JSONDecodeError) as error:
