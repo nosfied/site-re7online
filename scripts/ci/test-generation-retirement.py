@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import py_compile
 from pathlib import Path
 import shutil
 import stat
@@ -1010,6 +1011,240 @@ class LegacyP00InstalledBatchFixture:
 
 
 class GenerationRetirementTest(unittest.TestCase):
+
+    def test_builder_preservation_accepts_current_custody_without_prior_inventory_and_never_deletes(self):
+        fixture, residue_args, _, residue = self.residue_fixture()
+        Path(json.loads(residue_args.request.read_bytes())["baseline"]["path"]).unlink()
+        request = fixture.evidence_root / "preserve-request.private.json"
+        bind = lambda path: {"path": str(path), "sha256": sha(path)}
+        private_json(request, {
+            "schemaVersion": 1, "contract": bind(fixture.contract), "lifecycle": bind(fixture.lifecycle),
+            "rootPolicy": bind(fixture.policy), "deploymentLock": str(fixture.deploy_lock),
+            "responsible": "fixture-owner", "expiresAtUtc": "2099-01-01T00:00:00Z",
+            "reason": "retain the full builder custody",
+        })
+        intent = fixture.evidence_root / "preserve-intent.private.json"
+        originals = {path: path.read_bytes() for path in (fixture.contract, fixture.lifecycle, residue)}
+        measured = {str(path): MODULE.structural_metrics(path) for path in (fixture.worktree, fixture.api, fixture.frontend)}
+        with redirect_stdout(io.StringIO()):
+            MODULE.prepare_builder_preservation(SimpleNamespace(
+                request=request, request_sha256=sha(request), intent_output=intent))
+        self.assertEqual(json.loads(intent.read_bytes())["commands"], [])
+        auth = fixture.evidence_root / "preserve-authorization.private.json"
+        private_json(auth, {"schemaVersion": 1, "authorizationId": "preserve-only",
+                           "decision": "AUTHORIZE_ONCE", "intentSha256": sha(intent),
+                           "approvedPaths": [], "owner": "fixture-owner"})
+        args = SimpleNamespace(intent=intent, intent_sha256=sha(intent), authorization=auth,
+                               authorization_sha256=sha(auth), receipt_root=fixture.evidence_root / "preserved")
+        with patch.object(MODULE.subprocess, "run") as mutations:
+            with redirect_stdout(io.StringIO()):
+                MODULE.record_builder_preservation(args)
+            mutations.assert_not_called()
+        for path, raw in originals.items():
+            self.assertEqual(path.read_bytes(), raw)
+        self.assertEqual({str(path): MODULE.structural_metrics(path)
+                          for path in (fixture.worktree, fixture.api, fixture.frontend)}, measured)
+        receipt = json.loads((args.receipt_root / "preservation-receipt.private.json").read_bytes())
+        self.assertEqual(receipt["state"], "PRESERVED_RETENTION_DEBT")
+        self.assertFalse(receipt["historicalInventoryEquivalence"])
+        self.assertEqual(receipt["destructiveCommands"], 0)
+        review = json.loads(fixture.review.read_bytes())
+        self.assertEqual(review["state"], "PRESERVE_OVERRIDE")
+        with self.assertRaises(MODULE.Denied):
+            MODULE.record_builder_preservation(args)
+
+    def residue_fixture(self):
+        fixture = Fixture(candidate=True, deployed=False,
+                          release_id="immutable-aaaaaaaa-external-20261110T000000Z")
+        self.addCleanup(fixture.close)
+        source = fixture.worktree / "scripts/preparation_artifact_lifecycle.py"
+        source.parent.mkdir()
+        shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", source)
+        subprocess.run(["git", "-C", str(fixture.worktree), "add", "scripts"], check=True)
+        subprocess.run(["git", "-C", str(fixture.worktree), "commit", "-qm", "tracked dependency"], check=True)
+        baseline = MODULE.worktree_inventory(fixture.worktree)
+        self.assertEqual(MODULE.inventory_metrics(baseline), MODULE.structural_metrics(fixture.worktree))
+        original = json.loads(fixture.contract.read_bytes())
+        for item in original["artifacts"]:
+            if item["class"] == "DERIVED_WORKTREE":
+                item.update(MODULE.inventory_metrics(baseline))
+            if item["class"] == "DERIVED_STAGING":
+                item.update(state="SANITIZED", removedAtProducerCompletion=True)
+        shutil.rmtree(fixture.staging)
+        private_json(fixture.contract, original)
+        baseline_path = fixture.evidence_root / "baseline.private.json"
+        private_json(baseline_path, baseline)
+        denial = fixture.evidence_root / "prepare.stderr.private.txt"
+        denial.write_bytes(f"GENERATION_RETIREMENT_DENY:artifact_drift:{fixture.worktree}:sizeBytes\n".encode())
+        denial.chmod(0o600)
+        py_compile.compile(str(source), doraise=True)
+        generated = Path(importlib.util.cache_from_source(str(source)))
+        residue = fixture.worktree / MODULE.BYTECODE_RESIDUE
+        # Model the frozen production path using the runner's bytecode format.
+        if generated != residue:
+            generated.rename(residue)
+        bind = lambda path: {"path": str(path), "sha256": sha(path)}
+        request = fixture.evidence_root / "residue-request.private.json"
+        value = {"schemaVersion": 1, "contract": bind(fixture.contract), "lifecycle": bind(fixture.lifecycle),
+                 "baseline": bind(baseline_path), "denial": bind(denial),
+                 "operationalState": bind(fixture.operational), "rootPolicy": bind(fixture.policy),
+                 "deploymentLock": str(fixture.deploy_lock), "residueSha256": sha(residue)}
+        private_json(request, value)
+        intent = fixture.evidence_root / "residue-intent.private.json"
+        args = SimpleNamespace(request=request, request_sha256=sha(request), intent_output=intent)
+        return fixture, args, baseline, residue
+
+    def residue_authorization(self, fixture, intent_path):
+        intent = json.loads(intent_path.read_bytes())
+        auth = fixture.evidence_root / "residue-authorization.private.json"
+        private_json(auth, {"schemaVersion": 1, "authorizationId": "fixture-once",
+                           "decision": "AUTHORIZE_ONCE", "intentSha256": sha(intent_path),
+                           "approvedPaths": [item[-1] for item in intent["commands"]], "owner": "fixture"})
+        return SimpleNamespace(intent=intent_path, intent_sha256=sha(intent_path),
+                               authorization=auth, authorization_sha256=sha(auth),
+                               receipt_root=fixture.evidence_root / "residue-execution",
+                               successor_root=fixture.output_root / f"{fixture.release_id}-bytecode-successor")
+
+    def test_residue_fixture_supports_another_cache_tag_without_widening_production_scope(self):
+        cache_from_source = importlib.util.cache_from_source
+
+        def alternate_tag(path, **kwargs):
+            return cache_from_source(path, **kwargs).replace(sys.implementation.cache_tag, "cpython-fixture")
+
+        with patch.object(importlib.util, "cache_from_source", side_effect=alternate_tag):
+            fixture, args, _, residue = self.residue_fixture()
+        self.assertEqual(MODULE.BYTECODE_RESIDUE,
+                         "scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc")
+        self.assertTrue(residue.exists())
+        self.assertEqual(list(residue.parent.iterdir()), [residue])
+        with redirect_stdout(io.StringIO()):
+            MODULE.prepare_worktree_residue(args)
+        self.assertTrue(args.intent_output.exists())
+
+    def test_residue_reconciliation_preserves_original_and_then_retires_exactly_three(self):
+        fixture, args, baseline, residue = self.residue_fixture()
+        originals = {path: path.read_bytes() for path in (fixture.contract, fixture.lifecycle)}
+        with redirect_stdout(io.StringIO()):
+            MODULE.prepare_worktree_residue(args)
+        self.assertTrue(residue.exists())
+        execution = self.residue_authorization(fixture, args.intent_output)
+        with redirect_stdout(io.StringIO()):
+            MODULE.execute_worktree_residue(execution)
+        self.assertFalse(residue.parent.exists())
+        for path, raw in originals.items():
+            self.assertEqual(path.read_bytes(), raw)
+        successor = execution.successor_root / "generation-artifacts.private.json"
+        contract = json.loads(successor.read_bytes())
+        MODULE.validate_contract(contract)
+        self.assertEqual(contract["artifacts"][5]["structuralSha256"],
+                         MODULE.structural_metrics(fixture.worktree)["structuralSha256"])
+        self.assertNotEqual(contract["artifacts"][5]["structuralSha256"],
+                            MODULE.inventory_metrics(baseline)["structuralSha256"])
+        with self.assertRaises(MODULE.Denied):
+            MODULE.execute_worktree_residue(execution)
+        fixture.contract = successor
+        fixture.lifecycle = successor.parent / "generation-lifecycle.private.json"
+        fixture.review = successor.parent / "generation-review.private.json"
+        prepared = fixture.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        intent = json.loads(fixture.intent.read_bytes())
+        self.assertEqual([item["class"] for item in intent["commands"]],
+                         ["DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_OUTPUT_RUNTIME"])
+        result, receipt = fixture.execute(fixture.authorize())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        closed = json.loads((receipt / "execution-receipt.private.json").read_bytes())
+        self.assertEqual(closed["completedCommands"], 3)
+        self.assertEqual(closed["state"], "SANITIZED")
+        self.assertEqual(closed["remainingDerivedPaths"], [])
+        self.assertTrue(fixture.package.exists())
+        MODULE.validate_contract(contract)  # Portable proof remains valid after retirement.
+
+    def test_residue_preparation_denies_missing_baseline_extra_file_or_altered_content(self):
+        for mutation in ("baseline", "extra", "content"):
+            with self.subTest(mutation=mutation):
+                fixture, args, _, residue = self.residue_fixture()
+                request = json.loads(args.request.read_bytes())
+                if mutation == "baseline":
+                    Path(request["baseline"]["path"]).unlink()
+                elif mutation == "extra":
+                    (residue.parent / "other.pyc").write_bytes(b"unapproved")
+                else:
+                    tracked = fixture.worktree / "tracked"
+                    info = tracked.stat()
+                    tracked.write_bytes(b"y\n")
+                    os.utime(tracked, ns=(info.st_atime_ns, info.st_mtime_ns))
+                with self.assertRaises(MODULE.Denied):
+                    MODULE.prepare_worktree_residue(args)
+                self.assertTrue(residue.exists())
+                self.assertFalse(args.intent_output.exists())
+
+    def test_residue_execution_denies_expanded_authorization_and_tampered_successor(self):
+        fixture, args, _, residue = self.residue_fixture()
+        with redirect_stdout(io.StringIO()):
+            MODULE.prepare_worktree_residue(args)
+        execution = self.residue_authorization(fixture, args.intent_output)
+        authorization = json.loads(execution.authorization.read_bytes())
+        private_json(execution.authorization, {**authorization, "approvedPaths": [str(fixture.worktree)]})
+        execution.authorization_sha256 = sha(execution.authorization)
+        with self.assertRaisesRegex(MODULE.Denied, "residue_authorization"):
+            MODULE.execute_worktree_residue(execution)
+        self.assertTrue(residue.exists())
+        self.assertFalse(execution.receipt_root.exists())
+        private_json(execution.authorization, authorization)
+        execution.authorization_sha256 = sha(execution.authorization)
+        with redirect_stdout(io.StringIO()):
+            MODULE.execute_worktree_residue(execution)
+        contract = json.loads((execution.successor_root / "generation-artifacts.private.json").read_bytes())
+        contract["artifacts"][6]["allocatedBytes"] += 4096
+        with self.assertRaisesRegex(MODULE.Denied, "residue_successor_binding"):
+            MODULE.validate_contract(contract)
+
+    def test_residue_partial_failure_preserves_journal_and_never_replays(self):
+        fixture, args, _, residue = self.residue_fixture()
+        with redirect_stdout(io.StringIO()):
+            MODULE.prepare_worktree_residue(args)
+        execution = self.residue_authorization(fixture, args.intent_output)
+        real_run = subprocess.run
+        attempts = []
+
+        def run(argv, **kwargs):
+            if argv[:1] == ["/usr/bin/rmdir"]:
+                attempts.append(argv)
+                return subprocess.CompletedProcess(argv, 1, b"", b"fixture interrupted")
+            if argv[:1] == ["/usr/bin/rm"]:
+                attempts.append(argv)
+            return real_run(argv, **kwargs)
+
+        with patch.object(MODULE.subprocess, "run", side_effect=run):
+            with self.assertRaisesRegex(MODULE.Denied, "residue_command_failed"):
+                MODULE.execute_worktree_residue(execution)
+        receipt = json.loads((execution.receipt_root / "execution-receipt.private.json").read_bytes())
+        self.assertEqual(receipt["state"], "QUARANTINED")
+        self.assertEqual(receipt["completedCommands"], 1)
+        self.assertFalse(residue.exists())
+        self.assertTrue(residue.parent.exists())
+        self.assertFalse(execution.successor_root.exists())
+        with patch.object(MODULE.subprocess, "run") as calls:
+            with self.assertRaisesRegex(MODULE.Denied, "residue_execution_exists_reconciliation_required"):
+                MODULE.execute_worktree_residue(execution)
+            calls.assert_not_called()
+        self.assertEqual(len(attempts), 2)
+
+    def test_copied_consumer_help_preserves_control_inventory(self):
+        with tempfile.TemporaryDirectory(prefix="retirement-bytecode-") as directory:
+            control = Path(directory)
+            consumer = control / TOOL.name
+            dependency = control / "preparation_artifact_lifecycle.py"
+            shutil.copyfile(TOOL, consumer)
+            shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", dependency)
+            before = {path.name: path.read_bytes() for path in control.iterdir()}
+            result = subprocess.run(
+                [sys.executable, "-I", str(consumer), "--help"],
+                text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(sorted(path.name for path in control.iterdir()), sorted(before))
+            self.assertEqual({path.name: path.read_bytes() for path in control.iterdir()}, before)
+
     def test_failed_build_worktree_is_the_only_effect_and_closes_with_real_git(self):
         fixture = FailedBuildWorktreeFixture()
         try:

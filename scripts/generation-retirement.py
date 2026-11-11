@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import fcntl
 import hashlib
 import json
+import marshal
 import os
 from pathlib import Path
 import re
@@ -29,7 +31,8 @@ if hashlib.sha256(_preparation_raw).hexdigest() != PREPARATION_LIFECYCLE_SHA256:
 _preparation_spec = importlib.util.spec_from_file_location(
     "preparation_artifact_lifecycle", _preparation_path)
 preparation_lifecycle = importlib.util.module_from_spec(_preparation_spec)
-_preparation_spec.loader.exec_module(preparation_lifecycle)
+# Execute the authenticated bytes without reopening the dependency or writing bytecode.
+exec(compile(_preparation_raw, str(_preparation_path), "exec"), preparation_lifecycle.__dict__)
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
 FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
@@ -507,7 +510,7 @@ def acquire_or_authenticate_lock(path: Path, inherited_fd: int | None,
 def validate_contract(value: dict[str, Any]) -> None:
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
                 "writerLockPath", "classes", "artifacts", "privateDataPolicy"}
-    optional = {"privateDataOverlay"}
+    optional = {"privateDataOverlay", "worktreeResidueReconciliation"}
     if (not required.issubset(value) or not set(value).issubset(required | optional) or
             value.get("schemaVersion") != 1 or value.get("state") not in {"COMPLETE", "FAILED"}):
         deny("artifact_contract_schema")
@@ -632,6 +635,8 @@ def validate_contract(value: dict[str, Any]) -> None:
             value["targetCommit"] == LEGACY_D436_F160_BINDINGS[value["releaseId"]]["targetCommit"] and
             f160_cache_paths != {LEGACY_D436_F160_BINDINGS[value["releaseId"]]["overlayPath"]}):
         deny("artifact_contract_f160_runtime_cache_overlay")
+    if "worktreeResidueReconciliation" in value:
+        validate_residue_proof(value)
 
 
 def _strict_child(path: Path, root: Path, predicate: str) -> None:
@@ -1222,6 +1227,423 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
             deny(f"artifact_hash:{path}")
 
 
+BYTECODE_RESIDUE = "scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc"
+BYTECODE_DIRECTORY = "scripts/__pycache__"
+INVENTORY_KEYS = {"path", "type", "mode", "size", "mtimeNs", "link", "device", "inode",
+                  "allocatedBytes", "uid", "gid", "nlink", "sha256"}
+
+
+def worktree_inventory(root: Path) -> dict[str, Any]:
+    """Record contents and metadata without following directory symlinks."""
+    records = []
+    for path in sorted([root, *root.rglob("*")], key=lambda item: os.fsencode(item.as_posix())):
+        before = path.lstat()
+        kind = ("symlink" if stat.S_ISLNK(before.st_mode) else
+                "directory" if stat.S_ISDIR(before.st_mode) else
+                "regular" if stat.S_ISREG(before.st_mode) else "other")
+        if kind == "other":
+            deny("residue_inventory_type")
+        sha = None
+        if kind == "regular":
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                opened = os.fstat(stream.fileno())
+                if (opened.st_dev, opened.st_ino, opened.st_mode) != (before.st_dev, before.st_ino, before.st_mode):
+                    deny("residue_inventory_race")
+                hasher = hashlib.sha256()
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+                sha = hasher.hexdigest()
+        after = path.lstat()
+        if ((before.st_dev, before.st_ino, before.st_mode, before.st_size, before.st_mtime_ns,
+             before.st_ctime_ns, before.st_nlink) !=
+                (after.st_dev, after.st_ino, after.st_mode, after.st_size, after.st_mtime_ns,
+                 after.st_ctime_ns, after.st_nlink)):
+            deny("residue_inventory_race")
+        records.append({
+            "path": "." if path == root else path.relative_to(root).as_posix(),
+            "type": kind, "mode": stat.S_IMODE(before.st_mode), "size": before.st_size,
+            "mtimeNs": before.st_mtime_ns, "link": os.readlink(path) if kind == "symlink" else None,
+            "device": before.st_dev, "inode": before.st_ino, "allocatedBytes": before.st_blocks * 512,
+            "uid": before.st_uid, "gid": before.st_gid, "nlink": before.st_nlink, "sha256": sha,
+        })
+    return {"schemaVersion": 1, "root": str(root), "entries": records}
+
+
+def inventory_metrics(inventory: dict[str, Any]) -> dict[str, Any]:
+    if (set(inventory) != {"schemaVersion", "root", "entries"} or inventory["schemaVersion"] != 1 or
+            not isinstance(inventory["root"], str) or not Path(inventory["root"]).is_absolute() or
+            not isinstance(inventory["entries"], list)):
+        deny("residue_inventory_schema")
+    structure = hashlib.sha256()
+    unique = set()
+    seen_paths = set()
+    total = {"sizeBytes": 0, "allocatedBytes": 0, "inodes": 0}
+    entries = inventory["entries"]
+    if any(not isinstance(item, dict) or set(item) != INVENTORY_KEYS or
+           not isinstance(item["path"], str) for item in entries):
+        deny("residue_inventory_entry")
+    ordered = sorted(entries, key=lambda item: os.fsencode(
+        Path(inventory["root"]).name + ("" if item["path"] == "." else "/" + item["path"])))
+    if entries != ordered:
+        deny("residue_inventory_order")
+    for item in entries:
+        relative = item["path"]
+        if (relative in seen_paths or (relative != "." and
+                (not relative or Path(relative).is_absolute() or ".." in Path(relative).parts or
+                 str(Path(relative)) != relative)) or
+                item["type"] not in {"regular", "directory", "symlink"} or
+                any(type(item[key]) is not int or item[key] < 0 for key in
+                    ("mode", "size", "mtimeNs", "device", "inode", "allocatedBytes", "uid", "gid", "nlink")) or
+                (item["type"] == "regular" and not SHA256.fullmatch(str(item["sha256"]))) or
+                (item["type"] != "regular" and item["sha256"] is not None) or
+                (item["type"] == "symlink" and not isinstance(item["link"], str)) or
+                (item["type"] != "symlink" and item["link"] is not None)):
+            deny("residue_inventory_entry")
+        seen_paths.add(relative)
+        structure.update(canonical({key: item[key] for key in
+                                    ("path", "type", "mode", "size", "mtimeNs", "link")}))
+        identity = item["device"], item["inode"]
+        if identity not in unique:
+            unique.add(identity)
+            total["sizeBytes"] += item["size"]
+            total["allocatedBytes"] += item["allocatedBytes"]
+            total["inodes"] += 1
+    if not entries or entries[0]["path"] != "." or entries[0]["type"] != "directory":
+        deny("residue_inventory_root")
+    return {**total, "structuralSha256": structure.hexdigest()}
+
+
+def residue_delta(baseline: dict[str, Any], observed: dict[str, Any], *, present: bool) -> list[dict[str, Any]]:
+    inventory_metrics(baseline); inventory_metrics(observed)
+    if baseline["root"] != observed["root"]:
+        deny("residue_inventory_root")
+    source = {item["path"]: item for item in baseline["entries"]}
+    current = {item["path"]: item for item in observed["entries"]}
+    additions = {BYTECODE_DIRECTORY, BYTECODE_RESIDUE} if present else set()
+    if (set(current) != set(source) | additions or
+            BYTECODE_DIRECTORY in source or BYTECODE_RESIDUE in source):
+        deny("residue_inventory_delta_scope")
+    for path, item in source.items():
+        ignored = {"size", "mtimeNs", "allocatedBytes", "nlink"} if path == "scripts" else set()
+        if ({key: value for key, value in item.items() if key not in ignored} !=
+                {key: value for key, value in current[path].items() if key not in ignored}):
+            deny(f"residue_inventory_delta:{path}")
+    if "scripts" not in source or source["scripts"]["type"] != "directory":
+        deny("residue_inventory_parent")
+    if current["scripts"]["nlink"] != source["scripts"]["nlink"] + int(present):
+        deny("residue_inventory_parent_links")
+    if present:
+        directory, residue = current[BYTECODE_DIRECTORY], current[BYTECODE_RESIDUE]
+        owner = current["scripts"]
+        if (directory["type"] != "directory" or residue["type"] != "regular" or
+                residue["nlink"] != 1 or residue["size"] > 1024 * 1024 or
+                any(item["uid"] != owner["uid"] or item["gid"] != owner["gid"] or item["mode"] & 0o022
+                    for item in (directory, residue))):
+            deny("residue_identity")
+    changed = {"scripts"} | additions
+    return [item for item in observed["entries"] if item["path"] in changed]
+
+
+def restore_residue_inventory(baseline: dict[str, Any], delta: Any, *, present: bool) -> dict[str, Any]:
+    if (not isinstance(delta, list) or
+            any(not isinstance(item, dict) or "path" not in item for item in delta)):
+        deny("residue_inventory_delta")
+    expected = {"scripts", BYTECODE_DIRECTORY, BYTECODE_RESIDUE} if present else {"scripts"}
+    if len(delta) != len(expected) or {item["path"] for item in delta} != expected:
+        deny("residue_inventory_delta")
+    entries = {item["path"]: item for item in baseline["entries"]}
+    entries.update({item["path"]: item for item in delta})
+    restored = {**baseline, "entries": sorted(entries.values(), key=lambda item: os.fsencode(
+        Path(baseline["root"]).name + ("" if item["path"] == "." else "/" + item["path"])))}
+    residue_delta(baseline, restored, present=present)
+    return restored
+
+
+def residue_commands(worktree: str) -> list[list[str]]:
+    root = Path(worktree)
+    return [["/usr/bin/rm", "--", str(root / BYTECODE_RESIDUE)],
+            ["/usr/bin/rmdir", "--", str(root / BYTECODE_DIRECTORY)]]
+
+
+def validate_residue_sources(request: dict[str, Any], sources: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    required = {"schemaVersion", "contract", "lifecycle", "baseline", "denial",
+                "operationalState", "rootPolicy", "deploymentLock", "residueSha256"}
+    if (set(request) != required or request["schemaVersion"] != 1 or
+            set(sources) != {"contract", "lifecycle", "baseline", "denial"} or
+            not SHA256.fullmatch(str(request["residueSha256"])) or
+            not Path(str(request["deploymentLock"])).is_absolute()):
+        deny("residue_request_schema")
+    documents = {}
+    for key, encoded in sources.items():
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            deny("residue_source_encoding")
+        binding = request[key]
+        if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+                not Path(str(binding["path"])).is_absolute() or digest_bytes(raw) != binding["sha256"]):
+            deny("residue_source_binding")
+        documents[key] = raw
+    contract = object_json(documents["contract"], "residue-contract")
+    if "worktreeResidueReconciliation" in contract:
+        deny("residue_nested_successor")
+    validate_contract(contract)
+    lifecycle = object_json(documents["lifecycle"], "residue-lifecycle")
+    if (not re.fullmatch(r"immutable-[0-9a-f]{8}-external-[0-9]{8}T[0-9]{6}Z", str(contract["releaseId"])) or
+            not re.fullmatch(r"[0-9a-f]{40}", str(contract["targetCommit"])) or
+            not contract["releaseId"].startswith(f"immutable-{contract['targetCommit'][:8]}-external-") or
+            contract["generationId"] != contract["releaseId"] or
+            contract["state"] != "COMPLETE" or lifecycle.get("state") != "COMPLETE" or
+            lifecycle.get("generationId") != contract["generationId"] or
+            lifecycle.get("targetCommit") != contract["targetCommit"]):
+        deny("residue_generation")
+    worktrees = [item for item in contract["artifacts"] if item["class"] == "DERIVED_WORKTREE"]
+    if len(worktrees) != 1:
+        deny("residue_worktree_scope")
+    worktree = worktrees[0]
+    baseline = object_json(documents["baseline"], "residue-baseline")
+    if (baseline.get("root") != worktree["path"] or
+            any(worktree.get(key) != value for key, value in inventory_metrics(baseline).items()) or
+            worktree.get("observedIdentity") !=
+            {key: baseline["entries"][0][key] for key in ("device", "inode")}):
+        deny("residue_baseline_contract")
+    predicate = f"artifact_drift:{worktree['path']}:sizeBytes".encode()
+    if predicate not in documents["denial"]:
+        deny("residue_denial_binding")
+    return contract, baseline
+
+
+def validate_residue_proof(successor: dict[str, Any]) -> None:
+    proof = successor["worktreeResidueReconciliation"]
+    if not isinstance(proof, dict) or set(proof) != {"intent", "authorization", "events", "receipt", "afterDelta"}:
+        deny("residue_proof_schema")
+    intent, auth, receipt = proof["intent"], proof["authorization"], proof["receipt"]
+    original, baseline = validate_residue_sources(intent["request"], intent["sources"])
+    before = restore_residue_inventory(baseline, intent["beforeDelta"], present=True)
+    after = restore_residue_inventory(baseline, proof["afterDelta"], present=False)
+    worktree = baseline["root"]
+    commands = residue_commands(worktree)
+    if next(item["sha256"] for item in before["entries"] if item["path"] == BYTECODE_RESIDUE) != intent["request"]["residueSha256"]:
+        deny("residue_proof_bytecode")
+    if (intent.get("schemaVersion") != 1 or intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("commands") != commands or
+            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+            auth.get("intentSha256") != digest_bytes(canonical(intent)) or
+            auth.get("approvedPaths") != [command[-1] for command in commands] or
+            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+        deny("residue_proof_authorization")
+    events = proof["events"]
+    if not isinstance(events, list) or len(events) != 6:
+        deny("residue_proof_journal")
+    for index, argv in enumerate(commands, 1):
+        attempt, result, verified = events[(index - 1) * 3:index * 3]
+        if (attempt != {"event": "ATTEMPT", "ordinal": index, "path": argv[-1], "argv": argv} or
+                not isinstance(result, dict) or
+                set(result) != {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"} or
+                result.get("event") != "RESULT" or result.get("ordinal") != index or
+                type(result.get("exitCode")) is not int or result["exitCode"] != 0 or
+                any(not SHA256.fullmatch(str(result[key])) for key in ("stdoutSha256", "stderrSha256")) or
+                verified != {"event": "VERIFIED", "ordinal": index, "absent": True}):
+            deny("residue_proof_journal")
+    metrics = inventory_metrics(after)
+    changed = [{**item, **metrics} if item["class"] == "DERIVED_WORKTREE" else item
+               for item in original["artifacts"]]
+    if ({key: value for key, value in successor.items() if key != "worktreeResidueReconciliation"} !=
+            {**original, "artifacts": changed} or
+            receipt != {"schemaVersion": 1, "state": "COMPLETED",
+                        "intentSha256": digest_bytes(canonical(intent)),
+                        "authorizationSha256": digest_bytes(canonical(auth)),
+                        "journalSha256": digest_bytes(b"".join(canonical(event) for event in events)),
+                        "beforeInventorySha256": digest_bytes(canonical(before)),
+                        "afterInventorySha256": digest_bytes(canonical(after)),
+                        "successorArtifactsSha256": digest_bytes(canonical(changed)),
+                        "attemptedCommands": 2, "completedCommands": 2, "automaticRetry": False}):
+        deny("residue_successor_binding")
+
+
+def authenticate_residue_request(request_path: Path, expected_sha: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, str]]:
+    raw, _ = stable_private(request_path, expected_sha)
+    request = object_json(raw, "residue-request")
+    sources = {}
+    for key in ("contract", "lifecycle", "baseline", "denial"):
+        _, _, content = _closed_file_binding(request.get(key), f"residue:{key}")
+        sources[key] = base64.b64encode(content).decode()
+    contract, baseline = validate_residue_sources(request, sources)
+    return request, contract, baseline, sources
+
+
+def residue_policy(request: dict[str, Any]) -> dict[str, Any]:
+    binding = request.get("rootPolicy")
+    if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+        deny("residue_policy_binding")
+    raw, _ = stable_policy(Path(str(binding["path"])), binding["sha256"])
+    return validate_root_policy(raw, binding["sha256"])
+
+
+def residue_observation(request: dict[str, Any], contract: dict[str, Any], baseline: dict[str, Any],
+                        *, present: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+    for key in ("contract", "lifecycle", "baseline", "denial"):
+        _closed_file_binding(request[key], f"residue:{key}")
+    policy = residue_policy(request)
+    _, _, operational_raw = _closed_file_binding(request["operationalState"], "residue:operational")
+    operational = object_json(operational_raw, "residue-operational")
+    validate_operational(operational, contract, policy)
+    validate_artifact_roots(contract, operational, policy)
+    worktree = Path(baseline["root"])
+    if path_referenced(str(worktree), operational) or _path_has_symlink(worktree, Path(policy["canonicalRoots"]["worktrees"])):
+        deny("residue_worktree_referenced")
+    for artifact in contract["artifacts"]:
+        if artifact["class"] != "DERIVED_WORKTREE":
+            authenticate_artifact(artifact)
+    observed = worktree_inventory(worktree)
+    residue_delta(baseline, observed, present=present)
+    if present:
+        residue = worktree / BYTECODE_RESIDUE
+        fd = os.open(residue, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size > 1024 * 1024:
+                deny("residue_bytecode_binding")
+            raw = stream.read(1024 * 1024 + 1)
+        source = worktree / "scripts/preparation_artifact_lifecycle.py"
+        source_raw = source.read_bytes()
+        if (digest_bytes(raw) != request["residueSha256"] or
+                digest_bytes(source_raw) != PREPARATION_LIFECYCLE_SHA256 or
+                not 16 <= len(raw) <= 1024 * 1024 or raw[:4] != importlib.util.MAGIC_NUMBER):
+            deny("residue_bytecode_binding")
+        flags = int.from_bytes(raw[4:8], "little")
+        source_info = source.lstat()
+        if (flags not in {0, 1, 3} or
+                (flags == 0 and raw[8:16] !=
+                 (int(source_info.st_mtime) & 0xffffffff).to_bytes(4, "little") +
+                 (len(source_raw) & 0xffffffff).to_bytes(4, "little")) or
+                (flags in {1, 3} and raw[8:16] != importlib.util.source_hash(source_raw))):
+            deny("residue_bytecode_header")
+        try:
+            generated = marshal.loads(raw[16:])
+            compiled = compile(source_raw, str(source), "exec", dont_inherit=True, optimize=0)
+        except (ValueError, TypeError, EOFError, OverflowError):
+            deny("residue_bytecode_content")
+        if generated != compiled:
+            deny("residue_bytecode_content")
+    return observed, capture_fresh_operational(operational)
+
+
+def prepare_worktree_residue(args: argparse.Namespace) -> None:
+    request, contract, baseline, sources = authenticate_residue_request(args.request, args.request_sha256)
+    lock = acquire_existing_lock(Path(request["deploymentLock"]))
+    try:
+        writer = acquire_existing_lock(Path(contract["writerLockPath"]))
+        try:
+            observed, fresh = residue_observation(request, contract, baseline, present=True)
+            _, _, op_raw = _closed_file_binding(request["operationalState"], "residue:operational")
+            operational = object_json(op_raw, "residue-operational")
+            evidence_destination(args.intent_output, operational)
+            intent = {"schemaVersion": 1, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+                      "request": request, "sources": sources, "beforeDelta": residue_delta(baseline, observed, present=True),
+                      "commands": residue_commands(baseline["root"]), "freshObservation": fresh}
+            write_exclusive(args.intent_output, canonical(intent))
+            print(canonical({"result": "WORKTREE_RESIDUE_PREPARED", "intentSha256": digest_bytes(canonical(intent)),
+                             "commandCount": 2, "authorizationGranted": False}).decode().strip())
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
+
+
+def execute_worktree_residue(args: argparse.Namespace) -> None:
+    intent_raw, _ = stable_private(args.intent, args.intent_sha256)
+    auth_raw, _ = stable_private(args.authorization, args.authorization_sha256)
+    intent, auth = object_json(intent_raw, "residue-intent"), object_json(auth_raw, "residue-authorization")
+    if intent_raw != canonical(intent) or auth_raw != canonical(auth):
+        deny("residue_authorization_serialization")
+    request, sources = intent["request"], intent["sources"]
+    contract, baseline = validate_residue_sources(request, sources)
+    commands = residue_commands(baseline["root"])
+    if (intent.get("schemaVersion") != 1 or intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("commands") != commands or
+            set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+            auth.get("intentSha256") != args.intent_sha256 or
+            auth.get("approvedPaths") != [item[-1] for item in commands] or
+            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+        deny("residue_authorization")
+    if args.receipt_root.exists() or args.receipt_root.is_symlink():
+        deny("residue_execution_exists_reconciliation_required")
+    lock = acquire_existing_lock(Path(request["deploymentLock"]))
+    try:
+        writer = acquire_existing_lock(Path(contract["writerLockPath"]))
+        try:
+            observed, fresh = residue_observation(request, contract, baseline, present=True)
+            if observed != restore_residue_inventory(baseline, intent["beforeDelta"], present=True):
+                deny("residue_prepare_drift")
+            _, _, op_raw = _closed_file_binding(request["operationalState"], "residue:operational")
+            operational = object_json(op_raw, "residue-operational")
+            evidence_destination(args.receipt_root, operational)
+            policy = residue_policy(request)
+            outputs = authenticate_policy_root(policy, "outputs")[0]
+            _strict_child(args.successor_root, outputs, "residue_successor_destination")
+            if (args.successor_root != outputs / f"{contract['releaseId']}-bytecode-successor" or
+                    args.successor_root.exists() or args.successor_root.is_symlink()):
+                deny("residue_successor_destination")
+            if fresh != intent["freshObservation"]:
+                deny("residue_operational_drift")
+            args.receipt_root.mkdir(mode=0o700)
+            journal = args.receipt_root / "command-results.private.jsonl"
+            write_exclusive(journal, b"")
+            attempted = completed = 0
+            try:
+                for ordinal, argv in enumerate(commands, 1):
+                    append_event(journal, {"event": "ATTEMPT", "ordinal": ordinal, "path": argv[-1], "argv": argv})
+                    attempted += 1
+                    result = subprocess.run(argv, capture_output=True)
+                    append_event(journal, {"event": "RESULT", "ordinal": ordinal, "exitCode": result.returncode,
+                                          "stdoutSha256": digest_bytes(result.stdout), "stderrSha256": digest_bytes(result.stderr)})
+                    if result.returncode or Path(argv[-1]).exists() or Path(argv[-1]).is_symlink():
+                        deny("residue_command_failed")
+                    append_event(journal, {"event": "VERIFIED", "ordinal": ordinal, "absent": True})
+                    completed += 1
+                after, final_fresh = residue_observation(request, contract, baseline, present=False)
+                if final_fresh != fresh:
+                    deny("residue_operational_drift")
+                artifacts = [{**item, **inventory_metrics(after)} if item["class"] == "DERIVED_WORKTREE" else item
+                             for item in contract["artifacts"]]
+                receipt = {"schemaVersion": 1, "state": "COMPLETED", "intentSha256": args.intent_sha256,
+                           "authorizationSha256": args.authorization_sha256,
+                           "journalSha256": digest_bytes(journal.read_bytes()),
+                           "beforeInventorySha256": digest_bytes(canonical(observed)),
+                           "afterInventorySha256": digest_bytes(canonical(after)),
+                           "successorArtifactsSha256": digest_bytes(canonical(artifacts)),
+                           "attemptedCommands": 2, "completedCommands": 2, "automaticRetry": False}
+                proof = {"intent": intent, "authorization": auth, "events": _read_journal(journal.read_bytes()),
+                         "receipt": receipt, "afterDelta": residue_delta(baseline, after, present=False)}
+                successor = {**contract, "artifacts": artifacts, "worktreeResidueReconciliation": proof}
+                validate_contract(successor)
+                args.successor_root.mkdir(mode=0o700)
+                lifecycle_raw = base64.b64decode(sources["lifecycle"], validate=True)
+                write_exclusive(args.successor_root / "generation-lifecycle.private.json", lifecycle_raw)
+                successor_raw = canonical(successor)
+                write_exclusive(args.successor_root / "generation-artifacts.private.json", successor_raw)
+                write_exclusive(args.receipt_root / "execution-receipt.private.json", canonical(receipt))
+                print(canonical({"result": "WORKTREE_RESIDUE_RECONCILED",
+                                 "successorContractSha256": digest_bytes(successor_raw),
+                                 "receiptSha256": digest_bytes(canonical(receipt)),
+                                 "attemptedCommands": 2, "completedCommands": 2}).decode().strip())
+            except BaseException as error:
+                failed = args.receipt_root / "execution-receipt.private.json"
+                if not failed.exists():
+                    write_exclusive(failed, canonical({"schemaVersion": 1, "state": "QUARANTINED",
+                        "intentSha256": args.intent_sha256, "attemptedCommands": attempted,
+                        "completedCommands": completed, "failurePredicate": str(error),
+                        "journalSha256": digest_bytes(journal.read_bytes()), "automaticRetry": False}))
+                raise
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
+
+
 def structural_metrics(path: Path) -> dict[str, Any]:
     root = path.lstat()
     items = [path]
@@ -1684,6 +2106,569 @@ def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, An
 
 def canonical_release_verifier() -> Path:
     return Path(__file__).resolve().with_name("converta-release.py")
+
+
+def preservation_deadline(value: Any) -> None:
+    try:
+        expires = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        deny("builder_preservation_expiry")
+    if (expires.tzinfo is None or expires.utcoffset() != dt.timedelta(0) or
+            expires <= dt.datetime.now(dt.timezone.utc)):
+        deny("builder_preservation_expiry")
+
+
+def preservation_snapshot(request: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    fields = {"schemaVersion", "contract", "lifecycle", "rootPolicy",
+              "deploymentLock", "responsible", "expiresAtUtc", "reason"}
+    if (set(request) != fields or request.get("schemaVersion") != 1 or
+            any(not isinstance(request.get(key), str) or not request[key].strip()
+                for key in ("responsible", "reason")) or
+            not Path(str(request["deploymentLock"])).is_absolute()):
+        deny("builder_preservation_request")
+    preservation_deadline(request["expiresAtUtc"])
+    _, contract_sha, contract_raw = _closed_file_binding(request["contract"], "preservation:contract")
+    _, lifecycle_sha, lifecycle_raw = _closed_file_binding(request["lifecycle"], "preservation:lifecycle")
+    contract = object_json(contract_raw, "builder-preservation-contract")
+    lifecycle = object_json(lifecycle_raw, "builder-preservation-lifecycle")
+    validate_contract(contract)
+    if (contract["state"] != "COMPLETE" or
+            not re.fullmatch(r"immutable-[0-9a-f]{8}-external-[0-9]{8}T[0-9]{6}Z", contract["releaseId"]) or
+            lifecycle.get("state") != "COMPLETE" or lifecycle.get("generationId") != contract["generationId"] or
+            lifecycle.get("targetCommit") != contract["targetCommit"]):
+        deny("builder_preservation_generation")
+    policy = residue_policy(request)
+    for root_name in ("repository", "worktrees", "outputs", "releases"):
+        authenticate_policy_root(policy, root_name)
+    operational = {"canonicalRoots": policy["canonicalRoots"]}
+    validate_artifact_roots(contract, operational, policy)
+    observed = []
+    for artifact in contract["artifacts"]:
+        path = Path(artifact["path"])
+        if artifact["class"] == "DERIVED_WORKTREE":
+            info = path.lstat()
+            if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                    artifact["observedIdentity"] != {"device": info.st_dev, "inode": info.st_ino}):
+                deny("builder_preservation_worktree_identity")
+        else:
+            authenticate_artifact(artifact)
+        if artifact["class"] in {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}:
+            if not path.is_dir() or path.is_symlink():
+                deny("builder_preservation_path")
+            info = path.lstat()
+            observed.append({"path": str(path), "class": artifact["class"],
+                             "identity": {"device": info.st_dev, "inode": info.st_ino},
+                             **structural_metrics(path)})
+        elif artifact["class"] in DERIVED_CLASSES and not (
+                artifact["class"] == "DERIVED_STAGING" and
+                artifact.get("removedAtProducerCompletion") is True and
+                not path.exists() and not path.is_symlink()):
+            deny("builder_preservation_scope")
+    if [item["class"] for item in observed] != ["DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_OUTPUT_RUNTIME"]:
+        deny("builder_preservation_scope")
+    review = Path(request["contract"]["path"]).parent / "generation-review.private.json"
+    review_sha = digest_bytes(stable_private(review)[0]) if review.exists() or review.is_symlink() else None
+    snapshot = {"releaseId": contract["releaseId"], "targetCommit": contract["targetCommit"],
+                "contractSha256": contract_sha, "lifecycleSha256": lifecycle_sha,
+                "historicalInventoryEquivalence": False, "artifacts": observed,
+                "retainedBytes": sum(item["allocatedBytes"] for item in observed),
+                "accounting": "CONSERVATIVE_SUM_OF_PER_ROOT_PHYSICAL_BYTES",
+                "previousReviewSha256": review_sha}
+    return contract, operational, snapshot
+
+
+def prepare_builder_preservation(args: argparse.Namespace) -> None:
+    request_raw, _ = stable_private(args.request, args.request_sha256)
+    request = object_json(request_raw, "builder-preservation-request")
+    _, _, original_raw = _closed_file_binding(request.get("contract"), "preservation:contract")
+    original = object_json(original_raw, "builder-preservation-contract")
+    lock = acquire_existing_lock(Path(str(request.get("deploymentLock", ""))))
+    try:
+        writer = acquire_existing_lock(Path(original["writerLockPath"]))
+        try:
+            _, operational, snapshot = preservation_snapshot(request)
+            evidence_destination(args.intent_output, operational)
+            intent = {"schemaVersion": 1, "kind": "PRESERVE_EXTERNAL_BUILDER",
+                      "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION", "request": request,
+                      "snapshot": snapshot, "commands": []}
+            write_exclusive(args.intent_output, canonical(intent))
+            print(canonical({"result": "BUILDER_PRESERVATION_PREPARED",
+                             "intentSha256": digest_bytes(canonical(intent)), "commands": [],
+                             "retainedBytes": snapshot["retainedBytes"]}).decode().strip())
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
+
+
+def record_builder_preservation(args: argparse.Namespace) -> None:
+    intent_raw, _ = stable_private(args.intent, args.intent_sha256)
+    authorization_raw, _ = stable_private(args.authorization, args.authorization_sha256)
+    intent = object_json(intent_raw, "builder-preservation-intent")
+    auth = object_json(authorization_raw, "builder-preservation-authorization")
+    if (set(intent) != {"schemaVersion", "kind", "state", "request", "snapshot", "commands"} or
+            intent["schemaVersion"] != 1 or intent["kind"] != "PRESERVE_EXTERNAL_BUILDER" or
+            intent["state"] != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or intent["commands"] != [] or
+            set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+            auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+            auth.get("intentSha256") != args.intent_sha256 or auth.get("approvedPaths") != [] or
+            not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+        deny("builder_preservation_authorization")
+    request = intent["request"]
+    _, _, original_raw = _closed_file_binding(request["contract"], "preservation:contract")
+    original = object_json(original_raw, "builder-preservation-contract")
+    lock = acquire_existing_lock(Path(request["deploymentLock"]))
+    try:
+        writer = acquire_existing_lock(Path(original["writerLockPath"]))
+        try:
+            contract, operational, snapshot = preservation_snapshot(request)
+            if snapshot != intent["snapshot"]:
+                deny("builder_preservation_prepare_drift")
+            evidence_destination(args.receipt_root, operational)
+            review = Path(request["contract"]["path"]).parent / "generation-review.private.json"
+            canonical_review_destination(review, Path(request["contract"]["path"]),
+                                         Path(request["lifecycle"]["path"]), residue_policy(request))
+            args.receipt_root.mkdir(mode=0o700)
+            if snapshot["previousReviewSha256"] is not None:
+                prior_raw, _ = stable_private(review, snapshot["previousReviewSha256"])
+                write_exclusive(args.receipt_root / "previous-review.private.json", prior_raw)
+            journal = args.receipt_root / "preservation-journal.private.jsonl"
+            write_exclusive(journal, b"")
+            events = [
+                {"event": "PRESERVATION_OBSERVED", "intentSha256": args.intent_sha256,
+                 "snapshotSha256": digest_bytes(canonical(snapshot))},
+                {"event": "PRESERVATION_AUTHORIZED", "authorizationSha256": args.authorization_sha256},
+                {"event": "PRESERVATION_RECORDED", "destructiveCommands": 0},
+            ]
+            for event in events:
+                append_event(journal, event)
+            receipt = {"schemaVersion": 1, "state": "PRESERVED_RETENTION_DEBT",
+                       "intentSha256": args.intent_sha256, "authorizationSha256": args.authorization_sha256,
+                       "journalSha256": digest_bytes(journal.read_bytes()),
+                       "snapshotSha256": digest_bytes(canonical(snapshot)),
+                       "historicalInventoryEquivalence": False, "destructiveCommands": 0,
+                       "retainedBytes": snapshot["retainedBytes"], "responsible": request["responsible"],
+                       "expiresAtUtc": request["expiresAtUtc"],
+                       "preservedPaths": [item["path"] for item in snapshot["artifacts"]]}
+            receipt_raw = canonical(receipt)
+            write_exclusive(args.receipt_root / "preservation-receipt.private.json", receipt_raw)
+            value = {"schemaVersion": 2, "generationId": contract["generationId"],
+                     "lifecycleSha256": request["lifecycle"]["sha256"], "state": "PRESERVE_OVERRIDE",
+                     "reviewer": auth["owner"], "reason": request["reason"],
+                     "evidenceSha256": digest_bytes(receipt_raw), "retainedBytes": snapshot["retainedBytes"],
+                     "responsible": request["responsible"], "expiresAtUtc": request["expiresAtUtc"]}
+            replace_private(review, canonical(value))
+            stable_private(review, digest_bytes(canonical(value)))
+            print(canonical({"result": receipt["state"], "receiptSha256": digest_bytes(receipt_raw),
+                             "reviewSha256": digest_bytes(canonical(value)), "destructiveCommands": 0}).decode().strip())
+        finally:
+            os.close(writer)
+    finally:
+        os.close(lock)
+
+
+def authenticate_builder_preservation(bindings: dict[str, Any], contract: dict[str, Any],
+                                      builder_policy_sha: str) -> dict[str, Any]:
+    intent = object_json(bindings["intent"][2], "builder-preservation-intent")
+    authorization = object_json(bindings["authorization"][2], "builder-preservation-authorization")
+    receipt = object_json(bindings["receipt"][2], "builder-preservation-receipt")
+    review = object_json(bindings["review"][2], "builder-preservation-review")
+    if (set(intent) != {"schemaVersion", "kind", "state", "request", "snapshot", "commands"} or
+            intent["schemaVersion"] != 1 or intent["kind"] != "PRESERVE_EXTERNAL_BUILDER" or
+            intent["state"] != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or intent["commands"] != []):
+        deny("builder_preservation_intent")
+    request, snapshot = intent["request"], intent["snapshot"]
+    preservation_deadline(request.get("expiresAtUtc"))
+    if (request.get("schemaVersion") != 1 or
+            any(not isinstance(request.get(key), str) or not request[key].strip() for key in ("responsible", "reason")) or
+            request.get("contract", {}).get("sha256") != bindings["contract"][1] or
+            request.get("lifecycle", {}).get("sha256") != bindings["lifecycle"][1] or
+            request.get("rootPolicy", {}).get("sha256") != builder_policy_sha or
+            snapshot.get("releaseId") != contract["releaseId"] or snapshot.get("targetCommit") != contract["targetCommit"] or
+            snapshot.get("contractSha256") != bindings["contract"][1] or
+            snapshot.get("lifecycleSha256") != bindings["lifecycle"][1] or
+            snapshot.get("historicalInventoryEquivalence") is not False or
+            snapshot.get("accounting") != "CONSERVATIVE_SUM_OF_PER_ROOT_PHYSICAL_BYTES"):
+        deny("builder_preservation_binding")
+    expected = [item for item in contract["artifacts"] if item["class"] in
+                {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
+    observations = snapshot.get("artifacts")
+    if (not isinstance(observations, list) or len(expected) != 3 or len(observations) != 3 or
+            [(item.get("path"), item.get("class")) for item in observations] !=
+            [(item["path"], item["class"]) for item in expected]):
+        deny("builder_preservation_scope")
+    for original, observed in zip(expected, observations):
+        if (set(observed) != {"path", "class", "identity", "sizeBytes", "allocatedBytes", "inodes", "structuralSha256"} or
+                observed["identity"] != original["observedIdentity"] or
+                any(type(observed[key]) is not int or observed[key] < 0 for key in ("sizeBytes", "allocatedBytes", "inodes")) or
+                not SHA256.fullmatch(str(observed["structuralSha256"]))):
+            deny("builder_preservation_snapshot")
+        if original["class"] != "DERIVED_WORKTREE" and any(observed[key] != original[key] for key in
+                ("sizeBytes", "allocatedBytes", "inodes", "structuralSha256")):
+            deny("builder_preservation_runtime_drift")
+    retained = sum(item["allocatedBytes"] for item in observations)
+    if (set(authorization) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+            authorization.get("schemaVersion") != 1 or authorization.get("decision") != "AUTHORIZE_ONCE" or
+            authorization.get("intentSha256") != bindings["intent"][1] or authorization.get("approvedPaths") != [] or
+            not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
+        deny("builder_preservation_authorization")
+    paths = [item["path"] for item in observations]
+    expected_events = [
+        {"event": "PRESERVATION_OBSERVED", "intentSha256": bindings["intent"][1],
+         "snapshotSha256": digest_bytes(canonical(snapshot))},
+        {"event": "PRESERVATION_AUTHORIZED", "authorizationSha256": bindings["authorization"][1]},
+        {"event": "PRESERVATION_RECORDED", "destructiveCommands": 0},
+    ]
+    if (snapshot.get("retainedBytes") != retained or _read_journal(bindings["journal"][2]) != expected_events or
+            receipt != {"schemaVersion": 1, "state": "PRESERVED_RETENTION_DEBT",
+                        "intentSha256": bindings["intent"][1], "authorizationSha256": bindings["authorization"][1],
+                        "journalSha256": bindings["journal"][1], "snapshotSha256": digest_bytes(canonical(snapshot)),
+                        "historicalInventoryEquivalence": False, "destructiveCommands": 0,
+                        "retainedBytes": retained, "responsible": request["responsible"],
+                        "expiresAtUtc": request["expiresAtUtc"], "preservedPaths": paths} or
+            review != {"schemaVersion": 2, "generationId": contract["generationId"],
+                       "lifecycleSha256": bindings["lifecycle"][1], "state": "PRESERVE_OVERRIDE",
+                       "reviewer": authorization["owner"], "reason": request["reason"],
+                       "evidenceSha256": bindings["receipt"][1], "retainedBytes": retained,
+                       "responsible": request["responsible"], "expiresAtUtc": request["expiresAtUtc"]}):
+        deny("builder_preservation_closure")
+    return {"state": "PRESERVED_RETENTION_DEBT", "responsible": request["responsible"],
+            "retainedBytes": retained, "expiresAtUtc": request["expiresAtUtc"], "preservedPaths": paths}
+
+
+def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: bool) -> dict[str, Any]:
+    """Verify an inert installation and a single completed builder retirement."""
+    raw, _ = stable_private(args.handoff, args.handoff_sha256)
+    handoff = object_json(raw, "external-handoff")
+    fields = {"schemaVersion", "builderPolicy", "contract", "lifecycle",
+              "intent", "authorization", "receipt", "journal", "installation",
+              "packagePath", "canonicalVerifierSha256"}
+    if (handoff.get("schemaVersion") not in {1, 2} or
+            set(handoff) != (fields | {"review"} if handoff.get("schemaVersion") == 2 else fields) or
+            not SHA256.fullmatch(str(handoff.get("canonicalVerifierSha256", "")))):
+        deny("external_handoff_schema")
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    local_policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    evidence_input(args.handoff, local_policy)
+    names = ["builderPolicy", "contract", "lifecycle", "intent", "authorization", "receipt", "journal", "installation"]
+    if handoff["schemaVersion"] == 2:
+        names.append("review")
+    bindings = {key: _closed_file_binding(handoff[key], f"external_handoff:{key}") for key in names}
+    _, builder_policy_sha, builder_policy_raw = bindings["builderPolicy"]
+    builder = validate_root_policy(builder_policy_raw, builder_policy_sha)["canonicalRoots"]
+    contract = object_json(bindings["contract"][2], "external-builder-contract")
+    lifecycle = object_json(bindings["lifecycle"][2], "external-builder-lifecycle")
+    installation = object_json(bindings["installation"][2], "external-installation")
+    validate_contract(contract)
+    release, target = contract["releaseId"], contract["targetCommit"]
+    if (not isinstance(release, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", release) or
+            not isinstance(target, str) or not re.fullmatch(r"[0-9a-f]{40}", target) or
+            contract["generationId"] != release or contract["state"] != "COMPLETE" or
+            lifecycle.get("schemaVersion") != 1 or lifecycle.get("generationId") != release or
+            lifecycle.get("targetCommit") != target or lifecycle.get("state") != "COMPLETE"):
+        deny("external_handoff_generation")
+    hashes = {key: lifecycle.get(key) for key in ("packageSha256", "manifestSha256", "indexSha256")}
+    if any(not isinstance(value, str) or not SHA256.fullmatch(value) for value in hashes.values()):
+        deny("external_handoff_producer_hashes")
+    outputs = Path(builder["outputs"])
+    payload = Path(str(lifecycle.get("releaseRoot", "")))
+    _strict_child(payload, outputs, "external_handoff_builder_output")
+    origin_package = payload.parent / f"{release}.tar.xz"
+    if (payload.name != release or lifecycle.get("package") != str(origin_package) or
+            lifecycle.get("artifactContract") != str(payload.parent / "generation-artifacts.private.json") or
+            contract["writerLockPath"] != str(outputs / ".generation-build.lock")):
+        deny("external_handoff_builder_identity")
+    protected = {
+        origin_package: ("PACKAGE_PRESERVE", hashes["packageSha256"]),
+        payload / "manifest.json": ("PACKAGE_PRESERVE", hashes["manifestSha256"]),
+        payload / "index.sha256": ("PACKAGE_PRESERVE", hashes["indexSha256"]),
+        payload.parent / "generation-lifecycle.private.json": ("EVIDENCE_PRESERVE", bindings["lifecycle"][1]),
+    }
+    by_path = {Path(item["path"]): item for item in contract["artifacts"]}
+    if any(by_path.get(path, {}).get("class") != kind or
+           by_path[path].get("digest") != {"sha256": sha}
+           for path, (kind, sha) in protected.items()):
+        deny("external_handoff_producer_artifacts")
+    runtime = Path(builder["releases"]) / release
+    if ([item["path"] for item in contract["artifacts"] if item["class"] == "RELEASE_RUNTIME"] !=
+            [str(runtime)] or by_path[runtime].get("digest") != {"indexSha256": hashes["indexSha256"]}):
+        deny("external_handoff_builder_runtime")
+    worktrees = [item for item in contract["artifacts"] if item["class"] == "DERIVED_WORKTREE"]
+    runtimes = {Path(item["path"]) for item in contract["artifacts"]
+                if item["class"] == "DERIVED_OUTPUT_RUNTIME"}
+    staging = [item for item in contract["artifacts"] if item["class"] == "DERIVED_STAGING"]
+    if (len(worktrees) != 1 or worktrees[0].get("digest") != {"gitCommit": target} or
+            runtimes != {payload / "api-runtime", payload / "frontend-runtime"} or
+            any(by_path[path].get("digest") != {"indexSha256": hashes["indexSha256"]} for path in runtimes) or
+            len(staging) != 1 or staging[0].get("state") != "SANITIZED" or
+            staging[0].get("removedAtProducerCompletion") is not True or
+            staging[0].get("digest") != {"packageSha256": hashes["packageSha256"]} or
+            any(item["class"] == "PRIVATE_DATA_NEVER_RETIRE" for item in contract["artifacts"])):
+        deny("external_handoff_builder_scope")
+    _strict_child(Path(worktrees[0]["path"]), Path(builder["worktrees"]), "external_handoff_builder_worktree")
+    _strict_child(Path(staging[0]["path"]), outputs, "external_handoff_builder_staging")
+    if Path(staging[0]["path"]).parent != outputs:
+        deny("external_handoff_builder_staging")
+    external_debt = None
+    if handoff["schemaVersion"] == 2:
+        external_debt = authenticate_builder_preservation(bindings, contract, builder_policy_sha)
+    else:
+        intent = object_json(bindings["intent"][2], "external-builder-intent")
+        auth = object_json(bindings["authorization"][2], "external-builder-authorization")
+        receipt = object_json(bindings["receipt"][2], "external-builder-receipt")
+        if (intent.get("reconciliation") != {"chain": [], "completed": [], "subordinateAbsences": []} or
+                intent.get("legacyMigration") is not None or "failedBuildWorktreeDisposition" in intent or
+                (intent.get("generationId"), intent.get("releaseId"), intent.get("targetCommit"),
+                 intent.get("contractSha256"), intent.get("lifecycleSha256")) !=
+                (release, release, target, bindings["contract"][1], bindings["lifecycle"][1])):
+            deny("external_handoff_intent_binding")
+        commands = validate_intent(intent, {"canonicalRoots": builder,
+                                           "controlPlaneArtifacts": intent.get("controlPlaneArtifacts"),
+                                           "gitRepository": builder["repository"]}, builder_policy_sha)
+        expected = [(ordinal, item) for ordinal, item in enumerate(contract["artifacts"], 1)
+                    if item["class"] in {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
+        paths = [item["path"] for _, item in expected]
+        if ([(item["ordinal"], item["path"]) for item in commands] !=
+                [(ordinal, item["path"]) for ordinal, item in expected] or
+                [{key: value for key, value in item.items() if key != "retentionState"}
+                 for item in intent["artifacts"]] != contract["artifacts"] or
+                [item["allocatedBytes"] for item in commands] != [item["allocatedBytes"] for _, item in expected] or
+                intent["executionContract"]["writerLock"] != contract["writerLockPath"]):
+            deny("external_handoff_command_scope")
+        if (set(auth) != {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"} or
+                auth.get("schemaVersion") != 1 or auth.get("decision") != "AUTHORIZE_ONCE" or
+                auth.get("intentSha256") != bindings["intent"][1] or auth.get("approvedPaths") != paths or
+                not isinstance(auth.get("owner"), str) or not auth["owner"].strip()):
+            deny("external_handoff_authorization")
+        if (receipt.get("schemaVersion") != 1 or receipt.get("state") != "SANITIZED" or
+                receipt.get("intentSha256") != bindings["intent"][1] or
+                receipt.get("commandLogSha256") != bindings["journal"][1] or
+                receipt.get("remainingDerivedPaths") != [] or receipt.get("removedPaths") != paths or
+                receipt.get("attemptedCommands") != len(paths) or receipt.get("completedCommands") != len(paths) or
+                receipt.get("failurePredicate", "missing") is not None or receipt.get("automaticRetry") is not False or
+                receipt.get("lock") != {"canonicalHeldThroughReceiptFsync": True, "writerHeldThroughReceiptFsync": True}):
+            deny("external_handoff_retention_incomplete")
+        events = _read_journal(bindings["journal"][2])
+        if len(events) != 3 * len(commands):
+            deny("external_handoff_journal_scope")
+        for offset, command in enumerate(commands):
+            attempt, result, verified = events[3 * offset:3 * offset + 3]
+            ordinal = command["ordinal"]
+            if (attempt != {"event": "ATTEMPT", "ordinal": ordinal, "path": command["path"], "argv": command["argv"]} or
+                    set(result) != {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"} or
+                    result.get("event") != "RESULT" or result.get("ordinal") != ordinal or
+                    any(not SHA256.fullmatch(str(result[key])) for key in ("stdoutSha256", "stderrSha256")) or
+                    type(result.get("exitCode")) is not int or result["exitCode"] != 0 or
+                    verified != {"event": "VERIFIED", "ordinal": ordinal, "absent": True}):
+                deny("external_handoff_journal_order")
+    local_releases = authenticate_policy_root(local_policy, "releases")[0]
+    installed = local_releases / release
+    physical_keys = ROOT_KEYS - {"evidence"}
+    source_roots = [Path(builder[key]) for key in physical_keys]
+    destination_roots = [Path(local_policy["canonicalRoots"][key]) for key in physical_keys]
+    if any(source == destination or source in destination.parents or destination in source.parents
+           for source in source_roots for destination in destination_roots):
+        deny("external_handoff_host_roots_overlap")
+    for path, _, _ in bindings.values():
+        evidence_input(path, local_policy)
+    if (installation.get("result") != "RELEASE INSTALLED" or
+            installation.get("releaseId") != release or installation.get("targetCommit") != target or
+            installation.get("releasePath") != str(installed) or
+            any(installation.get(key) != value for key, value in hashes.items())):
+        deny("external_handoff_installation_binding")
+    package = Path(str(handoff["packagePath"]))
+    if package.name != origin_package.name:
+        deny("external_handoff_package_name")
+    evidence_input(package, local_policy)
+    stable_external_package(package, hashes["packageSha256"])
+    if _path_has_symlink(installed, local_releases):
+        deny("external_handoff_installation_path")
+    if verify_payload:
+        verification = _run_legacy_verifier(
+            {"targetCommit": target, "releaseId": release,
+             "canonicalVerifierSha256": handoff["canonicalVerifierSha256"],
+             "manifest": {"sha256": hashes["manifestSha256"]}, "index": {"sha256": hashes["indexSha256"]}},
+            ["--release-root", str(installed)], "external_handoff_installation_verification")
+        if any(verification.get(key) != installation.get(key)
+               for key in ("apiEntrySha256", "buildId", "indexEntries")):
+            deny("external_handoff_installed_payload")
+    else:
+        stable_regular_hash(installed / "manifest.json", hashes["manifestSha256"], "external_handoff_manifest")
+        stable_regular_hash(installed / "index.sha256", hashes["indexSha256"], "external_handoff_index")
+    return {"releaseId": release, "targetCommit": target, "installedPath": str(installed),
+            "handoffSha256": args.handoff_sha256, "builderReceiptSha256": bindings["receipt"][1],
+            "installationSha256": bindings["installation"][1],
+            **({"externalRetentionDebt": external_debt} if external_debt is not None else {}), **hashes}
+
+
+def verify_external_handoff(args: argparse.Namespace) -> None:
+    evidence = authenticate_external_handoff(args, verify_payload=True)
+    print(canonical({"result": "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED", **evidence}).decode().strip())
+
+
+def materialize_external_retirement(args: argparse.Namespace) -> None:
+    evidence = authenticate_external_handoff(args, verify_payload=True)
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    outputs = authenticate_policy_root(policy, "outputs")[0]
+    release, target = evidence["releaseId"], evidence["targetCommit"]
+    directory = outputs / f"{release}-external-import"
+    lock = outputs / ".generation-build.lock"
+    lifecycle_path = directory / "generation-lifecycle.private.json"
+    contract_path = directory / "generation-artifacts.private.json"
+    lifecycle = {"schemaVersion": 1, "generationId": release, "targetCommit": target,
+                 "state": "COMPLETE", "classification": "PENDING", "dispositionState": "OPEN",
+                 "externalHandoff": {"path": str(args.handoff), "sha256": args.handoff_sha256},
+                 "externalEvidence": evidence}
+    lifecycle_raw = canonical(lifecycle)
+    installed = Path(evidence["installedPath"])
+    info = installed.lstat()
+    identity = {"device": info.st_dev, "inode": info.st_ino}
+    metrics = structural_metrics(installed)
+    artifact_fields = {"releaseId": release, "targetCommit": target,
+                       "initialIdentity": None, "observedIdentity": None}
+    contract = {
+        "schemaVersion": 1, "generationId": release, "releaseId": release,
+        "targetCommit": target, "state": "COMPLETE", "writerLockPath": str(lock),
+        "classes": sorted(PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"}),
+        "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+        "privateDataOverlay": {"path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                               "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC"},
+        "artifacts": [
+            {**artifact_fields, "path": str(lifecycle_path), "class": "EVIDENCE_PRESERVE",
+             "expectedType": "regular_file", "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
+             "dependencies": ["external_handoff"], "digest": {"sha256": digest_bytes(lifecycle_raw)},
+             "sizeBytes": len(lifecycle_raw), "allocatedBytes": 0, "inodes": 1, "structuralSha256": None},
+            {**artifact_fields, **metrics, "path": str(installed), "class": "RELEASE_RUNTIME",
+             "expectedType": "directory", "state": "CANDIDATE_PENDING_ACTIVATION",
+             "retirableOn": "OUTSIDE_ACTIVE_ROLLBACK_TRANSITIVE_GRAPH", "dependencies": ["active_rollback_graph"],
+             "initialIdentity": identity, "observedIdentity": identity, "structuralSha256": None,
+             "digest": {"indexSha256": evidence["indexSha256"]}},
+        ],
+    }
+    fd = acquire_existing_lock(lock)
+    try:
+        # The directory and both records are exclusive. A partial generation
+        # remains visible to the lifecycle inventory and must be reconciled.
+        directory.mkdir(mode=0o700)
+        fsync_dir(outputs)
+        write_exclusive(lifecycle_path, lifecycle_raw)
+        lifecycle_info = lifecycle_path.lstat()
+        lifecycle_identity = {"device": lifecycle_info.st_dev, "inode": lifecycle_info.st_ino}
+        contract["artifacts"][0].update(
+            **structural_metrics(lifecycle_path), initialIdentity=lifecycle_identity,
+            observedIdentity=lifecycle_identity)
+        contract_raw = canonical(contract)
+        write_exclusive(contract_path, contract_raw)
+    finally:
+        os.close(fd)
+    print(canonical({"result": "EXTERNAL_RETIREMENT_MATERIALIZED", "releaseId": release,
+                     "contract": str(contract_path), "contractSha256": digest_bytes(contract_raw),
+                     "lifecycle": str(lifecycle_path), "lifecycleSha256": digest_bytes(lifecycle_raw)}).decode().strip())
+
+
+def authenticate_external_projection(contract: dict[str, Any], lifecycle: dict[str, Any],
+                                     contract_path: Path, lifecycle_path: Path,
+                                     lifecycle_sha: str, args: argparse.Namespace) -> dict[str, Any]:
+    binding = lifecycle.get("externalHandoff")
+    if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+        deny("external_projection_binding")
+    evidence = authenticate_external_handoff(argparse.Namespace(
+        handoff=Path(str(binding["path"])), handoff_sha256=binding["sha256"],
+        root_policy=args.root_policy, root_policy_sha256=args.root_policy_sha256),
+        verify_payload=False)
+    release, target = evidence["releaseId"], evidence["targetCommit"]
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    outputs = Path(policy["canonicalRoots"]["outputs"])
+    if (lifecycle.get("externalEvidence") != evidence or lifecycle.get("targetCommit") != target or
+            contract["releaseId"] != release or contract["targetCommit"] != target or
+            contract_path.parent != outputs / f"{release}-external-import" or
+            contract["writerLockPath"] != str(outputs / ".generation-build.lock")):
+        deny("external_projection_identity")
+    expected = [
+        (str(lifecycle_path), "EVIDENCE_PRESERVE", {"sha256": lifecycle_sha}),
+        (evidence["installedPath"], "RELEASE_RUNTIME", {"indexSha256": evidence["indexSha256"]}),
+    ]
+    if [(item["path"], item["class"], item["digest"]) for item in contract["artifacts"]] != expected:
+        deny("external_projection_scope")
+    for artifact in contract["artifacts"]:
+        authenticate_artifact(artifact)
+    return evidence
+
+
+def check_external_retirement(args: argparse.Namespace) -> None:
+    intent_raw, _ = stable_private(args.intent, args.intent_sha256)
+    intent = object_json(intent_raw, "external-projection-intent")
+    if intent.get("commands") != [] or intent.get("externalHandoff") is None:
+        deny("external_projection_intent")
+    evidence = authenticate_external_retirement_intent(args, intent)
+    auth_raw, _ = stable_private(args.authorization, args.authorization_sha256)
+    authorization = object_json(auth_raw, "external-projection-authorization")
+    if (set(authorization) != {"schemaVersion", "authorizationId", "decision", "intentSha256",
+                               "approvedPaths", "owner"} or
+            authorization.get("schemaVersion") != 1 or authorization.get("decision") != "AUTHORIZE_ONCE" or
+            authorization.get("intentSha256") != args.intent_sha256 or authorization.get("approvedPaths") != [] or
+            not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
+        deny("external_projection_authorization")
+    print(canonical({"result": "EXTERNAL_RETIREMENT_READY", "intentSha256": args.intent_sha256,
+                     **{key: evidence[key] for key in ("releaseId", "targetCommit", "installedPath",
+                                                       "manifestSha256", "indexSha256")}}).decode().strip())
+
+
+def authenticate_external_retirement_intent(args: argparse.Namespace, intent: dict[str, Any]) -> dict[str, Any]:
+    artifacts = intent.get("artifacts")
+    if (not isinstance(artifacts, list) or len(artifacts) != 2 or
+            any(not isinstance(item, dict) or not isinstance(item.get("path"), str) for item in artifacts)):
+        deny("external_projection_intent")
+    lifecycle_path = Path(artifacts[0]["path"])
+    contract_path = lifecycle_path.parent / "generation-artifacts.private.json"
+    contract_raw, _ = stable_private(contract_path, intent["contractSha256"])
+    lifecycle_raw, _ = stable_private(lifecycle_path, intent["lifecycleSha256"])
+    contract = object_json(contract_raw, "external-projection-contract")
+    lifecycle = object_json(lifecycle_raw, "external-projection-lifecycle")
+    validate_contract(contract)
+    if (intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("authorizationGranted") is not False or
+            intent.get("rootPolicySha256") != args.root_policy_sha256 or
+            intent.get("reviewOutput") != str(lifecycle_path.parent / "generation-review.private.json") or
+            intent.get("commandsSha256") != digest_bytes(b"") or
+            intent.get("reconciliation") != {"chain": [], "completed": [], "subordinateAbsences": []} or
+            not isinstance(intent.get("executionContract"), dict) or
+            intent["executionContract"].get("canonicalLock") != str(args.deployment_lock) or
+            intent["executionContract"].get("writerLock") != contract["writerLockPath"] or
+            any(intent.get(key) != contract.get(key) for key in ("generationId", "releaseId", "targetCommit")) or
+            intent.get("externalHandoff") != lifecycle.get("externalHandoff") or
+            intent.get("commands") != [] or
+            [{key: value for key, value in item.items() if key != "retentionState"} for item in artifacts]
+            != contract["artifacts"]):
+        deny("external_projection_intent")
+    return authenticate_external_projection(contract, lifecycle, contract_path, lifecycle_path,
+                                            intent["lifecycleSha256"], args)
+
+
+def stable_external_package(path: Path, expected_sha: str) -> None:
+    try:
+        before = path.lstat()
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                stat.S_IMODE(before.st_mode) & 0o022):
+            deny("external_handoff_package_identity")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if not stat.S_ISREG(opened.st_mode):
+                deny("external_handoff_package_identity")
+            digest = hashlib.sha256()
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+            after = path.lstat()
+    except OSError:
+        deny("external_handoff_package_read")
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
+                             item.st_mtime_ns, item.st_ctime_ns)
+    if (identity(before) != identity(opened) or
+            identity(before) != identity(after) or digest.hexdigest() != expected_sha):
+        deny("external_handoff_package_hash_or_drift")
 
 
 def validate_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[str, Any]:
@@ -3067,6 +4052,14 @@ def prepare(args: argparse.Namespace) -> None:
     writer_fd = acquire_existing_lock(Path(contract["writerLockPath"]))
     try:
         fresh = capture_fresh_operational(operational)
+        external = "externalHandoff" in lifecycle
+        if external:
+            authenticate_external_projection(contract, lifecycle, args.contract, args.lifecycle,
+                                             args.lifecycle_sha256, args)
+            if (contract["releaseId"] not in operational["candidateReleases"] or
+                    contract["releaseId"] not in operational["installedVerifiedReleases"] or
+                    contract["releaseId"] in operational["activeReleases"]):
+                deny("external_projection_candidate")
         failed_build_worktree = authenticate_failed_build_worktree_disposition(
             contract, lifecycle, operational, args.contract, args.contract_sha256,
             args.lifecycle, args.lifecycle_sha256)
@@ -3125,8 +4118,23 @@ def prepare(args: argparse.Namespace) -> None:
                                   "automaticRetry": False, "force": False, "prune": False,
                                   "globExpansion": False, "receiptFsync": True},
         }
+        if "worktreeResidueReconciliation" in contract:
+            derived = [item for item in commands if item["class"] in
+                       {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME"}]
+            if (len(commands) != 3 or len(derived) != 3 or
+                    [item["class"] for item in commands].count("DERIVED_WORKTREE") != 1 or
+                    [item["class"] for item in commands].count("DERIVED_OUTPUT_RUNTIME") != 2):
+                deny("residue_successor_command_scope")
+            intent["residueSuccessorInputs"] = {
+                "contract": {"path": str(args.contract), "sha256": args.contract_sha256},
+                "lifecycle": {"path": str(args.lifecycle), "sha256": args.lifecycle_sha256},
+            }
         if failed_build_worktree is not None:
             intent["failedBuildWorktreeDisposition"] = failed_build_worktree
+        if external:
+            if commands:
+                deny("external_projection_command_scope")
+            intent["externalHandoff"] = lifecycle["externalHandoff"]
         intent_raw = canonical(intent)
         commands_raw = ("\n".join(command["literal"] for command in commands) + ("\n" if commands else "")).encode()
         write_exclusive(args.commands_output, commands_raw)
@@ -3180,7 +4188,7 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation",
                 "rootPolicySha256", "reviewOutput", "reconciliation"}
     required.add("legacyMigration")
-    optional = {"failedBuildWorktreeDisposition"}
+    optional = {"failedBuildWorktreeDisposition", "externalHandoff", "residueSuccessorInputs"}
     if (not required.issubset(intent) or not set(intent).issubset(required | optional) or
             intent.get("schemaVersion") != 3 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
@@ -3249,6 +4257,9 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 len(commands) != 1 or
                 commands[0]["class"] != "DERIVED_WORKTREE"):
             deny("intent_failed_build_worktree_commands")
+    if "externalHandoff" in intent and (commands or failed_build_worktree is not None or
+            intent["reconciliation"] != {"chain": [], "completed": [], "subordinateAbsences": []}):
+        deny("external_projection_command_scope")
     return commands
 
 
@@ -3283,10 +4294,24 @@ def execute(args: argparse.Namespace) -> None:
         deny("intent_lifecycle_artifact")
     lifecycle_path = Path(lifecycle_artifacts[0]["path"])
     contract_path = lifecycle_path.parent / "generation-artifacts.private.json"
+    successor_inputs = intent.get("residueSuccessorInputs")
+    if successor_inputs is not None:
+        if not isinstance(successor_inputs, dict) or set(successor_inputs) != {"contract", "lifecycle"}:
+            deny("residue_successor_inputs")
+        contract_path, contract_sha, _ = _closed_file_binding(successor_inputs["contract"], "residue:successor-contract")
+        lifecycle_path, lifecycle_sha, _ = _closed_file_binding(successor_inputs["lifecycle"], "residue:successor-lifecycle")
+        if (contract_sha != intent["contractSha256"] or lifecycle_sha != intent["lifecycleSha256"]):
+            deny("residue_successor_inputs")
     persisted_contract_raw, _ = stable_private(contract_path, intent["contractSha256"])
     persisted_lifecycle_raw, _ = stable_private(lifecycle_path, intent["lifecycleSha256"])
     persisted_contract = object_json(persisted_contract_raw, "artifact-contract")
     persisted_lifecycle = object_json(persisted_lifecycle_raw, "generation-lifecycle")
+    if successor_inputs is not None:
+        validate_contract(persisted_contract)
+        if ("worktreeResidueReconciliation" not in persisted_contract or
+                [{key: value for key, value in item.items() if key != "retentionState"}
+                 for item in intent["artifacts"]] != persisted_contract["artifacts"]):
+            deny("residue_successor_intent")
     canonical_review_destination(args.review_output, contract_path, lifecycle_path, policy)
     if str(args.review_output) != intent["reviewOutput"]:
         deny("intent_review_output")
@@ -3295,12 +4320,24 @@ def execute(args: argparse.Namespace) -> None:
     writer_fd = acquire_existing_lock(Path(intent["executionContract"]["writerLock"]))
     attempted = completed = 0
     removed: list[str] = []
+    external_debt = None
     receipt_state = "DEPLOYED_SANITIZED" if operational["deploymentState"]["state"] == "DEPLOYED" else "SANITIZED"
     try:
         # These observations happen only after both locks and before the first
         # ATTEMPT. A stale prepare snapshot cannot authorize a deletion.
         validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
         fresh = capture_fresh_operational(operational)
+        if "externalHandoff" in intent or "externalHandoff" in persisted_lifecycle:
+            if operational["deploymentState"]["state"] != "DEPLOYED":
+                deny("external_projection_deployed_required")
+            evidence = authenticate_external_retirement_intent(args, intent)
+            external_debt = evidence.get("externalRetentionDebt")
+            marker_raw, _ = stable_private(Path(evidence["installedPath"]) / "DEPLOYED")
+            marker = object_json(marker_raw, "external-projection-marker")
+            if (marker.get("release") != evidence["releaseId"] or marker.get("target") != evidence["targetCommit"] or
+                    marker.get("accepted") != "ACEITE TÉCNICO PASS" or
+                    marker.get("dumpSha256") != fresh["dumpSha256"]):
+                deny("external_projection_marker")
         failed_build_worktree = authenticate_failed_build_worktree_disposition(
             persisted_contract, persisted_lifecycle, operational,
             contract_path, intent["contractSha256"],
@@ -3414,6 +4451,8 @@ def execute(args: argparse.Namespace) -> None:
                          else "SANITIZED") if not remaining else (
                          "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED"
                          else "RETENTION_INCOMPLETE")
+        if external_debt is not None:
+            receipt_state = "DEPLOYED_RETENTION_INCOMPLETE"
         journal_sha = digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b"")
         all_removed = [item["path"] for item in reconciliation["completed"]] + removed
         receipt = {"schemaVersion": 1, "state": receipt_state, "failurePredicate": None,
@@ -3426,12 +4465,15 @@ def execute(args: argparse.Namespace) -> None:
         subordinate_absences = _receipt_subordinate_absences(reconciliation)
         if subordinate_absences:
             receipt["subordinateAbsences"] = subordinate_absences
+        if external_debt is not None:
+            receipt["externalRetentionDebt"] = external_debt
         receipt_raw = canonical(receipt)
         write_exclusive(args.receipt_root / "execution-receipt.private.json", receipt_raw)
-        review_terminal = "SANITIZED" if not remaining else "QUARANTINED"
+        review_terminal = "SANITIZED" if not remaining and external_debt is None else "QUARANTINED"
         review = {"schemaVersion": 2, "generationId": intent["generationId"],
                   "lifecycleSha256": intent["lifecycleSha256"], "state": review_terminal,
-                  "reviewer": authorization["owner"], "reason": "derived artifacts retired",
+                  "reviewer": authorization["owner"],
+                  "reason": "external builder custody retained" if external_debt is not None else "derived artifacts retired",
                   "evidenceSha256": digest_bytes(receipt_raw)}
         replace_private(args.review_output, canonical(review))
         fsync_dir(args.receipt_root)
@@ -4005,6 +5047,34 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
+    residue_prepare = commands.add_parser("prepare-worktree-residue")
+    residue_prepare.add_argument("--request", type=Path, required=True)
+    residue_prepare.add_argument("--request-sha256", required=True)
+    residue_prepare.add_argument("--intent-output", type=Path, required=True)
+    residue_prepare.set_defaults(handler=prepare_worktree_residue)
+    residue_execute = commands.add_parser("execute-worktree-residue")
+    for name in ("intent", "authorization"):
+        residue_execute.add_argument(f"--{name}", type=Path, required=True)
+        residue_execute.add_argument(f"--{name}-sha256", required=True)
+    residue_execute.add_argument("--receipt-root", type=Path, required=True)
+    residue_execute.add_argument("--successor-root", type=Path, required=True)
+    residue_execute.set_defaults(handler=execute_worktree_residue)
+    handoff_parser = commands.add_parser("verify-external-handoff")
+    for name in ("handoff", "root-policy"):
+        handoff_parser.add_argument(f"--{name}", type=Path, required=True)
+        handoff_parser.add_argument(f"--{name}-sha256", required=True)
+    handoff_parser.set_defaults(handler=verify_external_handoff)
+    materialize_parser = commands.add_parser("materialize-external-retirement")
+    check_parser = commands.add_parser("check-external-retirement")
+    for operation_parser, input_name in ((materialize_parser, "handoff"), (check_parser, "intent")):
+        for name in (input_name, "root-policy"):
+            operation_parser.add_argument(f"--{name}", type=Path, required=True)
+            operation_parser.add_argument(f"--{name}-sha256", required=True)
+    check_parser.add_argument("--authorization", type=Path, required=True)
+    check_parser.add_argument("--authorization-sha256", required=True)
+    check_parser.add_argument("--deployment-lock", type=Path, required=True)
+    materialize_parser.set_defaults(handler=materialize_external_retirement)
+    check_parser.set_defaults(handler=check_external_retirement)
     bootstrap_parser = commands.add_parser("bootstrap-legacy")
     bootstrap_parser.add_argument("--descriptor", type=Path, required=True)
     bootstrap_parser.add_argument("--descriptor-sha256", required=True)
@@ -4094,6 +5164,17 @@ def parser() -> argparse.ArgumentParser:
     execute_parser.add_argument("--receipt-root", type=Path, required=True)
     execute_parser.add_argument("--review-output", type=Path, required=True)
     execute_parser.set_defaults(handler=execute)
+    preservation_prepare = commands.add_parser("prepare-builder-preservation")
+    preservation_prepare.add_argument("--request", type=Path, required=True)
+    preservation_prepare.add_argument("--request-sha256", required=True)
+    preservation_prepare.add_argument("--intent-output", type=Path, required=True)
+    preservation_prepare.set_defaults(handler=prepare_builder_preservation)
+    preservation_record = commands.add_parser("record-builder-preservation")
+    for name in ("intent", "authorization"):
+        preservation_record.add_argument(f"--{name}", type=Path, required=True)
+        preservation_record.add_argument(f"--{name}-sha256", required=True)
+    preservation_record.add_argument("--receipt-root", type=Path, required=True)
+    preservation_record.set_defaults(handler=record_builder_preservation)
     return root
 
 

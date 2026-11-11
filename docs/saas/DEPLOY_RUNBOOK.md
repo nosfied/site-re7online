@@ -17,7 +17,7 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 - target e control plane aprovados em CI;
 - release imutável de API/frontend selada por `scripts/converta-release.py`;
 - build único na VPS em worktree Linux x86_64 isolado, Node v20.20.0, com capacidade conferida; esse local de build já está autorizado pelo owner;
-- builder externo somente como alternativa decidida separadamente; a autorização da janela de ativação continua obrigatória;
+- builder externo somente como alternativa decidida separadamente. Antes do preflight, exigir a [qualificação entre hosts](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#build-externo-e-qualificação-entre-hosts); a instalação inerte não autoriza a janela de ativação;
 - pacote, manifesto, índice, BUILD_ID e entrypoint integralmente verificados;
 - release extraída em destino novo sob `/opt/re7online/releases`;
 - configuração privada e retorno autenticados, dump anterior e symlinks capturados;

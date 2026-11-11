@@ -292,9 +292,257 @@ operacional coerentes. Esta atualização documental não implementa nem encerra
   target/pacote/builder/hashes; não declarar conformidade SLSA, assinaturas ou níveis
   que o Converta ainda não implementou.
 
-Retenção automática por dependência e orçamento, armazenamento externo de artefatos
-com política de ciclo de vida e builder externo são evoluções a avaliar após esta
-entrega. Não se altera a arquitetura produtiva durante a retomada da Tendência.
+Retenção automática por dependência e orçamento e armazenamento externo de artefatos
+com política de ciclo de vida continuam como evoluções a avaliar.
+
+## Build externo e qualificação entre hosts
+
+O build externo é uma alternativa mediante decisão específica. É útil quando
+a capacidade ou o custo de preparação na VPS torna preferível produzir o pacote
+em outro host. A rota normal de build na VPS continua regida pelo
+[modelo operacional](../DEPLOYMENT_OPERATING_MODEL.md). A implantação em produção
+segue o [runbook](../DEPLOY_RUNBOOK.md).
+
+| Precedente | O que deu certo | Limite da prova |
+| --- | --- | --- |
+| [Frontend 3227b2d7, 09–11/10](../../reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md) | Build Node 20.20.0 reutilizado, tar com 23.795 arquivos e 31 symlinks, 16 cenários de navegador na extração. [Execução](../../reviews/automation-freeform-window-release-af26/frontend3227-observation-diagnostic-20261011/EXECUTION_2026-10-11.md) com aceite de UI e 46,122 s entre solicitação de parada e prontidão técnica. | Fluxo histórico frontend-only com política própria. |
+| [API Result Truth 2ed9dccc, 11/10](../../reviews/automation-freeform-window-release-af26/result-truth-api-prepared-20261011/README.md) | Base compilada reaproveitada, overlay conferido em staging e [implantação técnica concluída](../../reviews/automation-freeform-window-release-af26/result-truth-api-prepared-20261011/DEPLOYMENT_2026-10-11.md). O intervalo de contenção foi 37,824 s. | Overlay e controles históricos. Contenção é uma medição distinta da indisponibilidade percebida. |
+| Piloto a838bd33, 10/11 | Pacote imutável v2 construído no builder, verificado e instalado inertemente na VPS. 34.381 entradas, verificação em aproximadamente 74,6 s e instalação em 106,3 s. | A preparação ocorreu sem troca de runtime. O preflight atual segue bloqueado e a duração do futuro corte ainda precisa ser medida. |
+
+### Evidência do piloto a838bd33
+
+- Release `immutable-a838bd33-external-20261110T130618Z`, target
+  `a838bd33ea00ea49be52d61e025a36320a4154c1`, árvore
+  `438b737c96c8e42da61cdc14e84694a4afe9dde4` e BUILD_ID `y6yGEaAGGr5oZe93llTWD`.
+- SHA-256 do pacote `99b8ef1d6e056cc6846d6c85731bc41c53dfe251657ead62a12305d5b65ffacb`,
+  manifesto `389a1c9ead3fabab8e28b035cc0741bb090835fdb930aec6cf90b9a2afd477c3` e
+  índice `490f96946172d0248647bba16fd51248fca13098a85b156b28aecc4843980af2`.
+- A VPS alocou 148.201.472 B para o pacote e 989.118.464 B para a release instalada.
+  Verificação e instalação foram sequenciais. O staging de verificação foi
+  retirado antes da instalação e o staging desta virou a release por rename.
+  O pós-check registrou 8.289.509.376 B livres, 8.779.108 inodes livres e zero
+  staging ou transferência parcial residual. São medições da janela, sujeitas a
+  recaptura para novas escritas.
+- O lifecycle v2 `38a32f22f63c6b6b03e210e3e92a448b9abbf178bff39ca1a4a8543271c9b47f`
+  e o contrato `5e91a5d9c95b0845cc48a75e8a8f1473722c13901d1f058805f5fd70cb9faa8a`
+  vinculam as raízes e o writer lock do builder externo. A primeira tentativa
+  externa parou com `EPERM` no esbuild e mantém sua própria dívida no builder.
+- A decisão `DENY_BEFORE_PREFLIGHT / EXTERNAL_RETENTION_HANDOFF_UNSUPPORTED` foi
+  registrada antes de abrir transação. O consumidor local exigiria uma raiz
+  canônica da VPS para `RELEASE_RUNTIME`, com a negativa
+  `artifact_outside_canonical_root:RELEASE_RUNTIME`. `RELEASE VERIFIED` e
+  `RELEASE INSTALLED` comprovam a integridade local da v2. A disposição dos
+  derivados no builder é uma prova separada.
+
+### Critérios para tornar a rota reutilizável
+
+1. Decidir a rota na admissão, antes de alocar. Conferir se os consumidores de
+   preflight e finalização aceitam o vínculo previsto antes do primeiro build
+   ou upload. Quando o suporte estiver pendente, limitar um eventual piloto à
+   preparação inerte e registrar esse limite antes da alocação. Conferir
+   ferramenta, versão, target e árvore, bytes e inodes em cada host. Na VPS,
+   dimensionar pacote, maior extração simultânea, margem para falha/evidência
+   e reserva operacional. Recapturar os gates antes de escrever.
+2. Reusar o pacote já verificado da mesma geração quando íntegro e elegível.
+   Copiar para destino exclusivo, conferir SHA e executar `verify --package` e
+   `install` sequencialmente. Registrar o pico e comprovar a disposição dos
+   temporários antes de avançar. Para a v2 instalada, retomar da prova existente
+   após conferir novamente sua identidade.
+3. Qualificar um vínculo versionado entre o contrato, lifecycle e política de
+   raízes originais do builder, a identidade do pacote transportado e a release
+   física instalada. Preservar os documentos originais. Cada host autentica e
+   dispõe somente de caminhos e locks próprios. Vincular receipt e journal da
+   disposição no builder quando aplicáveis. Dívida ou prova ausente impede
+   declarar `SANITIZED`. A VPS opera apenas com o escopo local autenticado.
+4. Ensaiar admissão, preparo, preflight, ativação simulada, aceite e fechamento
+   com duas raízes distintas. Cobrir negativa por troca de pacote ou hash,
+   falta de prova, caminho do outro host e interrupção depois de possível efeito.
+   Conferir que a rota local existente continua passando e que a retomada usa
+   journal e receipt existentes.
+5. Com a rota qualificada e `PREFLIGHT PASS`, reservar a troca API-only deste
+   piloto para janela explicitamente autorizada após as 17h de Fortaleza.
+   Preservar frontend, worker, retorno autenticado e produção das 08h às 17h.
+   Conferir prontidão local e pública e aceite GET-only antes da finalização.
+   Registrar separadamente os tempos de preparação, de parada até prontidão,
+   o pico de disco, o saldo e a disposição por host. Promover a rota a
+   procedimento normal externo somente depois de comprovar esse fechamento.
+
+### Conferência de evidências antes do preflight
+
+`generation-retirement.py verify-external-handoff` valida a passagem em leitura.
+Recebe `--handoff`, `--handoff-sha256`, `--root-policy` e
+`--root-policy-sha256`. O handoff privado schema 1 vincula por caminho e SHA-256
+as cópias do `builderPolicy`, `contract`, `lifecycle`, `intent`,
+`authorization`, `receipt`, `journal` e do stdout integral de `install` em
+`installation`. `packagePath` identifica o pacote local em custódia e
+`canonicalVerifierSha256` fixa o verificador do control plane aprovado.
+Os hashes esperados devem vir da custódia autenticada de cada host.
+
+O perfil inicial exige uma única retirada concluída dos três derivados do builder,
+com os três comandos registrados no journal. A prova é comparada com os caminhos
+originais, sem consultar esses caminhos a partir da VPS. O verificador relê
+o SHA do pacote por streaming e confere a instalação inerte já existente.
+`EXTERNAL_HANDOFF_EVIDENCE_VERIFIED` encerra apenas essa conferência.
+
+1. Com a prova real do builder em custódia, usar `materialize-external-retirement`
+   com os mesmos argumentos do verificador. A projeção exclusiva no output
+   canônico local contém lifecycle e contrato novos, com a release instalada e
+   a referência à evidência original. Nenhum caminho remoto se torna alvo local.
+2. Rodar o `prepare` canônico com fotografia fresca que vincule a release como
+   candidata e instalada verificada. A intenção precisa ter zero comandos.
+   A autorização local usa `AUTHORIZE_ONCE` com `approvedPaths=[]` e o SHA
+   dessa intenção. A autorização de ativação pertence à janela de produção.
+3. O driver reabre a intenção, a autorização e a prova externa no preflight,
+   antes de trocar a API e antes do primeiro save. O fechamento relê a prova
+   sob os locks canônicos e exige grafo ativo, marker e dump correspondentes.
+   O receipt local registra zero comandos e o frontend preservado mantém a
+   sua release no grafo ativo, inclusive quando compartilha o retorno da API.
+
+O ensaio usa prova sintética de retirada no builder, build e instalação reais
+em duas raízes descartáveis e execução real da retenção local sem comandos. A
+troca API-only e a checagem antes do save são exercitadas com PM2 simulado.
+O piloto depende do receipt e do journal reais do builder. A tentativa de
+preparação v1 parou antes da intenção porque a importação Python criou
+`scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc` no worktree
+selado. O consumidor executa agora os bytes da dependência já autenticados em
+memória, sem reabertura pelo loader ou gravação de cache. A regressão executa
+`--help` em processo isolado e confere a igualdade do inventário e dos bytes
+dos controles copiados. Invocações operacionais Python devem usar `-B`.
+
+O resíduo preexistente exige prova específica da única diferença e disposição
+autorizada. Preservar contrato, inventário e negativa originais. A retirada do
+bytecode pode alterar metadados de diretórios ancestrais, portanto deve-se
+reautenticar o inventário completo e tratar eventuais diferenças por sucessor
+vinculado ao original antes do novo prepare. A correção preventiva não autentica
+a retirada anterior nem autoriza substituir hashes para aceitar drift. Preservar a
+instalação inerte até a conclusão desse gate e do preflight na VPS.
+
+### Preservação autorizada do builder sem baseline histórico
+
+Quando não existe inventário anterior detalhado, a alternativa implementada é
+preservar os três derivados e registrar a dívida; não apagar o resíduo nem
+reconstruir o baseline. O contrato e o lifecycle originais permanecem intactos.
+A rota destrutiva abaixo continua exigindo a prova histórica completa.
+
+No builder, criar uma custódia exclusiva e um request privado schema 1 com
+`contract`, `lifecycle` e `rootPolicy` como pares `path`/`sha256`, o
+`deploymentLock` existente, `responsible`, `expiresAtUtc` futuro em UTC e `reason`.
+Usar os caminhos reais e hashes da geração v2; não substituir documentos originais.
+O consumidor autentica as raízes e a identidade original do worktree, mede seu
+estado atual e exige que os dois runtimes continuem idênticos ao contrato.
+A medida `retainedBytes` soma conservadoramente os blocos físicos por raiz;
+`historicalInventoryEquivalence=false` declara a ausência da equivalência histórica.
+
+```sh
+python3 -B scripts/generation-retirement.py prepare-builder-preservation \
+  --request <request> --request-sha256 <sha> --intent-output <intenção>
+python3 -B scripts/generation-retirement.py record-builder-preservation \
+  --intent <intenção> --intent-sha256 <sha> \
+  --authorization <autorização> --authorization-sha256 <sha> \
+  --receipt-root <destino-exclusivo>
+```
+
+Entre os comandos, revisar a intenção de zero comandos e vincular uma autorização
+schema 1 `AUTHORIZE_ONCE`, com `authorizationId`, `owner`, `intentSha256` e
+`approvedPaths=[]`. O registro revalida a captura sob os dois locks existentes,
+arquiva a review anterior quando presente e emite receipt e journal privados.
+A nova review `PRESERVE_OVERRIDE` vincula responsável, bytes, prazo e receipt.
+Os originais, o worktree com o bytecode e os dois runtimes não são retirados.
+Divergência ou destino de receipt já existente encerra a execução; não há retry.
+
+Copiar para custódia privada na VPS as provas originais e os novos intent,
+autorização, receipt, journal e review, autenticando cada SHA. O handoff schema 2
+mantém os campos do schema 1 e acrescenta o binding `review`. Ele exige a cadeia
+`PRESERVATION_OBSERVED → PRESERVATION_AUTHORIZED → PRESERVATION_RECORDED`,
+zero comandos destrutivos, responsável e prazo futuro. A verificação do pacote e
+da instalação permanece integral e independente da preservação.
+
+Prosseguir com `verify-external-handoff`, `materialize-external-retirement` e
+`prepare` locais existentes. A intenção e a autorização locais também têm zero
+comandos e `approvedPaths=[]`. O driver reabre a prova no preflight, antes da
+ativação e antes do save; o fechamento usa a continuação canônica e seu lock herdado.
+O resultado esperado é `DEPLOYED_RETENTION_INCOMPLETE`, `saveCount=1`, receipt
+local com `externalRetentionDebt` e review `QUARANTINED`, nunca `SANITIZED`.
+A dívida continua sujeita a disposição própria; o prazo não autoriza exclusão.
+
+A regressão integrada exercita produtor, pacote, instalação, provas, projeção,
+preflight, ativação API-only, aceite, continuação de finalização e retenção reais
+em raízes descartáveis, com PM2 e processos simulados. Verifica o exit code do
+executor real, um único save, liberação terminal do lock e frontend/worker
+preservados. O marker novo `DEPLOYED` usa `0600`, conforme o verificador.
+Isso qualifica o código; somente evidências produtivas comprovam a entrega na VPS.
+
+### Disposição do bytecode e contrato sucessor
+
+O consumidor existente oferece `prepare-worktree-residue` e
+`execute-worktree-residue`. O perfil inicial abrange gerações externas com nome
+`immutable-<prefixo-do-target>-external-<timestamp-UTC>` e é limitado a
+`scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc` e ao
+diretório vazio que o contém. Reutiliza política de raízes, locks, observação
+operacional fresca, autorização, journal e autenticação de artefatos do
+`generation-retirement.py`.
+
+O request privado schema 1 vincula `contract`, `lifecycle`, `baseline`,
+`denial`, `operationalState` e `rootPolicy` por caminho absoluto e SHA-256.
+`deploymentLock` identifica o lock existente e `residueSha256` fixa o bytecode
+relatado. O stderr/diagnóstico original precisa conter o predicado exato de drift.
+Os bindings completos vêm da custódia operacional.
+
+O `baseline` é o inventário detalhado anterior, schema 1, com `root` e
+`entries`. Cada entrada contém `path`, `type`, `mode`, `size`, `mtimeNs`,
+`link`, `device`, `inode`, `allocatedBytes`, `uid`, `gid`, `nlink` e
+`sha256`. Os registros são ordenados como no produtor. Os hashes de conteúdo
+são SHA-256 para arquivos regulares e null para outros tipos. A reconstrução de
+blocos, inodes, tamanho e hash estrutural precisa coincidir com o artefato original.
+Esse inventário não pode ser fabricado a partir do worktree já alterado. Ausência
+de prova anterior detalhada encerra a preparação antes da intenção.
+
+No piloto a838bd33, o operador relatou em 10/11 a busca somente leitura nas
+custódias v1/v2, evidências, outputs e JSONs associados em /tmp, sem localizar o
+baseline anterior. O produtor desta geração registrou métricas e hash estrutural
+agregados. Seu índice detalhado cobre os runtimes do pacote. O novo perfil exige
+uma prova que essa produção não materializou. A negativa permanece
+`PRIOR_DETAILED_WORKTREE_INVENTORY_NOT_FOUND`.
+
+Uma nova busca nesse mesmo escopo depende de indicação concreta de outra custódia
+ou backup. Este perfil só pode retomar a geração quando houver uma prova anterior
+autenticável. Uma futura rota de reconciliação ou preservação com evidências
+atuais exige contrato e autorização próprios. O planejamento do próximo produtor
+deve incluir a emissão e custódia do baseline antes de qualquer controle importar
+módulos do worktree.
+
+A fixture de testes localiza o cache pelo `cache_from_source()` do Python que a
+executa e posiciona o bytecode sintético no caminho produtivo congelado. Assim,
+Python 3.14 pode exercitar o ensaio sem ampliar o perfil operacional 3.12.
+
+`prepare-worktree-residue --request <request> --request-sha256 <sha> --intent-output <intenção>`
+enumera o worktree inteiro sob os dois locks, compara os conteúdos e metadados
+com o baseline, valida o bytecode contra a fonte autenticada e sela somente
+`/usr/bin/rm -- <worktree>/scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc`
+e `/usr/bin/rmdir -- <worktree>/scripts/__pycache__`. Além dessas duas entradas,
+somente os metadados do diretório `scripts` podem diferir. Conteúdo extra,
+modificação em outro caminho, referência operacional e binding divergente negam.
+
+A autorização usa o schema canônico com `AUTHORIZE_ONCE`, SHA da intenção e
+`approvedPaths` contendo exatamente arquivo e diretório, nessa ordem. Intenção
+e autorização usam a serialização canônica JSON do consumidor.
+`execute-worktree-residue --intent <intenção> --intent-sha256 <sha> --authorization <autorização> --authorization-sha256 <sha> --receipt-root <custódia-nova> --successor-root <outputs>/<release>-bytecode-successor`
+recaptura as provas sob locks antes do primeiro efeito e registra cada comando
+por `ATTEMPT → RESULT → VERIFIED`.
+
+Após a retirada, o consumidor enumera novamente o worktree completo e publica o
+contrato sucessor e uma cópia byte-exata do lifecycle na nova raiz. O contrato
+original permanece intacto. Somente as métricas do worktree mudam. O sucessor
+carrega a prova portátil `worktreeResidueReconciliation`, vinculando originais,
+inventário, negativa, intenção, autorização, journal e receipt. O `prepare`
+normal revalida essa prova e exige exatamente worktree, API runtime e frontend
+runtime. O executor reabre os arquivos do sucessor pelos bindings selados.
+
+Falha após efeito fecha `QUARANTINED`, preserva o journal e impede repetição.
+Uma custódia de execução existente exige reconciliação própria. O receipt desta
+disposição tem dois comandos e é distinto do receipt posterior da retirada 3/3.
+A implementação e os testes isolados não comprovam a disponibilidade do baseline
+original no builder nem substituem sua autorização de retirada.
 
 ## Fechamento da janela fa63994a e dívida remanescente
 
