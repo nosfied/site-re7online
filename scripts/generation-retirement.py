@@ -2177,6 +2177,67 @@ def preservation_snapshot(request: dict[str, Any]) -> tuple[dict[str, Any], dict
     return contract, operational, snapshot
 
 
+def materialize_builder_preservation_lock(args: argparse.Namespace) -> None:
+    """Bootstrap only the builder window lock, using the existing writer lock."""
+    raw, _ = stable_private(args.request, args.request_sha256)
+    request = object_json(raw, "builder-preservation-request")
+    _, _, contract_raw = _closed_file_binding(request.get("contract"), "preservation:contract")
+    original = object_json(contract_raw, "builder-preservation-contract")
+    validate_contract(original)
+    writer_path = Path(original["writerLockPath"])
+    writer = acquire_existing_lock(writer_path)
+    try:
+        contract, operational, _ = preservation_snapshot(request)
+        policy = residue_policy(request)
+        outputs = authenticate_policy_root(policy, "outputs")[0]
+        path = Path(request["deploymentLock"])
+        parent = outputs.parent
+        info = parent.lstat()
+        if (path != parent / ".deployment-window.lock" or parent.resolve(strict=True) != parent or
+                not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or
+                info.st_gid != os.getegid() or stat.S_IMODE(info.st_mode) & 0o022 or path == writer_path):
+            deny("builder_preservation_lock_path")
+        evidence_destination(args.report_output, operational)
+        if args.report_output.exists() or args.report_output.is_symlink():
+            deny("builder_preservation_lock_report_exists")
+        binding = {
+            "schemaVersion": 1, "kind": "BUILDER_PRESERVATION_LOCK",
+            "generationId": contract["generationId"], "targetCommit": contract["targetCommit"],
+            "contractSha256": request["contract"]["sha256"],
+            "lifecycleSha256": request["lifecycle"]["sha256"],
+            "rootPolicySha256": request["rootPolicy"]["sha256"],
+            "path": str(path), "writerLockPath": str(writer_path),
+        }
+        binding_sha = digest_bytes(canonical(binding))
+        expected = (binding_sha + "\n").encode()
+        existed = path.exists() or path.is_symlink()
+        if existed:
+            existing, before = stable_private(path)
+            if existing != expected or before.st_nlink != 1:
+                deny("builder_preservation_lock_binding")
+        # Reuse the versioned exclusive creation, flock and fsync implementation.
+        lock = acquire_or_authenticate_lock(path, None, binding_sha)
+        try:
+            lock_raw, current = stable_private(path)
+            opened = os.fstat(lock)
+            if (lock_raw != expected or current.st_nlink != 1 or
+                    (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino) or
+                    (current.st_dev, current.st_ino) ==
+                    (os.fstat(writer).st_dev, os.fstat(writer).st_ino)):
+                deny("builder_preservation_lock_binding")
+            report = {"schemaVersion": 1, "result": "BUILDER_PRESERVATION_LOCK_READY",
+                      "created": not existed, "requestSha256": args.request_sha256,
+                      "binding": binding, "bindingSha256": binding_sha,
+                      "identity": {"device": current.st_dev, "inode": current.st_ino},
+                      "lockSha256": digest_bytes(lock_raw), "destructiveCommands": 0}
+            write_exclusive(args.report_output, canonical(report))
+            print(canonical(report).decode().strip())
+        finally:
+            os.close(lock)
+    finally:
+        os.close(writer)
+
+
 def prepare_builder_preservation(args: argparse.Namespace) -> None:
     request_raw, _ = stable_private(args.request, args.request_sha256)
     request = object_json(request_raw, "builder-preservation-request")
@@ -5164,6 +5225,11 @@ def parser() -> argparse.ArgumentParser:
     execute_parser.add_argument("--receipt-root", type=Path, required=True)
     execute_parser.add_argument("--review-output", type=Path, required=True)
     execute_parser.set_defaults(handler=execute)
+    preservation_lock = commands.add_parser("materialize-builder-preservation-lock")
+    preservation_lock.add_argument("--request", type=Path, required=True)
+    preservation_lock.add_argument("--request-sha256", required=True)
+    preservation_lock.add_argument("--report-output", type=Path, required=True)
+    preservation_lock.set_defaults(handler=materialize_builder_preservation_lock)
     preservation_prepare = commands.add_parser("prepare-builder-preservation")
     preservation_prepare.add_argument("--request", type=Path, required=True)
     preservation_prepare.add_argument("--request-sha256", required=True)

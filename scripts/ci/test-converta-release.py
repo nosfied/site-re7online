@@ -508,7 +508,7 @@ class ReleaseProducerTest(unittest.TestCase):
         custody = self.base / "evidence" / "preservation"
         custody.mkdir(mode=0o700)
         lock = self.base / ".deployment-window.lock"
-        write(lock, "", 0o600)
+        self.assertFalse(lock.exists())
         contract = self.output_a / "generation-artifacts.private.json"
         lifecycle = self.output_a / "generation-lifecycle.private.json"
         review = self.output_a / "generation-review.private.json"
@@ -530,6 +530,11 @@ class ReleaseProducerTest(unittest.TestCase):
                     argv.extend([f"--{key.replace('_', '-')}-sha256", bind(path)["sha256"]])
             return subprocess.run(argv, text=True, capture_output=True)
 
+        materialized = run("materialize-builder-preservation-lock", request=request,
+                           report_output=custody / "lock-report.private.json")
+        self.assertEqual(materialized.returncode, 0, materialized.stderr)
+        self.assertTrue(json.loads(materialized.stdout)["created"])
+        self.assertEqual(stat.S_IMODE(lock.stat().st_mode), 0o600)
         prepared = run("prepare-builder-preservation", request=request, intent_output=intent)
         self.assertEqual(prepared.returncode, 0, prepared.stderr)
         self.assertEqual(json.loads(intent.read_bytes())["commands"], [])

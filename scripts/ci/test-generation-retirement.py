@@ -1012,6 +1012,99 @@ class LegacyP00InstalledBatchFixture:
 
 class GenerationRetirementTest(unittest.TestCase):
 
+    def builder_lock_fixture(self):
+        fixture, _, _, _ = self.residue_fixture()
+        fixture.deploy_lock.unlink()
+        request = fixture.evidence_root / "lock-request.private.json"
+        bind = lambda path: {"path": str(path), "sha256": sha(path)}
+        private_json(request, {"schemaVersion": 1, "contract": bind(fixture.contract),
+                     "lifecycle": bind(fixture.lifecycle), "rootPolicy": bind(fixture.policy),
+                     "deploymentLock": str(fixture.deploy_lock), "responsible": "fixture-owner",
+                     "expiresAtUtc": "2099-01-01T00:00:00Z", "reason": "preserve existing generation"})
+        return fixture, request, SimpleNamespace(request=request, request_sha256=sha(request),
+                        report_output=fixture.evidence_root / "lock-report.private.json")
+
+    def test_builder_lock_materialization_binds_generation_and_preserves_source(self):
+        fixture, request, args = self.builder_lock_fixture()
+        originals = {p: p.read_bytes() for p in (fixture.contract, fixture.lifecycle, fixture.writer_lock)}
+        metrics = {p: MODULE.structural_metrics(p) for p in (fixture.worktree, fixture.api, fixture.frontend)}
+        with patch.object(MODULE.subprocess, "run") as processes, redirect_stdout(io.StringIO()):
+            MODULE.materialize_builder_preservation_lock(args)
+            processes.assert_not_called()
+        report = json.loads(args.report_output.read_bytes())
+        self.assertTrue(report["created"])
+        self.assertEqual(report["binding"]["generationId"], fixture.release_id)
+        self.assertEqual(report["binding"]["contractSha256"], sha(fixture.contract))
+        self.assertEqual(fixture.deploy_lock.read_text(), report["bindingSha256"] + "\n")
+        self.assertEqual(stat.S_IMODE(fixture.deploy_lock.stat().st_mode), 0o600)
+        identity = fixture.deploy_lock.stat().st_ino
+        for path, content in originals.items():
+            self.assertEqual(path.read_bytes(), content)
+        self.assertEqual({p: MODULE.structural_metrics(p) for p in metrics}, metrics)
+        # Recovery authenticates the existing binding, never replaces the lock inode.
+        args.report_output = fixture.evidence_root / "lock-report-recovered.private.json"
+        with redirect_stdout(io.StringIO()):
+            MODULE.materialize_builder_preservation_lock(args)
+        self.assertFalse(json.loads(args.report_output.read_bytes())["created"])
+        self.assertEqual(fixture.deploy_lock.stat().st_ino, identity)
+        fd = MODULE.acquire_existing_lock(fixture.deploy_lock); os.close(fd)
+        fd = MODULE.acquire_existing_lock(fixture.writer_lock); os.close(fd)
+
+    def test_builder_lock_rejects_unbound_mode_symlink_and_hardlink(self):
+        for kind in ("unbound", "mode", "symlink", "hardlink"):
+            with self.subTest(kind=kind):
+                fixture, _, args = self.builder_lock_fixture()
+                if kind == "symlink":
+                    fixture.deploy_lock.symlink_to(fixture.writer_lock)
+                elif kind == "hardlink":
+                    os.link(fixture.writer_lock, fixture.deploy_lock)
+                else:
+                    fixture.deploy_lock.write_text("unbound\n")
+                    fixture.deploy_lock.chmod(0o644 if kind == "mode" else 0o600)
+                before = fixture.deploy_lock.lstat()
+                with self.assertRaises(MODULE.Denied):
+                    MODULE.materialize_builder_preservation_lock(args)
+                self.assertFalse(args.report_output.exists())
+                self.assertEqual(fixture.deploy_lock.lstat().st_ino, before.st_ino)
+
+    def test_builder_lock_rejects_other_path_writer_busy_and_runtime_drift(self):
+        for kind in ("other-path", "writer-alias", "writer-busy", "runtime-drift"):
+            with self.subTest(kind=kind):
+                fixture, request, args = self.builder_lock_fixture()
+                held = None
+                if kind in ("other-path", "writer-alias"):
+                    value = json.loads(request.read_bytes())
+                    value["deploymentLock"] = str(fixture.writer_lock if kind == "writer-alias"
+                                                  else fixture.root / "unexpected.lock")
+                    private_json(request, value); args.request_sha256 = sha(request)
+                elif kind == "writer-busy":
+                    held = MODULE.acquire_existing_lock(fixture.writer_lock)
+                else:
+                    (fixture.api / "app").write_text("drift")
+                try:
+                    with self.assertRaises(MODULE.Denied):
+                        MODULE.materialize_builder_preservation_lock(args)
+                finally:
+                    if held is not None:
+                        os.close(held)
+                self.assertFalse(fixture.deploy_lock.exists())
+                self.assertFalse(args.report_output.exists())
+
+    def test_builder_lock_rejects_busy_existing_lock_without_replacement(self):
+        fixture, _, args = self.builder_lock_fixture()
+        with redirect_stdout(io.StringIO()):
+            MODULE.materialize_builder_preservation_lock(args)
+        held = MODULE.acquire_existing_lock(fixture.deploy_lock)
+        before = fixture.deploy_lock.stat().st_ino
+        args.report_output = fixture.evidence_root / "lock-report-busy.private.json"
+        try:
+            with self.assertRaises(MODULE.Denied):
+                MODULE.materialize_builder_preservation_lock(args)
+        finally:
+            os.close(held)
+        self.assertFalse(args.report_output.exists())
+        self.assertEqual(fixture.deploy_lock.stat().st_ino, before)
+
     def test_builder_preservation_accepts_current_custody_without_prior_inventory_and_never_deletes(self):
         fixture, residue_args, _, residue = self.residue_fixture()
         Path(json.loads(residue_args.request.read_bytes())["baseline"]["path"]).unlink()

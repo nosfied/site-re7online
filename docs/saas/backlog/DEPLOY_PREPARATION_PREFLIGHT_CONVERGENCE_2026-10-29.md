@@ -424,6 +424,11 @@ preservar os três derivados e registrar a dívida; não apagar o resíduo nem
 reconstruir o baseline. O contrato e o lifecycle originais permanecem intactos.
 A rota destrutiva abaixo continua exigindo a prova histórica completa.
 
+O produtor externo emite o writer lock, mas não emite o lock de janela do builder.
+A negativa `REQUIRED_BUILDER_DEPLOYMENT_LOCK_ABSENT` no piloto expôs esse
+pré-requisito não materializado; não altera a integridade do pacote ou da instalação.
+Não criar o segundo lock manualmente nem atribuir ambos os papéis ao writer lock.
+
 No builder, criar uma custódia exclusiva e um request privado schema 1 com
 `contract`, `lifecycle` e `rootPolicy` como pares `path`/`sha256`, o
 `deploymentLock` existente, `responsible`, `expiresAtUtc` futuro em UTC e `reason`.
@@ -433,7 +438,19 @@ estado atual e exige que os dois runtimes continuem idênticos ao contrato.
 A medida `retainedBytes` soma conservadoramente os blocos físicos por raiz;
 `historicalInventoryEquivalence=false` declara a ausência da equivalência histórica.
 
+O materializador abaixo é o único bootstrap admitido para esse perfil. Autentica a
+mesma geração e os três derivados sob o writer lock já existente. O destino é
+exatamente `.deployment-window.lock` no pai da raiz outputs autenticada. Reutiliza
+`acquire_or_authenticate_lock`, com `O_CREAT|O_EXCL|O_NOFOLLOW`, modo `0600`,
+flock e fsync do arquivo e diretório. O conteúdo vincula geração, target, hashes
+originais, política e os dois caminhos de lock. O relatório exclusivo registra o
+binding e device/inode. Lock preexistente somente é reconhecido com binding exato,
+modo privado e um único link; ocupado, divergente, symlink ou alias são negativas.
+O bootstrap não adquire autoridade de ativação e não modifica os três derivados.
+
 ```sh
+python3 -B scripts/generation-retirement.py materialize-builder-preservation-lock \
+  --request <request> --request-sha256 <sha> --report-output <relatório-exclusivo>
 python3 -B scripts/generation-retirement.py prepare-builder-preservation \
   --request <request> --request-sha256 <sha> --intent-output <intenção>
 python3 -B scripts/generation-retirement.py record-builder-preservation \
@@ -465,7 +482,7 @@ O resultado esperado é `DEPLOYED_RETENTION_INCOMPLETE`, `saveCount=1`, receipt
 local com `externalRetentionDebt` e review `QUARANTINED`, nunca `SANITIZED`.
 A dívida continua sujeita a disposição própria; o prazo não autoriza exclusão.
 
-A regressão integrada exercita produtor, pacote, instalação, provas, projeção,
+A regressão integrada começa sem o lock de janela, usa o materializador real e exercita produtor, pacote, instalação, provas, projeção,
 preflight, ativação API-only, aceite, continuação de finalização e retenção reais
 em raízes descartáveis, com PM2 e processos simulados. Verifica o exit code do
 executor real, um único save, liberação terminal do lock e frontend/worker
