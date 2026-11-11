@@ -119,6 +119,23 @@ AUDIT_REQUEST_KEYS = {
 }
 AUDIT_REQUEST_V2_KEYS = AUDIT_REQUEST_KEYS | {"procObserver"}
 AUDIT_REQUEST_V3_KEYS = AUDIT_REQUEST_V2_KEYS | {"incrementalBatch"}
+AUDIT_REQUEST_V4_KEYS = AUDIT_REQUEST_KEYS | {"crossHostEvidence"}
+BUILDER_A838BD33_PROFILE = "builder-a838bd33-derived-runtimes-v1"
+BUILDER_A838BD33_TARGET = "a838bd33ea00ea49be52d61e025a36320a4154c1"
+BUILDER_A838BD33_RELEASE = "immutable-a838bd33-external-20261110T130618Z"
+BUILDER_A838BD33_HELPER_SHA256 = (
+    "30af1520bfcf1726674a57193b0f8c4b5178fc7be7aec5f0e97b982abd57630b")
+BUILDER_A838BD33_ROOT = Path("/tmp/re7-external-builder-a838bd33-v2")
+BUILDER_A838BD33_CONTENT_HASHES = {
+    "contractSha256": "5e91a5d9c95b0845cc48a75e8a8f1473722c13901d1f058805f5fd70cb9faa8a",
+    "packageSha256": "99b8ef1d6e056cc6846d6c85731bc41c53dfe251657ead62a12305d5b65ffacb",
+    "manifestSha256": "389a1c9ead3fabab8e28b035cc0741bb090835fdb930aec6cf90b9a2afd477c3",
+    "indexSha256": "490f96946172d0248647bba16fd51248fca13098a85b156b28aecc4843980af2",
+}
+CROSS_HOST_EVIDENCE_KEYS = {
+    "profile", "maxAgeSeconds", "builderRequest", "builderAttestation",
+    "vpsOperationalState", "vpsCaptureReport",
+}
 PROC_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 PROC_OBSERVER_COMMAND = (
     "/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
@@ -2406,6 +2423,231 @@ def compare_index(runtime: Path, release_root: Path, relative: str,
             "allowedReleaseExtras": sorted(allowed_release_extras)}
 
 
+def compare_index_output_only(runtime: Path, relative: str,
+                              index: dict[str, Any]) -> dict[str, Any]:
+    """Authenticate a producer runtime directly against the sealed index.
+
+    This is deliberately narrower than compare_index(): it is used only by the
+    closed a838bd33 builder profile, whose installed release was authenticated
+    on the VPS and whose builder must not allocate a second extracted release.
+    """
+    entries = index.get("entries")
+    if not isinstance(entries, list):
+        deny("INDEX_ENTRIES")
+    selected: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+            deny("INDEX_ENTRY")
+        name = entry["path"]
+        if name == relative or name.startswith(relative + "/"):
+            if name in selected:
+                deny("INDEX_ENTRY_DUPLICATE")
+            selected[name] = entry
+    if relative not in selected:
+        deny("INDEX_RUNTIME_ROOT")
+    errors: list[str] = []
+    checked_files = 0
+    root = runtime.resolve(strict=True)
+    for name, entry in selected.items():
+        suffix = Path(name).relative_to(relative)
+        target = runtime / suffix
+        try:
+            info = target.lstat()
+        except OSError:
+            errors.append(f"missing:{name}")
+            continue
+        actual_type = ("directory" if stat.S_ISDIR(info.st_mode) else
+                       "file" if stat.S_ISREG(info.st_mode) else
+                       "symlink" if stat.S_ISLNK(info.st_mode) else "other")
+        if actual_type != entry.get("type") or stat.S_IMODE(info.st_mode) != _entry_mode(entry):
+            errors.append(f"identity:{name}")
+            continue
+        if actual_type == "file":
+            checked_files += 1
+            if info.st_size != entry.get("size") or sha256(target) != entry.get("sha256"):
+                errors.append(f"content:{name}")
+        elif actual_type == "symlink":
+            before = stat_identity(info)
+            try:
+                link = os.readlink(target)
+                resolved = target.resolve(strict=True)
+                after = stat_identity(target.lstat())
+            except OSError:
+                errors.append(f"symlink_broken:{name}")
+                continue
+            if before != after:
+                errors.append(f"symlink_changed:{name}")
+            elif resolved != root and root not in resolved.parents:
+                errors.append(f"symlink_escape:{name}")
+            elif link != entry.get("target"):
+                errors.append(f"symlink_target:{name}")
+    expected = {Path(name).relative_to(relative).as_posix() for name in selected}
+    expected.discard(".")
+    observed = {item.relative_to(runtime).as_posix() for item in runtime.rglob("*")}
+    if observed != expected:
+        errors.append("entry_set")
+    if errors:
+        deny("CROSS_HOST_OUTPUT_EQUIVALENCE_INCOMPLETE:" + errors[0])
+    return {"indexEntryCount": len(selected),
+            "checkedFileObservations": checked_files,
+            "authority": "SEALED_INDEX_AND_VPS_INSTALLATION_BINDING"}
+
+
+def _cross_host_binding(value: Any, label: str) -> tuple[Path, str, bytes, dict[str, Any]]:
+    if not isinstance(value, dict) or set(value) != {"path", "sha256"}:
+        deny(f"CROSS_HOST_{label}_BINDING")
+    path = normalized_absolute(value.get("path"), f"CROSS_HOST_{label}_PATH")
+    raw, identity = stable_regular(path, value.get("sha256"), allowed_modes={0o600})
+    if raw != canonical(object_json(raw, f"CROSS_HOST_{label}_JSON")):
+        deny(f"CROSS_HOST_{label}_CANONICAL")
+    return path, value["sha256"], raw, identity
+
+
+def authenticate_a838bd33_cross_host_evidence(
+        binding: Any, candidate_paths: list[str]) -> dict[str, Any]:
+    if not isinstance(binding, dict) or set(binding) != CROSS_HOST_EVIDENCE_KEYS:
+        deny("CROSS_HOST_EVIDENCE_SCHEMA")
+    if binding.get("profile") != BUILDER_A838BD33_PROFILE:
+        deny("CROSS_HOST_PROFILE")
+    max_age = binding.get("maxAgeSeconds")
+    if not isinstance(max_age, int) or max_age <= 0 or max_age > 3600:
+        deny("CROSS_HOST_MAX_AGE")
+    loaded = {label: _cross_host_binding(binding[key], label)
+              for key, label in (("builderRequest", "BUILDER_REQUEST"),
+                                 ("builderAttestation", "BUILDER_ATTESTATION"),
+                                 ("vpsOperationalState", "VPS_OPERATIONAL_STATE"),
+                                 ("vpsCaptureReport", "VPS_CAPTURE_REPORT"))}
+    request = object_json(loaded["BUILDER_REQUEST"][2], "BUILDER_REQUEST_JSON")
+    attestation = object_json(loaded["BUILDER_ATTESTATION"][2],
+                              "BUILDER_ATTESTATION_JSON")
+    operational = object_json(loaded["VPS_OPERATIONAL_STATE"][2],
+                              "VPS_OPERATIONAL_STATE_JSON")
+    report = object_json(loaded["VPS_CAPTURE_REPORT"][2], "VPS_CAPTURE_REPORT_JSON")
+
+    common = {"targetCommit": BUILDER_A838BD33_TARGET,
+              "releaseId": BUILDER_A838BD33_RELEASE}
+    if any(value.get(key) != expected for value in (request, attestation, operational, report)
+           for key, expected in common.items()):
+        deny("CROSS_HOST_RELEASE_BINDING")
+    if (request.get("schemaVersion") != 1 or
+            request.get("kind") != "A838BD33_BUILDER_PROC_REQUEST" or
+            not valid_sha(request.get("nonce")) or
+            {key: request.get(key) for key in BUILDER_A838BD33_CONTENT_HASHES} !=
+                BUILDER_A838BD33_CONTENT_HASHES):
+        deny("CROSS_HOST_BUILDER_REQUEST_PROVENANCE")
+    expected_root = (BUILDER_A838BD33_ROOT / "build-output" /
+                     f"{BUILDER_A838BD33_RELEASE}-producer" /
+                     BUILDER_A838BD33_RELEASE)
+    literal_paths = sorted(str(expected_root / suffix)
+                           for suffix in ("api-runtime", "frontend-runtime"))
+    expected_paths = sorted(candidate_paths)
+    if (len(expected_paths) != 2 or len(set(expected_paths)) != 2 or
+            expected_paths != literal_paths or
+            sorted(attestation.get("candidatePaths", [])) != expected_paths or
+            sorted(path for path in request.get("paths", {}) if
+                   path.endswith(("/api-runtime", "/frontend-runtime"))) != expected_paths):
+        deny("CROSS_HOST_EXACT_RUNTIME_BATCH")
+    for suffix in ("api-runtime", "frontend-runtime"):
+        if sum(path.endswith("/" + suffix) for path in expected_paths) != 1:
+            deny("CROSS_HOST_EXACT_RUNTIME_BATCH")
+
+    if (attestation.get("kind") != "A838BD33_BUILDER_PROC_ATTESTATION" or
+            attestation.get("schemaVersion") != 1 or
+            attestation.get("state") != "COMPLETE" or
+            attestation.get("requestSha256") != loaded["BUILDER_REQUEST"][1] or
+            attestation.get("nonce") != request.get("nonce") or
+            attestation.get("bindings") != request.get("paths") or
+            attestation.get("mechanism", {}).get("sha256") !=
+                BUILDER_A838BD33_HELPER_SHA256 or
+            attestation.get("mechanism", {}).get("path") !=
+                "/usr/local/libexec/re7online/capacity-proc-observer.py" or
+            attestation.get("mechanism", {}).get("identity", {}).get("uid") != 0 or
+            attestation.get("mechanism", {}).get("identity", {}).get("gid") != 0 or
+            attestation.get("mechanism", {}).get("identity", {}).get("mode") != "0500" or
+            attestation.get("mechanism", {}).get("identity", {}).get("type") != "regular" or
+            attestation.get("administrativeExecution", {}).get("mode") !=
+                "AUTHENTICATED_SUDO"):
+        deny("CROSS_HOST_BUILDER_PROVENANCE")
+    observation = attestation.get("observation")
+    if (not isinstance(observation, dict) or observation.get("complete") is not True or
+            observation.get("references") != [] or observation.get("activeWriters") != [] or
+            observation.get("failures") != [] or
+            observation.get("summary", {}).get("referenceReadFailures") != 0 or
+            observation.get("summary", {}).get("identityChanges") != 0):
+        deny("CROSS_HOST_BUILDER_OBSERVATION")
+    for path in expected_paths:
+        expected_identity = request["paths"].get(path)
+        observed_identity = attestation.get("paths", {}).get(path)
+        current = Path(path).lstat()
+        if (not isinstance(expected_identity, dict) or not isinstance(observed_identity, dict) or
+                (current.st_dev, current.st_ino) !=
+                    (expected_identity.get("device"), expected_identity.get("inode")) or
+                (observed_identity.get("device"), observed_identity.get("inode")) !=
+                    (expected_identity.get("device"), expected_identity.get("inode"))):
+            deny("CROSS_HOST_RUNTIME_IDENTITY")
+
+    hashes = {"requestSha256": loaded["BUILDER_REQUEST"][1],
+              "attestationSha256": loaded["BUILDER_ATTESTATION"][1],
+              "contractSha256": request.get("contractSha256"),
+              "packageSha256": request.get("packageSha256"),
+              "manifestSha256": request.get("manifestSha256"),
+              "indexSha256": request.get("indexSha256")}
+    if (report.get("kind") != "A838BD33_CROSS_HOST_OPERATIONAL_CAPTURE" or
+            report.get("schemaVersion") != 1 or
+            report.get("state") != "COMPLETE" or report.get("destructiveCommands") != 0 or
+            report.get("builderEvidence") != hashes or
+            report.get("operationalState", {}).get("sha256") !=
+                loaded["VPS_OPERATIONAL_STATE"][1]):
+        deny("CROSS_HOST_VPS_PROVENANCE")
+    selection = report.get("selection")
+    processes = report.get("pm2Processes")
+    expected_names = {"re7-admin-front", "re7-whatsapp-agent", "re7-whatsapp-web-worker"}
+    if (not isinstance(selection, dict) or
+            selection.get("api") !=
+                f"/opt/re7online/releases/{BUILDER_A838BD33_RELEASE}/api-runtime" or
+            selection.get("frontend") !=
+                "/opt/re7online/releases/immutable-b8d284b6-vps-20261108T132846Z/frontend-runtime" or
+            not isinstance(processes, list) or len(processes) != 3 or
+            {item.get("name") for item in processes if isinstance(item, dict)} != expected_names or
+            any(item.get("status") != "online" for item in processes if isinstance(item, dict)) or
+            operational.get("schemaVersion") != 2 or
+            BUILDER_A838BD33_RELEASE not in operational.get("activeReleases", []) or
+            operational.get("currentPaths") != [selection["api"], selection["frontend"]] or
+            operational.get("immediateRollbackReleases", {}).get("api") !=
+                "immutable-b8d284b6-vps-20261108T132846Z"):
+        deny("CROSS_HOST_VPS_OPERATIONAL_STATE")
+    for item in (request, attestation):
+        for key in ("contractSha256", "packageSha256", "manifestSha256", "indexSha256"):
+            if item.get(key) != hashes[key]:
+                deny("CROSS_HOST_CONTENT_BINDING")
+
+    now = time.time_ns()
+    timestamps = [attestation.get("capturedAtNs"), attestation.get("finishedAtNs"),
+                  report.get("capturedAtNs"), report.get("finishedAtNs")]
+    if (any(not isinstance(value, int) for value in timestamps) or
+            timestamps[0] > timestamps[1] or timestamps[2] > timestamps[3] or
+            any(value > now + 300_000_000_000 for value in timestamps) or
+            now - min(timestamps) > max_age * 1_000_000_000):
+        deny("CROSS_HOST_EVIDENCE_STALE")
+    return {"profile": BUILDER_A838BD33_PROFILE, "bindings": {
+                key: {"path": str(value[0]), "sha256": value[1], "identity": value[3]}
+                for key, value in loaded.items()},
+            "targetCommit": BUILDER_A838BD33_TARGET,
+            "releaseId": BUILDER_A838BD33_RELEASE,
+            "contentHashes": {key: hashes[key] for key in
+                              ("contractSha256", "packageSha256",
+                               "manifestSha256", "indexSha256")},
+            "builderObservation": {"complete": True, "references": 0,
+                                   "writers": 0, "failures": 0,
+                                   "finishedAtNs": attestation["finishedAtNs"]},
+            "vpsObservation": {"finishedAtNs": report["finishedAtNs"],
+                               "selection": selection,
+                               "pm2Online": sorted(expected_names)},
+            "builderLocks": [path for path in request["paths"]
+                             if path.endswith((".deployment-window.lock",
+                                               ".generation-build.lock"))]}
+
+
 def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], operational: dict[str, Any],
                         process_data: ProcessScan) -> dict[str, Any]:
     if set(candidate) != OUTPUT_CANDIDATE_KEYS:
@@ -2495,6 +2737,85 @@ def authenticate_output(candidate: dict[str, Any], policy: dict[str, Any], opera
             "bindings": {label: {"path": str(value[0]), "sha256": candidate[label]["sha256"]}
                          for label, value in bindings.items()}, "equivalence": equivalence,
             "processScan": scan_summary}
+
+
+def authenticate_a838bd33_cross_host_output(
+        candidate: dict[str, Any], policy: dict[str, Any],
+        cross_host: dict[str, Any]) -> dict[str, Any]:
+    if set(candidate) != OUTPUT_CANDIDATE_KEYS or candidate.get("class") != "DERIVED_OUTPUT_RUNTIME":
+        deny("CROSS_HOST_OUTPUT_SCHEMA")
+    path = normalized_absolute(candidate.get("path"), "CROSS_HOST_OUTPUT_PATH")
+    relative = candidate.get("runtimeRelativePath")
+    if relative not in {"api-runtime", "frontend-runtime"} or path.name != relative:
+        deny("CROSS_HOST_OUTPUT_RELATIVE")
+    output_def = policy["canonicalRoots"]["outputs"]
+    output_root = Path(output_def["path"])
+    if path == output_root or output_root not in path.parents:
+        deny("CROSS_HOST_OUTPUT_OUTSIDE_ROOT")
+    current = path
+    while current != output_root:
+        info = physical_directory(current, "CROSS_HOST_OUTPUT_ANCESTOR")
+        if ((info.st_uid, info.st_gid) !=
+                (output_def["ownerUid"], output_def["groupGid"]) or
+                stat.S_IMODE(info.st_mode) & 0o022):
+            deny("CROSS_HOST_OUTPUT_ANCESTOR")
+        current = current.parent
+    output_info = physical_directory(output_root, "CROSS_HOST_OUTPUT_ROOT")
+    if ((output_info.st_uid, output_info.st_gid) !=
+            (output_def["ownerUid"], output_def["groupGid"]) or
+            f"0{stat.S_IMODE(output_info.st_mode):03o}" not in output_def["allowedModes"] or
+            stat.S_IMODE(output_info.st_mode) & 0o022):
+        deny("CROSS_HOST_OUTPUT_ROOT_IDENTITY")
+    bindings: dict[str, tuple[Path, bytes, dict[str, Any]]] = {}
+    for label in ("contract", "package", "manifest", "index"):
+        item = candidate[label]
+        if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+            deny(f"CROSS_HOST_OUTPUT_{label.upper()}_BINDING")
+        item_path = normalized_absolute(item.get("path"), f"CROSS_HOST_OUTPUT_{label.upper()}_PATH")
+        if label == "package":
+            identity = stable_regular_digest(item_path, item.get("sha256"),
+                                             allowed_modes={0o600, 0o644})
+            raw = b""
+        else:
+            raw, identity = stable_regular(item_path, item.get("sha256"),
+                                           allowed_modes={0o600, 0o644})
+        bindings[label] = (item_path, raw, identity)
+        if cross_host["contentHashes"][label + "Sha256"] != item["sha256"]:
+            deny("CROSS_HOST_OUTPUT_EVIDENCE_DIGEST")
+    contract = object_json(bindings["contract"][1], "CROSS_HOST_OUTPUT_CONTRACT")
+    manifest = object_json(bindings["manifest"][1], "CROSS_HOST_OUTPUT_MANIFEST")
+    index = object_json(bindings["index"][1], "CROSS_HOST_OUTPUT_INDEX")
+    release_root = normalized_absolute(candidate.get("releaseRoot"),
+                                       "CROSS_HOST_OUTPUT_RELEASE_ROOT")
+    output_artifact = artifact_for(contract, path, "DERIVED_OUTPUT_RUNTIME")
+    release_artifact = artifact_for(contract, release_root, "RELEASE_RUNTIME")
+    package_artifact = artifact_for(contract, bindings["package"][0], "PACKAGE_PRESERVE")
+    manifest_artifact = artifact_for(contract, bindings["manifest"][0], "PACKAGE_PRESERVE")
+    index_artifact = artifact_for(contract, bindings["index"][0], "PACKAGE_PRESERVE")
+    linked = (output_artifact, release_artifact, package_artifact,
+              manifest_artifact, index_artifact)
+    if (contract.get("releaseId") != BUILDER_A838BD33_RELEASE or
+            contract.get("targetCommit") != BUILDER_A838BD33_TARGET or
+            manifest.get("releaseId") != BUILDER_A838BD33_RELEASE or
+            manifest.get("targetCommit") != BUILDER_A838BD33_TARGET or
+            any(item.get("releaseId") != BUILDER_A838BD33_RELEASE or
+                item.get("targetCommit") != BUILDER_A838BD33_TARGET for item in linked)):
+        deny("CROSS_HOST_OUTPUT_CONTRACT_LINK")
+    for label, artifact in (("package", package_artifact),
+                            ("manifest", manifest_artifact), ("index", index_artifact)):
+        if artifact.get("digest") != {"sha256": candidate[label]["sha256"]}:
+            deny("CROSS_HOST_OUTPUT_CONTRACT_DIGEST")
+    equivalence = compare_index_output_only(path, relative, index)
+    return {"class": candidate["class"], "path": str(path),
+            "identity": stat_identity(path.lstat()),
+            "releaseId": BUILDER_A838BD33_RELEASE,
+            "targetCommit": BUILDER_A838BD33_TARGET,
+            "releaseRoot": str(release_root), "runtimeRelativePath": relative,
+            "bindings": {label: {"path": str(item[0]), "sha256": candidate[label]["sha256"]}
+                         for label, item in bindings.items()},
+            "equivalence": equivalence,
+            "processScan": {"complete": True, "targets": 0, "activeWriters": 0,
+                            "source": BUILDER_A838BD33_PROFILE}}
 
 
 DIRECTORY_IDENTITY_KEYS = {"device", "inode", "uid", "gid", "mode"}
@@ -3937,8 +4258,9 @@ def removal_commands(observations: Iterable[dict[str, Any]]) -> list[list[str]]:
 def validate_audit_request(value: dict[str, Any]) -> None:
     version = value.get("schemaVersion")
     expected = (AUDIT_REQUEST_KEYS if version == 1 else
-                AUDIT_REQUEST_V2_KEYS if version == 2 else AUDIT_REQUEST_V3_KEYS)
-    if (version not in {1, 2, 3} or set(value) != expected or
+                AUDIT_REQUEST_V2_KEYS if version == 2 else
+                AUDIT_REQUEST_V3_KEYS if version == 3 else AUDIT_REQUEST_V4_KEYS)
+    if (version not in {1, 2, 3, 4} or set(value) != expected or
             value.get("kind") != "CAPACITY_RECOVERY_AUDIT_REQUEST"):
         deny("AUDIT_REQUEST_SCHEMA")
     for key in ("minimumRecoveryBytes", "targetAvailableBytes"):
@@ -3950,6 +4272,18 @@ def validate_audit_request(value: dict[str, Any]) -> None:
         _validate_proc_observer_binding(value["procObserver"])
     if version == 3 and value.get("incrementalBatch") is not True:
         deny("AUDIT_REQUEST_INCREMENTAL_BATCH")
+    if version == 4:
+        candidates = value["candidates"]
+        if (len(candidates) != 2 or
+                any(not isinstance(item, dict) or
+                    item.get("class") != "DERIVED_OUTPUT_RUNTIME" for item in candidates) or
+                {item.get("runtimeRelativePath") for item in candidates} !=
+                    {"api-runtime", "frontend-runtime"}):
+            deny("CROSS_HOST_EXACT_RUNTIME_BATCH")
+        evidence = value.get("crossHostEvidence")
+        if (not isinstance(evidence, dict) or set(evidence) != CROSS_HOST_EVIDENCE_KEYS or
+                evidence.get("profile") != BUILDER_A838BD33_PROFILE):
+            deny("CROSS_HOST_EVIDENCE_SCHEMA")
     dispositions = [item for item in value["candidates"] if isinstance(item, dict) and
                     item.get("class") == "CLOSED_PREPARATION_MANIFEST_DISPOSITION"]
     if dispositions:
@@ -3988,10 +4322,87 @@ def validate_audit_request(value: dict[str, Any]) -> None:
             deny("CRM_STAGING_EXACT_BATCH")
 
 
+def audit_a838bd33_cross_host_request(value: dict[str, Any], request_sha: str,
+                                      plan_output: Path) -> dict[str, Any]:
+    policy, policy_path, policy_sha = root_policy(value["rootPolicy"])
+    op_path, op_sha, op_raw, _ = load_binding(value["operationalState"],
+                                              "CROSS_HOST_OPERATIONAL_STATE")
+    if op_raw != canonical(object_json(op_raw, "CROSS_HOST_OPERATIONAL_STATE_JSON")):
+        deny("CROSS_HOST_OPERATIONAL_STATE_CANONICAL")
+    candidate_paths = [str(normalized_absolute(item.get("path"), "CANDIDATE_PATH"))
+                       for item in value["candidates"]]
+    cross_host = authenticate_a838bd33_cross_host_evidence(
+        value["crossHostEvidence"], candidate_paths)
+    if (value["operationalState"]["sha256"] !=
+            cross_host["bindings"]["VPS_OPERATIONAL_STATE"]["sha256"]):
+        deny("CROSS_HOST_OPERATIONAL_STATE_BINDING")
+    observations: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for ordinal, candidate in enumerate(value["candidates"], 1):
+        try:
+            observed = authenticate_a838bd33_cross_host_output(candidate, policy, cross_host)
+            observations.append({"ordinal": ordinal, "source": candidate,
+                                 "observation": observed})
+        except Denied as exc:
+            errors.append({"ordinal": ordinal, "predicate": str(exc)})
+    usage = physical_usage(Path(item["observation"]["path"]) for item in observations)
+    total = 0
+    inodes = 0
+    for item in observations:
+        measured = usage[item["observation"]["path"]]
+        item["observation"]["physical"] = measured
+        total += measured["allocatedBytes"]
+        inodes += measured["inodes"]
+    filesystem = os.statvfs(policy["canonicalRoots"]["outputs"]["path"])
+    available_before = filesystem.f_bavail * filesystem.f_frsize
+    projected = available_before + total
+    if total < value["minimumRecoveryBytes"]:
+        errors.append({"ordinal": 0, "predicate": "MINIMUM_RECOVERY_NOT_MET"})
+    if projected < value["targetAvailableBytes"]:
+        errors.append({"ordinal": 0, "predicate": "TARGET_AVAILABLE_NOT_MET"})
+    lock_paths = sorted(cross_host["builderLocks"])
+    if len(lock_paths) != 2:
+        deny("CROSS_HOST_BUILDER_LOCKS")
+    state = ("P00_CAPACITY_RECOVERY_AUDIT_PASS" if not errors else
+             "P00_CAPACITY_RECOVERY_AUDIT_DENY")
+    plan = {
+        "schemaVersion": 4, "kind": "CAPACITY_RECOVERY_PLAN", "state": state,
+        "requestSha256": request_sha,
+        "minimumRecoveryBytes": value["minimumRecoveryBytes"],
+        "targetAvailableBytes": value["targetAvailableBytes"],
+        "qualifiedBytes": total, "qualifiedInodes": inodes,
+        "availableBytesBefore": available_before,
+        "projectedAvailableBytes": projected,
+        "minimumRecoverySatisfied": total >= value["minimumRecoveryBytes"],
+        "targetAvailableSatisfied": projected >= value["targetAvailableBytes"],
+        "classificationPolicy": {"sourcesOfTruth": "EVIDENCE_PRESERVE",
+                                 "derivedCandidates": ["DERIVED_OUTPUT_RUNTIME"],
+                                 "unclassified": "NOT_QUALIFIED"},
+        "rootPolicy": {"path": str(policy_path), "sha256": policy_sha},
+        "operationalState": {"path": str(op_path), "sha256": op_sha},
+        "liveRecapture": {"profile": BUILDER_A838BD33_PROFILE,
+                          "auditOnly": True,
+                          "crossHostEvidence": cross_host},
+        "deploymentLock": next(path for path in lock_paths
+                               if path.endswith(".deployment-window.lock")),
+        "writerLock": next(path for path in lock_paths
+                           if path.endswith(".generation-build.lock")),
+        "candidates": observations, "errors": errors,
+        "commands": removal_commands(item["observation"] for item in observations),
+        "automaticExecutionPermitted": False,
+        "crossHostEvidence": value["crossHostEvidence"],
+        "phaseRevalidationRequired": True,
+    }
+    write_exclusive(plan_output, canonical(plan))
+    return plan
+
+
 def audit_request(request: Path, request_sha: str, plan_output: Path) -> dict[str, Any]:
     raw, _ = stable_regular(request, request_sha)
     value = object_json(raw, "AUDIT_REQUEST_JSON")
     validate_audit_request(value)
+    if value["schemaVersion"] == 4:
+        return audit_a838bd33_cross_host_request(value, request_sha, plan_output)
     policy, policy_path, policy_sha = root_policy(value["rootPolicy"])
     op_path, op_sha, op_raw, _ = load_binding(value["operationalState"], "OPERATIONAL_STATE")
     operational = validate_operational(op_raw)
@@ -4099,6 +4510,12 @@ def revalidate_plan(plan: dict[str, Any], *, plan_path: Path | None = None,
                 "operationalState", "liveRecapture", "deploymentLock", "writerLock", "candidates", "errors",
                 "commands", "automaticExecutionPermitted"}
     version = plan.get("schemaVersion")
+    if version == 4:
+        # The audit proof may use two already captured hosts. Mutation phases
+        # must not reuse it: they require a new, same-request collection while
+        # each host's canonical locks are held. That adapter is intentionally
+        # a separate authorization boundary.
+        deny("CROSS_HOST_PHASE_REVALIDATION_REQUIRED")
     if version in {2, 3}:
         required |= {"procObserver", "processObservation"}
     if version == 3:

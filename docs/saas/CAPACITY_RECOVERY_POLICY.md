@@ -583,6 +583,29 @@ Referência por `current`, PM2 live/dump, transação aberta, grafo protegido ou
 processo nega o candidato. Pacote, manifesto, índice e release instalada nunca
 entram no comando da classe.
 
+#### Perfil fechado do builder externo `a838bd33`
+
+O schema 4 admite exclusivamente a prova de auditoria dos dois runtimes
+`api-runtime` e `frontend-runtime` da geração
+`immutable-a838bd33-external-20261110T130618Z`. Ele não amplia a classe geral.
+No builder, cada entrada é comparada diretamente com o índice selado; a release
+instalada não é extraída novamente. A prova exige o request e a atestação da
+coleta privilegiada do builder, a fotografia operacional e o relatório da VPS,
+todos canônicos, privados e vinculados por SHA-256 ao mesmo target, release,
+contrato, pacote, manifesto e índice. A atestação deve registrar coleta completa,
+zero referências, zero writers e zero falhas; a fotografia da VPS deve registrar
+a API nessa release, os três processos PM2 online e `b8d284b6` como retorno
+imediato da API. O lote deve conter exatamente os dois caminhos declarados.
+
+`maxAgeSeconds` é obrigatório, positivo e limitado a uma hora. Hash, nonce,
+caminho, device/inode, identidade do helper, vínculo entre hosts, observação
+incompleta, referência, writer, falha de leitura ou evidência vencida negam o
+perfil. Um plano PASS desse schema permanece somente revisável:
+`phaseRevalidationRequired=true`. `prepare` e `execute` negam com
+`CROSS_HOST_PHASE_REVALIDATION_REQUIRED` até que um adaptador versionado obtenha
+novas provas ligadas à mesma requisição sob os locks de cada host. Portanto, o
+perfil não converte as capturas atuais em autorização de retirada.
+
 ### `CLOSED_PREPARATION_DERIVED_ARCHIVE`
 
 Admite somente os arquivos literais `api-frontend-return.private.tar.gz` e
