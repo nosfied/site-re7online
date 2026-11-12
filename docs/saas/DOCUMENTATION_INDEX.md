@@ -35,6 +35,9 @@
   — impede novas gerações com cache físico incompatível antes da alocação e
   preserva a geração falha; a disposição autenticada do único bytecode continua
   pendente de complemento versionado e autorização própria.
+- [E1.4-R2 — reconciliação fechada do bytecode residual](../reviews/CONVERTA_E1_4_R2_BYTECODE_RESIDUE_RECONCILIATION_2026-11-12.md)
+  — complemento versionado e ensaiado no lifecycle descartável; nenhuma retirada
+  real foi executada e a futura intenção produtiva exige autorização própria.
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
 - [Revisão da reconciliação não destrutiva b96](releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)

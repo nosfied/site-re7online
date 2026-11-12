@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
+import marshal
 import os
 from pathlib import Path, PurePosixPath
 import stat
@@ -31,6 +33,9 @@ CONTRACT_KEYS = {
 }
 EXPORT_NAMES_SUCCESS = {"package", "manifest", "index", "generation-contract", "generation-lifecycle"}
 EXPORT_NAMES_FAILURE = {"failure-evidence"}
+RESIDUE_SOURCE = "scripts/preparation_artifact_lifecycle.py"
+RESIDUE_DIRECTORY = "scripts/__pycache__"
+RESIDUE_FILE = "scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc"
 
 
 class Denied(RuntimeError):
@@ -309,6 +314,13 @@ def git(repository: Path, *arguments: str) -> str:
                             text=True, capture_output=True, check=False)
     require(result.returncode == 0, "disposable_git_" + arguments[0].replace("-", "_"))
     return result.stdout.strip()
+
+
+def git_bytes(repository: Path, *arguments: str) -> bytes:
+    result = subprocess.run(["git", "-C", str(repository), *arguments],
+                            capture_output=True, check=False)
+    require(result.returncode == 0, "disposable_git_" + arguments[0].replace("-", "_"))
+    return result.stdout
 
 
 def worktree_registration(repository: Path, worktree: Path) -> dict[str, str] | None:
@@ -820,6 +832,349 @@ def expected_commands(contract: dict[str, Any], intent: dict[str, Any]) -> list[
     return result
 
 
+def residue_commands(contract: dict[str, Any]) -> list[dict[str, Any]]:
+    worktree = Path(contract["worktreePath"])
+    residue = worktree / RESIDUE_FILE
+    directory = worktree / RESIDUE_DIRECTORY
+    return [
+        {"ordinal": 1, "kind": "remove-bytecode", "path": str(residue),
+         "argv": ["/usr/bin/rm", "--", str(residue)]},
+        {"ordinal": 2, "kind": "remove-bytecode-directory", "path": str(directory),
+         "argv": ["/usr/bin/rmdir", "--", str(directory)]},
+    ]
+
+
+def residue_entry(path: Path, expected_type: str, predicate: str) -> dict[str, Any]:
+    before = path.lstat()
+    require(not path.is_symlink(), predicate)
+    if expected_type == "file":
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1, predicate)
+        sha256 = calculate_stable_hash(path, predicate)
+    else:
+        require(stat.S_ISDIR(before.st_mode), predicate)
+        sha256 = None
+    after = path.lstat()
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
+                             item.st_mtime_ns, item.st_ctime_ns, item.st_nlink,
+                             item.st_uid, item.st_gid)
+    require(identity(before) == identity(after), predicate + "_changed")
+    return {"path": str(path), "type": expected_type, "device": before.st_dev,
+            "inode": before.st_ino, "ownerUid": before.st_uid,
+            "groupGid": before.st_gid, "mode": f"0{stat.S_IMODE(before.st_mode):03o}",
+            "size": before.st_size, "allocatedBytes": before.st_blocks * 512,
+            "nlink": before.st_nlink, "sha256": sha256}
+
+
+def validate_bytecode_lineage(source: Path, residue: Path, repository: Path,
+                              target: str) -> dict[str, Any]:
+    source_blob = git_bytes(repository, "show", f"{target}:{RESIDUE_SOURCE}")
+    source_raw = stable_bytes(source, digest(source_blob), "disposable_residue_source")
+    residue_raw = stable_bytes(residue, calculate_stable_hash(
+        residue, "disposable_residue_bytecode"), "disposable_residue_bytecode")
+    require(16 <= len(residue_raw) <= 1024 * 1024 and
+            residue_raw[:4] == importlib.util.MAGIC_NUMBER,
+            "disposable_residue_lineage")
+    flags = int.from_bytes(residue_raw[4:8], "little")
+    source_info = source.lstat()
+    expected_header = ((int(source_info.st_mtime) & 0xffffffff).to_bytes(4, "little") +
+                       (len(source_raw) & 0xffffffff).to_bytes(4, "little")
+                       if flags == 0 else importlib.util.source_hash(source_raw))
+    require(flags in {0, 1, 3} and residue_raw[8:16] == expected_header,
+            "disposable_residue_lineage")
+    try:
+        generated = marshal.loads(residue_raw[16:])
+        compiled = compile(source_raw, str(source), "exec", dont_inherit=True, optimize=0)
+    except (ValueError, TypeError, EOFError, OverflowError):
+        deny("disposable_residue_lineage")
+    require(generated == compiled, "disposable_residue_lineage")
+    return {"sourceSha256": digest(source_raw), "bytecodeSha256": digest(residue_raw),
+            "pythonMagicHex": residue_raw[:4].hex(), "flags": flags}
+
+
+def residue_git_state(contract: dict[str, Any], *, residue_present: bool) -> dict[str, str]:
+    repository = Path(contract["repository"])
+    worktree = Path(contract["worktreePath"])
+    registration = worktree_registration(repository, worktree)
+    require(worktree.is_dir() and not worktree.is_symlink() and registration is not None and
+            registration.get("HEAD") == contract["targetCommit"],
+            "disposable_residue_worktree")
+    head = git(worktree, "rev-parse", "HEAD")
+    tree = git(worktree, "rev-parse", "HEAD^{tree}")
+    target_tree = git(repository, "rev-parse", f"{contract['targetCommit']}^{{tree}}")
+    require(head == contract["targetCommit"] and tree == target_tree,
+            "disposable_residue_git_identity")
+    status = git_bytes(worktree, "status", "--porcelain=v1", "-z",
+                       "--untracked-files=all", "--ignored=matching")
+    expected = (f"?? {RESIDUE_FILE}\0".encode() if residue_present else b"")
+    require(status == expected, "disposable_residue_git_status")
+    return {"head": head, "tree": tree, "statusSha256": digest(status)}
+
+
+def observe_residue(contract: dict[str, Any], *, residue_present: bool,
+                    directory_present: bool, sealed: dict[str, Any] | None = None) -> dict[str, Any]:
+    worktree = Path(contract["worktreePath"])
+    source = worktree / RESIDUE_SOURCE
+    directory = worktree / RESIDUE_DIRECTORY
+    residue = worktree / RESIDUE_FILE
+    git_state = residue_git_state(contract, residue_present=residue_present)
+    require(source.is_file() and not source.is_symlink(), "disposable_residue_source")
+    source_entry = residue_entry(source, "file", "disposable_residue_source")
+    require((source_entry["ownerUid"], source_entry["groupGid"]) ==
+            (contract["ownerUid"], contract["groupGid"]), "disposable_residue_source_owner")
+    directory_entry = residue_entry(directory, "directory", "disposable_residue_directory") if directory_present else None
+    residue_item = residue_entry(residue, "file", "disposable_residue_file") if residue_present else None
+    if directory_present:
+        require((directory_entry["ownerUid"], directory_entry["groupGid"]) ==
+                (contract["ownerUid"], contract["groupGid"]), "disposable_residue_directory_owner")
+        expected_children = [residue] if residue_present else []
+        require(list(directory.iterdir()) == expected_children, "disposable_residue_directory_scope")
+    else:
+        require(not directory.exists() and not directory.is_symlink(),
+                "disposable_residue_directory_absence")
+    if residue_present:
+        require((residue_item["ownerUid"], residue_item["groupGid"]) ==
+                (contract["ownerUid"], contract["groupGid"]), "disposable_residue_file_owner")
+        lineage = validate_bytecode_lineage(source, residue, Path(contract["repository"]),
+                                            contract["targetCommit"])
+    else:
+        require(not residue.exists() and not residue.is_symlink(), "disposable_residue_file_absence")
+        lineage = sealed["lineage"] if sealed is not None else None
+    observation = validate_no_processes(worktree)
+    result = {"git": git_state, "source": source_entry, "directory": directory_entry,
+              "residue": residue_item, "lineage": lineage,
+              "processObservation": observation}
+    if sealed is not None:
+        require(result["git"]["head"] == sealed["git"]["head"] and
+                result["git"]["tree"] == sealed["git"]["tree"] and
+                (not residue_present or
+                 result["git"]["statusSha256"] == sealed["git"]["statusSha256"]),
+                "disposable_residue_sealed_drift_git")
+        require(result["source"] == sealed["source"],
+                "disposable_residue_sealed_drift_source")
+        if residue_present:
+            for key in ("directory", "residue", "lineage"):
+                require(result[key] == sealed[key],
+                        "disposable_residue_sealed_drift_" + key)
+        elif directory_present:
+            stable_directory_keys = ("path", "type", "device", "inode", "ownerUid",
+                                     "groupGid", "mode", "nlink", "sha256")
+            require(all(result["directory"][key] == sealed["directory"][key]
+                        for key in stable_directory_keys),
+                    "disposable_residue_sealed_drift_directory")
+    return result
+
+
+def prepare_residue(args: argparse.Namespace) -> dict[str, Any]:
+    contract, contract_raw = contract_from_args(args)
+    lifecycle, _ = read_lifecycle(contract, args.lifecycle_sha256)
+    require(lifecycle.get("state") == "EXPORTED" and lifecycle.get("event") == "AUTHORITY_EXPORTED" and
+            lifecycle.get("outcome") == "FAILED" and
+            lifecycle.get("contractSha256") == digest(contract_raw),
+            "disposable_residue_lifecycle")
+    validate_export_receipt(contract, lifecycle["exportReceiptSha256"])
+    descriptors = acquire_locks(contract)
+    try:
+        sealed = observe_residue(contract, residue_present=True, directory_present=True)
+        intent = {"schemaVersion": 1, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+                  "kind": "DISPOSABLE_BUILDER_BYTECODE_RESIDUE",
+                  "generationId": contract["generationId"],
+                  "targetCommit": contract["targetCommit"],
+                  "contractSha256": digest(contract_raw),
+                  "lifecycleSha256": args.lifecycle_sha256,
+                  "exportReceiptSha256": lifecycle["exportReceiptSha256"],
+                  "sealedObservation": sealed,
+                  "physicalInventory": [sealed[key] for key in ("source", "directory", "residue")],
+                  "commands": residue_commands(contract),
+                  "automaticRetry": False}
+        raw = canonical(intent)
+        output = Path(contract["custodyRoot"]) / "disposable-builder.residue-intent.private.json"
+        if output.exists() or output.is_symlink():
+            stable_bytes(output, digest(raw), "disposable_residue_intent", mode=0o600)
+        else:
+            exclusive_bytes(output, raw, "disposable_residue_intent")
+        return {"state": intent["state"], "intentSha256": digest(raw),
+                "commands": len(intent["commands"]),
+                "residueSha256": sealed["residue"]["sha256"]}
+    finally:
+        close_locks(descriptors)
+
+
+def residue_events(path: Path, commands: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    events = read_events(path)
+    require(all(isinstance(item, dict) and item.get("ordinal") in {1, 2} and
+                item.get("event") in {"ATTEMPT", "RESULT", "VERIFIED"}
+                for item in events), "disposable_residue_journal")
+    for command in commands:
+        ordinal_events = [item for item in events if item["ordinal"] == command["ordinal"]]
+        names = [item["event"] for item in ordinal_events]
+        require(names in ([], ["ATTEMPT"], ["ATTEMPT", "RESULT"],
+                          ["ATTEMPT", "RESULT", "VERIFIED"]),
+                "disposable_residue_journal")
+        if ordinal_events:
+            require(ordinal_events[0] == {"event": "ATTEMPT", "ordinal": command["ordinal"],
+                    "kind": command["kind"], "path": command["path"], "argv": command["argv"]},
+                    "disposable_residue_journal")
+        if len(ordinal_events) >= 2:
+            result = ordinal_events[1]
+            normal_keys = {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"}
+            reconciled_keys = normal_keys | {"resultSource"}
+            require(frozenset(result) in {frozenset(normal_keys), frozenset(reconciled_keys)} and
+                    result["event"] == "RESULT" and result["ordinal"] == command["ordinal"] and
+                    type(result["exitCode"]) is int and
+                    is_digest(result["stdoutSha256"]) and is_digest(result["stderrSha256"]),
+                    "disposable_residue_journal")
+            if "resultSource" in result:
+                require(result["resultSource"] == "RECONCILED_ABSENCE" and
+                        result["exitCode"] == 0 and
+                        result["stdoutSha256"] == digest(b"") and
+                        result["stderrSha256"] == digest(b""),
+                        "disposable_residue_journal")
+        if len(ordinal_events) == 3:
+            require(ordinal_events[2] == {"event": "VERIFIED", "ordinal": command["ordinal"],
+                                         "absent": True}, "disposable_residue_journal")
+    require(events == sorted(events, key=lambda item: (item["ordinal"],
+            {"ATTEMPT": 0, "RESULT": 1, "VERIFIED": 2}[item["event"]])),
+            "disposable_residue_journal")
+    return events
+
+
+def execute_residue(args: argparse.Namespace) -> dict[str, Any]:
+    contract, contract_raw = contract_from_args(args)
+    lifecycle, _ = read_lifecycle(contract, args.lifecycle_sha256)
+    require(lifecycle.get("state") == "EXPORTED" and lifecycle.get("event") == "AUTHORITY_EXPORTED" and
+            lifecycle.get("outcome") == "FAILED" and
+            lifecycle.get("contractSha256") == digest(contract_raw),
+            "disposable_residue_lifecycle")
+    intent, intent_raw = stable_json(args.intent, args.intent_sha256,
+                                     "disposable_residue_intent")
+    require(intent.get("schemaVersion") == 1 and
+            intent.get("state") == "SEALED_FOR_EXPLICIT_AUTHORIZATION" and
+            intent.get("kind") == "DISPOSABLE_BUILDER_BYTECODE_RESIDUE" and
+            intent.get("generationId") == contract["generationId"] and
+            intent.get("targetCommit") == contract["targetCommit"] and
+            intent.get("contractSha256") == digest(contract_raw) and
+            intent.get("lifecycleSha256") == args.lifecycle_sha256 and
+            intent.get("exportReceiptSha256") == lifecycle.get("exportReceiptSha256") and
+            intent.get("physicalInventory") == [intent.get("sealedObservation", {}).get(key)
+                                                 for key in ("source", "directory", "residue")] and
+            intent.get("commands") == residue_commands(contract),
+            "disposable_residue_intent_binding")
+    auth = authorization(args, digest(intent_raw))
+    commands = residue_commands(contract)
+    require(auth["approvedPaths"] == [item["path"] for item in commands],
+            "disposable_residue_authorization_scope")
+    validate_export_receipt(contract, intent["exportReceiptSha256"])
+    receipt_path = Path(contract["custodyRoot"]) / "disposable-builder.residue-receipt.private.json"
+    journal = Path(contract["custodyRoot"]) / "disposable-builder.residue-journal.private.jsonl"
+    descriptors = acquire_locks(contract)
+    try:
+        if receipt_path.exists() or receipt_path.is_symlink():
+            receipt, receipt_raw = stable_json(receipt_path, calculate_stable_hash(
+                receipt_path, "disposable_residue_receipt"), "disposable_residue_receipt")
+            journal_raw = stable_bytes(journal, receipt.get("journalSha256", ""),
+                                       "disposable_residue_journal", mode=0o600)
+            events = residue_events(journal, commands)
+            reconciled = [item["ordinal"] for item in events
+                          if item.get("resultSource") == "RECONCILED_ABSENCE"]
+            expected_receipt = {
+                "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_BYTECODE_RESIDUE",
+                "state": "COMPLETED", "generationId": contract["generationId"],
+                "contractSha256": digest(contract_raw),
+                "lifecycleSha256": args.lifecycle_sha256,
+                "exportReceiptSha256": intent["exportReceiptSha256"],
+                "intentSha256": digest(intent_raw),
+                "authorizationSha256": args.authorization_sha256,
+                "journalSha256": digest(journal_raw),
+                "attemptedCommands": 2, "completedCommands": 2,
+                "reconciledOrdinals": reconciled,
+                "removedPaths": [item["path"] for item in commands],
+                "worktreePreserved": True, "automaticRetry": False,
+            }
+            require(receipt == expected_receipt and len(events) == 6 and
+                    all(not Path(item["path"]).exists() and
+                        not Path(item["path"]).is_symlink() for item in commands),
+                    "disposable_residue_terminal_replay")
+            observe_residue(contract, residue_present=False, directory_present=False,
+                            sealed=intent["sealedObservation"])
+            return {"state": "COMPLETED", "receiptSha256": digest(receipt_raw),
+                    "journalSha256": receipt["journalSha256"], "replayed": True}
+        events = residue_events(journal, commands)
+        sealed = intent.get("sealedObservation")
+        require(isinstance(sealed, dict), "disposable_residue_intent_binding")
+        for command in commands:
+            ordinal = command["ordinal"]
+            current = [item for item in events if item["ordinal"] == ordinal]
+            target = Path(command["path"])
+            if len(current) == 3:
+                require(not target.exists() and not target.is_symlink(),
+                        "disposable_residue_verified_drift")
+                continue
+            if len(current) == 2:
+                require(current[1]["exitCode"] == 0 and
+                        not target.exists() and not target.is_symlink(),
+                        "disposable_residue_result_drift")
+                append_event(journal, {"event": "VERIFIED", "ordinal": ordinal, "absent": True})
+                events = residue_events(journal, commands)
+                continue
+            file_present = Path(commands[0]["path"]).exists()
+            directory_present = Path(commands[1]["path"]).exists()
+            target_absent = not target.exists() and not target.is_symlink()
+            if len(current) == 1 and target_absent:
+                observe_residue(contract, residue_present=file_present,
+                                directory_present=directory_present, sealed=sealed)
+                require(not target.exists() and not target.is_symlink(),
+                        "disposable_residue_reconciliation_drift")
+                append_event(journal, {"event": "RESULT", "ordinal": ordinal,
+                                       "exitCode": 0, "stdoutSha256": digest(b""),
+                                       "stderrSha256": digest(b""),
+                                       "resultSource": "RECONCILED_ABSENCE"})
+                append_event(journal, {"event": "VERIFIED", "ordinal": ordinal,
+                                       "absent": True})
+                events = residue_events(journal, commands)
+                continue
+            require(target.exists() and not target.is_symlink(),
+                    "disposable_residue_attempt_ambiguous")
+            observe_residue(contract, residue_present=file_present,
+                            directory_present=directory_present, sealed=sealed)
+            if not current:
+                append_event(journal, {"event": "ATTEMPT", "ordinal": ordinal,
+                                       "kind": command["kind"], "path": command["path"],
+                                       "argv": command["argv"]})
+            result = subprocess.run(command["argv"], capture_output=True)
+            append_event(journal, {"event": "RESULT", "ordinal": ordinal,
+                                   "exitCode": result.returncode,
+                                   "stdoutSha256": digest(result.stdout),
+                                   "stderrSha256": digest(result.stderr)})
+            require(result.returncode == 0 and not target.exists() and not target.is_symlink(),
+                    "disposable_residue_command")
+            append_event(journal, {"event": "VERIFIED", "ordinal": ordinal, "absent": True})
+            events = residue_events(journal, commands)
+        observe_residue(contract, residue_present=False, directory_present=False,
+                        sealed=sealed)
+        require(len(events) == 6, "disposable_residue_completion")
+        reconciled = [item["ordinal"] for item in events
+                      if item.get("resultSource") == "RECONCILED_ABSENCE"]
+        receipt = {"schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_BYTECODE_RESIDUE",
+                   "state": "COMPLETED", "generationId": contract["generationId"],
+                   "contractSha256": digest(contract_raw),
+                   "lifecycleSha256": args.lifecycle_sha256,
+                   "exportReceiptSha256": intent["exportReceiptSha256"],
+                   "intentSha256": digest(intent_raw),
+                   "authorizationSha256": args.authorization_sha256,
+                   "journalSha256": digest(journal.read_bytes()),
+                   "attemptedCommands": 2, "completedCommands": 2,
+                   "reconciledOrdinals": reconciled,
+                   "removedPaths": [item["path"] for item in commands],
+                   "worktreePreserved": True, "automaticRetry": False}
+        receipt_raw = canonical(receipt)
+        exclusive_bytes(receipt_path, receipt_raw, "disposable_residue_receipt")
+        return {"state": "COMPLETED", "receiptSha256": digest(receipt_raw),
+                "journalSha256": receipt["journalSha256"],
+                "attemptedCommands": 2, "completedCommands": 2}
+    finally:
+        close_locks(descriptors)
+
+
 def execute(args: argparse.Namespace) -> dict[str, Any]:
     contract, contract_raw = contract_from_args(args)
     lifecycle, _ = read_lifecycle(contract, args.lifecycle_sha256)
@@ -948,7 +1303,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     sub = result.add_subparsers(dest="command", required=True)
-    for name in ("open", "export", "prepare", "execute"):
+    for name in ("open", "export", "prepare", "execute", "prepare-residue", "execute-residue"):
         command = sub.add_parser(name)
         command.add_argument("--contract", type=Path, required=True)
         command.add_argument("--contract-sha256", required=True)
@@ -959,7 +1314,7 @@ def parser() -> argparse.ArgumentParser:
         if name == "export":
             command.add_argument("--export-request", type=Path, required=True)
             command.add_argument("--export-request-sha256", required=True)
-        if name == "execute":
+        if name in {"execute", "execute-residue"}:
             command.add_argument("--intent", type=Path, required=True)
             command.add_argument("--intent-sha256", required=True)
             command.add_argument("--authorization", type=Path, required=True)
@@ -972,7 +1327,10 @@ def main() -> int:
     try:
         value = (open_generation(args) if args.command == "open" else
                  export_generation(args) if args.command == "export" else
-                 prepare(args) if args.command == "prepare" else execute(args))
+                 prepare(args) if args.command == "prepare" else
+                 execute(args) if args.command == "execute" else
+                 prepare_residue(args) if args.command == "prepare-residue" else
+                 execute_residue(args))
         print(canonical(value).decode(), end="")
         return 0
     except (Denied, OSError, json.JSONDecodeError, subprocess.SubprocessError) as error:
