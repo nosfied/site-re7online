@@ -549,6 +549,39 @@ janela e evidências segundo os contratos vigentes. Contar blocos únicos; não 
 duas vezes subdiretórios, hardlinks ou cópias compartilhadas. Renomear no mesmo
 filesystem não recupera espaço.
 
+### Lifecycle fechado da raiz do builder descartável
+
+`scripts/disposable-builder-lifecycle.py` complementa, sem substituir, o produtor,
+o instalador, o driver e `generation-retirement.py`. Seu único objeto destrutível é
+a raiz efêmera declarada no contrato da geração. A custódia, o repositório, as
+releases instaladas, os retornos e as gerações históricas precisam ser disjuntos.
+
+| Estado/evento | Condição e efeito |
+| --- | --- |
+| `OPEN / ALLOCATION_STARTED` | Contrato, custódia, capacidade e locks autenticados; registro durável anterior à primeira alocação na raiz |
+| `OPEN / ROOT_ALLOCATED` | Raiz e sete subraízes exclusivas criadas e identificadas por device/inode, owner e modo |
+| `EXPORTED / AUTHORITY_EXPORTED` | Autoridade necessária copiada e reaberta por hash fora da raiz; sucesso exige pacote, manifesto, índice, contrato e lifecycle, falha exige evidência própria e proíbe pacote parcial |
+| `SEALED_FOR_EXPLICIT_AUTHORIZATION` | Inventário físico, observação de processos e comandos exatos selados; ainda sem retirada |
+| `RETENTION_DEBT` | Alocação, exportação ou retirada interrompida; raiz/evidências permanecem classificadas e nenhuma repetição é automática |
+| `SANITIZED / CLOSURE_RECORDED` | Todos os comandos têm `ATTEMPT → RESULT → VERIFIED`, raiz ausente, worktree ausente no disco e no registro Git e receipt terminal durável |
+
+O produtor aceita o cache npm e o temporário isolados somente como um par fechado,
+sob a mesma raiz do worktree. A extração segura normaliza diretórios indexados para
+o modo canônico `0755`; isso corrige a variação causada por `umask 0002` sem relaxar
+a comparação de arquivos, symlinks, modos ou hashes do índice.
+
+O fechamento reabre os artefatos exportados, recaptura `/proc`, inventário e
+identidades sob as duas travas e exige que a intenção contenha exatamente o
+worktree autenticado e a raiz. Arquivo ignorado, não rastreado, conteúdo novo,
+referência, writer, varredura incompleta ou identidade divergente nega antes do
+primeiro efeito. Se houver queda depois de `git worktree remove`, a retomada exige
+o `ATTEMPT` já durável e confirma a ausência no Git antes de seguir; efeitos
+`VERIFIED` não são repetidos.
+
+O receipt preservado fora da raiz separa `retiredBytes`/`retiredInodes` dos bytes
+da custódia. O saldo terminal admissível é zero dentro da raiz efêmera. Evidências
+e pacote exportados não são resíduos: sua disposição segue o contrato de custódia.
+
 Separar executáveis operacionais e retorno compatível de dependências regeneráveis
 e payloads redundantes. Manifestos, pacotes e diagnósticos não precisam acompanhar
 automaticamente todas as cópias de runtime na VPS. Conteúdo único depende de decisão

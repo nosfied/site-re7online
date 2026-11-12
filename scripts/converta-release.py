@@ -731,13 +731,19 @@ def run(command: list[str], cwd: Path, env: dict[str, str], *,
     return result.stdout.strip()
 
 
-def build_environment() -> dict[str, str]:
+def build_environment(npm_cache: Path | None = None,
+                      temporary_root: Path | None = None) -> dict[str, str]:
     allowed = {
         "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "XDG_CACHE_HOME",
         "npm_config_cache", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
         "http_proxy", "https_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR",
     }
-    return {name: value for name, value in os.environ.items() if name in allowed}
+    result = {name: value for name, value in os.environ.items() if name in allowed}
+    if npm_cache is not None:
+        result["npm_config_cache"] = str(npm_cache)
+    if temporary_root is not None:
+        result["TMPDIR"] = str(temporary_root)
+    return result
 
 
 def ensure_clean_repo(repo: Path, target: str) -> None:
@@ -1222,6 +1228,18 @@ def safe_extract(package: Path, destination: Path, expected_release: str) -> Pat
     root = destination / expected_release
     if not root.is_dir() or root.is_symlink():
         deny("package_release_root")
+    # Python's data extraction filter deliberately ignores directory modes on
+    # some interpreter versions.  Under a cooperative umask (for example
+    # 0002), a canonical 0755 directory can therefore be recreated as 0775 and
+    # fail the immutable release identity check even though the sealed package
+    # is unchanged.  Release directories are normalized to 0755 before
+    # packaging, so restore that canonical invariant after safe extraction.
+    # Files and symlinks remain untouched and are still checked entry-by-entry
+    # against index.sha256 by verify_root().
+    directories = [root, *(path for path in root.rglob("*")
+                            if path.is_dir() and not path.is_symlink())]
+    for directory in directories:
+        os.chmod(directory, 0o755)
     return root
 
 
@@ -1440,6 +1458,23 @@ def validate_build_paths(args: argparse.Namespace) -> dict[str, Path]:
         if current.is_symlink():
             deny("repo_unsafe_ancestor")
         current = current.parent
+    isolated = (args.npm_cache_root, args.temporary_root)
+    if any(path is not None for path in isolated):
+        if not all(path is not None for path in isolated):
+            deny("disposable_build_environment_pair")
+        disposable_parent = roots["worktrees"].parent
+        expected_names = ("npm-cache", "temporary")
+        for path, name in zip(isolated, expected_names):
+            assert path is not None
+            try:
+                info = path.lstat(); resolved = path.resolve(strict=True)
+            except OSError:
+                deny("disposable_build_environment")
+            if (path.parent != disposable_parent or path.name != name or resolved != path or
+                    path.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                    (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) !=
+                    (os.geteuid(), os.getegid(), 0o700)):
+                deny("disposable_build_environment")
     return roots
 
 
@@ -1487,7 +1522,7 @@ def build_in_generation_window(args: argparse.Namespace,
         artifact_contract_path,
         build_artifact_contract(args, lifecycle_path, "BUILDING"),
     )
-    env = build_environment()
+    env = build_environment(args.npm_cache_root, args.temporary_root)
     env.update(SOURCE_DATE_EPOCH=str(args.source_date_epoch), TZ="UTC", LANG="C.UTF-8",
                LC_ALL="C.UTF-8", CI="1", NEXT_TELEMETRY_DISABLED="1")
     workspace_baseline_bytes = allocated_bytes(repo)
@@ -1841,6 +1876,8 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--p00-static-floor-override-sha256")
     build_parser.add_argument("--root-policy", type=Path, required=True)
     build_parser.add_argument("--root-policy-sha256", required=True)
+    build_parser.add_argument("--npm-cache-root", type=Path)
+    build_parser.add_argument("--temporary-root", type=Path)
     build_parser.set_defaults(handler=build)
     verify_parser = commands.add_parser("verify")
     source = verify_parser.add_mutually_exclusive_group(required=True)
