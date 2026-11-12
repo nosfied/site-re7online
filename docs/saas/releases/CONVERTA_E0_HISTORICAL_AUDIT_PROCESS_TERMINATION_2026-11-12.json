@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "recordType": "DIRECTED_HISTORICAL_AUDIT_PROCESS_TERMINATION",
+  "status": "TERMINAL_SUCCESS",
+  "observedAtUtc": "2026-11-12T18:01:55Z",
+  "timezone": "America/Fortaleza",
+  "scope": "HISTORICAL_READ_ONLY_AUDIT_PROCESS_TREE_ONLY",
+  "before": [
+    {
+      "role": "shell",
+      "pid": 2997037,
+      "uid": 1000,
+      "ppid": 1,
+      "session": 2997037,
+      "processGroup": 2997037,
+      "startTicks": 121733547,
+      "executable": "/usr/bin/bash",
+      "children": [2997050, 2997051],
+      "canonicalLocksHeld": 0,
+      "activeProductionReferences": 0
+    },
+    {
+      "role": "search",
+      "pid": 2997050,
+      "uid": 1000,
+      "ppid": 2997037,
+      "session": 2997037,
+      "processGroup": 2997037,
+      "startTicks": 121733562,
+      "executable": "/usr/bin/grep",
+      "children": [],
+      "canonicalLocksHeld": 0,
+      "activeProductionReferences": 0
+    },
+    {
+      "role": "sort",
+      "pid": 2997051,
+      "uid": 1000,
+      "ppid": 2997037,
+      "session": 2997037,
+      "processGroup": 2997037,
+      "startTicks": 121733562,
+      "executable": "/usr/bin/sort",
+      "children": [],
+      "canonicalLocksHeld": 0,
+      "activeProductionReferences": 0
+    }
+  ],
+  "execution": {
+    "signals": [
+      {
+        "role": "search",
+        "pid": 2997050,
+        "signal": "SIGTERM"
+      }
+    ],
+    "naturalExits": ["sort", "shell"],
+    "sigkillCount": 0,
+    "groupSignalCount": 0,
+    "restartCount": 0,
+    "cleanupCommands": 0,
+    "dataChanges": 0
+  },
+  "after": {
+    "historicalPidsAbsent": true,
+    "apiReleaseId": "immutable-a838bd33-external-20261110T130618Z",
+    "frontendReleaseId": "immutable-b8d284b6-vps-20261108T132846Z",
+    "workerPreserved": true,
+    "processesOnline": 3,
+    "pm2DumpSha256": "67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171",
+    "localHealth": {"status": 200, "ok": true, "db": "ok"},
+    "publicHealth": {"status": 200, "ok": true, "db": "ok"},
+    "campaignGuard": {
+      "open": true,
+      "generation": 47,
+      "taskCount": 0,
+      "ledgerFault": null
+    },
+    "canonicalLockHolders": 0
+  },
+  "privateEvidencePublished": false,
+  "e0Result": "E0_PASS",
+  "e1Started": false
+}

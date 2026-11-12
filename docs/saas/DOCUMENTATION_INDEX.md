@@ -23,6 +23,9 @@
   — API ativa em `immutable-a838bd33-external-20261110T130618Z`, frontend
   `b8d284b6` e worker `e2e7f17a` preservados; a dívida externa v1/v2 permanece
   separada da finalização produtiva e bloqueia novo build até disposição própria.
+- [Encerramento dirigido da árvore histórica da auditoria E0](releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json)
+  — reidentificação integral, um `SIGTERM` dirigido à busca, saída natural de
+  `sort` e shell e pós-check produtivo sem alterações.
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
 - [Revisão da reconciliação não destrutiva b96](releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)

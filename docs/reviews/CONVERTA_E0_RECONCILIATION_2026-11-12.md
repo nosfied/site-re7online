@@ -86,3 +86,37 @@ pelo orçamento conhecido. O builder externo descartável é o padrão-alvo
 recomendado e tem ensaio sintético aprovado; a validação produtiva completa e a
 decisão de adoção pertencem à E1. Esta E0.2 não executou build, deploy, limpeza,
 mudança de guarda ou sinalização de processo.
+
+## Complemento E0.3 — árvore histórica encerrada
+
+Em 12/11/2026, a árvore histórica foi reidentificada integralmente antes de
+qualquer sinal. O shell, a busca e o `sort` preservavam UID, parentesco, sessão,
+grupo, start ticks, executáveis e argumentos da fotografia anterior. Não havia
+locks, descendentes novos, descritores sob as seleções produtivas nem vínculo
+com transação ou serviço ativo. A evidência sanitizada está em
+[`CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json`](../saas/releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json).
+
+Foi enviado um único `SIGTERM`, exclusivamente à busca. O `sort` e o shell
+encerraram naturalmente. Os três PIDs ficaram ausentes; não houve `SIGKILL`,
+sinal de grupo, restart, limpeza, alteração de dados ou mudança de seleção. A
+API permaneceu em a838bd33, o frontend em b8d284b6 e o worker foi preservado.
+Health local/público continuou saudável, o dump PM2 permaneceu idêntico, a
+guarda de campanhas continuou aberta na geração 47 com zero tarefas e sem
+fault, e os locks canônicos permaneceram livres. Resultado: `E0_PASS`.
+
+## Semântica do bloqueio da próxima geração
+
+`nextBuildBlocked=true` é um gate documental de coordenação para a geração do
+piloto e seus escopos equivalentes; não existe um booleano global mutável no
+runtime. O código aplica três controles concretos: reviews da geração no output
+parent selecionado, lifecycle equivalente na mesma reservation root e admissão
+de capacidade do host. Dívida `OPEN`/`RETENTION_DEBT` impede o mesmo scope e a
+mesma equivalência; operações independentes não são globalmente negadas apenas
+por essa dívida.
+
+A menor entrada segura em E1 é uma geração nova, em builder descartável e
+reservation root nova, com identificador, scope e equivalência próprios. A
+admissão deve autenticar as dívidas v1/v2 como custódia somente leitura,
+revalidar capacidade e criar lifecycle novo antes de alocar. Não alterar o flag,
+não reutilizar o worktree preservado e não iniciar em output parent cujo review
+negado ou override vencido ainda seja impeditivo. E1 não foi iniciada.

@@ -35,6 +35,17 @@ O grafo vigente é `b41713ac…d156`, o estado operacional `e239d8dc…20a` e o
 marker `50039ed6…ecad`. O registro verificável é
 [CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json).
 
+A auditoria de transição E0 encerrou a árvore histórica órfã com um único
+`SIGTERM` dirigido à busca; `sort` e shell saíram naturalmente. Seleções, três
+processos produtivos, dump, health, guarda e locks foram preservados. Registro:
+[CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json](releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json).
+
+`nextBuildBlocked=true` no registro ativo é um gate de coordenação da geração
+externa e dos escopos equivalentes, não um flag global do runtime. Uma geração
+independente continua condicionada à admissão canônica, lifecycle novo,
+reservation root própria e capacidade suficiente; as dívidas v1/v2 permanecem
+preservadas e não podem ser apagadas ou ignoradas.
+
 ## Histórico — resultado por destinatário b8d284b6 concluído
 
 O Codex local reportou em 08/11/2026 o fechamento `DEPLOYED_SANITIZED` de

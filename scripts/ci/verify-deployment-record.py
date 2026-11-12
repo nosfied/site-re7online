@@ -815,6 +815,17 @@ def verify_api_only_fixed_current_incomplete(record_path: Path, record: dict) ->
             retirement.get("remainingLocalDerivedArtifacts") == 0 and
             retirement.get("externalBuilderDebt") is True and
             retirement.get("nextBuildBlocked") is True and
+            retirement.get("nextBuildBlockedSemantics") == {
+                "scope": "COORDINATION_GATE_FOR_CURRENT_EXTERNAL_BUILDER_GENERATION_AND_EQUIVALENT_PREPARATION_SCOPE",
+                "globalMutableFlagImplemented": False,
+                "enforcedBy": [
+                    "GENERATION_REVIEW_IN_SELECTED_BUILDER_OUTPUT_PARENT",
+                    "EQUIVALENT_PREPARATION_LIFECYCLE_IN_SAME_RESERVATION_ROOT",
+                    "HOST_CAPACITY_ADMISSION",
+                ],
+                "independentGenerationPermittedOnlyAfterCanonicalAdmission": True,
+                "manualFlagMutationPermitted": False,
+            } and
             v2.get("state") == "PRESERVED_RETENTION_DEBT" and
             v2.get("worktreeAllocatedBytes") == 1027608576 and
             v2.get("expiresAt") == "2026-12-10T20:59:59-03:00" and

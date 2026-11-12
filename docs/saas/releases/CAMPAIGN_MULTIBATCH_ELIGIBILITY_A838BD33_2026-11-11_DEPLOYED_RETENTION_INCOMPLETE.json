@@ -88,6 +88,17 @@
     "remainingLocalDerivedArtifacts": 0,
     "externalBuilderDebt": true,
     "nextBuildBlocked": true,
+    "nextBuildBlockedSemantics": {
+      "scope": "COORDINATION_GATE_FOR_CURRENT_EXTERNAL_BUILDER_GENERATION_AND_EQUIVALENT_PREPARATION_SCOPE",
+      "globalMutableFlagImplemented": false,
+      "enforcedBy": [
+        "GENERATION_REVIEW_IN_SELECTED_BUILDER_OUTPUT_PARENT",
+        "EQUIVALENT_PREPARATION_LIFECYCLE_IN_SAME_RESERVATION_ROOT",
+        "HOST_CAPACITY_ADMISSION"
+      ],
+      "independentGenerationPermittedOnlyAfterCanonicalAdmission": true,
+      "manualFlagMutationPermitted": false
+    },
     "externalBuilder": {
       "v2": {
         "worktreeAllocatedBytes": 1027608576,
