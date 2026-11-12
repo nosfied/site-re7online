@@ -737,6 +737,126 @@ def verify_frontend_only(record_path: Path, record: dict) -> None:
 
 
 
+def verify_api_only_fixed_current_incomplete(record_path: Path, record: dict) -> None:
+    require(record.get("schemaVersion") == 1 and
+            record.get("recordType") ==
+            "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT" and
+            record.get("status") == "DEPLOYED_RETENTION_INCOMPLETE",
+            "API-only incomplete identity")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "API-only incomplete sensitive keys")
+
+    release = record.get("release", {})
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))) and
+            bool(re.fullmatch(r"[0-9a-f]{40}", release.get("tree", ""))) and
+            bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*",
+                              release.get("id", ""))) and
+            release.get("indexEntries") == 34381 and
+            release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+            "API-only incomplete release identity")
+    for field in ("packageSha256", "manifestSha256", "indexSha256",
+                  "artifactContractSha256", "apiEntrypointSha256"):
+        require(bool(SHA256.fullmatch(release.get(field, ""))),
+                f"API-only incomplete release {field}")
+
+    selection = record.get("selection", {})
+    require(selection.get("components") == ["api"] and
+            selection.get("apiReleaseId") == release.get("id") and
+            selection.get("frontendPreserved") is True and
+            selection.get("workerPreserved") is True and
+            selection.get("frontendBuildId") == "zguwjBfQne4CTh6dLIlfq",
+            "API-only incomplete component selection")
+    require(record.get("return") == {
+                "apiReleaseId": "immutable-b8d284b6-vps-20261108T132846Z",
+                "frontendReleaseId": "immutable-36b94c6d-vps-20261107T165118Z",
+            }, "API-only incomplete component returns")
+
+    acceptance = record.get("acceptance", {})
+    require(acceptance.get("state") == "PASS" and
+            acceptance.get("mode") == "GET_ONLY" and
+            bool(SHA256.fullmatch(acceptance.get("acceptanceSha256", ""))) and
+            acceptance.get("apiLocalHealthy") is True and
+            acceptance.get("apiPublicHealthy") is True and
+            acceptance.get("frontendPreserved") is True and
+            acceptance.get("workerPreserved") is True,
+            "API-only incomplete acceptance")
+
+    finalization = record.get("finalization", {})
+    require(finalization.get("state") == "DEPLOYED_RETENTION_INCOMPLETE" and
+            finalization.get("pm2SaveCount") == 1 and
+            finalization.get("secondSaveExecuted") is False and
+            finalization.get("deploymentLockAbsentAfterTerminalClosure") is True,
+            "API-only incomplete finalization")
+    for field in ("dumpSha256", "markerSha256", "releaseGraphSha256",
+                  "operationalStateSha256", "retirementReceiptSha256"):
+        require(bool(SHA256.fullmatch(finalization.get(field, ""))),
+                f"API-only incomplete finalization {field}")
+
+    runtime = record.get("runtime", {})
+    require(runtime.get("api", {}).get("selectedReleaseId") == release.get("id") and
+            runtime.get("frontend", {}).get("selectedReleaseId") ==
+            selection.get("frontendReleaseId") and
+            runtime.get("frontend", {}).get("preserved") is True and
+            runtime.get("worker", {}).get("selectedReleaseId") ==
+            selection.get("workerReleaseId") and
+            runtime.get("worker", {}).get("preserved") is True and
+            runtime.get("health") == {
+                "local": {"ok": True, "db": "ok"},
+                "public": {"ok": True, "db": "ok"},
+            }, "API-only incomplete runtime and health")
+
+    retirement = record.get("retirement", {})
+    v2 = retirement.get("externalBuilder", {}).get("v2", {})
+    v1 = retirement.get("externalBuilder", {}).get("v1", {})
+    removed = retirement.get("externalBuilder", {}).get("removedRuntimes", {})
+    require(retirement.get("state") == "DEPLOYED_RETENTION_INCOMPLETE" and
+            retirement.get("localCommandsAttempted") == 0 and
+            retirement.get("localCommandsCompleted") == 0 and
+            retirement.get("remainingLocalDerivedArtifacts") == 0 and
+            retirement.get("externalBuilderDebt") is True and
+            retirement.get("nextBuildBlocked") is True and
+            v2.get("state") == "PRESERVED_RETENTION_DEBT" and
+            v2.get("worktreeAllocatedBytes") == 1027608576 and
+            v2.get("expiresAt") == "2026-12-10T20:59:59-03:00" and
+            v1.get("state") == "FAILED" and
+            v1.get("worktreeAllocatedBytes") == 671199232 and
+            removed.get("state") == "COMPLETED" and
+            removed.get("recoveredBytes") == 982900736 and
+            bool(SHA256.fullmatch(removed.get("receiptSha256", ""))),
+            "API-only incomplete external-builder debt")
+
+    capacity = record.get("capacity", {})
+    require(capacity.get("capacityIsCurrent") is False and
+            capacity.get("vps", {}).get("freeBytes") == 8168931328 and
+            capacity.get("vps", {}).get("freeInodes") == 8778841 and
+            capacity.get("builder", {}).get("freeBytes") == 198923218944 and
+            capacity.get("builder", {}).get("freeInodes") == 28009941,
+            "API-only incomplete capacity observation")
+    require(record.get("campaignGuard") == {
+                "open": True, "generation": 47, "taskCount": 0, "fault": None,
+            } and
+            all(value == 0 for value in record.get("forbiddenEffects", {}).values()),
+            "API-only incomplete operation guards")
+
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(),
+            "API-only incomplete active record")
+    production = state.get("production", {})
+    require(production.get("status") == "DEPLOYED_RETENTION_INCOMPLETE" and
+            production.get("releaseId") == release.get("id") and
+            production.get("targetCommit") == release.get("target") and
+            production.get("api", {}).get("selectedReleaseId") == release.get("id") and
+            production.get("frontend", {}).get("selectedReleaseId") ==
+            selection.get("frontendReleaseId") and
+            production.get("pm2", {}).get("dumpSha256") ==
+            finalization.get("dumpSha256") and
+            production.get("currentMarkerSha256") ==
+            finalization.get("markerSha256"),
+            "API-only incomplete active topology")
+    print("DEPLOYMENT_RECORD_OK: API-only release deployed with external retention debt")
+
+
 def verify_api_only_fixed_current_sanitized(record_path: Path, record: dict) -> None:
     require(record.get("schemaVersion") == 1 and
             record.get("recordType") ==
@@ -1033,7 +1153,10 @@ def main() -> None:
     if (record.get("schemaVersion") == 1 and
             record.get("recordType") ==
             "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT"):
-        verify_api_only_fixed_current_sanitized(record_path, record)
+        if record.get("status") == "DEPLOYED_RETENTION_INCOMPLETE":
+            verify_api_only_fixed_current_incomplete(record_path, record)
+        else:
+            verify_api_only_fixed_current_sanitized(record_path, record)
         return
 
     if (record.get("schemaVersion") == 1 and

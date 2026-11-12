@@ -1415,3 +1415,24 @@ Resultado: nenhum lote fechado desse grupo cobre o déficit atual com margem. A
 única release sem proteção privada observada não pode ser promovida a efeito com
 ausência de prova. Lotes terminais, cadeias com custódia não localizada e dados
 privados permanecem fora da rodada; não há autorização de retirada.
+
+## Piloto externo a838bd33 — estado reconciliado em 12/11/2026
+
+A implantação API-only terminou produtivamente em
+`DEPLOYED_RETENTION_INCOMPLETE`: a API está em
+`immutable-a838bd33-external-20261110T130618Z`, enquanto frontend `b8d284b6` e
+worker `e2e7f17a` foram preservados. A dívida de retenção está no builder e não
+é efeito pendente na VPS.
+
+As disposições são independentes:
+
+| Escopo | Estado | Blocos físicos | Disposição |
+| --- | --- | ---: | --- |
+| runtimes v2 API + frontend | `COMPLETED` | 982.900.736 B recuperados | terminal; não repetir |
+| worktree v2 | `PRESERVED_RETENTION_DEBT` | 1.027.608.576 B | preservar até 10/12/2026 20:59:59 Fortaleza; faltam inventário detalhado original autenticado e cobertura privilegiada do caminho exato |
+| worktree v1 | `FAILED` | 671.199.232 B | auditoria dirigida própria; `FAILED` não implica elegibilidade |
+
+O prazo do worktree v2 é custódia, não autorização de retirada. Novo efeito
+exige procedimento e autoridade próprios. A fotografia histórica mediu na VPS
+8.168.931.328 bytes e 8.778.841 inodes livres, e no builder 198.923.218.944
+bytes e 28.009.941 inodes livres; os valores não são capacidade reservada.

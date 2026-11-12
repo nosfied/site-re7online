@@ -36,4 +36,53 @@
 ## Regra de continuidade
 A pesquisa da inbox é demanda de produto registrada à parte; **não implementar durante a reconciliação E0**. Ela é candidata à validação produtiva da E1 após teste local, isolamento, orçamento de bytes/inodes e aceite da transação canônica. Não antecipar o deploy.
 
-**Nenhuma conclusão desta auditoria representa leitura ao vivo da VPS ou uso de Codex local. Nenhuma mutação produtiva realizada.**
+## Complemento E0.2 — confronto direto concluído
+
+A leitura dirigida posterior autenticou o estado vivo sem repetir a auditoria
+geral. A API selecionada é `immutable-a838bd33-external-20261110T130618Z`; o
+frontend permanece em `immutable-b8d284b6-vps-20261108T132846Z`, BUILD_ID
+`zguwjBfQne4CTh6dLIlfq`, e o worker `immutable-e2e7f17a-20261022T005110Z`
+permanece preservado. Os retornos imediatos são b8d284b6 para a API e 36b94c6d
+para o frontend. Health local e público passaram. O dump PM2 vigente é
+`67006b02…2171`, o grafo `b41713ac…d156`, o estado operacional
+`e239d8dc…20a` e o marker `50039ed6…ecad`.
+
+A guarda de campanhas está aberta na geração 47, com zero tarefas e sem fault.
+A transação API-only terminou com `saveCount=1` e permanece
+`DEPLOYED_RETENTION_INCOMPLETE` exclusivamente por dívidas no builder externo.
+O novo registro por componente preserva o fechamento agregado b8d284b6 como
+histórico e como autoridade do frontend atualmente selecionado.
+
+Capacidade histórica observada: VPS com 8.168.931.328 bytes e 8.778.841 inodes
+livres, ocupação de 91%; builder com 198.923.218.944 bytes e 28.009.941 inodes
+livres e cache npm compartilhado de 4.378.787.840 bytes. Os runtimes v2 têm
+retirada terminal de 982.900.736 bytes. O worktree v2 mantém
+`PRESERVED_RETENTION_DEBT` de 1.027.608.576 bytes até 10/12/2026 20:59:59
+Fortaleza; o worktree v1 mantém lifecycle `FAILED` e 671.199.232 bytes. Nenhum
+dos estados autoriza retirada automática.
+
+## Processo histórico aguardando na VPS
+
+A inspeção mínima confirmou uma sessão órfã iniciada em 07/11/2026: um shell
+adotado pelo PID 1 aguarda um `grep -RIlE`, e um `sort` aguarda o pipe. A árvore
+pertence ao usuário operacional, permaneceu sem CPU acumulada relevante e não
+detinha locks canônicos nem descritores sob as raízes produtivas consultadas.
+Ela não pertence aos três processos PM2, à transação a838bd33 ou a uma tarefa
+ativa conhecida. Os identificadores numéricos completos ficam fora do documento
+versionado e constam do relatório privado desta E0.2.
+
+Nenhum sinal foi enviado. A proposta para autorização separada é reidentificar a
+mesma árvore por PID, UID, PPID, início, executável e argv; negar se houver drift,
+novos descendentes, locks ou referências à transação vigente; sinalizar somente
+os PIDs autenticados, do `grep` ao `sort` e por último o shell, verificando a
+saída após cada `SIGTERM`. Não usar `pkill`, `killall` ou sinal de grupo. Só
+considerar escalada de sinal para o mesmo PID após nova autorização e nova prova
+de identidade.
+
+## Modelo de build e limite da E0
+
+O build na VPS continua sendo o procedimento historicamente canônico, bloqueado
+pelo orçamento conhecido. O builder externo descartável é o padrão-alvo
+recomendado e tem ensaio sintético aprovado; a validação produtiva completa e a
+decisão de adoção pertencem à E1. Esta E0.2 não executou build, deploy, limpeza,
+mudança de guarda ou sinalização de processo.

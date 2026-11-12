@@ -1,11 +1,26 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API+FRONTEND B8D284B6 DEPLOYED_SANITIZED EM 08/11/2026 / WORKER E2E7 PRESERVADO**
+**Status: CANÔNICO / API A838BD33 ATIVA COM RETENÇÃO EXTERNA INCOMPLETA / FRONTEND B8D284B6 E WORKER E2E7 PRESERVADOS**
 
 Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação. Os comandos executáveis estão
 somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
-[registro b8d284b6 implantado e sanitizado](releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json).
+[registro a838bd33 implantado com retenção externa incompleta](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json).
+
+Na fotografia reconciliada de 12/11/2026, a API selecionada é
+`immutable-a838bd33-external-20261110T130618Z`; o frontend permanece em
+`immutable-b8d284b6-vps-20261108T132846Z`, BUILD_ID
+`zguwjBfQne4CTh6dLIlfq`, e o worker `e2e7f17a` permanece inalterado. O dump PM2
+vigente é `67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171`.
+O fechamento produtivo tem `saveCount=1`; a dívida que impede `SANITIZED` está
+no builder externo e não transforma o antigo registro agregado b8d284b6 em
+registro da implantação API-only.
+
+O build na VPS continua sendo o procedimento historicamente canônico, hoje
+bloqueado pelo orçamento conhecido. O builder externo descartável é o padrão-alvo
+recomendado e possui ensaio sintético aprovado, mas sua validação produtiva
+completa pertence à E1. Esta reconciliação não altera silenciosamente o padrão e
+não autoriza novo build.
 Preparações e executores anteriores são evidência e não autorizam repetição.
 
 ## Topologia canônica

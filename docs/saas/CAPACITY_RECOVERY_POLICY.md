@@ -1053,3 +1053,17 @@ e `d41`, e exige o caminho e o SHA canônicos do grafo final `785bde80` fixados 
 próprio consumidor. Uma fonte alternativa, ainda que tenha SHA válido e uma
 projeção internamente coerente, termina em
 `LIVE_RELEASE_GRAPH_SOURCE_BINDING` antes da autenticação dos candidatos.
+
+## Dívidas externas independentes do piloto a838bd33
+
+O fechamento API-only de `a838bd33` não autoriza tratar o builder como uma única
+árvore removível. Os runtimes v2 já têm receipt terminal e recuperaram
+982.900.736 bytes. O worktree v2, com 1.027.608.576 bytes, permanece
+`PRESERVED_RETENTION_DEBT`; o worktree v1, com 671.199.232 bytes, permanece
+`FAILED` e exige auditoria dirigida distinta. O cache npm compartilhado medido
+em 4.378.787.840 bytes é outra classe e não integra nenhuma dessas disposições.
+
+Ausência do inventário detalhado original autenticado ou da cobertura
+privilegiada de processos para o caminho exato do worktree v2 mantém a negativa.
+O estado `FAILED` do v1 também não prova equivalência, ausência de referência ou
+segurança de retirada. Nenhuma dessas fotografias autoriza limpeza.

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_RETENTION_INCOMPLETE",
+  "evidenceProvenance": {
+    "source": "DIRECT_LOCAL_AND_VPS_READ_ONLY_RECONCILIATION",
+    "observedDate": "2026-11-12",
+    "timezone": "America/Fortaleza",
+    "privateEvidencePublished": false
+  },
+  "release": {
+    "id": "immutable-a838bd33-external-20261110T130618Z",
+    "target": "a838bd33ea00ea49be52d61e025a36320a4154c1",
+    "tree": "438b737c96c8e42da61cdc14e84694a4afe9dde4",
+    "buildId": "y6yGEaAGGr5oZe93llTWD",
+    "packageSha256": "99b8ef1d6e056cc6846d6c85731bc41c53dfe251657ead62a12305d5b65ffacb",
+    "manifestSha256": "389a1c9ead3fabab8e28b035cc0741bb090835fdb930aec6cf90b9a2afd477c3",
+    "indexSha256": "490f96946172d0248647bba16fd51248fca13098a85b156b28aecc4843980af2",
+    "indexEntries": 34381,
+    "artifactContractSha256": "5e91a5d9c95b0845cc48a75e8a8f1473722c13901d1f058805f5fd70cb9faa8a",
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "buildCount": 1,
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "selection": {
+    "components": [
+      "api"
+    ],
+    "apiReleaseId": "immutable-a838bd33-external-20261110T130618Z",
+    "frontendReleaseId": "immutable-b8d284b6-vps-20261108T132846Z",
+    "frontendBuildId": "zguwjBfQne4CTh6dLIlfq",
+    "workerReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "frontendPreserved": true,
+    "workerPreserved": true
+  },
+  "return": {
+    "apiReleaseId": "immutable-b8d284b6-vps-20261108T132846Z",
+    "frontendReleaseId": "immutable-36b94c6d-vps-20261107T165118Z"
+  },
+  "acceptance": {
+    "state": "PASS",
+    "mode": "GET_ONLY",
+    "acceptanceSha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
+    "apiLocalHealthy": true,
+    "apiPublicHealthy": true,
+    "frontendPreserved": true,
+    "workerPreserved": true
+  },
+  "finalization": {
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171",
+    "markerSha256": "50039ed69dc14260bee1789dc2852aec30d29ec09e140b816aaca3f623e5ecad",
+    "releaseGraphSha256": "b41713acbb1e4d496d61bb97dbe04b2fb70db381ca58c173035d5e3e76d1d156",
+    "operationalStateSha256": "e239d8dc7febee852e11d1921d99322585c1680dee2e289c77fdd14de8aac20a",
+    "retirementReceiptSha256": "1ee1da610324411266591f1dd5e36f1b72da28289ba9b0ad8a4607cf3a2498d7",
+    "deploymentLockAbsentAfterTerminalClosure": true
+  },
+  "runtime": {
+    "api": {
+      "selectedReleaseId": "immutable-a838bd33-external-20261110T130618Z"
+    },
+    "frontend": {
+      "selectedReleaseId": "immutable-b8d284b6-vps-20261108T132846Z",
+      "buildId": "zguwjBfQne4CTh6dLIlfq",
+      "preserved": true
+    },
+    "worker": {
+      "selectedReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "preserved": true
+    },
+    "health": {
+      "local": {
+        "ok": true,
+        "db": "ok"
+      },
+      "public": {
+        "ok": true,
+        "db": "ok"
+      }
+    }
+  },
+  "retirement": {
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "localCommandsAttempted": 0,
+    "localCommandsCompleted": 0,
+    "remainingLocalDerivedArtifacts": 0,
+    "externalBuilderDebt": true,
+    "nextBuildBlocked": true,
+    "externalBuilder": {
+      "v2": {
+        "worktreeAllocatedBytes": 1027608576,
+        "worktreeInodes": 37990,
+        "state": "PRESERVED_RETENTION_DEBT",
+        "responsible": "Deifson Oliveira",
+        "expiresAt": "2026-12-10T20:59:59-03:00",
+        "missingEvidence": [
+          "ORIGINAL_AUTHENTICATED_DETAILED_INVENTORY",
+          "PRIVILEGED_PROCESS_COVERAGE_FOR_EXACT_WORKTREE"
+        ]
+      },
+      "v1": {
+        "worktreeAllocatedBytes": 671199232,
+        "state": "FAILED",
+        "disposition": "DIRECTED_AUDIT_REQUIRED"
+      },
+      "removedRuntimes": {
+        "state": "COMPLETED",
+        "recoveredBytes": 982900736,
+        "receiptSha256": "86dc0957f568bfba2c21464addc616fb3175be0a09d0fe832716ed40902993dd"
+      }
+    }
+  },
+  "capacity": {
+    "observedDate": "2026-11-12",
+    "capacityIsCurrent": false,
+    "vps": {
+      "freeBytes": 8168931328,
+      "freeInodes": 8778841,
+      "usedPercent": 91
+    },
+    "builder": {
+      "freeBytes": 198923218944,
+      "freeInodes": 28009941,
+      "sharedNpmCacheBytes": 4378787840
+    }
+  },
+  "campaignGuard": {
+    "open": true,
+    "generation": 47,
+    "taskCount": 0,
+    "fault": null
+  },
+  "forbiddenEffects": {
+    "extraRestarts": 0,
+    "secondPm2Save": 0,
+    "metaCalls": 0,
+    "guardChanges": 0
+  },
+  "nextPermittedAct": "RECONCILE_EXTERNAL_BUILDER_DEBTS_WITH_SEPARATE_AUTHORITY"
+}
