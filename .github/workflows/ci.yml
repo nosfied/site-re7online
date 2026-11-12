@@ -238,6 +238,7 @@ jobs:
       - name: Inbox remote search, protocol, race and tenant isolation
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_inbox_search_ci
+          APP_AUTH_SECRET: synthetic-inbox-search-ci-secret
         run: |
           PGPASSWORD=postgres psql -h 127.0.0.1 -p 55781 -U postgres -d retention_lab \
             -v ON_ERROR_STOP=1 -c 'CREATE DATABASE re7_inbox_search_ci'

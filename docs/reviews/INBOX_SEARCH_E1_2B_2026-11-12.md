@@ -41,7 +41,7 @@ A suíte ampla preexistente `ownClosedConversations.test.ts` permaneceu em 17/18
 
 As duas negativas da primeira CI tinham causas locais e distintas:
 
-- o teste PostgreSQL herdava `retention_lab` do job. O banco era descartável, mas não satisfazia a proteção nominal `re7_*` da fixture. O job agora cria `re7_inbox_search_ci`, aplica nele as migrations e aponta somente a suíte da Inbox para essa URL;
+- o teste PostgreSQL herdava `retention_lab` do job. O banco era descartável, mas não satisfazia a proteção nominal `re7_*` da fixture. O job agora cria `re7_inbox_search_ci`, aplica nele as migrations e aponta somente a suíte da Inbox para essa URL. O mesmo passo recebe um `APP_AUTH_SECRET` sintético e restrito à CI para emitir as sessões HTTP da fixture;
 - a fixture HTTP introduzira cinco usos de `any`. Eles foram substituídos por um contrato de resposta explícito, sem alterar o teto ou as regras do ESLint. O baseline local passou em `659/243`, abaixo do teto `663/246`.
 
 O contrato funcional adicional ficou comprovado assim:
