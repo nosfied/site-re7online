@@ -33,6 +33,11 @@ let adminA: Awaited<ReturnType<typeof prisma.user.create>>;
 let agentA: Awaited<ReturnType<typeof prisma.user.create>>;
 let adminB: Awaited<ReturnType<typeof prisma.user.create>>;
 
+type ConversationSearchResponse = {
+  items: Array<{ waId: string; protocol?: string | null; lastMessage?: { bodyText?: string | null } | null }>;
+  nextCursor?: string | null;
+};
+
 async function createUser(clientId: string, role: string, name: string, departmentId: string | null) {
   const user = await prisma.user.create({
     data: { clientId, role, name, email: `${prefix}-${name}@example.test`, isActive: true, departmentId },
@@ -47,7 +52,7 @@ async function request(route: string, actor = adminA) {
   const response = await fetch(`${baseUrl}${route}`, {
     headers: { authorization: `Bearer ${issueClientAuthToken(actor, `${actor.id}-session`)}` },
   });
-  return { status: response.status, body: await response.json() as any };
+  return { status: response.status, body: await response.json() as ConversationSearchResponse };
 }
 
 async function createConversation(params: {
@@ -58,6 +63,7 @@ async function createConversation(params: {
   name: string;
   phone?: string;
   protocol: string;
+  messageText?: string;
   status?: "WAITING" | "CLOSED";
   updatedAt: Date;
 }) {
@@ -99,7 +105,7 @@ async function createConversation(params: {
   await prisma.inboundMessage.create({
     data: {
       clientId: tenantId, waId: params.waId, waIdCanonical: params.waId,
-      messageId: `${prefix}-${params.waId}`, type: "TEXT", bodyText: "mensagem sintética",
+      messageId: `${prefix}-${params.waId}`, type: "TEXT", bodyText: params.messageText ?? "mensagem sintética",
       allowlistHit: true, rawPayload: { serviceCycle: cycle }, createdAt: params.updatedAt,
     },
   });
@@ -164,7 +170,7 @@ test("remote inbox search finds name, phone and active protocol with normalizati
   ]) {
     const response = await request(`/app/conversations?search=${encodeURIComponent(search)}&limit=10`);
     assert.equal(response.status, 200);
-    assert.deepEqual(response.body.items.map((item: any) => item.waId), [expected]);
+    assert.deepEqual(response.body.items.map((item) => item.waId), [expected]);
   }
 });
 
@@ -184,7 +190,104 @@ test("search pagination remains bound to the query and closed filter", async () 
   assert.equal(second.body.items.length, 1);
   assert.notEqual(second.body.items[0].waId, first.body.items[0].waId);
   const closedProtocol = await request("/app/conversations?search=222222&status=CLOSED&limit=10");
-  assert.deepEqual(closedProtocol.body.items.map((item: any) => item.waId), ["558188880002"]);
+  assert.deepEqual(closedProtocol.body.items.map((item) => item.waId), ["558188880002"]);
+});
+
+test("search preserves last-message lookup beyond the first list page", async () => {
+  const target = await createConversation({
+    waId: "558155550099", name: "Contato antigo", protocol: "CVT-MESSAGE00001",
+    messageText: "Retorno sobre cirurgia pediátrica",
+    updatedAt: new Date("2026-11-10T08:00:00Z"),
+  });
+  for (let index = 0; index < 15; index += 1) {
+    await createConversation({
+      waId: `558155551${String(index).padStart(3, "0")}`,
+      name: `Contato recente ${index}`,
+      protocol: `CVT-RECENT${String(index).padStart(6, "0")}`,
+      messageText: "Outra mensagem",
+      updatedAt: new Date(Date.parse("2026-11-12T15:00:00Z") - index * 1_000),
+    });
+  }
+
+  const response = await request("/app/conversations?search=cirurgia%20pediatrica&limit=1");
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.items.map((item) => item.waId), [target.waId]);
+  assert.equal(response.body.items[0]?.lastMessage?.bodyText, "Retorno sobre cirurgia pediátrica");
+});
+
+test("historical protocol remains searchable when the displayed active protocol is different", async () => {
+  const conversation = await createConversation({
+    waId: "558144440001", name: "Ciclo atual", protocol: "CVT-CURRENT00001",
+    updatedAt: new Date("2026-11-12T13:00:00Z"),
+  });
+  await prisma.completedServiceSnapshot.create({
+    data: {
+      clientId: tenantA.id,
+      conversationId: conversation.id,
+      cycleId: crypto.randomUUID(),
+      protocol: "CVT-HISTORICALZX",
+      closedAt: new Date("2026-11-11T13:00:00Z"),
+      departmentId: departmentA.id,
+      queueId: queueA.id,
+    },
+  });
+
+  const response = await request("/app/conversations?search=historicalzx&limit=10");
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.items.map((item) => item.waId), [conversation.waId]);
+  assert.equal(response.body.items[0]?.protocol, "CVT-CURRENT00001");
+});
+
+test("1001 matching candidates keep deterministic order and cursor pagination", async () => {
+  const baseTime = Date.parse("2026-11-12T07:00:00Z");
+  const fixtures = Array.from({ length: 1001 }, (_, index) => {
+    const waId = `5577${String(index).padStart(9, "0")}`;
+    const updatedAt = new Date(baseTime - index * 1_000);
+    return { id: crypto.randomUUID(), waId, updatedAt };
+  });
+  await prisma.conversation.createMany({
+    data: fixtures.map(({ id, waId, updatedAt }) => ({
+      id, clientId: tenantA.id, departmentId: departmentA.id,
+      waId, waIdCanonical: waId, channel: "whatsapp", provider: "meta",
+      lastInboundAt: updatedAt, updatedAt,
+    })),
+  });
+  await prisma.conversationRuntimeState.createMany({
+    data: fixtures.map(({ waId, updatedAt }, index) => ({
+      clientId: tenantA.id, waId, waIdCanonical: waId,
+      conversationKey: `${tenantA.id}:${waId}`, channel: "whatsapp", provider: "meta",
+      status: "WAITING", mode: "HUMAN", handoffStatus: "ACTIVE",
+      handoffActivatedAt: updatedAt, departmentId: departmentA.id, queueId: queueA.id,
+      answers: { operationalProtocol: { protocol: `CVT-LIMIT${String(index).padStart(7, "0")}` } },
+      updatedAt,
+    })),
+  });
+  await prisma.lead.createMany({
+    data: fixtures.map(({ waId }) => ({
+      tenantId: tenantA.id, waId, waIdCanonical: waId,
+      name: "Carga limite previsível", phone: waId, channel: "whatsapp", provider: "meta",
+    })),
+  });
+  await prisma.inboundMessage.createMany({
+    data: fixtures.map(({ waId, updatedAt }, index) => ({
+      clientId: tenantA.id, waId, waIdCanonical: waId,
+      messageId: `${prefix}-limit-${index}`, type: "TEXT", bodyText: "mensagem de carga",
+      allowlistHit: true, rawPayload: {}, createdAt: updatedAt,
+    })),
+  });
+
+  const observed: string[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 11; page += 1) {
+    const response = await request(
+      `/app/conversations?search=carga%20limite%20previsivel&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`
+    );
+    assert.equal(response.status, 200);
+    observed.push(...response.body.items.map((item) => item.waId));
+    cursor = response.body.nextCursor ?? null;
+  }
+  assert.deepEqual(observed, fixtures.map((item) => item.waId));
+  assert.equal(cursor, null);
 });
 
 test("search preserves department RBAC and tenant isolation", async () => {
@@ -200,8 +303,8 @@ test("search preserves department RBAC and tenant isolation", async () => {
   assert.equal(agent.status, 200);
   assert.equal(agent.body.items.length, 0);
   const admin = await request("/app/conversations?search=segredo%20compartilhado", adminA);
-  assert.deepEqual(admin.body.items.map((item: any) => item.waId), ["558177770001"]);
+  assert.deepEqual(admin.body.items.map((item) => item.waId), ["558177770001"]);
   const other = await request("/app/conversations?search=segredo%20compartilhado", adminB);
-  assert.deepEqual(other.body.items.map((item: any) => item.waId), ["558166660001"]);
+  assert.deepEqual(other.body.items.map((item) => item.waId), ["558166660001"]);
 });
 

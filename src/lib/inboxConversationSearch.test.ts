@@ -72,6 +72,33 @@ test("a realtime refresh can run again after the current query settles", async (
   assert.equal(calls, 2);
 });
 
+test("identical filters from different authenticated sessions never coalesce or cross-publish", async () => {
+  const registry = new InboxConversationQueryRegistry();
+  const first = deferred();
+  const second = deferred();
+  const published: string[] = [];
+  const firstKey = "tenant-a:user-a:token-a:search=ana";
+  const secondKey = "tenant-b:user-b:token-b:search=ana";
+
+  registry.setCurrentKey(firstKey);
+  const firstRun = registry.run(firstKey, async () => {
+    await first.promise;
+    if (registry.isCurrent(firstKey)) published.push("first");
+  });
+  registry.setCurrentKey(secondKey);
+  const secondRun = registry.run(secondKey, async () => {
+    await second.promise;
+    if (registry.isCurrent(secondKey)) published.push("second");
+  });
+
+  first.resolve();
+  await firstRun;
+  assert.deepEqual(published, []);
+  second.resolve();
+  await secondRun;
+  assert.deepEqual(published, ["second"]);
+});
+
 test("clearing after positive and empty results restores the active-filter base list", async () => {
   const registry = new InboxConversationQueryRegistry();
   let rows = ["base-a", "base-b"];

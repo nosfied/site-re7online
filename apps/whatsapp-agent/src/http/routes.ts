@@ -36034,7 +36034,7 @@ function conversationMatchesListFilters(item: {
   departmentId: string | null;
   assignedUserId: string | null;
   assignedAt?: string | null;
-}, filters: ConversationListFilters, ownClosedWaIds?: ReadonlySet<string>) {
+}, filters: ConversationListFilters, ownClosedWaIds?: ReadonlySet<string>, searchMatchedHistoricalProtocol = false) {
   if (filters.automation) {
     if (!conversationListItemIsAutomation(item)) return false;
   } else if (conversationListItemIsAutomation(item)) {
@@ -36055,7 +36055,7 @@ function conversationMatchesListFilters(item: {
   if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
   if (filters.unassigned && item.assignedUserId) return false;
-  if (filters.search) {
+  if (filters.search && !searchMatchedHistoricalProtocol) {
     if (!inboxConversationMatchesSearch(item, filters.search)) return false;
   }
   return true;
@@ -36204,10 +36204,12 @@ function buildConversationFilterCounts(
     mode?: string | null;
     handoffStatus?: string | null;
     assignedAt?: string | null;
+    waIdCanonical?: string | null;
   }>,
   filters: ConversationListFilters,
   currentUserId?: string | null,
-  ownClosedWaIds?: ReadonlySet<string>
+  ownClosedWaIds?: ReadonlySet<string>,
+  historicalProtocolConversationKeys?: ReadonlySet<string>
 ) {
   const baseFilters = {
     ...filters,
@@ -36216,11 +36218,18 @@ function buildConversationFilterCounts(
     unassigned: false,
     automation: false,
   };
-  const baseItems = items.filter((item) => conversationMatchesListFilters(item, baseFilters, ownClosedWaIds));
+  const matches = (item: (typeof items)[number], nextFilters: ConversationListFilters) =>
+    conversationMatchesListFilters(
+      item,
+      nextFilters,
+      ownClosedWaIds,
+      Boolean(historicalProtocolConversationKeys?.has(item.waIdCanonical || item.waId))
+    );
+  const baseItems = items.filter((item) => matches(item, baseFilters));
   const counts = {
     ALL: baseItems.length,
     WAITING: 0,
-    AUTOMATION: items.filter(item => conversationMatchesListFilters(item, { ...baseFilters, automation: true }, ownClosedWaIds)).length,
+    AUTOMATION: items.filter(item => matches(item, { ...baseFilters, automation: true })).length,
     IN_PROGRESS: 0,
     WAITING_USER: 0,
     CLOSED: 0,
@@ -36289,6 +36298,8 @@ async function buildConversationListPayload(
   const searchIdentityVariants = searchIdentity
     ? Array.from(new Set([searchIdentity, ...buildWaIdLookup(searchIdentity).variants].filter(Boolean)))
     : [];
+  const historicalProtocolConversationIds = new Set<string>();
+  const historicalProtocolIdentityVariants = new Set<string>();
   const conversationWhere: Prisma.ConversationWhereInput = {
       clientId: params.clientId,
       deletedAt: null,
@@ -36378,6 +36389,32 @@ async function buildConversationListPayload(
           LIMIT 1001
         `)
       : [];
+    const messageRows = await prisma.$queryRaw<Array<{
+      waId: string;
+      waIdCanonical: string | null;
+    }>>(Prisma.sql`
+      WITH all_messages AS (
+        SELECT "waId", "waIdCanonical", "bodyText", "rawPayload", "createdAt"
+        FROM "InboundMessage"
+        WHERE "clientId" = ${params.clientId}::uuid
+        UNION ALL
+        SELECT "waId", "waIdCanonical", "bodyText", "rawPayload", "createdAt"
+        FROM "OutboundMessage"
+        WHERE "clientId" = ${params.clientId}::uuid
+      ), latest_human_message AS (
+        SELECT DISTINCT ON (coalesce(nullif("waIdCanonical", ''), "waId"))
+          "waId", "waIdCanonical", "bodyText", "createdAt"
+        FROM all_messages
+        WHERE coalesce("rawPayload" #>> '{inboxVisibility}', '') <> 'management_only'
+        ORDER BY coalesce(nullif("waIdCanonical", ''), "waId"), "createdAt" DESC
+      )
+      SELECT "waId", "waIdCanonical"
+      FROM latest_human_message
+      WHERE translate(lower(coalesce("bodyText", '')), ${accentSource}, ${accentTarget})
+        LIKE ${`%${normalizedSearch}%`}
+      ORDER BY "createdAt" DESC
+      LIMIT 1001
+    `);
     const [snapshotRows, eventRows] = protocolFragment.length >= 3
       ? await Promise.all([
           prisma.completedServiceSnapshot.findMany({
@@ -36413,12 +36450,24 @@ async function buildConversationListPayload(
       ...leadRows.flatMap((row) => [row.waId, row.waIdCanonical, row.phone, row.externalUserRef, row.legacyWaId]),
       ...runtimeRows.flatMap((row) => [row.waId, row.waIdCanonical]),
       ...eventRows.flatMap((row) => [row.waId, row.waIdCanonical]),
+      ...messageRows.flatMap((row) => [row.waId, row.waIdCanonical]),
     ].flatMap((value) => buildWaIdLookup(String(value ?? "")).variants).filter(Boolean)));
     const candidateConversationIds = Array.from(new Set([
       ...snapshotRows.map((row) => row.conversationId),
       ...eventRows.map((row) => row.conversationId),
       ...legacyProtocolRows.map((row) => row.id),
     ].filter((value): value is string => Boolean(value))));
+    for (const conversationId of candidateConversationIds) {
+      historicalProtocolConversationIds.add(conversationId);
+    }
+    for (const identity of [
+      ...runtimeRows.flatMap((row) => [row.waId, row.waIdCanonical]),
+      ...eventRows.flatMap((row) => [row.waId, row.waIdCanonical]),
+    ]) {
+      for (const variant of buildWaIdLookup(String(identity ?? "")).variants) {
+        if (variant) historicalProtocolIdentityVariants.add(variant);
+      }
+    }
     const candidateWhere: Prisma.ConversationWhereInput[] = [
       ...(candidateIdentities.length > 0 ? [
         { waId: { in: candidateIdentities } },
@@ -36547,6 +36596,20 @@ async function buildConversationListPayload(
         lastOutboundAt: conversation.lastOutboundAt,
         historyVisibleAfter: conversation.historyVisibleAfter,
       });
+    }
+  }
+  const historicalProtocolConversationKeys = new Set<string>();
+  for (const conversation of conversations) {
+    const identityVariants = buildWaIdLookup(
+      conversation.waIdCanonical || conversation.waId
+    ).variants;
+    if (
+      historicalProtocolConversationIds.has(conversation.id) ||
+      identityVariants.some((variant) => historicalProtocolIdentityVariants.has(variant))
+    ) {
+      historicalProtocolConversationKeys.add(
+        getWaIdGroupKey(conversation.waId, conversation.waIdCanonical)
+      );
     }
   }
   const cursorFilteredConversations = Array.from(groupedConversations.values())
@@ -37063,14 +37126,20 @@ async function buildConversationListPayload(
     allItems.filter(
       (item) =>
         itemMatchesUserInboxVisibility(item) &&
-        conversationMatchesListFilters(item, params.filters, ownClosedWaIds)
+        conversationMatchesListFilters(
+          item,
+          params.filters,
+          ownClosedWaIds,
+          historicalProtocolConversationKeys.has(item.waIdCanonical || item.waId)
+        )
     )
   );
   const filterCounts = buildConversationFilterCounts(
     allItems.filter(itemMatchesUserInboxVisibility),
     params.filters,
     params.userId ?? null,
-    ownClosedWaIds
+    ownClosedWaIds,
+    historicalProtocolConversationKeys
   );
   const items = filteredItems.slice(0, params.limit);
   const nextCursorSource =

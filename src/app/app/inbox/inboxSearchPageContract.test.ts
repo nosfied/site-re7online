@@ -25,3 +25,12 @@ test("search input is debounced independently while clear remains an immediate z
   assert.match(source, /search: search \|\| null/);
 });
 
+test("the complete query key is scoped to authenticated tenant, user and token", () => {
+  const keyStart = source.indexOf("const conversationQueryKey = useMemo");
+  const keyEnd = source.indexOf("conversationQueryRegistryRef.current.setCurrentKey", keyStart);
+  const keyBlock = source.slice(keyStart, keyEnd);
+  assert.match(keyBlock, /clientId: session\.user\.clientId/);
+  assert.match(keyBlock, /userId: session\.user\.id/);
+  assert.match(keyBlock, /token: session\.token/);
+});
+

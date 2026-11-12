@@ -3955,8 +3955,18 @@ export default function AppInboxPage() {
   ]);
 
   const conversationQueryKey = useMemo(
-    () => JSON.stringify(buildConversationFetchOptions(null)),
-    [buildConversationFetchOptions]
+    () => JSON.stringify({
+      session: session
+        ? {
+            baseUrl: session.baseUrl,
+            clientId: session.user.clientId,
+            userId: session.user.id,
+            token: session.token,
+          }
+        : null,
+      query: buildConversationFetchOptions(null),
+    }),
+    [buildConversationFetchOptions, session]
   );
   conversationQueryRegistryRef.current.setCurrentKey(conversationQueryKey);
 

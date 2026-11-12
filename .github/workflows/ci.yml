@@ -236,7 +236,12 @@ jobs:
       - name: CRM cursor filters, RBAC and tenant isolation routes
         run: node --import tsx --test src/http/crmCapabilityRoutes.test.ts
       - name: Inbox remote search, protocol, race and tenant isolation
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_inbox_search_ci
         run: |
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 55781 -U postgres -d retention_lab \
+            -v ON_ERROR_STOP=1 -c 'CREATE DATABASE re7_inbox_search_ci'
+          npm run db:deploy
           node --import tsx --test \
             src/inbox/conversationSearch.test.ts \
             src/http/inboxConversationSearch.postgres.test.ts
