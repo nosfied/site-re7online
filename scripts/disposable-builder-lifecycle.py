@@ -1016,11 +1016,19 @@ def residue_events(path: Path, commands: list[dict[str, Any]]) -> list[dict[str,
                     "disposable_residue_journal")
         if len(ordinal_events) >= 2:
             result = ordinal_events[1]
-            require(set(result) == {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"} and
+            normal_keys = {"event", "ordinal", "exitCode", "stdoutSha256", "stderrSha256"}
+            reconciled_keys = normal_keys | {"resultSource"}
+            require(frozenset(result) in {frozenset(normal_keys), frozenset(reconciled_keys)} and
                     result["event"] == "RESULT" and result["ordinal"] == command["ordinal"] and
                     type(result["exitCode"]) is int and
                     is_digest(result["stdoutSha256"]) and is_digest(result["stderrSha256"]),
                     "disposable_residue_journal")
+            if "resultSource" in result:
+                require(result["resultSource"] == "RECONCILED_ABSENCE" and
+                        result["exitCode"] == 0 and
+                        result["stdoutSha256"] == digest(b"") and
+                        result["stderrSha256"] == digest(b""),
+                        "disposable_residue_journal")
         if len(ordinal_events) == 3:
             require(ordinal_events[2] == {"event": "VERIFIED", "ordinal": command["ordinal"],
                                          "absent": True}, "disposable_residue_journal")
@@ -1066,6 +1074,8 @@ def execute_residue(args: argparse.Namespace) -> dict[str, Any]:
             journal_raw = stable_bytes(journal, receipt.get("journalSha256", ""),
                                        "disposable_residue_journal", mode=0o600)
             events = residue_events(journal, commands)
+            reconciled = [item["ordinal"] for item in events
+                          if item.get("resultSource") == "RECONCILED_ABSENCE"]
             expected_receipt = {
                 "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_BYTECODE_RESIDUE",
                 "state": "COMPLETED", "generationId": contract["generationId"],
@@ -1076,6 +1086,7 @@ def execute_residue(args: argparse.Namespace) -> dict[str, Any]:
                 "authorizationSha256": args.authorization_sha256,
                 "journalSha256": digest(journal_raw),
                 "attemptedCommands": 2, "completedCommands": 2,
+                "reconciledOrdinals": reconciled,
                 "removedPaths": [item["path"] for item in commands],
                 "worktreePreserved": True, "automaticRetry": False,
             }
@@ -1107,6 +1118,20 @@ def execute_residue(args: argparse.Namespace) -> dict[str, Any]:
                 continue
             file_present = Path(commands[0]["path"]).exists()
             directory_present = Path(commands[1]["path"]).exists()
+            target_absent = not target.exists() and not target.is_symlink()
+            if len(current) == 1 and target_absent:
+                observe_residue(contract, residue_present=file_present,
+                                directory_present=directory_present, sealed=sealed)
+                require(not target.exists() and not target.is_symlink(),
+                        "disposable_residue_reconciliation_drift")
+                append_event(journal, {"event": "RESULT", "ordinal": ordinal,
+                                       "exitCode": 0, "stdoutSha256": digest(b""),
+                                       "stderrSha256": digest(b""),
+                                       "resultSource": "RECONCILED_ABSENCE"})
+                append_event(journal, {"event": "VERIFIED", "ordinal": ordinal,
+                                       "absent": True})
+                events = residue_events(journal, commands)
+                continue
             require(target.exists() and not target.is_symlink(),
                     "disposable_residue_attempt_ambiguous")
             observe_residue(contract, residue_present=file_present,
@@ -1127,6 +1152,8 @@ def execute_residue(args: argparse.Namespace) -> dict[str, Any]:
         observe_residue(contract, residue_present=False, directory_present=False,
                         sealed=sealed)
         require(len(events) == 6, "disposable_residue_completion")
+        reconciled = [item["ordinal"] for item in events
+                      if item.get("resultSource") == "RECONCILED_ABSENCE"]
         receipt = {"schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_BYTECODE_RESIDUE",
                    "state": "COMPLETED", "generationId": contract["generationId"],
                    "contractSha256": digest(contract_raw),
@@ -1136,6 +1163,7 @@ def execute_residue(args: argparse.Namespace) -> dict[str, Any]:
                    "authorizationSha256": args.authorization_sha256,
                    "journalSha256": digest(journal.read_bytes()),
                    "attemptedCommands": 2, "completedCommands": 2,
+                   "reconciledOrdinals": reconciled,
                    "removedPaths": [item["path"] for item in commands],
                    "worktreePreserved": True, "automaticRetry": False}
         receipt_raw = canonical(receipt)

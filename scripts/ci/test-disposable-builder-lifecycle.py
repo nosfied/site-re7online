@@ -457,6 +457,119 @@ class DisposableLifecycleTests(unittest.TestCase):
         events = MODULE.read_events(self.custody / "disposable-builder.residue-journal.private.jsonl")
         self.assertEqual(sum(item["event"] == "ATTEMPT" and item["ordinal"] == 1 for item in events), 1)
 
+    def test_bytecode_residue_reconciles_file_removed_before_result_without_repeating_rm(self) -> None:
+        historical = []
+        for raw in self.contract["protectedPaths"]:
+            path = Path(raw); path.mkdir(mode=0o700); (path / "sentinel").write_text("preserve\n")
+            historical.append(path)
+        residue = self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        real_run = MODULE.subprocess.run
+        interrupted = {"done": False}
+        def remove_then_stop(argv, **kwargs):
+            result = real_run(argv, **kwargs)
+            if argv[:1] == ["/usr/bin/rm"] and not interrupted["done"]:
+                interrupted["done"] = True
+                raise OSError("synthetic interruption after physical rm")
+            return result
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}), \
+             patch.object(MODULE.subprocess, "run", side_effect=remove_then_stop):
+            with self.assertRaisesRegex(OSError, "after physical rm"):
+                MODULE.execute_residue(self.args(
+                    intent=self.custody / "disposable-builder.residue-intent.private.json",
+                    intent_sha256=prepared["intentSha256"], authorization=authorization,
+                    authorization_sha256=auth_sha))
+        self.assertFalse(residue.exists()); self.assertTrue(residue.parent.is_dir())
+        before = MODULE.read_events(self.custody / "disposable-builder.residue-journal.private.jsonl")
+        self.assertEqual([item["event"] for item in before], ["ATTEMPT"])
+        repeated = []
+        def record_commands(argv, **kwargs):
+            if argv[:1] in (["/usr/bin/rm"], ["/usr/bin/rmdir"]):
+                repeated.append(argv[0])
+            return real_run(argv, **kwargs)
+        with patch.object(MODULE.subprocess, "run", side_effect=record_commands):
+            result = self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertEqual(repeated, ["/usr/bin/rmdir"])
+        receipt = json.loads((self.custody / "disposable-builder.residue-receipt.private.json").read_bytes())
+        self.assertEqual(receipt["reconciledOrdinals"], [1])
+        self.assertTrue(self.worktree.is_dir())
+        self.assertIn(str(self.worktree), run("git", "worktree", "list", "--porcelain",
+                                             cwd=self.repository))
+        self.assertTrue(all((path / "sentinel").read_text() == "preserve\n"
+                            for path in historical))
+
+    def test_bytecode_residue_reconciles_directory_removed_before_result_without_repeating(self) -> None:
+        residue = self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        real_run = MODULE.subprocess.run
+        interrupted = {"done": False}
+        def remove_then_stop(argv, **kwargs):
+            result = real_run(argv, **kwargs)
+            if argv[:1] == ["/usr/bin/rmdir"] and not interrupted["done"]:
+                interrupted["done"] = True
+                raise OSError("synthetic interruption after physical rmdir")
+            return result
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}), \
+             patch.object(MODULE.subprocess, "run", side_effect=remove_then_stop):
+            with self.assertRaisesRegex(OSError, "after physical rmdir"):
+                MODULE.execute_residue(self.args(
+                    intent=self.custody / "disposable-builder.residue-intent.private.json",
+                    intent_sha256=prepared["intentSha256"], authorization=authorization,
+                    authorization_sha256=auth_sha))
+        self.assertFalse(residue.exists()); self.assertFalse(residue.parent.exists())
+        destructive = []
+        def reject_repeat(argv, **kwargs):
+            if argv[:1] in (["/usr/bin/rm"], ["/usr/bin/rmdir"]):
+                destructive.append(argv)
+                raise AssertionError("destructive command repeated")
+            return real_run(argv, **kwargs)
+        with patch.object(MODULE.subprocess, "run", side_effect=reject_repeat):
+            result = self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertEqual(destructive, [])
+        receipt = json.loads((self.custody / "disposable-builder.residue-receipt.private.json").read_bytes())
+        self.assertEqual(receipt["reconciledOrdinals"], [2])
+        events = MODULE.read_events(self.custody / "disposable-builder.residue-journal.private.jsonl")
+        reconciled = [item for item in events if item.get("resultSource") == "RECONCILED_ABSENCE"]
+        self.assertEqual([item["ordinal"] for item in reconciled], [2])
+
+    def test_bytecode_residue_absence_without_attempt_is_denied(self) -> None:
+        residue = self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        residue.unlink()
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_attempt_ambiguous"):
+            self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertFalse((self.custody / "disposable-builder.residue-journal.private.jsonl").exists())
+
+    def test_bytecode_residue_reconciliation_denies_unexpected_content_after_effect(self) -> None:
+        residue = self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        journal = self.custody / "disposable-builder.residue-journal.private.jsonl"
+        MODULE.append_event(journal, {"event": "ATTEMPT", "ordinal": 1,
+            "kind": "remove-bytecode", "path": str(residue),
+            "argv": ["/usr/bin/rm", "--", str(residue)]})
+        residue.unlink(); (residue.parent / "unexpected.pyc").write_bytes(b"unexpected")
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_git_status"):
+            self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertEqual([item["event"] for item in MODULE.read_events(journal)], ["ATTEMPT"])
+
+    def test_bytecode_residue_reconciliation_denies_directory_identity_drift(self) -> None:
+        residue = self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        journal = self.custody / "disposable-builder.residue-journal.private.jsonl"
+        MODULE.append_event(journal, {"event": "ATTEMPT", "ordinal": 1,
+            "kind": "remove-bytecode", "path": str(residue),
+            "argv": ["/usr/bin/rm", "--", str(residue)]})
+        directory_fd = os.open(residue.parent, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            residue.unlink(); residue.parent.rmdir(); residue.parent.mkdir(mode=0o775)
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_sealed_drift_directory"):
+                self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        finally:
+            os.close(directory_fd)
+        self.assertEqual([item["event"] for item in MODULE.read_events(journal)], ["ATTEMPT"])
+
     def test_bytecode_residue_resume_after_completed_effect_does_not_repeat_it(self) -> None:
         self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
         authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])

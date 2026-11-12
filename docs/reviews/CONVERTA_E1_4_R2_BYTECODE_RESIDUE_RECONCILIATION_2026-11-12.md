@@ -55,7 +55,7 @@ as sentinelas v1/v2 intactas.
 
 ## Regressões locais
 
-O conjunto dirigido passou com **33/33** testes. Junto dos testes existentes, as
+O conjunto dirigido passou com **38/38** testes. Junto dos testes existentes, as
 novas regressões cobrem sucesso, conteúdo/hash, symlink, hardlink, device/inode,
 modo/owner, conteúdo extra e ignorado, tracked/index dirty, processo, writer,
 observação incompleta, lock ocupado, negativa antes de `ATTEMPT`, interrupções,
@@ -75,6 +75,25 @@ não foi introduzida por R2.
 
 As métricas da fixture são sintéticas: pico de **126.976 B / 28 inodes**, raiz
 terminal em **0 B / 0 inodes** e custódia preservada em **65.536 B / 17 inodes**.
+
+## R2.1 — interrupção depois do efeito e antes de `RESULT`
+
+O HEAD inicial da R2 negava indefinidamente a retomada quando o journal continha
+um `ATTEMPT` autenticado, mas o comando já havia retirado fisicamente seu alvo
+antes de persistir `RESULT`. O executor agora trata somente esse checkpoint.
+
+Sob os dois locks, ele reabre intenção e autorização, autentica o `ATTEMPT` literal
+e recaptura Git, fonte, conteúdo remanescente, identidade do worktree e observação
+de processos. Se o alvo iniciado está ausente e todo o restante confere, registra
+um `RESULT(exitCode=0, resultSource=RECONCILED_ABSENCE)` com hashes vazios, seguido
+de `VERIFIED(absent=true)`. O receipt lista os ordinais reconciliados. O comando
+ausente não é executado outra vez.
+
+As regressões interrompem separadamente depois do `rm` do bytecode e depois do
+`rmdir`, antes de `RESULT`. A retomada do primeiro caso executa apenas o `rmdir`;
+a do segundo não executa comando destrutivo algum. Ausência sem `ATTEMPT`, inode
+do diretório divergente e conteúdo inesperado são negados sem acrescentar
+`RESULT`. Receipt, journal, worktree e sentinelas v1/v2 permanecem autenticados.
 
 ## Geração real e próxima ação
 
