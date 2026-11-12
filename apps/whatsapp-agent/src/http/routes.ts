@@ -600,8 +600,15 @@ import { buildInboxWebSessionChannelStateBatch } from "../inbox/inboxWebSessionC
 import {
   buildConversationProtocol,
   buildConversationProtocolNotice,
+  getConversationIdPrefixFromProtocol,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
+import {
+  inboxConversationMatchesSearch,
+  normalizeInboxConversationSearch,
+  normalizeInboxPhoneSearch,
+  normalizeInboxProtocolSearch,
+} from "../inbox/conversationSearch.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import {
   isManagementOnlyInboxMessage,
@@ -36014,6 +36021,7 @@ function compareConversationListOrder(
 }
 
 function conversationMatchesListFilters(item: {
+  id?: string | null;
   lastMessage: { bodyText: string | null } | null;
   leadName: string | null;
   leadPhone: string | null;
@@ -36048,14 +36056,7 @@ function conversationMatchesListFilters(item: {
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
   if (filters.unassigned && item.assignedUserId) return false;
   if (filters.search) {
-    const normalizedProtocol = normalizeConversationProtocol(filters.search);
-    const protocolMatches =
-      normalizedProtocol !== null && item.protocol?.toUpperCase() === normalizedProtocol;
-    const haystack = [item.protocol, item.leadName, item.leadPhone, item.waId, item.lastMessage?.bodyText]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    if (!protocolMatches && !haystack.includes(filters.search.toLowerCase())) return false;
+    if (!inboxConversationMatchesSearch(item, filters.search)) return false;
   }
   return true;
 }
@@ -36315,7 +36316,7 @@ async function buildConversationListPayload(
       ],
   };
   const baseQueryStartedAt = channelLatencyNow();
-  const conversations = await prisma.conversation.findMany({
+  const conversations = searchIdentity ? [] : await prisma.conversation.findMany({
     where: conversationWhere,
     orderBy: [{ updatedAt: "desc" }, { waIdCanonical: "asc" }, { waId: "asc" }],
     take: conversationFetchLimit,
@@ -36335,6 +36336,117 @@ async function buildConversationListPayload(
       historyVisibleAfter: true,
     },
   });
+  if (searchIdentity) {
+    const normalizedSearch = normalizeInboxConversationSearch(searchIdentity);
+    const normalizedPhone = normalizeInboxPhoneSearch(searchIdentity);
+    const protocolFragment = normalizeInboxProtocolSearch(searchIdentity);
+    const protocolPrefix = getConversationIdPrefixFromProtocol(searchIdentity);
+    const accentSource = "áàâãäéèêëíìîïóòôõöúùûüç";
+    const accentTarget = "aaaaaeeeeiiiiooooouuuuc";
+    const leadRows = await prisma.$queryRaw<Array<{
+      waId: string | null;
+      waIdCanonical: string | null;
+      phone: string | null;
+      externalUserRef: string | null;
+      legacyWaId: string | null;
+    }>>(Prisma.sql`
+      SELECT "waId", "waIdCanonical", "phone", "externalUserRef", "legacyWaId"
+      FROM "Lead"
+      WHERE "tenantId" = ${params.clientId}::uuid
+        AND (
+          translate(lower(coalesce("name", '')), ${accentSource}, ${accentTarget}) LIKE ${`%${normalizedSearch}%`}
+          OR lower(coalesce("externalUserRef", '')) LIKE ${`%${normalizedSearch}%`}
+          ${normalizedPhone.length >= 3
+            ? Prisma.sql`OR regexp_replace(coalesce("phone", ''), '[^0-9]', '', 'g') LIKE ${`%${normalizedPhone}%`}
+                OR regexp_replace(coalesce("waId", ''), '[^0-9]', '', 'g') LIKE ${`%${normalizedPhone}%`}
+                OR regexp_replace(coalesce("waIdCanonical", ''), '[^0-9]', '', 'g') LIKE ${`%${normalizedPhone}%`}`
+            : Prisma.empty}
+        )
+      ORDER BY "updatedAt" DESC
+      LIMIT 1001
+    `);
+    const runtimeRows = protocolFragment.length >= 3
+      ? await prisma.$queryRaw<Array<{ waId: string; waIdCanonical: string | null }>>(Prisma.sql`
+          SELECT "waId", "waIdCanonical"
+          FROM "ConversationRuntimeState"
+          WHERE "clientId" = ${params.clientId}::uuid
+            AND (
+              upper(coalesce("answers" #>> '{operationalProtocol,protocol}', '')) LIKE ${`%${protocolFragment}%`}
+              OR upper(coalesce("answers" #>> '{lastClosedServiceCycle,protocol}', '')) LIKE ${`%${protocolFragment}%`}
+            )
+          ORDER BY "updatedAt" DESC
+          LIMIT 1001
+        `)
+      : [];
+    const [snapshotRows, eventRows] = protocolFragment.length >= 3
+      ? await Promise.all([
+          prisma.completedServiceSnapshot.findMany({
+            where: { clientId: params.clientId, protocol: { contains: protocolFragment, mode: "insensitive" } },
+            select: { conversationId: true },
+            orderBy: { closedAt: "desc" },
+            take: 1001,
+          }),
+          prisma.event.findMany({
+            where: {
+              clientId: params.clientId,
+              eventName: { in: ["conversation.protocol.started", "conversation.protocol.closed"] },
+              payloadJson: { path: ["protocol"], string_contains: protocolFragment },
+            },
+            select: { conversationId: true, waId: true, waIdCanonical: true },
+            orderBy: { createdAt: "desc" },
+            take: 1001,
+          }),
+        ])
+      : [[], []] as const;
+    const legacyProtocolRows = protocolPrefix
+      ? await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT "id"
+          FROM "Conversation"
+          WHERE "clientId" = ${params.clientId}::uuid
+            AND "deletedAt" IS NULL
+            AND "anonymizedAt" IS NULL
+            AND "id"::text LIKE ${`${protocolPrefix}%`}
+          LIMIT 1001
+        `)
+      : [];
+    const candidateIdentities = Array.from(new Set([
+      ...leadRows.flatMap((row) => [row.waId, row.waIdCanonical, row.phone, row.externalUserRef, row.legacyWaId]),
+      ...runtimeRows.flatMap((row) => [row.waId, row.waIdCanonical]),
+      ...eventRows.flatMap((row) => [row.waId, row.waIdCanonical]),
+    ].flatMap((value) => buildWaIdLookup(String(value ?? "")).variants).filter(Boolean)));
+    const candidateConversationIds = Array.from(new Set([
+      ...snapshotRows.map((row) => row.conversationId),
+      ...eventRows.map((row) => row.conversationId),
+      ...legacyProtocolRows.map((row) => row.id),
+    ].filter((value): value is string => Boolean(value))));
+    const candidateWhere: Prisma.ConversationWhereInput[] = [
+      ...(candidateIdentities.length > 0 ? [
+        { waId: { in: candidateIdentities } },
+        { waIdCanonical: { in: candidateIdentities } },
+      ] : []),
+      ...(candidateConversationIds.length > 0 ? [{ id: { in: candidateConversationIds } }] : []),
+    ];
+    const searchedConversations = candidateWhere.length > 0 ? await prisma.conversation.findMany({
+      where: {
+        clientId: params.clientId,
+        deletedAt: null,
+        anonymizedAt: null,
+        OR: candidateWhere,
+      },
+      orderBy: [{ updatedAt: "desc" }, { waIdCanonical: "asc" }, { waId: "asc" }],
+      take: 1001,
+      select: {
+        id: true, waId: true, waIdCanonical: true, channel: true, provider: true,
+        channelAccountId: true, departmentId: true, createdAt: true, updatedAt: true,
+        firstResponseAt: true, lastInboundAt: true, lastOutboundAt: true, historyVisibleAfter: true,
+      },
+    }) : [];
+    const seen = new Set(conversations.map((conversation) => conversation.id));
+    for (const conversation of searchedConversations) {
+      if (!seen.has(conversation.id)) conversations.push(conversation);
+      seen.add(conversation.id);
+    }
+  }
   if (searchIdentityVariants.length > 0) {
     const identityConversations = await prisma.conversation.findMany({
       where: {
@@ -36374,7 +36486,7 @@ async function buildConversationListPayload(
     }
   }
   recordInboxListTiming(params.clientId, "base_query", baseQueryStartedAt);
-  recordInboxListCount(params.clientId, "base_query", 1);
+  recordInboxListCount(params.clientId, "base_query", searchIdentity ? 0 : 1);
   if (conversations.length === 0) {
     const readStateStartedAt = channelLatencyNow();
     const readState = params.userId
