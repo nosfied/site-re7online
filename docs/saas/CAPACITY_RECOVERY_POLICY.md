@@ -612,6 +612,17 @@ divergência operacional nega antes do primeiro `ATTEMPT`. Assim, cada fase
 revalida os dois hosts e as capturas do `audit` não se convertem isoladamente em
 autorização de retirada.
 
+A segurança da janela posterior à fotografia da VPS não depende de manter seus
+locks durante o efeito no builder. O plano sela `vpsMutationSafety`: os únicos
+efeitos são as duas cópias `DERIVED_OUTPUT_RUNTIME`, enquanto pacote verificado,
+manifesto e índice permanecem no builder como autoridade de reconstrução,
+fisicamente fora dos candidatos e dos comandos. Essa autoridade é reaberta por
+SHA-256 e identidade em `audit`, `prepare` e `execute`, sob os locks locais. Uma
+mudança posterior de papel ativo ou retorno na VPS não transforma cópias de
+output do builder em artefatos únicos de produção; alteração ou sobreposição da
+autoridade preservada nega antes do primeiro efeito. A release instalada e os
+artefatos da VPS continuam fora dos comandos.
+
 ### `CLOSED_PREPARATION_DERIVED_ARCHIVE`
 
 Admite somente os arquivos literais `api-frontend-return.private.tar.gz` e

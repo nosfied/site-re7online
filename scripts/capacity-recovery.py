@@ -4369,6 +4369,10 @@ def audit_a838bd33_cross_host_request(value: dict[str, Any], request_sha: str,
         deny("CROSS_HOST_BUILDER_LOCKS")
     state = ("P00_CAPACITY_RECOVERY_AUDIT_PASS" if not errors else
              "P00_CAPACITY_RECOVERY_AUDIT_DENY")
+    commands = removal_commands(item["observation"] for item in observations)
+    mutation_safety = (a838bd33_vps_mutation_safety(
+        [item["observation"] for item in observations], commands, cross_host)
+        if not errors else None)
     plan = {
         "schemaVersion": 4, "kind": "CAPACITY_RECOVERY_PLAN", "state": state,
         "requestSha256": request_sha,
@@ -4392,10 +4396,11 @@ def audit_a838bd33_cross_host_request(value: dict[str, Any], request_sha: str,
         "writerLock": next(path for path in lock_paths
                            if path.endswith(".generation-build.lock")),
         "candidates": observations, "errors": errors,
-        "commands": removal_commands(item["observation"] for item in observations),
+        "commands": commands,
         "automaticExecutionPermitted": False,
         "crossHostEvidence": value["crossHostEvidence"],
         "phaseRevalidationRequired": True,
+        "vpsMutationSafety": mutation_safety,
     }
     write_exclusive(plan_output, canonical(plan))
     return plan
@@ -4504,6 +4509,69 @@ def candidate_bindings(observations: list[dict[str, Any]]) -> list[dict[str, Any
     return [candidate_binding(item) for item in observations]
 
 
+def a838bd33_vps_mutation_safety(
+        observations: list[dict[str, Any]], commands: list[list[str]],
+        cross_host: dict[str, Any]) -> dict[str, Any]:
+    """Prove that later VPS role changes cannot make builder copies unique.
+
+    The destructive effects are local to the two derived runtime directories.
+    The verified package, manifest and index remain authenticated on the builder
+    and are sufficient to reproduce the installed tree regardless of a later
+    active/rollback selection on the distinct VPS host.
+    """
+    if len(observations) != 2 or removal_commands(observations) != commands:
+        deny("CROSS_HOST_VPS_MUTATION_SAFETY_SCOPE")
+    if (cross_host.get("profile") != BUILDER_A838BD33_PROFILE or
+            cross_host.get("releaseId") != BUILDER_A838BD33_RELEASE or
+            cross_host.get("contentHashes") != BUILDER_A838BD33_CONTENT_HASHES):
+        deny("CROSS_HOST_VPS_MUTATION_SAFETY_PROVENANCE")
+    vps_selection = cross_host.get("vpsObservation", {}).get("selection")
+    if (not isinstance(vps_selection, dict) or
+            vps_selection.get("api") !=
+                f"/opt/re7online/releases/{BUILDER_A838BD33_RELEASE}/api-runtime"):
+        deny("CROSS_HOST_VPS_MUTATION_SAFETY_PROVENANCE")
+    candidate_paths = [Path(item["path"]) for item in observations]
+    if ({path.name for path in candidate_paths} !=
+            {"api-runtime", "frontend-runtime"} or
+            len(set(candidate_paths)) != 2):
+        deny("CROSS_HOST_VPS_MUTATION_SAFETY_SCOPE")
+    authority: dict[str, dict[str, Any]] = {}
+    for label in ("package", "manifest", "index"):
+        bindings = [item.get("bindings", {}).get(label) for item in observations]
+        if (any(not isinstance(item, dict) or set(item) != {"path", "sha256"}
+                for item in bindings) or bindings[0] != bindings[1]):
+            deny("CROSS_HOST_VPS_MUTATION_SAFETY_AUTHORITY")
+        binding = bindings[0]
+        path = normalized_absolute(binding["path"],
+                                   "CROSS_HOST_VPS_MUTATION_SAFETY_PATH")
+        if any(path == candidate or candidate in path.parents or path in candidate.parents
+               for candidate in candidate_paths):
+            deny("CROSS_HOST_VPS_MUTATION_SAFETY_OVERLAP")
+        if label == "package":
+            identity = stable_regular_digest(path, binding["sha256"],
+                                             allowed_modes={0o600, 0o644})
+        else:
+            _, identity = stable_regular(path, binding["sha256"],
+                                         allowed_modes={0o600, 0o644})
+        authority[label] = {"path": str(path), "sha256": binding["sha256"],
+                            "identity": identity}
+    return {
+        "schemaVersion": 1,
+        "kind": "A838BD33_VPS_MUTATION_SAFETY",
+        "basis": "PRESERVED_VERIFIED_PACKAGE_MANIFEST_INDEX",
+        "candidateRole": "DERIVED_OUTPUT_RUNTIME",
+        "candidatePaths": [str(path) for path in candidate_paths],
+        "recoveryAuthority": authority,
+        "authenticatedInstallation": {
+            "releaseId": BUILDER_A838BD33_RELEASE,
+            "selectionAtCapture": vps_selection,
+            "contentHashes": cross_host["contentHashes"],
+        },
+        "commandsExcludeRecoveryAuthority": True,
+        "mutableVpsStateRequiredAfterCapture": False,
+    }
+
+
 def authenticate_cross_host_phase_revalidation(
         path: Path | None, expected_sha: str | None, plan: dict[str, Any],
         plan_sha: str, phase: str, candidate_paths: list[str]) -> dict[str, Any]:
@@ -4547,7 +4615,8 @@ def revalidate_a838bd33_cross_host_plan(
                 "classificationPolicy", "rootPolicy", "operationalState",
                 "liveRecapture", "deploymentLock", "writerLock", "candidates",
                 "errors", "commands", "automaticExecutionPermitted",
-                "crossHostEvidence", "phaseRevalidationRequired"}
+                "crossHostEvidence", "phaseRevalidationRequired",
+                "vpsMutationSafety"}
     if (set(plan) != required or plan.get("schemaVersion") != 4 or
             plan.get("kind") != "CAPACITY_RECOVERY_PLAN" or
             plan.get("state") != "P00_CAPACITY_RECOVERY_AUDIT_PASS" or
@@ -4592,6 +4661,15 @@ def revalidate_a838bd33_cross_host_plan(
                 errors.append(str(exc))
     if removal_commands(refreshed) != plan.get("commands"):
         errors.append("PLAN_COMMANDS_DIVERGED")
+    try:
+        mutation_safety = a838bd33_vps_mutation_safety(
+            refreshed, plan.get("commands", []),
+            phase_evidence["authenticated"])
+        if mutation_safety != plan.get("vpsMutationSafety"):
+            errors.append("CROSS_HOST_VPS_MUTATION_SAFETY_DIVERGED")
+    except (Denied, KeyError, TypeError) as exc:
+        mutation_safety = None
+        errors.append(str(exc))
     process_evidence = {
         "mechanism": BUILDER_A838BD33_PROFILE,
         "phase": phase,
@@ -4601,6 +4679,7 @@ def revalidate_a838bd33_cross_host_plan(
         "builderObservation": phase_evidence["authenticated"]["builderObservation"],
         "vpsObservation": phase_evidence["authenticated"]["vpsObservation"],
         "candidateComparisons": comparisons,
+        "vpsMutationSafety": mutation_safety,
     }
     live_recapture = {"profile": BUILDER_A838BD33_PROFILE, "phase": phase,
                       "phaseEvidenceSha256": cross_host_revalidation_sha,
@@ -4774,6 +4853,7 @@ def prepare_plan(plan_path: Path, plan_sha: str, intent_output: Path,
     if plan["schemaVersion"] == 4:
         intent["crossHostProfile"] = BUILDER_A838BD33_PROFILE
         intent["preparedCrossHostRevalidation"] = process_evidence
+        intent["vpsMutationSafety"] = plan["vpsMutationSafety"]
     intent_raw = canonical(intent)
     manifest = {
         "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_SEAL_MANIFEST",
@@ -4969,7 +5049,8 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
     if version == 3:
         required |= {"incrementalBatch"}
     if version == 4:
-        required |= {"crossHostProfile", "preparedCrossHostRevalidation"}
+        required |= {"crossHostProfile", "preparedCrossHostRevalidation",
+                     "vpsMutationSafety"}
     if (set(intent) != required or version not in {1, 2, 3, 4} or
             intent.get("kind") != "CAPACITY_RECOVERY_INTENT" or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
@@ -5023,6 +5104,8 @@ def execute_intent(intent_path: Path, intent_sha: str, authorization_path: Path,
                    for key in ("builderRequest", "builderAttestation",
                                "vpsCaptureReport")):
                 deny("CROSS_HOST_EXECUTE_REVALIDATION_NOT_FRESH")
+            if process_evidence.get("vpsMutationSafety") != intent["vpsMutationSafety"]:
+                deny("CROSS_HOST_VPS_MUTATION_SAFETY_DIVERGED")
         candidates_changed = candidate_bindings(refreshed) != candidate_bindings(intent["candidates"])
         pre_attempt = {"event": "RECAPTURE_DENY" if errors or candidates_changed else "RECAPTURE_PASS",
                        "intentSha256": intent_sha,

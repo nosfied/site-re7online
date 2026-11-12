@@ -884,8 +884,8 @@ class CapacityRecoveryTests(unittest.TestCase):
         result = json.loads((receipt / "execution-receipt.private.json").read_text())
         self.assertEqual(result["attemptedCommands"], 0)
         self.assertEqual(result["completedCommands"], 0)
-        self.assertIn("EXECUTE_RECAPTURE_DENY:CROSS_HOST_OUTPUT_EQUIVALENCE_INCOMPLETE",
-                      result["failurePredicate"])
+        self.assertEqual(result["failurePredicate"],
+                         "CROSS_HOST_VPS_MUTATION_SAFETY_DIVERGED")
         self.assertTrue(self.runtime.is_dir())
         self.assertTrue(drift.is_file())
 
@@ -909,6 +909,12 @@ class CapacityRecoveryTests(unittest.TestCase):
                 "paths": [item["path"] for item in intent["candidates"]]})
             execute_evidence = self.cross_host_phase_revalidation(
                 fixture, sha(self.plan), "execute", 2)
+            # Model a later VPS role change after its sealed capture. The
+            # builder retirement remains safe because the authenticated package,
+            # manifest and index are local recovery authority and are not effects.
+            latest_vps_state = self.base / "vps-state-after-capture.private.json"
+            private_json(latest_vps_state, {"activeApi": "immutable-later-release",
+                "rollbackApi": "immutable-a838bd33-external-20261110T130618Z"})
             receipt = self.base / "receipts/execute-pass"
             receipt.parent.mkdir(mode=0o700)
             result = MODULE.execute_intent(
@@ -919,6 +925,50 @@ class CapacityRecoveryTests(unittest.TestCase):
         self.assertEqual(result["completedCommands"], 2)
         self.assertFalse(self.runtime.exists())
         self.assertFalse(Path(fixture["candidates"][1]["path"]).exists())
+        sealed = json.loads(self.intent.read_text())["vpsMutationSafety"]
+        self.assertFalse(sealed["mutableVpsStateRequiredAfterCapture"])
+        self.assertEqual(sealed["basis"],
+                         "PRESERVED_VERIFIED_PACKAGE_MANIFEST_INDEX")
+        for binding in sealed["recoveryAuthority"].values():
+            self.assertTrue(Path(binding["path"]).is_file())
+            self.assertEqual(sha(Path(binding["path"])), binding["sha256"])
+        self.assertTrue(latest_vps_state.is_file())
+
+    def test_a838bd33_recovery_authority_drift_after_capture_denies_before_effect(self):
+        fixture = self.cross_host_fixture()
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]):
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+            prepare_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, prepare_evidence, sha(prepare_evidence))
+            intent = json.loads(self.intent.read_text())
+            authorization = self.base / "authorization-authority.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+                "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(self.intent),
+                "commandsSha256": intent["commandsSha256"],
+                "paths": [item["path"] for item in intent["candidates"]]})
+            execute_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "execute", 2)
+            self.package.write_bytes(self.package.read_bytes() + b"drift")
+            receipt = self.base / "receipts/authority-drift"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE.subprocess, "run") as destructive, \
+                    self.assertRaises(SystemExit):
+                MODULE.execute_intent(
+                    self.intent, sha(self.intent), authorization,
+                    sha(authorization), receipt, execute_evidence,
+                    sha(execute_evidence))
+            destructive.assert_not_called()
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual((result["attemptedCommands"], result["completedCommands"]),
+                         (0, 0))
+        self.assertTrue(self.runtime.is_dir())
+        self.assertTrue(Path(fixture["candidates"][1]["path"]).is_dir())
 
     def crm_staging_fixture(self):
         incoming = self.base / "crm-incoming"; incoming.mkdir(mode=0o700)
