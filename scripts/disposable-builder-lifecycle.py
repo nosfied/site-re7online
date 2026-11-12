@@ -362,9 +362,16 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
             "disposable_capacity_inodes")
     for protected in contract["protectedPaths"]:
         require(Path(protected) != root, "disposable_protected_overlap")
+    lifecycle_file = lifecycle_path(contract)
+    if not lifecycle_file.exists() and not lifecycle_file.is_symlink():
+        # The producer has a closed physical contract for the isolated npm
+        # cache.  Enforce it before creating locks, lifecycle state, or any
+        # directory below the disposable root.  Existing generations retain
+        # their original contract so that export/retirement can finish.
+        require(Path(contract["roots"]["cache"]) == root / "npm-cache",
+                "disposable_contract_cache_root")
     descriptors = acquire_locks(contract)
     try:
-        lifecycle_file = lifecycle_path(contract)
         if lifecycle_file.exists() or lifecycle_file.is_symlink():
             require(args.lifecycle_sha256 is not None, "disposable_open_resume_lifecycle")
             lifecycle, lifecycle_raw = read_lifecycle(contract, args.lifecycle_sha256)

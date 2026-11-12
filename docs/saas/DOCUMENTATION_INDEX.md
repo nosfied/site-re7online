@@ -31,6 +31,10 @@
   — parecer `ADMISSION_PARTIAL`: independência e capacidade preliminar
   comprovadas; target da Inbox e lifecycle terminal da raiz inteira ainda
   pendentes, sem iniciar build ou E1.2.
+- [E1.4-R1 — reconciliação do contrato de cache e recuperação dirigida](../reviews/CONVERTA_E1_4_R1_CACHE_CONTRACT_RECOVERY_2026-11-12.md)
+  — impede novas gerações com cache físico incompatível antes da alocação e
+  preserva a geração falha; a disposição autenticada do único bytecode continua
+  pendente de complemento versionado e autorização própria.
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
 - [Revisão da reconciliação não destrutiva b96](releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)
