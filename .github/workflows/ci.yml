@@ -89,6 +89,10 @@ jobs:
         run: >-
           python3 scripts/ci/verify-pm2-definition-isolated.py
           --pm2 "$RUNNER_TEMP/re7-pm2-definition-tools/node_modules/.bin/pm2"
+      - name: Prove disposable builder lifecycle with real PM2
+        run: >-
+          python3 -B scripts/ci/verify-disposable-builder-lifecycle.py
+          --pm2 "$RUNNER_TEMP/re7-pm2-definition-tools/node_modules/.bin/pm2"
 
   frontend:
     name: Frontend build and lint
