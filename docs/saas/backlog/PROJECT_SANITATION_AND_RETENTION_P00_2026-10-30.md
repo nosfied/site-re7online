@@ -1288,7 +1288,7 @@ O verificador canônico agora possui a exceção fechada
 e somente `frontend-runtime/.next/cache`; arquivo extra fora dessa subárvore,
 release diferente, symlink, modo gravável ou conteúdo privado continuam negando.
 Os bytes finais do verificador proposto têm SHA-256
-`8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec`;
+`3bc9a6ba5eec9e36090bcfc8bace1b3986bda5c45c5feb67483ff1defd1ae309`;
 os descriptors legados versionados foram atualizados para vincular esse mesmo
 consumidor, sem alterar as evidências históricas privadas.
 O próprio script final foi transmitido por stdin e executado em leitura na VPS:

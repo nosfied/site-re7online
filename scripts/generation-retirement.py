@@ -116,7 +116,7 @@ LEGACY_123BA_BINDING = {
         "path": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/immutable-123ba7bd-vps-20261026T200100Z/index.sha256",
         "sha256": "a91323272cdcd3a91c207a18a953f11f93e346cf3bde1f976e3229829fa0e69b",
     },
-    "canonicalVerifierSha256": "8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec",
+    "canonicalVerifierSha256": "3bc9a6ba5eec9e36090bcfc8bace1b3986bda5c45c5feb67483ff1defd1ae309",
     "contractOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-artifacts.private.json",
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
@@ -182,7 +182,7 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
             "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
         },
     },
-    "canonicalVerifierSha256": "8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec",
+    "canonicalVerifierSha256": "3bc9a6ba5eec9e36090bcfc8bace1b3986bda5c45c5feb67483ff1defd1ae309",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
 }
@@ -242,7 +242,7 @@ LEGACY_D7_WORKTREE_BATCH = {
 LEGACY_P00_INSTALLED_BATCH = {
     "schemaVersion": 1,
     "batchId": "p00-legacy-installed-releases-20261107-v1",
-    "canonicalVerifierSha256": "8e2135f3ac66b7bc2548ccf6f7b56d257c35f1c2c12ada779d2bedc0834532ec",
+    "canonicalVerifierSha256": "3bc9a6ba5eec9e36090bcfc8bace1b3986bda5c45c5feb67483ff1defd1ae309",
     "sourceGraph": {
         "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/"
                 "immutable-17cc77a8-vps-20261104T141039Z-api-frontend-c206959c-v3-once/"

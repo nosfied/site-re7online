@@ -27,6 +27,7 @@
   — reidentificação integral, um `SIGTERM` dirigido à busca, saída natural de
   `sort` e shell e pós-check produtivo sem alterações.
 - [E1.1 — admissão de geração independente em builder descartável](../reviews/CONVERTA_E1_1_DISPOSABLE_BUILDER_ADMISSION_2026-11-12.md)
+- [E1.2-A — lifecycle completo do builder descartável](../reviews/CONVERTA_E1_2A_DISPOSABLE_BUILDER_LIFECYCLE_2026-11-12.md)
   — parecer `ADMISSION_PARTIAL`: independência e capacidade preliminar
   comprovadas; target da Inbox e lifecycle terminal da raiz inteira ainda
   pendentes, sem iniciar build ou E1.2.

@@ -174,6 +174,8 @@ class ReleaseProducerTest(unittest.TestCase):
         }}, sort_keys=True) + "\n", 0o600)
         cls.root_policy_sha = hashlib.sha256(cls.root_policy.read_bytes()).hexdigest()
         cls.output_a = cls.outputs / "output-a"
+        cls.npm_cache = cls.base / "npm-cache"; cls.npm_cache.mkdir(mode=0o700)
+        cls.temporary_root = cls.base / "temporary"; cls.temporary_root.mkdir(mode=0o700)
         cls.capacity = capacity_contract(
             cls.base / "capacity.private.json", cls.base, cls.target, cls.release_id
         )
@@ -184,6 +186,8 @@ class ReleaseProducerTest(unittest.TestCase):
                    "--source-date-epoch", EPOCH,
                    "--capacity-contract", str(cls.capacity),
                    "--root-policy", str(cls.root_policy), "--root-policy-sha256", cls.root_policy_sha]
+        command.extend(["--npm-cache-root", str(cls.npm_cache),
+                        "--temporary-root", str(cls.temporary_root)])
         args = MODULE.parser().parse_args(command[2:])
         with patch.dict(os.environ, cls.env, clear=True):
             args.handler(args)
@@ -202,6 +206,28 @@ class ReleaseProducerTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         cls.temp.cleanup()
+
+    def test_safe_extract_normalizes_directory_modes_under_group_writable_umask(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="release-extract-mode-") as directory:
+            destination = Path(directory)
+            previous = os.umask(0o002)
+            try:
+                extracted = MODULE.safe_extract(self.package, destination, self.release_id)
+            finally:
+                os.umask(previous)
+            directories = [extracted, *(path for path in extracted.rglob("*")
+                                        if path.is_dir() and not path.is_symlink())]
+            self.assertTrue(directories)
+            self.assertTrue(all(stat.S_IMODE(path.lstat().st_mode) == 0o755
+                                for path in directories))
+
+    def test_disposable_build_environment_pins_cache_and_temporary_root(self) -> None:
+        with patch.dict(os.environ, {
+                "npm_config_cache": "/shared/cache", "TMPDIR": "/shared/tmp",
+                "PATH": os.environ["PATH"]}, clear=True):
+            environment = MODULE.build_environment(self.npm_cache, self.temporary_root)
+        self.assertEqual(environment["npm_config_cache"], str(self.npm_cache))
+        self.assertEqual(environment["TMPDIR"], str(self.temporary_root))
 
     def copy_release(self, name: str) -> Path:
         destination = self.base / name / self.release_id
