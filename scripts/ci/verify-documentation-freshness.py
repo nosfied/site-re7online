@@ -19,7 +19,9 @@ require(state["activeOperationalRecord"] == record_value,
 record_path = ROOT / record_value
 require(record_path.is_file(), "active deployment record exists")
 record = json.loads(record_path.read_text())
-require(record.get("status") in ("DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED"),
+require(record.get("status") in (
+            "DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED",
+            "DEPLOYED_RETENTION_INCOMPLETE"),
         "active record deployed")
 require(state["contactsListRecovery"]["state"] == "DEPLOYED_VERIFIED",
         "contacts deployed")

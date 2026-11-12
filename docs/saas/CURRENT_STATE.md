@@ -1,8 +1,52 @@
 # Estado canônico do Converta
 
-**DEPLOYED_SANITIZED / CAMPAIGN RECIPIENT CONTINUITY ACTIVE / PRODUCTION HEALTHY**
+**DEPLOYED_RETENTION_INCOMPLETE / API A838BD33 ACTIVE / PRODUCTION HEALTHY**
 
-## Estado vigente — resultado por destinatário b8d284b6 concluído
+## Estado vigente — API-only a838bd33 ativa, retenção externa incompleta
+
+A reconciliação direta de 12/11/2026 confirmou a API em
+`immutable-a838bd33-external-20261110T130618Z`, target
+`a838bd33ea00ea49be52d61e025a36320a4154c1`. O frontend continua em
+`immutable-b8d284b6-vps-20261108T132846Z`, BUILD_ID
+`zguwjBfQne4CTh6dLIlfq`, e o worker `immutable-e2e7f17a-20261022T005110Z`
+foi preservado. Os retornos imediatos são `b8d284b6` para a API e `36b94c6d`
+para o frontend. O dump PM2 vigente é
+`67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171`.
+
+A implantação API-only foi aceita e finalizada com um `pm2 save`, mas permanece
+`DEPLOYED_RETENTION_INCOMPLETE` por dívida no builder externo. O worktree v2
+retém 1.027.608.576 bytes em `PRESERVED_RETENTION_DEBT` até 10/12/2026 às
+20:59:59 de Fortaleza; faltam o inventário detalhado original autenticado e a
+cobertura privilegiada de processos para o caminho exato. O worktree v1 retém
+671.199.232 bytes, tem lifecycle `FAILED` e exige auditoria dirigida própria.
+Esses escopos são independentes. Os dois runtimes v2 foram retirados de forma
+terminal, com 982.900.736 bytes recuperados; não repetir essa retirada.
+O backlog não bloqueante vigente é `EXTERNAL_BUILDER_RETENTION_DEBT`; a antiga
+classificação `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE` foi superada pela API
+a838bd33 e permanece apenas no histórico.
+
+A fotografia histórica de capacidade registrou na VPS 8.168.931.328 bytes e
+8.778.841 inodes livres, com 91% de ocupação. No builder, registrou
+198.923.218.944 bytes e 28.009.941 inodes livres; o cache npm compartilhado
+ocupava 4.378.787.840 bytes. Esses valores não são reservas atuais.
+
+A guarda de campanhas está aberta na geração 47, com zero tarefas e `fault=null`.
+O grafo vigente é `b41713ac…d156`, o estado operacional `e239d8dc…20a` e o
+marker `50039ed6…ecad`. O registro verificável é
+[CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json).
+
+A auditoria de transição E0 encerrou a árvore histórica órfã com um único
+`SIGTERM` dirigido à busca; `sort` e shell saíram naturalmente. Seleções, três
+processos produtivos, dump, health, guarda e locks foram preservados. Registro:
+[CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json](releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json).
+
+`nextBuildBlocked=true` no registro ativo é um gate de coordenação da geração
+externa e dos escopos equivalentes, não um flag global do runtime. Uma geração
+independente continua condicionada à admissão canônica, lifecycle novo,
+reservation root própria e capacidade suficiente; as dívidas v1/v2 permanecem
+preservadas e não podem ser apagadas ou ignoradas.
+
+## Histórico — resultado por destinatário b8d284b6 concluído
 
 O Codex local reportou em 08/11/2026 o fechamento `DEPLOYED_SANITIZED` de
 `immutable-b8d284b6-vps-20261108T132846Z`, target

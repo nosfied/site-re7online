@@ -19,6 +19,13 @@
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
+- [Elegibilidade multilote a838bd33 ativa com retenção externa incompleta](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json)
+  — API ativa em `immutable-a838bd33-external-20261110T130618Z`, frontend
+  `b8d284b6` e worker `e2e7f17a` preservados; a dívida externa v1/v2 permanece
+  separada da finalização produtiva e bloqueia novo build até disposição própria.
+- [Encerramento dirigido da árvore histórica da auditoria E0](releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json)
+  — reidentificação integral, um `SIGTERM` dirigido à busca, saída natural de
+  `sort` e shell e pós-check produtivo sem alterações.
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
 - [Revisão da reconciliação não destrutiva b96](releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)
@@ -36,7 +43,8 @@
   continuidade vigente está em `CAMPAIGN_OPERATIONS_READINESS.md`: nov.02
   reconciliada e nov.03 cancelada com ordinal 588 ainda incerto.
 - [Resultado por destinatário b8d284b6 implantado e sanitizado](releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json)
-  — estado ativo de API + frontend, retorno 36b94c6d, worker preservado, save único e retenção 3/3.
+  — fechamento histórico API + frontend; hoje preservado como frontend ativo e
+  retorno imediato da API a838bd33.
 - [Continuação de resultado incerto 36b94c6d implantada e sanitizada](releases/CAMPAIGN_UNCERTAIN_CONTINUATION_36B94C6D_2026-11-08_DEPLOYED_SANITIZED.json)
   — fechamento anterior de API+frontend, retorno 17cc77a8, worker preservado, save único
   e retenção 3/3. A custódia `deploy-control`, separada da retenção da release,

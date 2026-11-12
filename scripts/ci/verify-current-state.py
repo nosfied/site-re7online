@@ -15,16 +15,43 @@ def require(value, reason):
 
 
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
-require(state["schemaVersion"] in (6, 7), "schema")
-require(state["production"]["status"] in ("DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED"),
+require(state["schemaVersion"] in (6, 7, 8), "schema")
+require(state["production"]["status"] in (
+            "DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED",
+            "DEPLOYED_RETENTION_INCOMPLETE"),
         "production status")
 record_path = ROOT / state["activeDeploymentRecord"]
 require(record_path.is_file(), "active record")
 record = json.loads(record_path.read_text())
-require(record["status"] in ("DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED"), "record status")
+require(record["status"] in (
+            "DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED",
+            "DEPLOYED_RETENTION_INCOMPLETE"), "record status")
 require(state["activeOperationalRecord"] == state["activeDeploymentRecord"],
         "single active record")
 production = state["production"]
+
+if state["schemaVersion"] == 8:
+    transition = state.get("transitionAudit", {})
+    require(transition == {
+                "state": "E0_PASS",
+                "closureRecord": "docs/saas/releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json",
+                "historicalProcessesAbsent": True,
+                "signalsSent": 1,
+                "productionPreserved": True,
+                "e1Started": False,
+            }, "transition audit closure")
+    closure = json.loads((ROOT / transition["closureRecord"]).read_text())
+    require(closure.get("status") == "TERMINAL_SUCCESS" and
+            closure.get("e0Result") == "E0_PASS" and
+            closure.get("after", {}).get("historicalPidsAbsent") is True and
+            closure.get("after", {}).get("pm2DumpSha256") ==
+            production.get("pm2", {}).get("dumpSha256") and
+            closure.get("after", {}).get("campaignGuard") == {
+                "open": True,
+                "generation": 47,
+                "taskCount": 0,
+                "ledgerFault": None,
+            }, "transition audit evidence")
 
 if record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE":
     require(record["schemaVersion"] == 1 and record["status"] == "DEPLOYED_SANITIZED",
@@ -56,7 +83,8 @@ if record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE":
             "frontend closure retirement")
 elif record.get("recordType") == "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
     require(record["schemaVersion"] == 1 and
-            record["status"] == "DEPLOYED_SANITIZED",
+            record["status"] in (
+                "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"),
             "API-only fixed-current record schema")
     require(production["targetCommit"] == record["release"]["target"] and
             production["releaseId"] == record["release"]["id"] and
@@ -79,11 +107,32 @@ elif record.get("recordType") == "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLO
             record["finalization"]["dumpSha256"] and
             record["finalization"]["pm2SaveCount"] == 1,
             "API-only PM2 finalization")
-    require(record["retirement"]["state"] == "SANITIZED" and
-            record["retirement"]["remainingDerivedArtifacts"] == 0 and
-            record["retirement"]["commandsCompleted"] ==
-            record["retirement"]["commandsAttempted"] == 3,
-            "API-only generation retirement")
+    retirement = record["retirement"]
+    if record["status"] == "DEPLOYED_SANITIZED":
+        require(retirement["state"] == "SANITIZED" and
+                retirement["remainingDerivedArtifacts"] == 0 and
+                retirement["commandsCompleted"] ==
+                retirement["commandsAttempted"] == 3,
+                "API-only generation retirement")
+    else:
+        require(retirement["state"] == "DEPLOYED_RETENTION_INCOMPLETE" and
+                retirement["localCommandsCompleted"] ==
+                retirement["localCommandsAttempted"] == 0 and
+                retirement["remainingLocalDerivedArtifacts"] == 0 and
+                retirement["externalBuilderDebt"] is True and
+                retirement["nextBuildBlocked"] is True and
+                retirement["nextBuildBlockedSemantics"] == {
+                    "scope": "COORDINATION_GATE_FOR_CURRENT_EXTERNAL_BUILDER_GENERATION_AND_EQUIVALENT_PREPARATION_SCOPE",
+                    "globalMutableFlagImplemented": False,
+                    "enforcedBy": [
+                        "GENERATION_REVIEW_IN_SELECTED_BUILDER_OUTPUT_PARENT",
+                        "EQUIVALENT_PREPARATION_LIFECYCLE_IN_SAME_RESERVATION_ROOT",
+                        "HOST_CAPACITY_ADMISSION",
+                    ],
+                    "independentGenerationPermittedOnlyAfterCanonicalAdmission": True,
+                    "manualFlagMutationPermitted": False,
+                },
+                "API-only external-builder retention debt")
 elif record.get("recordType") == "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
     require(record["schemaVersion"] == 1, "fixed-current record schema")
     require(record["status"] == "DEPLOYED_SANITIZED", "fixed-current terminal state")
