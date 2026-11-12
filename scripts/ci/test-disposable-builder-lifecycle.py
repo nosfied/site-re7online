@@ -21,6 +21,11 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+PRODUCER_SPEC = importlib.util.spec_from_file_location(
+    "converta_release", ROOT / "scripts/converta-release.py")
+assert PRODUCER_SPEC and PRODUCER_SPEC.loader
+PRODUCER = importlib.util.module_from_spec(PRODUCER_SPEC)
+PRODUCER_SPEC.loader.exec_module(PRODUCER)
 
 
 def sha(raw: bytes) -> str:
@@ -183,6 +188,67 @@ class DisposableLifecycleTests(unittest.TestCase):
             self.assertTrue(path.is_file())
         receipt = json.loads((self.custody / "disposable-builder.terminal-receipt.private.json").read_bytes())
         self.assertTrue(receipt["rootAbsent"] and receipt["worktreeRegistrationAbsent"])
+
+    def assert_new_cache_root_denied(self, cache_name: str) -> None:
+        root = self.base / f"invalid-{cache_name}"
+        custody = self.base / f"invalid-{cache_name}-custody"
+        custody.mkdir(mode=0o700)
+        contract = json.loads(json.dumps(self.contract))
+        contract["generationId"] += f"-{cache_name}"
+        contract["disposableRoot"] = str(root)
+        contract["custodyRoot"] = str(custody)
+        contract["roots"] = {
+            key: str(root / (cache_name if key == "cache" else Path(value).name))
+            for key, value in contract["roots"].items()
+        }
+        contract["worktreePath"] = str(Path(contract["roots"]["worktrees"]) / "source")
+        contract["locks"] = {"lifecycle": str(custody / "lifecycle.lock"),
+                             "writer": str(custody / "writer.lock")}
+        path = custody / "contract.private.json"
+        contract_sha = write(path, contract)
+        args = type("Args", (), {"contract": path, "contract_sha256": contract_sha,
+                                  "lifecycle_sha256": None})()
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_contract_cache_root"):
+            MODULE.open_generation(args)
+        self.assertFalse(root.exists())
+        self.assertEqual([item.name for item in custody.iterdir()], [path.name])
+
+    def test_new_generation_requires_canonical_npm_cache_before_allocation(self) -> None:
+        self.assert_new_cache_root_denied("cache")
+        self.assert_new_cache_root_denied("alternate-cache")
+
+    def test_historical_contract_remains_parseable_for_retirement(self) -> None:
+        historical = json.loads(json.dumps(self.contract))
+        historical["roots"]["cache"] = str(self.root / "cache")
+        self.assertIs(MODULE.validate_contract(historical), historical)
+
+    def test_canonical_cache_root_is_accepted_by_real_producer(self) -> None:
+        roots = self.contract["roots"]
+        physical = {
+            "repository": self.repository,
+            "worktrees": Path(roots["worktrees"]),
+            "outputs": Path(roots["outputs"]),
+            "releases": Path(roots["releases"]),
+            "staging": Path(roots["staging"]),
+            "evidence": Path(roots["auxiliary"]),
+        }
+        policy = {"schemaVersion": 1, "canonicalRoots": {
+            key: {"path": str(path), "ownerUid": path.stat().st_uid,
+                  "groupGid": path.stat().st_gid,
+                  "allowedModes": [f"0{stat.S_IMODE(path.stat().st_mode):03o}"]}
+            for key, path in physical.items()
+        }}
+        policy_path = self.custody / "root-policy.private.json"
+        policy_sha = write(policy_path, policy)
+        args = type("Args", (), {
+            "root_policy": policy_path, "root_policy_sha256": policy_sha,
+            "output": Path(roots["outputs"]) / "producer-output",
+            "installed_releases_root": Path(roots["releases"]),
+            "repo": self.worktree, "npm_cache_root": Path(roots["cache"]),
+            "temporary_root": Path(roots["temporary"]),
+        })()
+        authenticated = PRODUCER.validate_build_paths(args)
+        self.assertEqual(authenticated["worktrees"], Path(roots["worktrees"]))
 
     def test_success_exports_authority_and_leaves_zero_disposable_residue(self) -> None:
         historical = []
