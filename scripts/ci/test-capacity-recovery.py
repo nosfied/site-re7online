@@ -607,6 +607,369 @@ class CapacityRecoveryTests(unittest.TestCase):
                 "operationalState": {"path": str(self.operational), "sha256": sha(self.operational)},
                 "candidates": candidates or [self.npm_candidate(), self.output_candidate()]}
 
+    def cross_host_fixture(self):
+        target = "a" * 40
+        release_id = "immutable-abc"
+        frontend = self.payload / "frontend-runtime"
+        frontend.mkdir(mode=0o755, exist_ok=True)
+        (frontend / "app.js").write_bytes(b"front runtime")
+        (frontend / "app.js").chmod(0o644)
+        index = {"schemaVersion": 1, "entries": [
+            {"path": "api-runtime", "type": "directory", "mode": "0755",
+             "size": 0, "sha256": None},
+            {"path": "api-runtime/app.js", "type": "file", "mode": "0644",
+             "size": 12, "sha256": hashlib.sha256(b"same runtime").hexdigest()},
+            {"path": "frontend-runtime", "type": "directory", "mode": "0755",
+             "size": 0, "sha256": None},
+            {"path": "frontend-runtime/app.js", "type": "file", "mode": "0644",
+             "size": 13, "sha256": hashlib.sha256(b"front runtime").hexdigest()},
+        ]}
+        self.index.write_bytes(MODULE.canonical(index)); self.index.chmod(0o600)
+        self.manifest.write_bytes(MODULE.canonical(
+            {"releaseId": release_id, "targetCommit": target})); self.manifest.chmod(0o600)
+        def artifact(path, cls, digest=None):
+            value = {"path": str(path), "class": cls, "releaseId": release_id,
+                     "targetCommit": target}
+            if digest is not None:
+                value["digest"] = {"sha256": digest}
+            return value
+        self.contract.write_bytes(MODULE.canonical({
+            "schemaVersion": 1, "releaseId": release_id, "targetCommit": target,
+            "artifacts": [artifact(self.runtime, "DERIVED_OUTPUT_RUNTIME"),
+                          artifact(frontend, "DERIVED_OUTPUT_RUNTIME"),
+                          artifact(self.release, "RELEASE_RUNTIME"),
+                          artifact(self.package, "PACKAGE_PRESERVE", sha(self.package)),
+                          artifact(self.manifest, "PACKAGE_PRESERVE", sha(self.manifest)),
+                          artifact(self.index, "PACKAGE_PRESERVE", sha(self.index))],
+            "privateDataOverlay": {"path": "api-runtime/.data"},
+        })); self.contract.chmod(0o600)
+        candidates = []
+        for runtime, relative in ((self.runtime, "api-runtime"),
+                                  (frontend, "frontend-runtime")):
+            candidates.append({"class": "DERIVED_OUTPUT_RUNTIME", "path": str(runtime),
+                "runtimeRelativePath": relative, "releaseRoot": str(self.release),
+                "contract": {"path": str(self.contract), "sha256": sha(self.contract)},
+                "package": {"path": str(self.package), "sha256": sha(self.package)},
+                "manifest": {"path": str(self.manifest), "sha256": sha(self.manifest)},
+                "index": {"path": str(self.index), "sha256": sha(self.index)}})
+        builder_deployment_lock = self.base / ".deployment-window.lock"
+        builder_writer_lock = self.outputs / ".generation-build.lock"
+        for path in (builder_deployment_lock, builder_writer_lock):
+            path.write_bytes(b""); path.chmod(0o600)
+        request_paths = {}
+        for path in (self.base, builder_deployment_lock, self.outputs, builder_writer_lock,
+                     self.producer, self.payload, self.runtime, frontend):
+            info = path.lstat()
+            item = {"device": info.st_dev, "inode": info.st_ino}
+            if path in {builder_deployment_lock, builder_writer_lock}:
+                item["sha256"] = sha(path)
+            request_paths[str(path)] = item
+        builder_request_value = {"schemaVersion": 1,
+            "kind": "A838BD33_BUILDER_PROC_REQUEST", "nonce": "a" * 64,
+            "targetCommit": target, "releaseId": release_id,
+            "contract": str(self.contract), "contractSha256": sha(self.contract),
+            "packageSha256": sha(self.package), "manifestSha256": sha(self.manifest),
+            "indexSha256": sha(self.index), "paths": request_paths}
+        builder_request = self.base / "builder-request.private.json"
+        builder_request.write_bytes(MODULE.canonical(builder_request_value)); builder_request.chmod(0o600)
+        now = time.time_ns()
+        observed_paths = {path: {**identity, "uid": os.geteuid(), "gid": os.getegid(),
+            "mode": "0600" if path in {str(builder_deployment_lock), str(builder_writer_lock)} else "0755",
+            "type": "regular" if path in {str(builder_deployment_lock), str(builder_writer_lock)} else "directory",
+            "size": Path(path).lstat().st_size, "mtimeNs": Path(path).lstat().st_mtime_ns,
+            "ctimeNs": Path(path).lstat().st_ctime_ns}
+            for path, identity in request_paths.items()}
+        attestation_value = {"schemaVersion": 1,
+            "kind": "A838BD33_BUILDER_PROC_ATTESTATION", "state": "COMPLETE",
+            "targetCommit": target, "releaseId": release_id,
+            "requestSha256": sha(builder_request), "nonce": "a" * 64,
+            "contractSha256": sha(self.contract), "packageSha256": sha(self.package),
+            "manifestSha256": sha(self.manifest), "indexSha256": sha(self.index),
+            "candidatePaths": [str(self.runtime), str(frontend)],
+            "bindings": request_paths, "paths": observed_paths,
+            "capturedAtNs": now - 2_000_000_000, "finishedAtNs": now - 1_000_000_000,
+            "mechanism": {"sha256": "h" * 64,
+                "path": "/usr/local/libexec/re7online/capacity-proc-observer.py",
+                "identity": {"uid": 0, "gid": 0, "mode": "0500", "type": "regular"}},
+            "administrativeExecution": {"mode": "AUTHENTICATED_SUDO"},
+            "observation": {"complete": True, "references": [], "activeWriters": [],
+                "failures": [], "summary": {"referenceReadFailures": 0,
+                                               "identityChanges": 0}}}
+        attestation = self.base / "builder-attestation.private.json"
+        attestation.write_bytes(MODULE.canonical(attestation_value)); attestation.chmod(0o600)
+        api = f"/opt/re7online/releases/{release_id}/api-runtime"
+        frontend_live = "/opt/re7online/releases/immutable-b8d284b6-vps-20261108T132846Z/frontend-runtime"
+        operational_value = {"schemaVersion": 2, "targetCommit": target,
+            "releaseId": release_id, "currentPaths": [api, frontend_live],
+            "activeReleases": [release_id, "immutable-b8d284b6-vps-20261108T132846Z"],
+            "immediateRollbackReleases": {"api": "immutable-b8d284b6-vps-20261108T132846Z"}}
+        operational = self.base / "vps-operational.private.json"
+        operational.write_bytes(MODULE.canonical(operational_value)); operational.chmod(0o600)
+        builder_evidence = {"requestSha256": sha(builder_request),
+            "attestationSha256": sha(attestation), "contractSha256": sha(self.contract),
+            "packageSha256": sha(self.package), "manifestSha256": sha(self.manifest),
+            "indexSha256": sha(self.index)}
+        report_value = {"schemaVersion": 1,
+            "kind": "A838BD33_CROSS_HOST_OPERATIONAL_CAPTURE", "state": "COMPLETE",
+            "targetCommit": target, "releaseId": release_id, "destructiveCommands": 0,
+            "builderEvidence": builder_evidence,
+            "operationalState": {"path": "/private/vps/operational.json",
+                                 "sha256": sha(operational)},
+            "capturedAtNs": now - 900_000_000, "finishedAtNs": now - 500_000_000,
+            "selection": {"api": api, "frontend": frontend_live},
+            "pm2Processes": [{"name": name, "status": "online"} for name in
+                ("re7-admin-front", "re7-whatsapp-agent", "re7-whatsapp-web-worker")]}
+        report = self.base / "vps-report.private.json"
+        report.write_bytes(MODULE.canonical(report_value)); report.chmod(0o600)
+        evidence = {"profile": MODULE.BUILDER_A838BD33_PROFILE, "maxAgeSeconds": 60,
+            "builderRequest": {"path": str(builder_request), "sha256": sha(builder_request)},
+            "builderAttestation": {"path": str(attestation), "sha256": sha(attestation)},
+            "vpsOperationalState": {"path": str(operational), "sha256": sha(operational)},
+            "vpsCaptureReport": {"path": str(report), "sha256": sha(report)}}
+        request = {"schemaVersion": 4, "kind": "CAPACITY_RECOVERY_AUDIT_REQUEST",
+            "minimumRecoveryBytes": 1, "targetAvailableBytes": 1,
+            "rootPolicy": {"path": str(self.policy), "sha256": sha(self.policy)},
+            "operationalState": {"path": str(operational), "sha256": sha(operational)},
+            "candidates": candidates, "crossHostEvidence": evidence}
+        return {"request": request, "attestation": attestation,
+                "builderRequest": builder_request, "operational": operational,
+                "report": report, "candidates": candidates,
+                "patches": {"BUILDER_A838BD33_TARGET": target,
+                            "BUILDER_A838BD33_RELEASE": release_id,
+                            "BUILDER_A838BD33_HELPER_SHA256": "h" * 64,
+                            "BUILDER_A838BD33_ROOT": self.base,
+                            "BUILDER_A838BD33_CONTENT_HASHES": {
+                                "contractSha256": sha(self.contract),
+                                "packageSha256": sha(self.package),
+                                "manifestSha256": sha(self.manifest),
+                                "indexSha256": sha(self.index)}}}
+
+    def cross_host_phase_revalidation(self, fixture, plan_sha, phase, ordinal):
+        nonce = hashlib.sha256(f"{phase}-{ordinal}".encode()).hexdigest()
+        builder_request = json.loads(fixture["builderRequest"].read_text())
+        builder_request["nonce"] = nonce
+        request_path = self.base / f"builder-{phase}-{ordinal}.private.json"
+        request_path.write_bytes(MODULE.canonical(builder_request)); request_path.chmod(0o600)
+
+        now = time.time_ns()
+        attestation = json.loads(fixture["attestation"].read_text())
+        attestation["requestSha256"] = sha(request_path)
+        attestation["nonce"] = nonce
+        attestation["capturedAtNs"] = now - 4_000_000
+        attestation["finishedAtNs"] = now - 3_000_000
+        attestation_path = self.base / f"attestation-{phase}-{ordinal}.private.json"
+        attestation_path.write_bytes(MODULE.canonical(attestation)); attestation_path.chmod(0o600)
+
+        report = json.loads(fixture["report"].read_text())
+        report["builderEvidence"]["requestSha256"] = sha(request_path)
+        report["builderEvidence"]["attestationSha256"] = sha(attestation_path)
+        report["capturedAtNs"] = now - 2_000_000
+        report["finishedAtNs"] = now - 1_000_000
+        report_path = self.base / f"vps-{phase}-{ordinal}.private.json"
+        report_path.write_bytes(MODULE.canonical(report)); report_path.chmod(0o600)
+
+        evidence = {"profile": MODULE.BUILDER_A838BD33_PROFILE,
+            "maxAgeSeconds": 300 if phase == "prepare" else 60,
+            "builderRequest": {"path": str(request_path), "sha256": sha(request_path)},
+            "builderAttestation": {"path": str(attestation_path),
+                                   "sha256": sha(attestation_path)},
+            "vpsOperationalState": {"path": str(fixture["operational"]),
+                                    "sha256": sha(fixture["operational"])},
+            "vpsCaptureReport": {"path": str(report_path), "sha256": sha(report_path)}}
+        phase_value = {"schemaVersion": 1,
+            "kind": "A838BD33_CROSS_HOST_PHASE_REVALIDATION", "phase": phase,
+            "planSha256": plan_sha,
+            "auditEvidenceSha256": MODULE.digest_bytes(
+                MODULE.canonical(fixture["request"]["crossHostEvidence"])),
+            "crossHostEvidence": evidence}
+        phase_path = self.base / f"phase-{phase}-{ordinal}.private.json"
+        phase_path.write_bytes(MODULE.canonical(phase_value)); phase_path.chmod(0o600)
+        return phase_path
+
+    def test_a838bd33_cross_host_audit_passes_but_prepare_requires_fresh_two_host_proof(self):
+        fixture = self.cross_host_fixture()
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]):
+            plan = MODULE.audit_request(self.request, sha(self.request), self.plan)
+            self.assertEqual(plan["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+            self.assertEqual(len(plan["candidates"]), 2)
+            self.assertTrue(plan["phaseRevalidationRequired"])
+            with self.assertRaisesRegex(MODULE.Denied,
+                                       "CROSS_HOST_PHASE_REVALIDATION_REQUIRED"):
+                MODULE.prepare_plan(self.plan, sha(self.plan), self.intent,
+                                    self.commands, self.seal_manifest)
+            revalidation = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            seal = MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, revalidation, sha(revalidation))
+            self.assertEqual(seal["state"], "SEALED_FOR_EXPLICIT_AUTHORIZATION")
+            intent = json.loads(self.intent.read_text())
+            self.assertEqual(intent["crossHostProfile"],
+                             MODULE.BUILDER_A838BD33_PROFILE)
+            self.assertEqual(intent["preparedCrossHostRevalidation"]["phase"],
+                             "prepare")
+
+    def test_a838bd33_cross_host_audit_denies_incomplete_or_divergent_evidence(self):
+        for mutation in ("incomplete", "binding", "extra-candidate"):
+            with self.subTest(mutation=mutation):
+                fixture = self.cross_host_fixture()
+                if mutation == "incomplete":
+                    value = json.loads(fixture["attestation"].read_text())
+                    value["observation"]["complete"] = False
+                    fixture["attestation"].write_bytes(MODULE.canonical(value))
+                    fixture["request"]["crossHostEvidence"]["builderAttestation"]["sha256"] = sha(fixture["attestation"])
+                elif mutation == "binding":
+                    value = json.loads(fixture["report"].read_text())
+                    value["builderEvidence"]["requestSha256"] = "f" * 64
+                    fixture["report"].write_bytes(MODULE.canonical(value))
+                    fixture["request"]["crossHostEvidence"]["vpsCaptureReport"]["sha256"] = sha(fixture["report"])
+                else:
+                    fixture["request"]["candidates"].append(
+                        dict(fixture["request"]["candidates"][0]))
+                self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+                with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                        self.assertRaisesRegex(MODULE.Denied, "CROSS_HOST_"):
+                    MODULE.audit_request(self.request, sha(self.request), self.plan)
+                if self.plan.exists():
+                    self.plan.unlink()
+
+    def test_a838bd33_cross_host_audit_denies_stale_evidence(self):
+        fixture = self.cross_host_fixture()
+        value = json.loads(fixture["attestation"].read_text())
+        value["capturedAtNs"] -= 120_000_000_000
+        value["finishedAtNs"] -= 120_000_000_000
+        fixture["attestation"].write_bytes(MODULE.canonical(value))
+        fixture["request"]["crossHostEvidence"]["builderAttestation"]["sha256"] = sha(fixture["attestation"])
+        report = json.loads(fixture["report"].read_text())
+        report["builderEvidence"]["attestationSha256"] = sha(fixture["attestation"])
+        fixture["report"].write_bytes(MODULE.canonical(report))
+        fixture["request"]["crossHostEvidence"]["vpsCaptureReport"]["sha256"] = sha(fixture["report"])
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]), \
+                self.assertRaisesRegex(MODULE.Denied, "CROSS_HOST_EVIDENCE_STALE"):
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+
+    def test_a838bd33_execute_revalidates_both_hosts_and_denies_runtime_drift_before_effect(self):
+        fixture = self.cross_host_fixture()
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]):
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+            prepare_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, prepare_evidence, sha(prepare_evidence))
+            intent = json.loads(self.intent.read_text())
+            authorization = self.base / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+                "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(self.intent),
+                "commandsSha256": intent["commandsSha256"],
+                "paths": [item["path"] for item in intent["candidates"]]})
+            execute_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "execute", 2)
+            drift = self.runtime / "late-drift.js"
+            drift.write_bytes(b"created after both-host capture"); drift.chmod(0o644)
+            receipt = self.base / "receipts/execute-drift"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE.subprocess, "run") as destructive, \
+                    self.assertRaises(SystemExit):
+                MODULE.execute_intent(
+                    self.intent, sha(self.intent), authorization,
+                    sha(authorization), receipt, execute_evidence,
+                    sha(execute_evidence))
+            destructive.assert_not_called()
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual(result["attemptedCommands"], 0)
+        self.assertEqual(result["completedCommands"], 0)
+        self.assertEqual(result["failurePredicate"],
+                         "CROSS_HOST_VPS_MUTATION_SAFETY_DIVERGED")
+        self.assertTrue(self.runtime.is_dir())
+        self.assertTrue(drift.is_file())
+
+    def test_a838bd33_prepare_and_execute_require_distinct_fresh_two_host_proofs(self):
+        fixture = self.cross_host_fixture()
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]):
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+            prepare_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, prepare_evidence, sha(prepare_evidence))
+            intent = json.loads(self.intent.read_text())
+            authorization = self.base / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+                "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(self.intent),
+                "commandsSha256": intent["commandsSha256"],
+                "paths": [item["path"] for item in intent["candidates"]]})
+            execute_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "execute", 2)
+            # Model a later VPS role change after its sealed capture. The
+            # builder retirement remains safe because the authenticated package,
+            # manifest and index are local recovery authority and are not effects.
+            latest_vps_state = self.base / "vps-state-after-capture.private.json"
+            private_json(latest_vps_state, {"activeApi": "immutable-later-release",
+                "rollbackApi": "immutable-a838bd33-external-20261110T130618Z"})
+            receipt = self.base / "receipts/execute-pass"
+            receipt.parent.mkdir(mode=0o700)
+            result = MODULE.execute_intent(
+                self.intent, sha(self.intent), authorization, sha(authorization),
+                receipt, execute_evidence, sha(execute_evidence))
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertEqual(result["attemptedCommands"], 2)
+        self.assertEqual(result["completedCommands"], 2)
+        self.assertFalse(self.runtime.exists())
+        self.assertFalse(Path(fixture["candidates"][1]["path"]).exists())
+        sealed = json.loads(self.intent.read_text())["vpsMutationSafety"]
+        self.assertFalse(sealed["mutableVpsStateRequiredAfterCapture"])
+        self.assertEqual(sealed["basis"],
+                         "PRESERVED_VERIFIED_PACKAGE_MANIFEST_INDEX")
+        for binding in sealed["recoveryAuthority"].values():
+            self.assertTrue(Path(binding["path"]).is_file())
+            self.assertEqual(sha(Path(binding["path"])), binding["sha256"])
+        self.assertTrue(latest_vps_state.is_file())
+
+    def test_a838bd33_recovery_authority_drift_after_capture_denies_before_effect(self):
+        fixture = self.cross_host_fixture()
+        self.request.write_bytes(MODULE.canonical(fixture["request"])); self.request.chmod(0o600)
+        with mock.patch.multiple(MODULE, **fixture["patches"]):
+            MODULE.audit_request(self.request, sha(self.request), self.plan)
+            prepare_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "prepare", 1)
+            MODULE.prepare_plan(
+                self.plan, sha(self.plan), self.intent, self.commands,
+                self.seal_manifest, prepare_evidence, sha(prepare_evidence))
+            intent = json.loads(self.intent.read_text())
+            authorization = self.base / "authorization-authority.private.json"
+            private_json(authorization, {"schemaVersion": 1,
+                "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+                "authorization": "AUTHORIZE_ONCE",
+                "intentSha256": sha(self.intent),
+                "commandsSha256": intent["commandsSha256"],
+                "paths": [item["path"] for item in intent["candidates"]]})
+            execute_evidence = self.cross_host_phase_revalidation(
+                fixture, sha(self.plan), "execute", 2)
+            self.package.write_bytes(self.package.read_bytes() + b"drift")
+            receipt = self.base / "receipts/authority-drift"
+            receipt.parent.mkdir(mode=0o700)
+            with mock.patch.object(MODULE.subprocess, "run") as destructive, \
+                    self.assertRaises(SystemExit):
+                MODULE.execute_intent(
+                    self.intent, sha(self.intent), authorization,
+                    sha(authorization), receipt, execute_evidence,
+                    sha(execute_evidence))
+            destructive.assert_not_called()
+        result = json.loads((receipt / "execution-receipt.private.json").read_text())
+        self.assertEqual((result["attemptedCommands"], result["completedCommands"]),
+                         (0, 0))
+        self.assertTrue(self.runtime.is_dir())
+        self.assertTrue(Path(fixture["candidates"][1]["path"]).is_dir())
+
     def crm_staging_fixture(self):
         incoming = self.base / "crm-incoming"; incoming.mkdir(mode=0o700)
         candidates = []; bindings = {}

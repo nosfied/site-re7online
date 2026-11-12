@@ -583,6 +583,46 @@ Referência por `current`, PM2 live/dump, transação aberta, grafo protegido ou
 processo nega o candidato. Pacote, manifesto, índice e release instalada nunca
 entram no comando da classe.
 
+#### Perfil fechado do builder externo `a838bd33`
+
+O schema 4 admite exclusivamente a prova de auditoria dos dois runtimes
+`api-runtime` e `frontend-runtime` da geração
+`immutable-a838bd33-external-20261110T130618Z`. Ele não amplia a classe geral.
+No builder, cada entrada é comparada diretamente com o índice selado; a release
+instalada não é extraída novamente. A prova exige o request e a atestação da
+coleta privilegiada do builder, a fotografia operacional e o relatório da VPS,
+todos canônicos, privados e vinculados por SHA-256 ao mesmo target, release,
+contrato, pacote, manifesto e índice. A atestação deve registrar coleta completa,
+zero referências, zero writers e zero falhas; a fotografia da VPS deve registrar
+a API nessa release, os três processos PM2 online e `b8d284b6` como retorno
+imediato da API. O lote deve conter exatamente os dois caminhos declarados.
+
+`maxAgeSeconds` é obrigatório, positivo e limitado a uma hora. Hash, nonce,
+caminho, device/inode, identidade do helper, vínculo entre hosts, observação
+incompleta, referência, writer, falha de leitura ou evidência vencida negam o
+perfil. Um plano PASS desse schema permanece somente revisável:
+`phaseRevalidationRequired=true`. `prepare` exige uma requisição canônica de
+revalidação ligada ao SHA-256 do plano e da prova do `audit`, com nova coleta do
+builder e novo relatório da VPS, limitada a 300 segundos. A intenção preserva
+integralmente essa prova. `execute`, já sob os dois locks locais do builder,
+exige outra requisição, coleta e relatório, distintos dos usados no `audit` e no
+`prepare` e limitados a 60 segundos. A fotografia da VPS é produzida sob os
+locks daquele host. Reutilização de prova, alteração de qualquer runtime ou
+divergência operacional nega antes do primeiro `ATTEMPT`. Assim, cada fase
+revalida os dois hosts e as capturas do `audit` não se convertem isoladamente em
+autorização de retirada.
+
+A segurança da janela posterior à fotografia da VPS não depende de manter seus
+locks durante o efeito no builder. O plano sela `vpsMutationSafety`: os únicos
+efeitos são as duas cópias `DERIVED_OUTPUT_RUNTIME`, enquanto pacote verificado,
+manifesto e índice permanecem no builder como autoridade de reconstrução,
+fisicamente fora dos candidatos e dos comandos. Essa autoridade é reaberta por
+SHA-256 e identidade em `audit`, `prepare` e `execute`, sob os locks locais. Uma
+mudança posterior de papel ativo ou retorno na VPS não transforma cópias de
+output do builder em artefatos únicos de produção; alteração ou sobreposição da
+autoridade preservada nega antes do primeiro efeito. A release instalada e os
+artefatos da VPS continuam fora dos comandos.
+
 ### `CLOSED_PREPARATION_DERIVED_ARCHIVE`
 
 Admite somente os arquivos literais `api-frontend-return.private.tar.gz` e
