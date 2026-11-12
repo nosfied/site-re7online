@@ -1,6 +1,6 @@
 # Converta — Pesquisa da inbox: diagnóstico dirigido e contrato de correção
 
-**Data:** 2026-11-12. **Base auditada:** `review/campaign-recovery-20260926@0433b06012eba74a48316eac0fe898ba24c6f176`. **Estado:** análise de código, NÃO implementação/homologação.
+**Data:** 2026-11-12. **Base auditada:** `review/campaign-recovery-20260926@0433b06012eba74a48316eac0fe898ba24c6f176`. **Estado:** diagnóstico encerrado; a implementação isolada E1.2-B está registrada em [INBOX_SEARCH_E1_2B_2026-11-12.md](INBOX_SEARCH_E1_2B_2026-11-12.md), ainda não integrada nem implantada.
 
 ## Sintomas trazidos pelo operador
 1. Lista fica vazia ao limpar o campo de busca.

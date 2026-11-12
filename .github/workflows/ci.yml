@@ -235,6 +235,20 @@ jobs:
           src/crm/crmContactUpsert.test.ts
       - name: CRM cursor filters, RBAC and tenant isolation routes
         run: node --import tsx --test src/http/crmCapabilityRoutes.test.ts
+      - name: Inbox remote search, protocol, race and tenant isolation
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_inbox_search_ci
+          APP_AUTH_SECRET: synthetic-inbox-search-ci-secret
+        run: |
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 55781 -U postgres -d retention_lab \
+            -v ON_ERROR_STOP=1 -c 'CREATE DATABASE re7_inbox_search_ci'
+          npm run db:deploy
+          node --import tsx --test \
+            src/inbox/conversationSearch.test.ts \
+            src/http/inboxConversationSearch.postgres.test.ts
+          cd ../.. && apps/whatsapp-agent/node_modules/.bin/tsx --test \
+            src/lib/inboxConversationSearch.test.ts \
+            src/app/app/inbox/inboxSearchPageContract.test.ts
       - name: Template media validation, Meta contract and tenant isolation
         run: >-
           node --import tsx --test

@@ -53,6 +53,10 @@ import {
 } from "@/lib/inboxConversationFilters";
 import { isInboxFreeformWindowOpen } from "@/lib/inboxWindow";
 import {
+  INBOX_CONVERSATION_SEARCH_DEBOUNCE_MS,
+  InboxConversationQueryRegistry,
+} from "@/lib/inboxConversationSearch";
+import {
   addAutoReadSuppressionKeys,
   clearAutoReadSuppressionKeys,
   hasAutoReadSuppressionKey,
@@ -2438,6 +2442,7 @@ export default function AppInboxPage() {
     useState<ConversationChannelFilter>("ALL");
   const [conversationQuickFilter, setConversationQuickFilter] =
     useState<ConversationQuickFilter>("ALL");
+  const [conversationSearchInput, setConversationSearchInput] = useState("");
   const [conversationSearch, setConversationSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("ALL");
   const [conversationFilterCounts, setConversationFilterCounts] = useState<Record<ConversationFilter, number>>({
@@ -2518,7 +2523,6 @@ export default function AppInboxPage() {
   const hasInitializedConversationSoundRef = useRef(false);
   const suppressNextConversationRefreshNotificationRef = useRef(false);
   const loadedConversationPageCountRef = useRef(0);
-  const conversationQueryKeyRef = useRef("");
   const notifiedInboundMessageKeysRef = useRef(new Set<string>());
   const primedTimelineNotificationKeysRef = useRef(new Set<string>());
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
@@ -2536,7 +2540,7 @@ export default function AppInboxPage() {
   const skipNextSelectedConversationListMarkReadRef = useRef(false);
   const queueMutationAutoReadSuppressedKeysRef = useRef(new Set<string>());
   const autoReadSuppressionSessionKeyRef = useRef<string | null>(null);
-  const conversationListRefreshPromiseRef = useRef<Promise<void> | null>(null);
+  const conversationQueryRegistryRef = useRef(new InboxConversationQueryRegistry());
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const refreshSelectedTimelineRef = useRef<
     ((
@@ -3951,238 +3955,252 @@ export default function AppInboxPage() {
   ]);
 
   const conversationQueryKey = useMemo(
-    () => JSON.stringify(buildConversationFetchOptions(null)),
-    [buildConversationFetchOptions]
+    () => JSON.stringify({
+      session: session
+        ? {
+            baseUrl: session.baseUrl,
+            clientId: session.user.clientId,
+            userId: session.user.id,
+            token: session.token,
+          }
+        : null,
+      query: buildConversationFetchOptions(null),
+    }),
+    [buildConversationFetchOptions, session]
   );
-  conversationQueryKeyRef.current = conversationQueryKey;
+  conversationQueryRegistryRef.current.setCurrentKey(conversationQueryKey);
+
+  useEffect(() => {
+    const normalized = conversationSearchInput.trim();
+    const timeout = window.setTimeout(
+      () => setConversationSearch(normalized),
+      normalized ? INBOX_CONVERSATION_SEARCH_DEBOUNCE_MS : 0
+    );
+    return () => window.clearTimeout(timeout);
+  }, [conversationSearchInput]);
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
-    if (conversationListRefreshPromiseRef.current) {
-      return conversationListRefreshPromiseRef.current;
-    }
-    const refreshPromise = (async () => {
     const requestQueryKey = conversationQueryKey;
-    const skipSelectedConversationMarkRead = skipNextSelectedConversationListMarkReadRef.current;
-    skipNextSelectedConversationListMarkReadRef.current = false;
-    const response = await fetchAppConversations(activeSession, buildConversationFetchOptions(null));
-    if (requestQueryKey !== conversationQueryKeyRef.current) {
-      return;
-    }
-    if (response.readState) {
-      setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
-    }
-    setAllowOwnClosed(response.allowAgentOwnClosedConversations === true);
-    if (response.inboxVisibilityPolicy) {
-      setInboxVisibilityPolicy(response.inboxVisibilityPolicy);
-    }
-    if (response.filterCounts) {
-      setConversationFilterCounts({
-        ALL: Number(response.filterCounts.ALL ?? 0),
-        WAITING: Number(response.filterCounts.WAITING ?? 0),
-        AUTOMATION: Number(response.filterCounts.AUTOMATION ?? 0),
-        IN_PROGRESS: Number(response.filterCounts.IN_PROGRESS ?? 0),
-        WAITING_USER: Number(response.filterCounts.WAITING_USER ?? 0),
-        CLOSED: Number(response.filterCounts.CLOSED ?? 0),
-        MINE: Number(response.filterCounts.MINE ?? 0),
-        UNASSIGNED: Number(response.filterCounts.UNASSIGNED ?? 0),
-      });
-    }
-    const automationRevoked = response.allowAutomationConversationsInInbox !== true;
-    if (automationRevoked && selectedAutomationReadRef.current) {
-      evictConversationFromLocalState([selectedConversationKey, selectedConversationWaId, ...selectedConversationIdentityCandidatesRef.current]);
-    }
-    const pageItems = response.conversations ?? response.items;
-    const shouldRemoveMissingItems = loadedConversationPageCountRef.current <= 1;
-    if (!response.filterCounts && pageItems.length === 0) {
-      setConversationFilterCounts({
-        ALL: 0,
-        WAITING: 0,
-        AUTOMATION: 0,
-        IN_PROGRESS: 0,
-        WAITING_USER: 0,
-        CLOSED: 0,
-        MINE: 0,
-        UNASSIGNED: 0,
-      });
-    }
-    if (loadedConversationPageCountRef.current <= 1) {
-      setConversationNextCursor(response.nextCursor ?? null);
-      loadedConversationPageCountRef.current = 1;
-    }
-    const prioritizeLeads = isBusinessSession(activeSession);
-    const sortedItems = dedupeConversationsByIdentity(pageItems, prioritizeLeads);
-    retainAutoReadSuppressionKeys(
-      queueMutationAutoReadSuppressedKeysRef.current,
-      sortedItems.flatMap((item) => getConversationIdentityCandidates(item))
-    );
-    const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
-    const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
-    const humanFlowConversationKeys = getHumanFlowConversationKeys(sortedItems);
-    const suppressRefreshNotifications = suppressNextConversationRefreshNotificationRef.current;
-    if (suppressRefreshNotifications) {
-      hasInitializedConversationSoundRef.current = true;
-    } else if (hasInitializedConversationSoundRef.current) {
-      let notifiedHandoffTransition = false;
-      for (const item of sortedItems) {
-        const conversationKey = getConversationIdentity(item);
+    const executeRefresh = async () => {
+      const skipSelectedConversationMarkRead = skipNextSelectedConversationListMarkReadRef.current;
+      skipNextSelectedConversationListMarkReadRef.current = false;
+      const response = await fetchAppConversations(activeSession, buildConversationFetchOptions(null));
+      if (!conversationQueryRegistryRef.current.isCurrent(requestQueryKey)) {
+        return;
+      }
+      if (response.readState) {
+        setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
+      }
+      setAllowOwnClosed(response.allowAgentOwnClosedConversations === true);
+      if (response.inboxVisibilityPolicy) {
+        setInboxVisibilityPolicy(response.inboxVisibilityPolicy);
+      }
+      if (response.filterCounts) {
+        setConversationFilterCounts({
+          ALL: Number(response.filterCounts.ALL ?? 0),
+          WAITING: Number(response.filterCounts.WAITING ?? 0),
+          AUTOMATION: Number(response.filterCounts.AUTOMATION ?? 0),
+          IN_PROGRESS: Number(response.filterCounts.IN_PROGRESS ?? 0),
+          WAITING_USER: Number(response.filterCounts.WAITING_USER ?? 0),
+          CLOSED: Number(response.filterCounts.CLOSED ?? 0),
+          MINE: Number(response.filterCounts.MINE ?? 0),
+          UNASSIGNED: Number(response.filterCounts.UNASSIGNED ?? 0),
+        });
+      }
+      const automationRevoked = response.allowAutomationConversationsInInbox !== true;
+      if (automationRevoked && selectedAutomationReadRef.current) {
+        evictConversationFromLocalState([selectedConversationKey, selectedConversationWaId, ...selectedConversationIdentityCandidatesRef.current]);
+      }
+      const pageItems = response.conversations ?? response.items;
+      const shouldRemoveMissingItems = loadedConversationPageCountRef.current <= 1;
+      if (!response.filterCounts && pageItems.length === 0) {
+        setConversationFilterCounts({
+          ALL: 0,
+          WAITING: 0,
+          AUTOMATION: 0,
+          IN_PROGRESS: 0,
+          WAITING_USER: 0,
+          CLOSED: 0,
+          MINE: 0,
+          UNASSIGNED: 0,
+        });
+      }
+      if (loadedConversationPageCountRef.current <= 1) {
+        setConversationNextCursor(response.nextCursor ?? null);
+        loadedConversationPageCountRef.current = 1;
+      }
+      const prioritizeLeads = isBusinessSession(activeSession);
+      const sortedItems = dedupeConversationsByIdentity(pageItems, prioritizeLeads);
+      retainAutoReadSuppressionKeys(
+        queueMutationAutoReadSuppressedKeysRef.current,
+        sortedItems.flatMap((item) => getConversationIdentityCandidates(item))
+      );
+      const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
+      const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
+      const humanFlowConversationKeys = getHumanFlowConversationKeys(sortedItems);
+      const suppressRefreshNotifications = suppressNextConversationRefreshNotificationRef.current;
+      if (suppressRefreshNotifications) {
+        hasInitializedConversationSoundRef.current = true;
+      } else if (hasInitializedConversationSoundRef.current) {
+        let notifiedHandoffTransition = false;
+        for (const item of sortedItems) {
+          const conversationKey = getConversationIdentity(item);
+          if (
+            humanFlowConversationKeys.has(conversationKey) &&
+            !humanFlowConversationKeysRef.current.has(conversationKey)
+          ) {
+            if (
+              conversationKey !== selectedConversationKey &&
+              canUserReceiveTargetedNotification(item, activeSession.user)
+            ) {
+              markConversationIdentitiesAsUnread(getConversationIdentityCandidates(item), item.waId);
+            }
+            if (buildConversationNotificationRequest(item, true)) {
+              notifiedHandoffTransition = true;
+            }
+          }
+        }
+
         if (
-          humanFlowConversationKeys.has(conversationKey) &&
-          !humanFlowConversationKeysRef.current.has(conversationKey)
+          !notifiedHandoffTransition &&
+          latestInboundSignature &&
+          latestInboundSignature !== lastInboundConversationSignatureRef.current &&
+          latestInboundTimestamp !== null &&
+          (lastInboundConversationTimestampRef.current === null ||
+            latestInboundTimestamp > lastInboundConversationTimestampRef.current)
         ) {
-          if (
-            conversationKey !== selectedConversationKey &&
-            canUserReceiveTargetedNotification(item, activeSession.user)
-          ) {
-            markConversationIdentitiesAsUnread(getConversationIdentityCandidates(item), item.waId);
-          }
-          if (buildConversationNotificationRequest(item, true)) {
-            notifiedHandoffTransition = true;
+          const latestInboundItem = sortedItems.find(
+            (item) =>
+              shouldPlayInboundNotificationForConversation(item) &&
+              item.lastInboundAt &&
+              Date.parse(item.lastInboundAt) === latestInboundTimestamp
+          );
+          const latestInboundConversationKey = latestInboundItem
+            ? getConversationIdentity(latestInboundItem)
+            : null;
+          if (latestInboundItem && latestInboundConversationKey) {
+            if (
+              (latestInboundConversationKey !== selectedConversationKey || !isAppForegroundFocused()) &&
+              canUserReceiveTargetedNotification(latestInboundItem, activeSession.user)
+            ) {
+              markConversationIdentitiesAsUnread(
+                getConversationIdentityCandidates(latestInboundItem),
+                latestInboundItem.waId
+              );
+            }
+            buildConversationNotificationRequest(latestInboundItem);
           }
         }
+      } else {
+        hasInitializedConversationSoundRef.current = true;
       }
-
-      if (
-        !notifiedHandoffTransition &&
-        latestInboundSignature &&
-        latestInboundSignature !== lastInboundConversationSignatureRef.current &&
-        latestInboundTimestamp !== null &&
-        (lastInboundConversationTimestampRef.current === null ||
-          latestInboundTimestamp > lastInboundConversationTimestampRef.current)
-      ) {
-        const latestInboundItem = sortedItems.find(
-          (item) =>
-            shouldPlayInboundNotificationForConversation(item) &&
-            item.lastInboundAt &&
-            Date.parse(item.lastInboundAt) === latestInboundTimestamp
-        );
-        const latestInboundConversationKey = latestInboundItem
-          ? getConversationIdentity(latestInboundItem)
-          : null;
-        if (latestInboundItem && latestInboundConversationKey) {
-          if (
-            (latestInboundConversationKey !== selectedConversationKey || !isAppForegroundFocused()) &&
-            canUserReceiveTargetedNotification(latestInboundItem, activeSession.user)
-          ) {
-            markConversationIdentitiesAsUnread(
-              getConversationIdentityCandidates(latestInboundItem),
-              latestInboundItem.waId
-            );
-          }
-          buildConversationNotificationRequest(latestInboundItem);
-        }
-      }
-    } else {
-      hasInitializedConversationSoundRef.current = true;
-    }
-    lastInboundConversationSignatureRef.current = latestInboundSignature;
-    lastInboundConversationTimestampRef.current = latestInboundTimestamp;
-    humanFlowConversationKeys.forEach((key) => {
-      humanFlowConversationKeysRef.current.add(key);
-    });
-    suppressNextConversationRefreshNotificationRef.current = false;
-    const previousListScrollTop = conversationListRef.current?.scrollTop ?? null;
-    setConversations((current) =>
-      mergeConversationsPreservingStableOrder(automationRevoked ? current.filter(item => !item.automationReadOnly) : current, sortedItems, prioritizeLeads, {
-        removeMissing: shouldRemoveMissingItems,
-        preserveMissingIdentities: [
-          selectedConversationKey,
-          selectedConversationWaId,
-          ...selectedConversationIdentityCandidatesRef.current,
-        ],
-      })
-    );
-    if (previousListScrollTop !== null) {
-      window.requestAnimationFrame(() => {
-        if (conversationListRef.current) {
-          conversationListRef.current.scrollTop = previousListScrollTop;
-        }
+      lastInboundConversationSignatureRef.current = latestInboundSignature;
+      lastInboundConversationTimestampRef.current = latestInboundTimestamp;
+      humanFlowConversationKeys.forEach((key) => {
+        humanFlowConversationKeysRef.current.add(key);
       });
-    }
-    if (!selectedConversationKey) {
-      return;
-    }
-    const selectedItem = sortedItems.find(
-      (item) => getConversationIdentity(item) === selectedConversationKey
-    );
-    if (!selectedItem) return;
-
-	    if (!isAppForegroundFocused()) return;
-	    const waitingForUnreadAnchor =
-	      pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
-	    const activeConversation = sortedItems.find(
-	      (item) => getConversationIdentity(item) === selectedConversationKey
-	    );
-	    const latestTimelineMessageTimestamp = getLatestMessageTimestamp(messages);
-	    const activeConversationTimestamp = activeConversation ? getConversationActivityTimestamp(activeConversation) : null;
-	    if (
-	      activeConversation &&
-	      selectedConversationWaId &&
-	      !loadingMessages &&
-	      !waitingForUnreadAnchor &&
-	      activeConversationTimestamp !== null &&
-	      (latestTimelineMessageTimestamp === null || activeConversationTimestamp > latestTimelineMessageTimestamp) &&
-	      selectedTimelineRequestedActivityAtRef.current !== activeConversationTimestamp
-	    ) {
-	      selectedTimelineRequestedActivityAtRef.current = activeConversationTimestamp;
-	      void refreshSelectedTimelineRef.current?.(activeSession, selectedConversationWaId, "append").catch(
-	        (err: { status?: number }) => {
-	          if (err.status === 401) {
-	            handleUnauthorized();
-	            return;
-	          }
-	          if (isConversationGoneError(err)) {
-	            clearSelectedConversation();
-	          }
-	        }
-	      );
-	    }
-	    if (
-	      activeConversation &&
-	      !loadingMessages &&
-	      !waitingForUnreadAnchor &&
-	      !skipSelectedConversationMarkRead &&
-	      !isAutoReadSuppressedForConversation(getConversationIdentityCandidates(activeConversation)) &&
-	      canCurrentUserMutateConversationReadState(activeConversation, activeSession.user.id)
-	    ) {
-	      markConversationIdentitiesAsRead(
-	        getConversationIdentityCandidates(activeConversation),
-	        getConversationActivityAt(activeConversation),
-	        activeConversation.waId
-	      );
-	    }
-    })();
-    conversationListRefreshPromiseRef.current = refreshPromise;
-    try {
-      await refreshPromise;
-    } finally {
-      if (conversationListRefreshPromiseRef.current === refreshPromise) {
-        conversationListRefreshPromiseRef.current = null;
+      suppressNextConversationRefreshNotificationRef.current = false;
+      const previousListScrollTop = conversationListRef.current?.scrollTop ?? null;
+      setConversations((current) =>
+        mergeConversationsPreservingStableOrder(automationRevoked ? current.filter(item => !item.automationReadOnly) : current, sortedItems, prioritizeLeads, {
+          removeMissing: shouldRemoveMissingItems,
+          preserveMissingIdentities: conversationSearch
+            ? []
+            : [
+                selectedConversationKey,
+                selectedConversationWaId,
+                ...selectedConversationIdentityCandidatesRef.current,
+              ],
+        })
+      );
+      if (previousListScrollTop !== null) {
+        window.requestAnimationFrame(() => {
+          if (conversationListRef.current) {
+            conversationListRef.current.scrollTop = previousListScrollTop;
+          }
+        });
       }
-    }
-	  }, [
-	    buildConversationFetchOptions,
-	    buildConversationNotificationRequest,
-	    clearSelectedConversation,
-	    conversationQueryKey,
-	    evictConversationFromLocalState,
-	    handleUnauthorized,
-	    loadingMessages,
-	    markConversationIdentitiesAsRead,
-	    markConversationIdentitiesAsUnread,
-	    messages,
-	    selectedConversationKey,
-	    selectedConversationWaId,
-	  ]);
+      if (!selectedConversationKey) {
+        return;
+      }
+      const selectedItem = sortedItems.find(
+        (item) => getConversationIdentity(item) === selectedConversationKey
+      );
+      if (!selectedItem) return;
+
+      if (!isAppForegroundFocused()) return;
+      const waitingForUnreadAnchor =
+        pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
+      const activeConversation = sortedItems.find(
+        (item) => getConversationIdentity(item) === selectedConversationKey
+      );
+      const latestTimelineMessageTimestamp = getLatestMessageTimestamp(messages);
+      const activeConversationTimestamp = activeConversation ? getConversationActivityTimestamp(activeConversation) : null;
+      if (
+        activeConversation &&
+        selectedConversationWaId &&
+        !loadingMessages &&
+        !waitingForUnreadAnchor &&
+        activeConversationTimestamp !== null &&
+        (latestTimelineMessageTimestamp === null || activeConversationTimestamp > latestTimelineMessageTimestamp) &&
+        selectedTimelineRequestedActivityAtRef.current !== activeConversationTimestamp
+      ) {
+        selectedTimelineRequestedActivityAtRef.current = activeConversationTimestamp;
+        void refreshSelectedTimelineRef.current?.(activeSession, selectedConversationWaId, "append").catch(
+          (err: { status?: number }) => {
+            if (err.status === 401) {
+              handleUnauthorized();
+              return;
+            }
+            if (isConversationGoneError(err)) {
+              clearSelectedConversation();
+            }
+          }
+        );
+      }
+      if (
+        activeConversation &&
+        !loadingMessages &&
+        !waitingForUnreadAnchor &&
+        !skipSelectedConversationMarkRead &&
+        !isAutoReadSuppressedForConversation(getConversationIdentityCandidates(activeConversation)) &&
+        canCurrentUserMutateConversationReadState(activeConversation, activeSession.user.id)
+      ) {
+        markConversationIdentitiesAsRead(
+          getConversationIdentityCandidates(activeConversation),
+          getConversationActivityAt(activeConversation),
+          activeConversation.waId
+        );
+      }
+    };
+    return conversationQueryRegistryRef.current.run(requestQueryKey, executeRefresh);
+  }, [
+    buildConversationFetchOptions,
+    buildConversationNotificationRequest,
+    clearSelectedConversation,
+    conversationQueryKey,
+    conversationSearch,
+    evictConversationFromLocalState,
+    handleUnauthorized,
+    loadingMessages,
+    markConversationIdentitiesAsRead,
+    markConversationIdentitiesAsUnread,
+    messages,
+    selectedConversationKey,
+    selectedConversationWaId,
+  ]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!session || !conversationNextCursor || loadingConversationsPage) return;
     setLoadingConversationsPage(true);
     setError(null);
+    const requestQueryKey = conversationQueryKey;
     try {
       const response = await fetchAppConversations(
         session,
         buildConversationFetchOptions(conversationNextCursor)
       );
+      if (!conversationQueryRegistryRef.current.isCurrent(requestQueryKey)) return;
       if (response.readState) {
         setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
       }
@@ -4216,6 +4234,7 @@ export default function AppInboxPage() {
     }
   }, [
     buildConversationFetchOptions,
+    conversationQueryKey,
     conversationNextCursor,
     handleUnauthorized,
     loadingConversationsPage,
@@ -4476,7 +4495,6 @@ export default function AppInboxPage() {
     setConversationNextCursor(null);
     loadedConversationPageCountRef.current = 0;
     suppressNextConversationRefreshNotificationRef.current = true;
-    setConversations([]);
     setError(null);
 
     const loadConversations = refreshConversationListRef.current ?? refreshConversationList;
@@ -5069,22 +5087,6 @@ export default function AppInboxPage() {
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {
-      const searchTerm = conversationSearch.trim().toLowerCase();
-      if (searchTerm) {
-        const haystack = [
-          item.protocol,
-          item.leadName,
-          item.leadPhone,
-          item.waId,
-          item.lastMessage?.bodyText,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(searchTerm)) {
-          return false;
-        }
-      }
       if (isAdminUser && departmentFilter !== "ALL") {
         if ((item.departmentId ?? null) !== departmentFilter) {
           return false;
@@ -5128,7 +5130,6 @@ export default function AppInboxPage() {
     conversationChannelFilter,
     conversationFilter,
     conversationQuickFilter,
-    conversationSearch,
     conversations,
     departmentFilter,
     isAdminUser,
@@ -7661,9 +7662,10 @@ export default function AppInboxPage() {
               ) : null}
               <input
                 type="search"
-                value={conversationSearch}
-                onChange={(event) => setConversationSearch(event.target.value)}
-                placeholder="Buscar conversa"
+                value={conversationSearchInput}
+                onChange={(event) => setConversationSearchInput(event.target.value)}
+                placeholder="Buscar por nome, telefone, ID ou protocolo"
+                aria-label="Buscar conversas"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:py-1.5 max-[1440px]:text-xs"
               />
               <div className="relative space-y-1.5">
@@ -7825,7 +7827,7 @@ export default function AppInboxPage() {
                 </div>
                 <p className="mt-3 text-sm font-semibold text-white">Nenhuma conversa encontrada</p>
                 <p className="mt-1 text-xs leading-relaxed text-white/55">
-                  {conversationSearch.trim()
+                  {conversationSearchInput.trim()
                     ? "Ajuste a busca ou limpe os filtros para ampliar a fila."
                     : `Sem conversas em ${getChannelEmptyStateLabel(conversationChannelFilter)} com os filtros atuais.`}
                 </p>
