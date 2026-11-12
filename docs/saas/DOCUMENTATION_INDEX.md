@@ -26,6 +26,10 @@
 - [Encerramento dirigido da árvore histórica da auditoria E0](releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json)
   — reidentificação integral, um `SIGTERM` dirigido à busca, saída natural de
   `sort` e shell e pós-check produtivo sem alterações.
+- [E1.1 — admissão de geração independente em builder descartável](../reviews/CONVERTA_E1_1_DISPOSABLE_BUILDER_ADMISSION_2026-11-12.md)
+  — parecer `ADMISSION_PARTIAL`: independência e capacidade preliminar
+  comprovadas; target da Inbox e lifecycle terminal da raiz inteira ainda
+  pendentes, sem iniciar build ou E1.2.
 - [Fechamento frontend b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json)
   — frontend histórico substituído por aa9527; aceite visual, save e retirada 3/3 preservados.
 - [Revisão da reconciliação não destrutiva b96](releases/B96_RELEASE_GRAPH_RECONCILIATION_REVIEW_2026-11-03.json)
