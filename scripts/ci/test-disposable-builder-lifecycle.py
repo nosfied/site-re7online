@@ -4,8 +4,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import fcntl
 import os
 from pathlib import Path
+import py_compile
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -56,6 +59,9 @@ class DisposableLifecycleTests(unittest.TestCase):
         run("git", "config", "user.name", "fixture", cwd=self.repository)
         (self.repository / ".gitignore").write_text("node_modules/\n")
         (self.repository / "tracked.txt").write_text("authority\n")
+        (self.repository / "scripts").mkdir()
+        shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py",
+                        self.repository / MODULE.RESIDUE_SOURCE)
         run("git", "add", ".", cwd=self.repository); run("git", "commit", "-qm", "fixture", cwd=self.repository)
         self.target = run("git", "rev-parse", "HEAD", cwd=self.repository)
         self.root = self.base / "disposable-generation"
@@ -151,6 +157,21 @@ class DisposableLifecycleTests(unittest.TestCase):
         self.lifecycle_sha = result["lifecycleSha256"]
         return result
 
+    def export_failure(self) -> dict:
+        failure = Path(self.contract["roots"]["auxiliary"]) / "build-denied.private.json"
+        failure.write_text("denied before npm\n")
+        request = {"schemaVersion": 1, "generationId": self.contract["generationId"],
+                   "contractSha256": self.contract_sha, "outcome": "FAILED",
+                   "artifacts": [{"name": "failure-evidence", "source": str(failure),
+                                  "destination": str(self.exports / failure.name),
+                                  "sha256": sha(failure.read_bytes())}]}
+        request_path = self.custody / "failure-export-request.private.json"
+        request_sha = write(request_path, request)
+        result = MODULE.export_generation(self.args(
+            export_request=request_path, export_request_sha256=request_sha))
+        self.lifecycle_sha = result["lifecycleSha256"]
+        return result
+
     def prepare(self) -> dict:
         with patch.object(MODULE, "process_observation", return_value={
                 "complete": True, "references": [], "writers": [], "failures": []}):
@@ -170,6 +191,44 @@ class DisposableLifecycleTests(unittest.TestCase):
                 "complete": True, "references": [], "writers": [], "failures": []}):
             return MODULE.execute(self.args(
                 intent=self.custody / "disposable-builder.intent.private.json",
+                intent_sha256=intent_sha, authorization=authorization,
+                authorization_sha256=auth_sha))
+
+    def add_residue(self) -> Path:
+        if (self.worktree / "node_modules").exists():
+            shutil.rmtree(self.worktree / "node_modules")
+        source = self.worktree / MODULE.RESIDUE_SOURCE
+        residue = self.worktree / MODULE.RESIDUE_FILE
+        if residue.exists() or residue.is_symlink():
+            residue.unlink()
+        generated = Path(py_compile.compile(str(source), doraise=True))
+        if generated != residue:
+            generated.rename(residue)
+        residue.parent.chmod(0o775)
+        residue.chmod(0o664)
+        return residue
+
+    def prepare_residue(self) -> dict:
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}):
+            return MODULE.prepare_residue(self.args())
+
+    def authorize_residue(self, intent_sha: str, *, approved_paths=None,
+                          name="residue-authorization.private.json") -> tuple[Path, str]:
+        intent = json.loads((self.custody / "disposable-builder.residue-intent.private.json").read_bytes())
+        value = {"schemaVersion": 1, "decision": "AUTHORIZE_ONCE",
+                 "intentSha256": intent_sha,
+                 "approvedPaths": (approved_paths if approved_paths is not None else
+                                   [item["path"] for item in intent["commands"]]),
+                 "owner": "synthetic-test"}
+        path = self.custody / name
+        return path, write(path, value)
+
+    def execute_residue(self, intent_sha: str, authorization: Path, auth_sha: str):
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}):
+            return MODULE.execute_residue(self.args(
+                intent=self.custody / "disposable-builder.residue-intent.private.json",
                 intent_sha256=intent_sha, authorization=authorization,
                 authorization_sha256=auth_sha))
 
@@ -249,6 +308,214 @@ class DisposableLifecycleTests(unittest.TestCase):
         })()
         authenticated = PRODUCER.validate_build_paths(args)
         self.assertEqual(authenticated["worktrees"], Path(roots["worktrees"]))
+
+    def test_bytecode_residue_is_reconciled_then_normal_lifecycle_closes(self) -> None:
+        historical = []
+        for raw in self.contract["protectedPaths"]:
+            path = Path(raw); path.mkdir(mode=0o700); (path / "sentinel").write_text("preserve\n")
+            historical.append(path)
+        residue = self.add_residue(); self.export_failure()
+        prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        result = self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertFalse(residue.exists())
+        self.assertFalse(residue.parent.exists())
+        self.assertEqual(run("git", "status", "--porcelain=v1", "--untracked-files=all",
+                             cwd=self.worktree), "")
+        receipt = json.loads((self.custody / "disposable-builder.residue-receipt.private.json").read_bytes())
+        self.assertEqual(receipt["removedPaths"], [
+            str(self.worktree / MODULE.RESIDUE_FILE), str(self.worktree / MODULE.RESIDUE_DIRECTORY)])
+        normal = self.prepare(); normal_auth, normal_auth_sha = self.authorize(normal["intentSha256"])
+        closed = self.execute(normal["intentSha256"], normal_auth, normal_auth_sha)
+        self.assert_closed(closed)
+        self.assertTrue(all((path / "sentinel").read_text() == "preserve\n" for path in historical))
+
+    def test_bytecode_residue_content_symlink_and_hardlink_are_denied(self) -> None:
+        self.export_failure()
+        for mutation in ("content", "symlink", "hardlink"):
+            with self.subTest(mutation=mutation):
+                residue = self.add_residue()
+                if mutation == "content":
+                    residue.write_bytes(b"not bytecode")
+                elif mutation == "symlink":
+                    residue.unlink(); residue.symlink_to(self.worktree / MODULE.RESIDUE_SOURCE)
+                else:
+                    residue.unlink(); os.link(self.worktree / MODULE.RESIDUE_SOURCE, residue)
+                with patch.object(MODULE, "process_observation", return_value={
+                        "complete": True, "references": [], "writers": [], "failures": []}):
+                    with self.assertRaises(MODULE.Denied):
+                        MODULE.prepare_residue(self.args())
+                self.assertFalse((self.custody / "disposable-builder.residue-intent.private.json").exists())
+
+    def test_bytecode_residue_extra_ignored_tracked_and_index_drift_are_denied(self) -> None:
+        residue = self.add_residue(); self.export_failure()
+        (residue.parent / "other.pyc").write_bytes(b"extra")
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}):
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_git_status"):
+                MODULE.prepare_residue(self.args())
+        (residue.parent / "other.pyc").unlink()
+        (self.worktree / "node_modules").mkdir()
+        (self.worktree / "node_modules/ignored").write_text("extra\n")
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}):
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_git_status"):
+                MODULE.prepare_residue(self.args())
+        shutil.rmtree(self.worktree / "node_modules")
+        (self.worktree / "tracked.txt").write_text("dirty\n")
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}):
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_git_status"):
+                MODULE.prepare_residue(self.args())
+        run("git", "checkout", "--", "tracked.txt", cwd=self.worktree)
+        (self.worktree / "tracked.txt").write_text("staged\n")
+        run("git", "add", "tracked.txt", cwd=self.worktree)
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}):
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_git_status"):
+                MODULE.prepare_residue(self.args())
+
+    def test_bytecode_residue_identity_drift_denies_before_attempt(self) -> None:
+        residue = self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        original = residue.read_bytes(); descriptor = os.open(residue, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            residue.unlink(); residue.write_bytes(original); residue.chmod(0o664)
+            authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_sealed_drift"):
+                self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        finally:
+            os.close(descriptor)
+        self.assertFalse((self.custody / "disposable-builder.residue-journal.private.jsonl").exists())
+
+    def test_bytecode_residue_mode_and_owner_binding_deny_before_attempt(self) -> None:
+        residue = self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        residue.chmod(0o644)
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_sealed_drift"):
+            self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        residue.chmod(0o664)
+        intent_path = self.custody / "disposable-builder.residue-intent.private.json"
+        intent = json.loads(intent_path.read_bytes())
+        intent["sealedObservation"]["residue"]["ownerUid"] += 1
+        intent_sha = write(intent_path, intent)
+        authorization, auth_sha = self.authorize_residue(intent_sha, name="owner-authorization.private.json")
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_intent_binding"):
+            self.execute_residue(intent_sha, authorization, auth_sha)
+        self.assertFalse((self.custody / "disposable-builder.residue-journal.private.jsonl").exists())
+
+    def test_bytecode_residue_process_and_lock_negatives(self) -> None:
+        self.add_residue(); self.export_failure()
+        for observed, predicate in ((
+                {"complete": False, "references": [], "writers": [], "failures": [{"pid": 1}]},
+                "disposable_process_observation_incomplete"), (
+                {"complete": True, "references": [{"pid": 2}], "writers": [], "failures": []},
+                "disposable_process_reference"), (
+                {"complete": True, "references": [], "writers": [{"pid": 3}], "failures": []},
+                "disposable_process_writer")):
+            with self.subTest(predicate=predicate), \
+                 patch.object(MODULE, "process_observation", return_value=observed):
+                with self.assertRaisesRegex(MODULE.Denied, predicate):
+                    MODULE.prepare_residue(self.args())
+        lock = Path(self.contract["locks"]["lifecycle"])
+        fd = os.open(lock, os.O_RDWR | os.O_NOFOLLOW)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_lock_busy"):
+                self.prepare_residue()
+        finally:
+            os.close(fd)
+
+    def test_bytecode_residue_divergent_authorization_denies_before_attempt(self) -> None:
+        self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(
+            prepared["intentSha256"], approved_paths=[])
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_authorization_scope"):
+            self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertFalse((self.custody / "disposable-builder.residue-journal.private.jsonl").exists())
+
+    def test_bytecode_residue_resume_after_attempt_does_not_duplicate_attempt(self) -> None:
+        self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        real_run = MODULE.subprocess.run
+        interrupted = {"done": False}
+        def run_once(argv, **kwargs):
+            if argv[:1] == ["/usr/bin/rm"] and not interrupted["done"]:
+                interrupted["done"] = True
+                raise OSError("synthetic interruption after attempt")
+            return real_run(argv, **kwargs)
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}), \
+             patch.object(MODULE.subprocess, "run", side_effect=run_once):
+            with self.assertRaisesRegex(OSError, "synthetic interruption"):
+                MODULE.execute_residue(self.args(
+                    intent=self.custody / "disposable-builder.residue-intent.private.json",
+                    intent_sha256=prepared["intentSha256"], authorization=authorization,
+                    authorization_sha256=auth_sha))
+        result = self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertEqual(result["state"], "COMPLETED")
+        events = MODULE.read_events(self.custody / "disposable-builder.residue-journal.private.jsonl")
+        self.assertEqual(sum(item["event"] == "ATTEMPT" and item["ordinal"] == 1 for item in events), 1)
+
+    def test_bytecode_residue_resume_after_completed_effect_does_not_repeat_it(self) -> None:
+        self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        real_append = MODULE.append_event
+        interrupted = {"done": False}
+        def stop_before_verified(path, value):
+            if value == {"event": "VERIFIED", "ordinal": 1, "absent": True} and not interrupted["done"]:
+                interrupted["done"] = True
+                raise OSError("synthetic post-result interruption")
+            real_append(path, value)
+        with patch.object(MODULE, "process_observation", return_value={
+                "complete": True, "references": [], "writers": [], "failures": []}), \
+             patch.object(MODULE, "append_event", side_effect=stop_before_verified):
+            with self.assertRaisesRegex(OSError, "synthetic post-result interruption"):
+                MODULE.execute_residue(self.args(
+                    intent=self.custody / "disposable-builder.residue-intent.private.json",
+                    intent_sha256=prepared["intentSha256"], authorization=authorization,
+                    authorization_sha256=auth_sha))
+        destructive = []
+        real_run = MODULE.subprocess.run
+        def observe_commands(argv, **kwargs):
+            if argv[:1] in (["/usr/bin/rm"], ["/usr/bin/rmdir"]):
+                destructive.append(argv)
+            return real_run(argv, **kwargs)
+        with patch.object(MODULE.subprocess, "run", side_effect=observe_commands):
+            result = self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertEqual(result["state"], "COMPLETED")
+        self.assertEqual([item[0] for item in destructive], ["/usr/bin/rmdir"])
+
+    def test_bytecode_residue_terminal_replay_requires_same_authorization(self) -> None:
+        self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        first = self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        journal = (self.custody / "disposable-builder.residue-journal.private.jsonl").read_bytes()
+        replay = self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(first["receiptSha256"], replay["receiptSha256"])
+        self.assertEqual(journal, (self.custody / "disposable-builder.residue-journal.private.jsonl").read_bytes())
+        other, other_sha = self.authorize_residue(
+            prepared["intentSha256"], name="other-residue-authorization.private.json")
+        value = json.loads(other.read_bytes()); value["owner"] = "different-owner"; other_sha = write(other, value)
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_terminal_replay"):
+            self.execute_residue(prepared["intentSha256"], other, other_sha)
+
+    def test_bytecode_residue_terminal_replay_authenticates_receipt_and_journal(self) -> None:
+        self.add_residue(); self.export_failure(); prepared = self.prepare_residue()
+        authorization, auth_sha = self.authorize_residue(prepared["intentSha256"])
+        self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        receipt_path = self.custody / "disposable-builder.residue-receipt.private.json"
+        receipt_raw = receipt_path.read_bytes()
+        receipt = json.loads(receipt_raw); receipt["automaticRetry"] = True
+        write(receipt_path, receipt)
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_terminal_replay"):
+            self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
+        receipt_path.write_bytes(receipt_raw); receipt_path.chmod(0o600)
+        journal = self.custody / "disposable-builder.residue-journal.private.jsonl"
+        journal.write_bytes(journal.read_bytes() + b"\n"); journal.chmod(0o600)
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_residue_journal_hash"):
+            self.execute_residue(prepared["intentSha256"], authorization, auth_sha)
 
     def test_success_exports_authority_and_leaves_zero_disposable_residue(self) -> None:
         historical = []
