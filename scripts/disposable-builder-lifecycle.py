@@ -16,9 +16,12 @@ import json
 import marshal
 import os
 from pathlib import Path, PurePosixPath
+import pwd
+import secrets
 import stat
 import subprocess
 import sys
+import time
 from typing import Any
 
 import preparation_artifact_lifecycle as common
@@ -36,6 +39,10 @@ EXPORT_NAMES_FAILURE = {"failure-evidence"}
 RESIDUE_SOURCE = "scripts/preparation_artifact_lifecycle.py"
 RESIDUE_DIRECTORY = "scripts/__pycache__"
 RESIDUE_FILE = "scripts/__pycache__/preparation_artifact_lifecycle.cpython-312.pyc"
+PRIVILEGED_GENERATION = "immutable-fa10f4f5-external-20261112T233820Z"
+PRIVILEGED_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
+PRIVILEGED_OBSERVER_COMMAND = "collect-disposable-builder-fa10f4f5"
+PRIVILEGED_INSTALLER_SHA256 = "a39a3e2c9106baf9a1e19be1ab569528288ac4285e3423d59874484473feb9c1"
 
 
 class Denied(RuntimeError):
@@ -686,6 +693,132 @@ def validate_no_processes(root: Path) -> dict[str, Any]:
     return observed
 
 
+def _process_start_ticks(pid: int) -> int:
+    raw = (Path("/proc") / str(pid) / "stat").read_text()
+    closing = raw.rfind(") ")
+    require(closing >= 0, "disposable_consumer_identity")
+    fields = raw[closing + 2:].split()
+    require(len(fields) > 19, "disposable_consumer_identity")
+    try:
+        return int(fields[19])
+    except ValueError:
+        deny("disposable_consumer_identity")
+
+
+def _installed_observer(path: Path, expected: str, report_path: Path,
+                        report_sha256: str) -> dict[str, Any]:
+    require(path == PRIVILEGED_OBSERVER_PATH and is_digest(expected),
+            "disposable_privileged_observer_identity")
+    report, _ = stable_json(report_path, report_sha256,
+                            "disposable_privileged_observer_installation")
+    helper = report.get("helper")
+    require(set(report) == {"schemaVersion", "kind", "state", "installerSha256", "helper",
+                            "createdDirectories", "sudoersChanged"} and
+            report.get("schemaVersion") == 1 and
+            report.get("kind") == "A838BD33_BUILDER_OBSERVER_INSTALLATION" and
+            report.get("state") in {"INSTALLED", "UPGRADED", "RECOVERED"} and
+            report.get("installerSha256") == PRIVILEGED_INSTALLER_SHA256 and
+            report.get("sudoersChanged") is False and
+            isinstance(report.get("createdDirectories"), list) and
+            isinstance(helper, dict) and
+            set(helper) == {"path", "sha256", "device", "inode", "uid", "gid", "mode"} and
+            helper.get("path") == str(path) and helper.get("sha256") == expected and
+            helper.get("uid") == 0 and helper.get("gid") == 0 and helper.get("mode") == "0500" and
+            type(helper.get("device")) is int and type(helper.get("inode")) is int and
+            helper["device"] > 0 and helper["inode"] > 0,
+            "disposable_privileged_observer_installation")
+    return helper
+
+
+def _lock_binding(contract: dict[str, Any], descriptors: list[int]) -> list[dict[str, Any]]:
+    result = []
+    for key, descriptor in zip(("lifecycle", "writer"), descriptors):
+        info = os.fstat(descriptor)
+        raw = os.pread(descriptor, 4097, 0)
+        require(len(raw) <= 4096 and stat.S_ISREG(info.st_mode) and
+                stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1,
+                "disposable_lock_identity")
+        result.append({"path": contract["locks"][key], "device": info.st_dev,
+                       "inode": info.st_ino, "sha256": digest(raw)})
+    return result
+
+
+def privileged_process_observation(args: argparse.Namespace, contract: dict[str, Any],
+                                   contract_raw: bytes, lifecycle: dict[str, Any],
+                                   lifecycle_raw: bytes, descriptors: list[int],
+                                   phase: str) -> dict[str, Any]:
+    observer = getattr(args, "process_observer", None)
+    observer_sha = getattr(args, "process_observer_sha256", None)
+    installation = getattr(args, "process_observer_installation_report", None)
+    installation_sha = getattr(args, "process_observer_installation_report_sha256", None)
+    if contract["generationId"] != PRIVILEGED_GENERATION:
+        require(observer is None and observer_sha is None and
+                installation is None and installation_sha is None,
+                "disposable_privileged_observer_scope")
+        return validate_no_processes(Path(contract["disposableRoot"]))
+    require(observer is not None and observer_sha is not None and
+            installation is not None and installation_sha is not None,
+            "disposable_privileged_observer_required")
+    mechanism = _installed_observer(observer, observer_sha, installation, installation_sha)
+    maximum = 300 if phase == "PREPARE" else 60
+    request = {
+        "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_PROC_REQUEST", "phase": phase,
+        "generationId": contract["generationId"], "targetCommit": contract["targetCommit"],
+        "contractSha256": digest(contract_raw), "lifecycleSha256": digest(lifecycle_raw),
+        "contract": contract_raw.decode(), "lifecycle": lifecycle_raw.decode(),
+        "nonce": secrets.token_hex(32),
+        "consumer": {"pid": os.getpid(), "startTicks": _process_start_ticks(os.getpid())},
+        "root": lifecycle["rootIdentity"], "worktree": contract["worktreePath"],
+        "locks": _lock_binding(contract, descriptors), "maxAgeSeconds": maximum,
+    }
+    request_raw = canonical(request)
+    command = ["/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
+               str(observer), PRIVILEGED_OBSERVER_COMMAND]
+    result = subprocess.run(command, input=request_raw, capture_output=True, check=False)
+    require(result.returncode == 0, "disposable_privileged_observer_execution")
+    require(len(result.stdout) <= 4 * 1024 * 1024 and not result.stderr,
+            "disposable_privileged_observer_output")
+    try:
+        attestation = json.loads(result.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny("disposable_privileged_observer_output")
+    require(canonical(attestation) == result.stdout,
+            "disposable_privileged_observer_output")
+    observation = attestation.get("observation")
+    now = time.time_ns()
+    captured = attestation.get("capturedAtNs")
+    finished = attestation.get("finishedAtNs")
+    require(attestation.get("schemaVersion") == 1 and
+            attestation.get("kind") == "DISPOSABLE_BUILDER_PROC_ATTESTATION" and
+            attestation.get("state") == "COMPLETE" and attestation.get("phase") == phase and
+            attestation.get("requestSha256") == digest(request_raw) and
+            attestation.get("nonce") == request["nonce"] and
+            attestation.get("generationId") == contract["generationId"] and
+            attestation.get("targetCommit") == contract["targetCommit"] and
+            attestation.get("contractSha256") == digest(contract_raw) and
+            attestation.get("lifecycleSha256") == digest(lifecycle_raw) and
+            attestation.get("candidatePaths") == [contract["disposableRoot"]] and
+            attestation.get("consumer") == request["consumer"] and
+            attestation.get("mechanism") == mechanism and
+            attestation.get("administrativeExecution") == {
+                "mode": "AUTHENTICATED_SUDO", "uid": contract["ownerUid"],
+                "gid": contract["groupGid"], "user": pwd.getpwuid(contract["ownerUid"]).pw_name,
+                "commandSha256": digest(("/usr/bin/python3 -I -B -E -s " +
+                    str(observer) + " " + PRIVILEGED_OBSERVER_COMMAND).encode())} and
+            isinstance(captured, int) and isinstance(finished, int) and
+            0 <= captured <= finished <= now and now - captured <= maximum * 1_000_000_000 and
+            isinstance(observation, dict) and observation.get("complete") is True and
+            observation.get("references") == [] and observation.get("activeWriters") == [] and
+            observation.get("failures", []) == [],
+            "disposable_privileged_attestation")
+    # Bind the exact bytes used for the decision into the intent/receipt.
+    return {"kind": "PRIVILEGED", "phase": phase,
+            "requestSha256": digest(request_raw), "attestationSha256": digest(result.stdout),
+            "helperSha256": mechanism["sha256"], "capturedAtNs": captured,
+            "finishedAtNs": finished, "complete": True, "references": [],
+            "writers": [], "failures": []}
+
+
 def validate_export_receipt(contract: dict[str, Any], expected: str) -> dict[str, Any]:
     path = Path(contract["custodyRoot"]) / "disposable-builder.export-receipt.private.json"
     receipt, _ = stable_json(path, expected, "disposable_export_receipt")
@@ -701,14 +834,15 @@ def validate_export_receipt(contract: dict[str, Any], expected: str) -> dict[str
 
 def prepare(args: argparse.Namespace) -> dict[str, Any]:
     contract, contract_raw = contract_from_args(args)
-    lifecycle, _ = read_lifecycle(contract, args.lifecycle_sha256)
+    lifecycle, lifecycle_raw = read_lifecycle(contract, args.lifecycle_sha256)
     require(lifecycle.get("state") == "EXPORTED", "disposable_prepare_lifecycle")
     validate_export_receipt(contract, lifecycle["exportReceiptSha256"])
     descriptors = acquire_locks(contract)
     try:
         root = Path(contract["disposableRoot"])
         require(directory_identity(root) == lifecycle["rootIdentity"], "disposable_root_drift")
-        observation = validate_no_processes(root)
+        observation = privileged_process_observation(
+            args, contract, contract_raw, lifecycle, lifecycle_raw, descriptors, "PREPARE")
         items, usage = inventory(root)
         require(usage["allocatedBytes"] <= contract["budget"]["requiredFreeBytes"] and
                 usage["allocatedInodes"] <= contract["budget"]["requiredFreeInodes"],
@@ -1177,7 +1311,7 @@ def execute_residue(args: argparse.Namespace) -> dict[str, Any]:
 
 def execute(args: argparse.Namespace) -> dict[str, Any]:
     contract, contract_raw = contract_from_args(args)
-    lifecycle, _ = read_lifecycle(contract, args.lifecycle_sha256)
+    lifecycle, lifecycle_raw = read_lifecycle(contract, args.lifecycle_sha256)
     require(lifecycle.get("state") in {"EXPORTED", "RETENTION_DEBT", "SANITIZED"},
             "disposable_execute_lifecycle")
     intent, intent_raw = stable_json(args.intent, args.intent_sha256, "disposable_intent")
@@ -1223,11 +1357,15 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             for item in commands) or worktree_absent_after_attempt else None
         if root.exists():
             require(directory_identity(root) == intent["rootIdentity"], "disposable_root_drift")
-            validate_no_processes(root)
+            execution_observation = privileged_process_observation(
+                args, contract, contract_raw, lifecycle, lifecycle_raw, descriptors, "EXECUTE")
             validate_inventory(root, intent["inventory"], allow_missing=root_attempted,
                                ignored_prefix=ignored_prefix)
         else:
             require(root_attempted, "disposable_root_absent_without_attempt")
+            execution_observation = {"kind": "TERMINAL_RESUME", "phase": "EXECUTE",
+                                     "complete": True, "references": [], "writers": [],
+                                     "failures": []}
         for command in commands:
             ordinal = command["ordinal"]
             if ordinal in verified:
@@ -1273,6 +1411,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                    "remainingPaths": [], "rootAbsent": True, "worktreeRegistrationAbsent": True,
                    "retiredBytes": intent["usage"]["allocatedBytes"],
                    "retiredInodes": intent["usage"]["allocatedInodes"],
+                   "processObservation": execution_observation,
                    "automaticRetry": False}
         receipt_raw = canonical(receipt)
         receipt_path = Path(contract["custodyRoot"]) / "disposable-builder.terminal-receipt.private.json"
@@ -1319,6 +1458,11 @@ def parser() -> argparse.ArgumentParser:
             command.add_argument("--intent-sha256", required=True)
             command.add_argument("--authorization", type=Path, required=True)
             command.add_argument("--authorization-sha256", required=True)
+        if name in {"prepare", "execute"}:
+            command.add_argument("--process-observer", type=Path)
+            command.add_argument("--process-observer-sha256")
+            command.add_argument("--process-observer-installation-report", type=Path)
+            command.add_argument("--process-observer-installation-report-sha256")
     return result
 
 
