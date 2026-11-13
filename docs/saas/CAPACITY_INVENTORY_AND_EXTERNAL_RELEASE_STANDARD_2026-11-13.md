@@ -25,6 +25,23 @@ Fontes já existentes, com época e fronteira explícitas:
 
 **Proibições:** não executar `du -a`/auditoria global de novo como ponto de partida, não somar `du` de hardlinks como recuperação, não reabrir lote terminal, não reemitir intenção consumida, não recalcular SHA imutável sem necessidade, não apagar por idade/tamanho, não executar `prune`, `rm` genérico, glob ou `git worktree remove --force`. Reabrir fotografias existentes primeiro; recapturar somente dados **voláteis e dirigidos** dos candidatos realmente pendentes no momento de seu `prepare/execute`. Se for indispensável um inventário amplo novo, justificar explicitamente qual campo não coberto impede decisão e limitar custo/cgroup/tempo pela política.
 
+## 2-A. Reconciliação posterior — lote P00 de quatro releases legadas JÁ SANITIZADO
+
+**13/11/2026, última verificação dirigida informada pelo Codex; sem nova retirada.** A qualificação histórica registrada no backlog de 07/11, inicialmente descrevendo `3630e16`, `d7de6453`, `ec2a9fde` e `ef7db111` como candidatas potenciais, foi **superada** por receipts produtivos terminais posteriores. A verificação dirigida encontrou as quatro releases **ausentes**. Não há `audit`, `prepare`, `AUTHORIZE_ONCE` ou `execute` a repetir para elas.
+
+| Release | Receipt terminal informado (abreviado; reabrir autoridade privada para SHA integral) | Bytes físicos atribuídos no receipt | Estado verificado |
+| --- | --- | ---: | --- |
+| `immutable-3630e16-vps-20261024T195842Z` | `19e45fc4…f23c` | 988.524.544 | `SANITIZED`, ausente |
+| `immutable-d7de6453-vps-20261024T221500Z` | `3cd34156…fccc` | 988.606.464 | `SANITIZED`, ausente |
+| `immutable-ec2a9fde-vps-20261024T162005Z` | `dfc0e535…cfcc` | 988.528.640 | `SANITIZED`, ausente |
+| `immutable-ef7db111-vps-20261024T174000Z` | `416e4173…4142` | 988.508.160 | `SANITIZED`, ausente |
+
+**Total atribuído às retiradas anteriores: 3.954.167.808 B; remanescente físico desse lote: 0 B.** Os receipts informam quatro comandos históricos `ATTEMPT → RESULT(exitCode=0) → VERIFIED`, um por release, e `remainingDerivedPaths=[]`. A verificação atual executou **zero** comandos destrutivos. Última capacidade VPS informada: **7.106.207.744 B** e **8.743.986** inodes livres, sem nova varredura integral. Essas atribuições não equivalem à variação exclusiva de `df` e não devem ser somadas novamente aos lotes históricos sem confrontar receipts/escopos.
+
+**Autoridades coletivas informadas (prefixos, não substituem os originais):** qualificação `865d015b…497e`, materialização `bb1b1531…7a2e`, prepare terminal `cad7092a…e8f9`. Antes de usar qualquer uma como autoridade operacional, recuperar os SHA integrais dos arquivos privados; não fabricar hashes nem reproduzir o lote. Classificação: `TERMINAL_SANITIZED / NO_FURTHER_ACTION`.
+
+**Localização documental:** este arquivo está rastreado no branch canônico `review/campaign-recovery-20260926`, merge `2a55c80e840f593e8da73a18da8575445856cea9` (blob `560806d3e4e2d54f4fb843bd96e74a7edc764722`). Se ausente no checkout local do operador, verificar primeiro `git rev-parse HEAD`, branch e remote/ref, sem reemitir inventário, alterar receipts ou presumir que o arquivo não foi integrado.
+
 ## 3. Classes e decisões de limpeza
 
 | Classe operacional | Exemplos | Tratamento |
