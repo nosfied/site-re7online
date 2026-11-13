@@ -1968,6 +1968,48 @@ if config_path:
         self.assertEqual(self.host.save_calls, 1)
         self.assertEqual(self.host.retirement_calls, 1)
 
+    def test_fa10_runtime_cache_profile_accepts_the_ten_observed_entries(self) -> None:
+        driver, manifest, old = self.runtime_cache_finalize()
+        root = self.releases / self.candidate
+        payload = json.loads(manifest.read_text())
+        for ordinal in (1, 2):
+            key = (f"productionCacheKey{ordinal:02d}" + "A" * 24)
+            directory = f"frontend-runtime/.next/cache/images/{key}"
+            relative = f"{directory}/14400.production-cache-{ordinal:02d}.webp"
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.parent.chmod(0o755)
+            target.write_bytes(f"production-cache-{ordinal}\n".encode())
+            target.chmod(0o644)
+            payload["cacheEntries"].extend((
+                {"path": directory, "type": "directory", "mode": 0o755},
+                {"path": relative, "type": "file", "mode": 0o644,
+                 "size": target.stat().st_size, "sha256": sha(target)},
+            ))
+        self.assertEqual(len(payload["cacheEntries"]), 10)
+        put(manifest, payload)
+        self.inputs = replace(
+            self.inputs, runtime_cache_reconciliation=manifest,
+            runtime_cache_reconciliation_sha256=sha(manifest))
+        driver = self._driver()
+        constants = {
+            "RUNTIME_CACHE_36B_RELEASE": deploy.RUNTIME_CACHE_36B_RELEASE,
+            "RUNTIME_CACHE_FA10_RELEASE": self.candidate,
+            "RUNTIME_CACHE_FA10_TARGET": self.target,
+            "RUNTIME_CACHE_FA10_TRANSACTION": self.transaction,
+            "RUNTIME_CACHE_FA10_INDEX_SHA256": old["RUNTIME_CACHE_36B_INDEX_SHA256"],
+            "RUNTIME_CACHE_FA10_MANIFEST_SHA256": old["RUNTIME_CACHE_36B_MANIFEST_SHA256"],
+            "RUNTIME_CACHE_FA10_INTENT_SHA256": old["RUNTIME_CACHE_36B_INTENT_SHA256"],
+            "RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256":
+                old["RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256"],
+            "RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256": old["RUNTIME_CACHE_36B_ACCEPTANCE_SHA256"],
+            "RUNTIME_CACHE_FA10_LOCK_SHA256": old["RUNTIME_CACHE_36B_LOCK_SHA256"],
+        }
+        with patch.multiple(deploy, **constants):
+            driver.finalize()
+        self.assertEqual(driver._journal_read()["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+
     def test_fa10_runtime_cache_profile_recaptures_before_save(self) -> None:
         driver, _, old = self.runtime_cache_finalize()
         constants = {

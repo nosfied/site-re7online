@@ -827,11 +827,13 @@ class Driver:
             deny("runtime_cache_reconciliation_lock")
 
         entries = value.get("cacheEntries")
-        if (not isinstance(entries, list) or len(entries) != 6 or
+        if (not isinstance(entries, list) or not entries or
                 any(not isinstance(item, dict) or not isinstance(item.get("path"), str)
                     for item in entries)):
             deny("runtime_cache_reconciliation_entries")
         declared = {item["path"]: item for item in entries}
+        if len(declared) != len(entries):
+            deny("runtime_cache_reconciliation_entries")
         expected_extras = profile["extras"]
         if profile.get("volatileCachePolicy") == "FA10_NEXT_IMAGE_CACHE_V1":
             bases = {
@@ -864,7 +866,7 @@ class Driver:
                         deny("runtime_cache_reconciliation_entries")
                     continue
                 deny("runtime_cache_reconciliation_entries")
-        elif set(declared) != set(expected_extras) or len(declared) != len(entries):
+        elif set(declared) != set(expected_extras):
             deny("runtime_cache_reconciliation_entries")
         for item in entries:
             kind = item.get("type")
