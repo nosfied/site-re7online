@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT_WITH_EXTERNAL_BUILDER_CLOSURE",
+  "status": "DEPLOYED_RETENTION_INCOMPLETE",
+  "evidenceProvenance": {
+    "source": "USER_REPORTED_CODEX_TERMINAL_REPORTS",
+    "observedDate": "2026-11-13",
+    "timezone": "America/Fortaleza",
+    "privateEvidencePublished": false,
+    "liveRecollectionPerformed": false
+  },
+  "release": {
+    "id": "immutable-fa10f4f5-external-20261112T233820Z",
+    "target": "fa10f4f59c9a05328e536dd25a1668c3ba25939e",
+    "tree": "9ae01069b58e465eee1093132a5b4c5d421dcd40",
+    "buildId": "4j3t9N75vsvYu9t3DoFq4",
+    "packageSha256": "29ec148a01b518e16f752ed8c289904b36edcc1ea11a03dc4003d743799ff6b1",
+    "manifestSha256": "8e255cdc234ccfa385751c934c181ed58eb2d0e8a9dcb1c71db81be1e9ffa3cc",
+    "indexSha256": "312e047ec58514eb62f115c2efe115fe261de7deafdd052bd428b3ad4d376b19",
+    "indexEntries": 34384,
+    "buildCount": 1,
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "selection": {
+    "components": [
+      "api",
+      "frontend"
+    ],
+    "apiReleaseId": "immutable-fa10f4f5-external-20261112T233820Z",
+    "frontendReleaseId": "immutable-fa10f4f5-external-20261112T233820Z",
+    "frontendBuildId": "4j3t9N75vsvYu9t3DoFq4",
+    "workerReleaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "workerPreserved": true
+  },
+  "return": {
+    "apiReleaseId": "immutable-a838bd33-external-20261110T130618Z",
+    "frontendReleaseId": "immutable-b8d284b6-vps-20261108T132846Z"
+  },
+  "acceptance": {
+    "state": "PASS",
+    "acceptanceSha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
+    "humanInboxScenariosPassed": 5,
+    "localAndPublicHealth": true
+  },
+  "finalization": {
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "journalSha256": "45579306a46dbd79a963b9176531673124147e8a7e667eaef72fec7591bf11e5",
+    "pm2SaveCount": 1,
+    "dumpSha256": "3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a",
+    "markerSha256": "ef3cb8edde127f4de841f49f5a329e74fde4a7d34b5fe787463b20d7228fcf5d",
+    "retirementReceiptSha256": "f12d8260d27f1bc041afddfe8badc0b46cd9f9a8b0a9a732f71b2ebd6a8fa18b",
+    "vpsRetirementCommands": 0,
+    "canonicalLockAbsent": true
+  },
+  "builderRetirement": {
+    "state": "SANITIZED_CLOSURE_RECORDED",
+    "authorizationSha256": "54f0821a660cedc7f64a851bbfc63b550b7f612b07629ee2b97d4562f4942285",
+    "journalSha256": "dfc96283013a0dad6d36e28a68ffa1ea65813f3a1be4b955a192d915c543e351",
+    "receiptSha256": "4b4f1a295e5c24acad2d03a8b816925ec46efb790db6ceddbece1c898f93ca7d",
+    "lifecycleSha256": "b28caeaf78e0ce006736f8721a8a6ed2a855de8330f7b0934d5654c0b77d69e0",
+    "attributedPhysicalBytesRecovered": 2508197888,
+    "retiredEntries": 75639,
+    "retiredInodesIncludingRoot": 75640,
+    "worktreeAbsent": true,
+    "rootAbsent": true,
+    "otherBuilderDebtsUnaffected": true
+  },
+  "capacity": {
+    "vpsLastReportedFreeBytes": 7080562688,
+    "vpsLastReportedFreeInodes": 8743987,
+    "vpsSnapshotNotCurrent": true,
+    "retentionOnVpsNotSanitized": true
+  },
+  "notes": [
+    "Terminal VPS record remains DEPLOYED_RETENTION_INCOMPLETE; subsequent builder success does not rewrite the historical VPS journal.",
+    "No new production checks, capacity scans or mutation were made while preparing this documentary record.",
+    "Do not repeat completed deploy, pm2 save or builder removal; do not classify previous-generation artifacts as trash without fresh graph and custody checks."
+  ]
+}
