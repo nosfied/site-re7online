@@ -1027,6 +1027,13 @@ class LegacyPrecontractFiveFixture:
         self.releases = self.root / "releases"; self.releases.mkdir()
         self.evidence = self.root / "evidence"; self.evidence.mkdir()
         self.data = self.root / "private-data"; self.data.mkdir()
+        self.source_root = self.root / "preserved-af26-source"; self.source_root.mkdir(mode=0o700)
+        (self.source_root / "apps/whatsapp-agent/src").mkdir(parents=True)
+        (self.source_root / "apps/whatsapp-agent/src/base.ts").write_text("base\n")
+        (self.source_root / "node_modules/package").mkdir(parents=True)
+        (self.source_root / "node_modules/package/index.js").write_text("dependency\n")
+        (self.source_root / "README.md").write_text("tracked\n")
+        os.symlink(self.data, self.source_root / "apps/whatsapp-agent/.data")
         self.paths = {}
         for release, _, component in self.RELEASES:
             path = self.releases / release; path.mkdir(mode=0o700)
@@ -1040,6 +1047,12 @@ class LegacyPrecontractFiveFixture:
         (self.paths["af26-api"] / "apps/whatsapp-agent/src/base.ts").write_text("base\n")
         (self.paths["af26-api"] / "apps/whatsapp-agent/dist/base.js").write_text("base\n")
         (self.paths["af26-front"] / ".next/app.js").write_text("front\n")
+        for release in ("af26-api", "af26-front"):
+            (self.paths[release] / "README.md").write_text("tracked\n")
+            (self.paths[release] / "node_modules/package").mkdir(parents=True)
+            (self.paths[release] / "node_modules/package/index.js").write_text("dependency\n")
+        (self.paths["af26-front"] / "apps/whatsapp-agent/src").mkdir(parents=True)
+        (self.paths["af26-front"] / "apps/whatsapp-agent/src/base.ts").write_text("base\n")
         (self.paths["af26-front"] / ".next/cache/images/key").mkdir(parents=True)
         (self.paths["af26-front"] / ".next/cache/images/key/item.webp").write_text("derived\n")
 
@@ -1078,6 +1091,8 @@ class LegacyPrecontractFiveFixture:
                                          "apps/whatsapp-agent/dist/base.js")},
                 "frontend": {"app.js": sha(self.paths["af26-front"] / ".next/app.js")},
             },
+            "preservation": {"metadata": {"candidateDestinations": {
+                str(self.source_root): True}}},
         })
         self.r879_source = self.evidence / "879-src.sha256"
         self.r879_source.write_text(
@@ -1141,6 +1156,7 @@ class LegacyPrecontractFiveFixture:
         return {"schemaVersion": 1, "batchId": "fixture-five",
                 "sourceInventorySha256": "0" * 64,
                 "sourceGraph": item(self.graph), "externalDataTarget": str(self.data),
+                "af26SourceRoot": str(self.source_root),
                 "af26Manifest": item(self.af26_manifest),
                 "r879": {"manifest": item(self.r879_manifest),
                           "sourceManifest": item(self.r879_source),
@@ -1780,6 +1796,25 @@ class GenerationRetirementTest(unittest.TestCase):
                          for item in proof["protectedReleases"]}
             self.assertIn("unmanifested_difference", protected["b9-api"])
             self.assertIn("parent_authority", protected["afbb-api"])
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_five_protects_uncovered_leaf_only(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            (fixture.paths["af26-front"] / "unique-outside-next.txt").write_text("unknown\n")
+            for item in fixture.binding["releases"]:
+                if item["releaseId"] == "af26-front":
+                    item["allocatedBytes"] = MODULE.structural_metrics(
+                        fixture.paths["af26-front"])["allocatedBytes"]
+            fixture._write_inventory()
+            fixture.binding["sourceInventorySha256"] = sha(fixture.inventory)
+            proof = fixture.qualify()
+            self.assertEqual({item["releaseId"] for item in proof["releases"]},
+                             {"af26-api", "879-api", "b9-api", "afbb-api"})
+            self.assertEqual(proof["protectedReleases"], [{
+                "releaseId": "af26-front", "path": str(fixture.paths["af26-front"]),
+                "predicate": "af26_frontend_uncovered_leaf"}])
         finally:
             fixture.close()
 

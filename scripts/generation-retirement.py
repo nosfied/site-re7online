@@ -325,6 +325,7 @@ LEGACY_PRECONTRACT_FIVE_BATCH = {
         "sha256": "7b9ea5fe44f0a280d314a463aaff9b4e13413071cf42e1177fc4e0756505cb41",
     },
     "externalDataTarget": "/opt/re7online/site-re7online/apps/whatsapp-agent/.data",
+    "af26SourceRoot": "/opt/re7online/release-sources/freeform-window-af26",
     "af26Manifest": {
         "path": "/opt/re7online/backups/converta-persistent/preparations/"
                 "immutable-708f018c-vps-20261027T152109Z-fixed-current-bd83b8b5-v2/"
@@ -3379,6 +3380,28 @@ def _historical_leaf_map(root: Path, predicate: str) -> dict[str, tuple[Any, ...
     return result
 
 
+def _historical_leaf_map_sha256(values: dict[str, tuple[Any, ...]]) -> str:
+    return digest_bytes(canonical({key: list(value) for key, value in values.items()}))
+
+
+def _historical_complete_against_source(
+        candidate: dict[str, tuple[Any, ...]], source: dict[str, tuple[Any, ...]],
+        component: str, predicate: str) -> dict[str, Any]:
+    """Prove every non-executable leaf remains in the preserved source tree."""
+    source_excluded = ("apps/whatsapp-agent/dist/", ".next/")
+    candidate_excluded = (("apps/whatsapp-agent/dist/",) if component == "api" else
+                          (".next/",))
+    external_data = "apps/whatsapp-agent/.data"
+    source_baseline = {key: value for key, value in source.items()
+                       if key != external_data and not key.startswith(source_excluded)}
+    candidate_baseline = {key: value for key, value in candidate.items()
+                          if key != external_data and not key.startswith(candidate_excluded)}
+    if candidate_baseline != source_baseline:
+        deny(f"{predicate}_uncovered_leaf")
+    return {"preservedSourceLeafCount": len(source_baseline),
+            "preservedSourceLeafMapSha256": _historical_leaf_map_sha256(source_baseline)}
+
+
 def _historical_manifest_delta(raw: bytes, predicate: str) -> tuple[dict[str, Any], set[str]]:
     value = object_json(raw, predicate)
     files = value.get("apiFiles")
@@ -3473,6 +3496,23 @@ def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
             not isinstance(file_hashes.get("api"), dict) or
             not isinstance(file_hashes.get("frontend"), dict)):
         deny("legacy_precontract_af26_schema")
+    source_root = Path(binding["af26SourceRoot"])
+    candidate_destinations = af26.get("preservation", {}).get(
+        "metadata", {}).get("candidateDestinations", {})
+    if candidate_destinations.get(str(source_root)) is not True:
+        deny("legacy_precontract_af26_source_binding")
+    try:
+        source_info = source_root.lstat()
+    except OSError:
+        deny("legacy_precontract_af26_source_identity")
+    if (source_root.is_symlink() or not stat.S_ISDIR(source_info.st_mode) or
+            source_info.st_uid != os.geteuid() or stat.S_IMODE(source_info.st_mode) & 0o022):
+        deny("legacy_precontract_af26_source_identity")
+    source_map = _historical_leaf_map(source_root, "af26_source")
+    source_authority = {"path": str(source_root),
+                        "device": source_info.st_dev, "inode": source_info.st_ino,
+                        "leafCount": len(source_map),
+                        "leafMapSha256": _historical_leaf_map_sha256(source_map)}
 
     authority_raw: dict[str, bytes] = {}
     authority_bindings: list[dict[str, str]] = [binding["af26Manifest"]]
@@ -3553,17 +3593,21 @@ def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
                 deny(f"af26_{scope}_schema")
             normalized[(prefix / relative).as_posix()] = digest
         _verify_historical_hashes(path, normalized, f"af26_{scope}")
-        observed = {relative for relative in _historical_leaf_map(
-            path, f"af26_{scope}_inventory") if relative.startswith(prefix.as_posix() + "/")}
+        complete_map = _historical_leaf_map(path, f"af26_{scope}_inventory")
+        observed = {relative for relative in complete_map
+                    if relative.startswith(prefix.as_posix() + "/")}
         missing = set(normalized) - observed
         extra = observed - set(normalized)
         allowed_cache = (scope == "frontend" and all(
             item.startswith(".next/cache/images/") for item in extra))
         if missing or extra and not allowed_cache:
             deny(f"af26_{scope}_unmanifested_executable")
+        completeness = _historical_complete_against_source(
+            complete_map, source_map, scope, f"af26_{scope}")
         return {"manifestSha256": binding["af26Manifest"]["sha256"],
                 "verifiedFiles": len(normalized),
-                "derivedRuntimeCacheFiles": len(extra)}
+                "derivedRuntimeCacheFiles": len(extra),
+                "preservedSource": source_authority, **completeness}
 
     attempt(af26_api, lambda path: {**verify_af26(path, "api"),
         "externalData": _historical_external_data_link(

@@ -1524,7 +1524,10 @@ referência não é, sozinha, autoridade de retirada.
 
 A fronteira `qualify-legacy-precontract-five` autentica as identidades e caminhos
 literais e reconstrói a linhagem sem fabricar manifesto moderno. `af26` é provado
-pelo manifesto de executáveis preservado; `879` pelos manifests completos de
+pelo manifesto de executáveis preservado e pela igualdade integral de todas as
+folhas não executáveis com a fonte histórica preservada
+`release-sources/freeform-window-af26`; folha desconhecida protege apenas a árvore
+afetada. `879` é provado pelos manifests completos de
 source/dist e pelo baseline `af26` preservado; `b9` e `afbb` pelos deltas exatos e
 encadeados. A comparação dirigida comprovou 425 hashes de API e 1.645 de frontend
 em `af26`, 428 hashes de source e 425 de dist em `879`, 26 caminhos no delta
