@@ -31,6 +31,8 @@
   — parecer `ADMISSION_PARTIAL`: independência e capacidade preliminar
   comprovadas; target da Inbox e lifecycle terminal da raiz inteira ainda
   pendentes, sem iniciar build ou E1.2.
+- [E1.4 — continuidade, evidências já válidas e prevenção de retrabalho](../reviews/CONVERTA_E1_4_CONTINUIDADE_E_LICOES_2026-11-13.md)
+  — histórico do piloto, sucessos e negativas da release Inbox, hashes e regras de não repetição; aceite já materializado, finalize e fechamento de disco pendentes.
 - [E1.4 — integração final do builder descartável](../reviews/CONVERTA_E1_4_DISPOSABLE_BUILDER_PRODUCTION_INTEGRATION_2026-11-13.md)
   — handoff schema 3 preserva a dívida externa sem fabricar closure; observação
   privilegiada fechada cobre `prepare` e `execute` da geração real em fixture.
