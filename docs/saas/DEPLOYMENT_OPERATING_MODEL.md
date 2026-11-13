@@ -5,6 +5,9 @@
 Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md).
 A única instrução executável permanece o [runbook](DEPLOY_RUNBOOK.md). O estado
 produtivo informado em 13/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md),
+e com o registro legado E0 ainda validado por
+[CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json)
+(exclusivamente histórico, não seleção atual),
 com recibos e limites de inferência em
 [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md).
 
