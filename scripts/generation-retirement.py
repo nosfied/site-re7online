@@ -3431,10 +3431,16 @@ def _historical_leaf_map_sha256(values: dict[str, tuple[Any, ...]]) -> str:
     return digest_bytes(canonical({key: list(value) for key, value in values.items()}))
 
 
-def _historical_complete_against_source(
+def _historical_component_baselines(
         candidate: dict[str, tuple[Any, ...]], source: dict[str, tuple[Any, ...]],
-        component: str, predicate: str) -> dict[str, Any]:
-    """Prove every non-executable leaf remains in the preserved source tree."""
+        component: str) -> tuple[dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]]]:
+    """Return the non-executable leaves governed by the AF26 closure.
+
+    Executables retain their existing manifests and the external .data link is
+    authenticated separately.  This helper deliberately does not classify an
+    uncovered leaf by its name: a leaf absent from the historical source remains
+    uncovered until an authenticated successor custody contains the same bytes.
+    """
     source_excluded = ("apps/whatsapp-agent/dist/", ".next/")
     candidate_excluded = (("apps/whatsapp-agent/dist/",) if component == "api" else
                           (".next/",))
@@ -3443,10 +3449,122 @@ def _historical_complete_against_source(
                        if key != external_data and not key.startswith(source_excluded)}
     candidate_baseline = {key: value for key, value in candidate.items()
                           if key != external_data and not key.startswith(candidate_excluded)}
+    return candidate_baseline, source_baseline
+
+
+def _historical_complete_against_source(
+        candidate: dict[str, tuple[Any, ...]], source: dict[str, tuple[Any, ...]],
+        component: str, predicate: str) -> dict[str, Any]:
+    """Prove every non-executable leaf remains in the preserved source tree."""
+    candidate_baseline, source_baseline = _historical_component_baselines(
+        candidate, source, component)
     if candidate_baseline != source_baseline:
         deny(f"{predicate}_uncovered_leaf")
     return {"preservedSourceLeafCount": len(source_baseline),
             "preservedSourceLeafMapSha256": _historical_leaf_map_sha256(source_baseline)}
+
+
+def _paths_overlap(left: Path, right: Path) -> bool:
+    return left == right or left in right.parents or right in left.parents
+
+
+def _historical_complete_with_successor_custody(
+        candidate_root: Path, candidate: dict[str, tuple[Any, ...]],
+        source: dict[str, tuple[Any, ...]], component: str, predicate: str,
+        descriptor: dict[str, Any], binding: dict[str, str], batch_id: str,
+        protected_roots: list[Path]) -> dict[str, Any]:
+    """Close AF26 with an independently stored, byte-authenticated leaf set.
+
+    The receipt is not trusted as an assertion.  Its private bytes are bound by
+    the caller-provided digest, the custody directory is reopened by identity,
+    and every uncovered leaf is compared again by type, mode, digest or literal
+    symlink target.  The custody must contain exactly that disjoint complement.
+    """
+    if set(binding) != {"path", "sha256"}:
+        deny(f"{predicate}_successor_custody_binding")
+    receipt_path = Path(binding["path"])
+    if (not receipt_path.is_absolute() or any(
+            _paths_overlap(receipt_path, root) for root in protected_roots)):
+        deny(f"{predicate}_successor_custody_scope")
+    receipt_raw, _ = stable_private(receipt_path, binding["sha256"])
+    receipt = object_json(receipt_raw, f"{predicate}-successor-custody")
+    expected_keys = {
+        "schemaVersion", "kind", "batchId", "releaseId", "component",
+        "runtimePath", "runtimeLeafMapSha256", "custodyRoot",
+        "uncoveredLeafCount", "uncoveredLeafMapSha256",
+        "custodyLeafMapSha256", "restorationLeafMapSha256",
+        "readbackVerified", "restorationVerified",
+    }
+    if (set(receipt) != expected_keys or receipt.get("schemaVersion") != 1 or
+            receipt.get("kind") != "LEGACY_PRECONTRACT_SUCCESSOR_CUSTODY" or
+            receipt.get("batchId") != batch_id or
+            receipt.get("releaseId") != descriptor["releaseId"] or
+            receipt.get("component") != component or
+            receipt.get("runtimePath") != str(candidate_root) or
+            receipt.get("readbackVerified") is not True or
+            receipt.get("restorationVerified") is not True):
+        deny(f"{predicate}_successor_custody_schema")
+
+    candidate_baseline, source_baseline = _historical_component_baselines(
+        candidate, source, component)
+    # A successor custody can preserve candidate-only or divergent bytes.  It
+    # cannot excuse loss of a historical source leaf from the installed tree.
+    if set(source_baseline) - set(candidate_baseline):
+        deny(f"{predicate}_source_leaf_missing")
+    uncovered = {key: value for key, value in candidate_baseline.items()
+                 if source_baseline.get(key) != value}
+    if not uncovered:
+        deny(f"{predicate}_successor_custody_redundant")
+
+    root_value = receipt.get("custodyRoot")
+    if (not isinstance(root_value, dict) or
+            set(root_value) != {"path", "device", "inode", "uid", "gid", "mode"}):
+        deny(f"{predicate}_successor_custody_identity")
+    custody_root = Path(str(root_value.get("path", "")))
+    if (not custody_root.is_absolute() or any(
+            _paths_overlap(custody_root, root) for root in protected_roots)):
+        deny(f"{predicate}_successor_custody_scope")
+    try:
+        custody_info = custody_root.lstat()
+    except OSError:
+        deny(f"{predicate}_successor_custody_identity")
+    observed_identity = {
+        "path": str(custody_root), "device": custody_info.st_dev,
+        "inode": custody_info.st_ino, "uid": custody_info.st_uid,
+        "gid": custody_info.st_gid, "mode": f"{stat.S_IMODE(custody_info.st_mode):04o}",
+    }
+    if (custody_root.is_symlink() or not stat.S_ISDIR(custody_info.st_mode) or
+            custody_info.st_uid != os.geteuid() or custody_info.st_gid != os.getegid() or
+            stat.S_IMODE(custody_info.st_mode) != 0o700 or root_value != observed_identity):
+        deny(f"{predicate}_successor_custody_identity")
+
+    custody_map = _historical_leaf_map(custody_root, f"{predicate}_successor_custody")
+    # Restoration is demonstrated from the two independently reopened sources,
+    # not inferred from the receipt's boolean.  Custody bytes replace only the
+    # candidate leaves that historical authority does not authenticate.
+    restored = dict(source_baseline)
+    restored.update(custody_map)
+    uncovered_sha = _historical_leaf_map_sha256(uncovered)
+    custody_sha = _historical_leaf_map_sha256(custody_map)
+    candidate_sha = _historical_leaf_map_sha256(candidate)
+    baseline_sha = _historical_leaf_map_sha256(candidate_baseline)
+    if (custody_map != uncovered or restored != candidate_baseline or
+            receipt.get("runtimeLeafMapSha256") != candidate_sha or
+            receipt.get("uncoveredLeafCount") != len(uncovered) or
+            receipt.get("uncoveredLeafMapSha256") != uncovered_sha or
+            receipt.get("custodyLeafMapSha256") != custody_sha or
+            receipt.get("restorationLeafMapSha256") != baseline_sha):
+        deny(f"{predicate}_successor_custody_content")
+    return {
+        "preservedSourceLeafCount": len(source_baseline),
+        "preservedSourceLeafMapSha256": _historical_leaf_map_sha256(source_baseline),
+        "successorCustody": {
+            "receipt": binding, "rootIdentity": observed_identity,
+            "uncoveredLeafCount": len(uncovered),
+            "uncoveredLeafMapSha256": uncovered_sha,
+            "restorationLeafMapSha256": baseline_sha,
+        },
+    }
 
 
 def _historical_manifest_delta(raw: bytes, predicate: str) -> tuple[dict[str, Any], set[str]]:
@@ -3590,6 +3708,19 @@ def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
     protected: list[dict[str, str]] = []
     content_maps: dict[str, dict[str, tuple[Any, ...]]] = {}
     authority_ok: dict[str, bool] = {}
+    custody_bindings: dict[str, dict[str, str]] = {}
+    for component in ("api", "frontend"):
+        path = getattr(args, f"af26_{component}_successor_custody_receipt", None)
+        expected = getattr(args, f"af26_{component}_successor_custody_receipt_sha256", None)
+        if (path is None) != (expected is None):
+            deny(f"legacy_precontract_{component}_successor_custody_binding")
+        if path is not None:
+            if not isinstance(path, Path) or not path.is_absolute() or not SHA256.fullmatch(expected):
+                deny(f"legacy_precontract_{component}_successor_custody_binding")
+            custody_bindings[component] = {"path": str(path), "sha256": expected}
+    if (len(custody_bindings) == 2 and
+            custody_bindings["api"]["path"] == custody_bindings["frontend"]["path"]):
+        deny("legacy_precontract_successor_custody_distinct")
 
     def attempt(descriptor: dict[str, Any], verifier: Any) -> None:
         release = descriptor["releaseId"]
@@ -3652,8 +3783,17 @@ def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
             item.startswith(".next/cache/images/") for item in extra))
         if missing or extra and not allowed_cache:
             deny(f"af26_{scope}_unmanifested_executable")
-        completeness = _historical_complete_against_source(
-            complete_map, source_map, scope, f"af26_{scope}")
+        custody = custody_bindings.get(scope)
+        if custody is None:
+            completeness = _historical_complete_against_source(
+                complete_map, source_map, scope, f"af26_{scope}")
+        else:
+            completeness = _historical_complete_with_successor_custody(
+                path, complete_map, source_map, scope, f"af26_{scope}",
+                descriptors[path.name], custody, binding["batchId"],
+                [Path(item["installedReleasePath"]) for item in binding["releases"]] +
+                [Path(binding["af26SourceRoot"]), Path(binding["sourceGraph"]["path"])])
+            authority_bindings.append(custody)
         return {"manifestSha256": binding["af26Manifest"]["sha256"],
                 "verifiedFiles": len(normalized),
                 "derivedRuntimeCacheFiles": len(extra),
@@ -5842,6 +5982,10 @@ def parser() -> argparse.ArgumentParser:
     precontract_parser.add_argument("--inventory", type=Path, required=True)
     precontract_parser.add_argument("--inventory-sha256", required=True)
     precontract_parser.add_argument("--proof-output", type=Path, required=True)
+    precontract_parser.add_argument("--af26-api-successor-custody-receipt", type=Path)
+    precontract_parser.add_argument("--af26-api-successor-custody-receipt-sha256")
+    precontract_parser.add_argument("--af26-frontend-successor-custody-receipt", type=Path)
+    precontract_parser.add_argument("--af26-frontend-successor-custody-receipt-sha256")
     precontract_parser.set_defaults(handler=qualify_legacy_precontract_five)
     reconciliation_parser = commands.add_parser("reconcile-release-graph")
     reconciliation_parser.add_argument("--request", type=Path, required=True)

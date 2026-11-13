@@ -1175,12 +1175,60 @@ class LegacyPrecontractFiveFixture:
             }
         private_json(self.inventory, {"targets": targets})
 
-    def qualify(self):
+    def successor_custody(self, component):
+        release = "af26-api" if component == "api" else "af26-front"
+        runtime = self.paths[release]
+        complete = MODULE._historical_leaf_map(runtime, "fixture-runtime")
+        source = MODULE._historical_leaf_map(self.source_root, "fixture-source")
+        candidate_baseline, source_baseline = MODULE._historical_component_baselines(
+            complete, source, component)
+        uncovered = {key: value for key, value in candidate_baseline.items()
+                     if source_baseline.get(key) != value}
+        custody = self.evidence / f"{component}-successor-custody"
+        custody.mkdir(mode=0o700)
+        for relative in uncovered:
+            source_path = runtime / relative
+            destination = custody / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if source_path.is_symlink():
+                os.symlink(os.readlink(source_path), destination)
+            else:
+                shutil.copy2(source_path, destination)
+        custody_map = MODULE._historical_leaf_map(custody, "fixture-custody")
+        info = custody.lstat()
+        receipt = self.evidence / f"{component}-successor-custody-receipt.json"
+        private_json(receipt, {
+            "schemaVersion": 1,
+            "kind": "LEGACY_PRECONTRACT_SUCCESSOR_CUSTODY",
+            "batchId": self.binding["batchId"],
+            "releaseId": release,
+            "component": component,
+            "runtimePath": str(runtime),
+            "runtimeLeafMapSha256": MODULE._historical_leaf_map_sha256(complete),
+            "custodyRoot": {"path": str(custody), "device": info.st_dev,
+                            "inode": info.st_ino, "uid": info.st_uid,
+                            "gid": info.st_gid,
+                            "mode": f"{stat.S_IMODE(info.st_mode):04o}"},
+            "uncoveredLeafCount": len(uncovered),
+            "uncoveredLeafMapSha256": MODULE._historical_leaf_map_sha256(uncovered),
+            "custodyLeafMapSha256": MODULE._historical_leaf_map_sha256(custody_map),
+            "restorationLeafMapSha256": MODULE._historical_leaf_map_sha256(
+                candidate_baseline),
+            "readbackVerified": True,
+            "restorationVerified": True,
+        })
+        return receipt, custody
+
+    def qualify(self, custody=None):
         if self.proof.exists(): self.proof.unlink()
+        custody = custody or {}
+        arguments = dict(inventory=self.inventory, inventory_sha256=sha(self.inventory),
+                         proof_output=self.proof)
+        for component, receipt in custody.items():
+            arguments[f"af26_{component}_successor_custody_receipt"] = receipt
+            arguments[f"af26_{component}_successor_custody_receipt_sha256"] = sha(receipt)
         with patch.object(MODULE, "LEGACY_PRECONTRACT_FIVE_BATCH", self.binding):
-            MODULE.qualify_legacy_precontract_five(SimpleNamespace(
-                inventory=self.inventory, inventory_sha256=sha(self.inventory),
-                proof_output=self.proof))
+            MODULE.qualify_legacy_precontract_five(SimpleNamespace(**arguments))
         return json.loads(self.proof.read_text())
 
     def close(self): self.temp.cleanup()
@@ -1855,6 +1903,120 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(proof["protectedReleases"], [{
                 "releaseId": "af26-front", "path": str(fixture.paths["af26-front"]),
                 "predicate": "af26_frontend_uncovered_leaf"}])
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_successor_custody_closes_both_af26_components(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            for release in ("af26-api", "879-api", "b9-api", "afbb-api", "af26-front"):
+                private = fixture.paths[release] / ".env.production.local"
+                private.write_text("PRIVATE_FIXTURE=value\n")
+                private.chmod(0o600)
+                (fixture.paths[release] / "next-env.d.ts").write_text("generated\n")
+                for descriptor in fixture.binding["releases"]:
+                    if descriptor["releaseId"] == release:
+                        descriptor["allocatedBytes"] = MODULE.structural_metrics(
+                            fixture.paths[release])["allocatedBytes"]
+            fixture._write_inventory()
+            fixture.binding["sourceInventorySha256"] = sha(fixture.inventory)
+            api_receipt, _ = fixture.successor_custody("api")
+            frontend_receipt, _ = fixture.successor_custody("frontend")
+            proof = fixture.qualify({"api": api_receipt, "frontend": frontend_receipt})
+            self.assertEqual(len(proof["releases"]), 5)
+            self.assertEqual(proof["protectedReleases"], [])
+            af26 = {item["component"]: item for item in proof["releases"]
+                    if item["releaseId"].startswith("af26")}
+            for component in ("api", "frontend"):
+                custody = af26[component]["authorityEvidence"]["successorCustody"]
+                self.assertGreater(custody["uncoveredLeafCount"], 0)
+                self.assertRegex(custody["uncoveredLeafMapSha256"], r"^[0-9a-f]{64}$")
+            receipt_paths = {str(api_receipt), str(frontend_receipt)}
+            self.assertTrue(receipt_paths.issubset(
+                {item["path"] for item in proof["authorityFiles"]}))
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_successor_custody_denies_drift_without_blocking_frontend(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            unique = fixture.paths["af26-api"] / ".env.production.local"
+            unique.write_text("PRIVATE_FIXTURE=value\n"); unique.chmod(0o600)
+            for descriptor in fixture.binding["releases"]:
+                if descriptor["releaseId"] == "af26-api":
+                    descriptor["allocatedBytes"] = MODULE.structural_metrics(
+                        fixture.paths["af26-api"])["allocatedBytes"]
+            fixture._write_inventory()
+            fixture.binding["sourceInventorySha256"] = sha(fixture.inventory)
+            receipt, custody = fixture.successor_custody("api")
+            (custody / ".env.production.local").write_text("tampered\n")
+            proof = fixture.qualify({"api": receipt})
+            self.assertEqual({item["releaseId"] for item in proof["releases"]},
+                             {"af26-front"})
+            protected = {item["releaseId"]: item["predicate"]
+                         for item in proof["protectedReleases"]}
+            self.assertIn("successor_custody_content", protected["af26-api"])
+            self.assertIn("parent_authority", protected["879-api"])
+            self.assertIn("parent_authority", protected["b9-api"])
+            self.assertIn("parent_authority", protected["afbb-api"])
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_successor_custody_denies_incomplete_and_overlapping_roots(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            first = fixture.paths["af26-api"] / "private-one"
+            second = fixture.paths["af26-api"] / "private-two"
+            first.write_text("one\n"); second.write_text("two\n")
+            for descriptor in fixture.binding["releases"]:
+                if descriptor["releaseId"] == "af26-api":
+                    descriptor["allocatedBytes"] = MODULE.structural_metrics(
+                        fixture.paths["af26-api"])["allocatedBytes"]
+            fixture._write_inventory()
+            fixture.binding["sourceInventorySha256"] = sha(fixture.inventory)
+            receipt, custody = fixture.successor_custody("api")
+            (custody / "private-two").unlink()
+            proof = fixture.qualify({"api": receipt})
+            protected = {item["releaseId"]: item["predicate"]
+                         for item in proof["protectedReleases"]}
+            self.assertIn("successor_custody_content", protected["af26-api"])
+
+            # A self-referential custody can carry internally consistent declared
+            # hashes, but scope validation must reject it before trusting bytes.
+            value = json.loads(receipt.read_text())
+            runtime = fixture.paths["af26-api"]
+            info = runtime.lstat()
+            value["custodyRoot"] = {"path": str(runtime), "device": info.st_dev,
+                                    "inode": info.st_ino, "uid": info.st_uid,
+                                    "gid": info.st_gid,
+                                    "mode": f"{stat.S_IMODE(info.st_mode):04o}"}
+            private_json(receipt, value)
+            proof = fixture.qualify({"api": receipt})
+            protected = {item["releaseId"]: item["predicate"]
+                         for item in proof["protectedReleases"]}
+            self.assertIn("successor_custody_scope", protected["af26-api"])
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_successor_custody_interrupted_receipt_is_not_authority(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            unique = fixture.paths["af26-front"] / "unique-private"
+            unique.write_text("preserve\n")
+            for descriptor in fixture.binding["releases"]:
+                if descriptor["releaseId"] == "af26-front":
+                    descriptor["allocatedBytes"] = MODULE.structural_metrics(
+                        fixture.paths["af26-front"])["allocatedBytes"]
+            fixture._write_inventory()
+            fixture.binding["sourceInventorySha256"] = sha(fixture.inventory)
+            receipt, _ = fixture.successor_custody("frontend")
+            receipt.write_bytes(receipt.read_bytes()[:32])
+            proof = fixture.qualify({"frontend": receipt})
+            protected = {item["releaseId"]: item["predicate"]
+                         for item in proof["protectedReleases"]}
+            self.assertIn("json_invalid", protected["af26-front"])
+            self.assertEqual({item["releaseId"] for item in proof["releases"]},
+                             {"af26-api", "879-api", "b9-api", "afbb-api"})
         finally:
             fixture.close()
 
