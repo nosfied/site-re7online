@@ -68,6 +68,54 @@ RUNTIME_CACHE_36B_EXTRAS = {
         "sha256": "269d00bf54ca36881b71b4d3e769841cab6a868edbd4378c472db1b06292926c",
     },
 }
+RUNTIME_CACHE_FA10_RELEASE = "immutable-fa10f4f5-external-20261112T233820Z"
+RUNTIME_CACHE_FA10_TARGET = "fa10f4f59c9a05328e536dd25a1668c3ba25939e"
+RUNTIME_CACHE_FA10_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-fa10f4f5-external-20261112T233820Z-api-frontend-88a5e8b7-v1-once"
+)
+RUNTIME_CACHE_FA10_INDEX_SHA256 = "312e047ec58514eb62f115c2efe115fe261de7deafdd052bd428b3ad4d376b19"
+RUNTIME_CACHE_FA10_MANIFEST_SHA256 = "8e255cdc234ccfa385751c934c181ed58eb2d0e8a9dcb1c71db81be1e9ffa3cc"
+RUNTIME_CACHE_FA10_INTENT_SHA256 = "cf22eb0f466b448092e1bebd9bf83279c076cf654b6b00b4e57e725ade3b9bc2"
+RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256 = "5e03099c401dc155522cb2b36b667ffaf32d2d7daed1ba219682f804a672f017"
+RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256 = "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
+RUNTIME_CACHE_FA10_LOCK_SHA256 = "f9e10f1075681b67ede7c6e62ade690c2a50a562ace6604051aebe342db23339"
+RUNTIME_CACHE_FA10_EXTRAS = {
+    "frontend-runtime/.next/cache": {"type": "directory", "mode": 0o755},
+    "frontend-runtime/.next/cache/images": {"type": "directory", "mode": 0o755},
+    "frontend-runtime/.next/cache/images/5Zf6Dt9Da6GBJFCrYyD0xu2dFAWqjPJ01EZzZ76RaCc": {
+        "type": "directory", "mode": 0o755,
+    },
+    ("frontend-runtime/.next/cache/images/5Zf6Dt9Da6GBJFCrYyD0xu2dFAWqjPJ01EZzZ76RaCc/"
+     "14400.1794581947655.PWJME0lVvfrDOLRUu2QulRp1jBxfu1J5ZOWEpf0UqF0.Vy8iMTFmYjYtMWExZDE5YWIzMzgi.webp"): {
+        "type": "file", "mode": 0o644, "size": 10558,
+        "sha256": "3d624c134955bdfac338b454bb642e951a758c1c5fbb527964e584a5fd14a85d",
+    },
+    "frontend-runtime/.next/cache/images/C6kHOGVuBg99mi5S3icZefk2-A0olpaDNKnM99SLY6c": {
+        "type": "directory", "mode": 0o755,
+    },
+    ("frontend-runtime/.next/cache/images/C6kHOGVuBg99mi5S3icZefk2-A0olpaDNKnM99SLY6c/"
+     "14400.1794582030725.up7CnLxV2Ygzw45ELtSmlTWWqbBVEb1jmNYkVzoPN0M.Vy8iMWIxOGYtMWExZDE5YWIzMzgi.webp"): {
+        "type": "file", "mode": 0o644, "size": 4432,
+        "sha256": "ba9ec29cbc55d98833c38e442ed4a6953596a9b05511bd6398d624573a0f3743",
+    },
+    "frontend-runtime/.next/cache/images/To4GqmXFYdIkSU_SW9FDP1_xRixDFs9QFhJLchkU4LM": {
+        "type": "directory", "mode": 0o755,
+    },
+    ("frontend-runtime/.next/cache/images/To4GqmXFYdIkSU_SW9FDP1_xRixDFs9QFhJLchkU4LM/"
+     "14400.1794581947693.Jp0Av1TKNogbcbTT52mEHKtqho7b1DeMRy2xsGKSkmw.Vy8iMWIxOGYtMWExZDE5YWIzMzgi.webp"): {
+        "type": "file", "mode": 0o644, "size": 11454,
+        "sha256": "269d00bf54ca36881b71b4d3e769841cab6a868edbd4378c472db1b06292926c",
+    },
+    "frontend-runtime/.next/cache/images/r1KbNqxU2NuD77PnVvrMwZrgKgdEfSJkSuDExI5kGJo": {
+        "type": "directory", "mode": 0o755,
+    },
+    ("frontend-runtime/.next/cache/images/r1KbNqxU2NuD77PnVvrMwZrgKgdEfSJkSuDExI5kGJo/"
+     "14400.1794582030736.E97iu2qJMpu_QOlvSzWQQBBTk60sVR61v3ZerurFIKs.Vy8iMTFmYjYtMWExZDE5YWIzMzgi.webp"): {
+        "type": "file", "mode": 0o644, "size": 3732,
+        "sha256": "13dee2bb6a89329bbf40e96f4b359040105393ad2c551eb5bf765eaeeac520ab",
+    },
+}
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -698,21 +746,46 @@ class Driver:
                                       observed_extras: dict[str, dict[str, Any]],
                                       journal: dict[str, Any]) -> dict[str, Any]:
         value = self._runtime_cache_manifest()
-        if (self.inputs.release != RUNTIME_CACHE_36B_RELEASE or
-                self.inputs.target != RUNTIME_CACHE_36B_TARGET or
-                self.inputs.transaction_root != RUNTIME_CACHE_36B_TRANSACTION or
-                index_sha256 != RUNTIME_CACHE_36B_INDEX_SHA256 or
-                manifest_sha256 != RUNTIME_CACHE_36B_MANIFEST_SHA256 or
+        profiles = {
+            RUNTIME_CACHE_36B_RELEASE: {
+                "target": RUNTIME_CACHE_36B_TARGET,
+                "transaction": RUNTIME_CACHE_36B_TRANSACTION,
+                "indexSha256": RUNTIME_CACHE_36B_INDEX_SHA256,
+                "manifestSha256": RUNTIME_CACHE_36B_MANIFEST_SHA256,
+                "intentSha256": RUNTIME_CACHE_36B_INTENT_SHA256,
+                "negativeJournalSha256": RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256,
+                "acceptanceSha256": RUNTIME_CACHE_36B_ACCEPTANCE_SHA256,
+                "lockSha256": RUNTIME_CACHE_36B_LOCK_SHA256,
+                "extras": RUNTIME_CACHE_36B_EXTRAS,
+            },
+            RUNTIME_CACHE_FA10_RELEASE: {
+                "target": RUNTIME_CACHE_FA10_TARGET,
+                "transaction": RUNTIME_CACHE_FA10_TRANSACTION,
+                "indexSha256": RUNTIME_CACHE_FA10_INDEX_SHA256,
+                "manifestSha256": RUNTIME_CACHE_FA10_MANIFEST_SHA256,
+                "intentSha256": RUNTIME_CACHE_FA10_INTENT_SHA256,
+                "negativeJournalSha256": RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256,
+                "acceptanceSha256": RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256,
+                "lockSha256": RUNTIME_CACHE_FA10_LOCK_SHA256,
+                "extras": None,
+                "volatileCachePolicy": "FA10_NEXT_IMAGE_CACHE_V1",
+            },
+        }
+        profile = profiles.get(self.inputs.release)
+        if (profile is None or self.inputs.target != profile["target"] or
+                self.inputs.transaction_root != profile["transaction"] or
+                index_sha256 != profile["indexSha256"] or
+                manifest_sha256 != profile["manifestSha256"] or
                 self.inputs.retirement is None or
-                self.inputs.retirement.intent_sha256 != RUNTIME_CACHE_36B_INTENT_SHA256):
+                self.inputs.retirement.intent_sha256 != profile["intentSha256"]):
             deny("runtime_cache_reconciliation_scope")
         expected_binding = {
             "releaseId": self.inputs.release, "targetCommit": self.inputs.target,
             "transactionRoot": str(self.inputs.transaction_root), "indexSha256": index_sha256,
             "manifestSha256": manifest_sha256,
             "retirementIntentSha256": self.inputs.retirement.intent_sha256,
-            "acceptanceSha256": RUNTIME_CACHE_36B_ACCEPTANCE_SHA256,
-            "lockSha256": RUNTIME_CACHE_36B_LOCK_SHA256,
+            "acceptanceSha256": profile["acceptanceSha256"],
+            "lockSha256": profile["lockSha256"],
             "originalControlPlane": self.inputs.control_plane,
         }
         if any(value.get(key) != item for key, item in expected_binding.items()):
@@ -723,7 +796,7 @@ class Driver:
 
         negative = value.get("negativeJournal")
         if (not isinstance(negative, dict) or set(negative) != {"path", "sha256"} or
-                negative.get("sha256") != RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256 or
+                negative.get("sha256") != profile["negativeJournalSha256"] or
                 not isinstance(negative.get("path"), str) or
                 not Path(negative["path"]).is_absolute()):
             deny("runtime_cache_reconciliation_negative_journal")
@@ -754,12 +827,46 @@ class Driver:
             deny("runtime_cache_reconciliation_lock")
 
         entries = value.get("cacheEntries")
-        if (not isinstance(entries, list) or len(entries) != 6 or
+        if (not isinstance(entries, list) or not entries or
                 any(not isinstance(item, dict) or not isinstance(item.get("path"), str)
                     for item in entries)):
             deny("runtime_cache_reconciliation_entries")
         declared = {item["path"]: item for item in entries}
-        if set(declared) != set(RUNTIME_CACHE_36B_EXTRAS) or len(declared) != len(entries):
+        if len(declared) != len(entries):
+            deny("runtime_cache_reconciliation_entries")
+        expected_extras = profile["extras"]
+        if profile.get("volatileCachePolicy") == "FA10_NEXT_IMAGE_CACHE_V1":
+            bases = {
+                "frontend-runtime/.next/cache",
+                "frontend-runtime/.next/cache/images",
+            }
+            if (not bases.issubset(declared) or len(declared) > 256 or
+                    any(declared[path].get("type") != "directory" or
+                        declared[path].get("mode") != 0o755 for path in bases)):
+                deny("runtime_cache_reconciliation_entries")
+            for path, item in declared.items():
+                parts = PurePosixPath(path).parts
+                if path in bases:
+                    continue
+                if (len(parts) == 5 and parts[:4] ==
+                        ("frontend-runtime", ".next", "cache", "images")):
+                    if (item.get("type") != "directory" or item.get("mode") != 0o755 or
+                            not re.fullmatch(r"[A-Za-z0-9_-]{20,96}", parts[4])):
+                        deny("runtime_cache_reconciliation_entries")
+                    continue
+                if (len(parts) == 6 and parts[:4] ==
+                        ("frontend-runtime", ".next", "cache", "images")):
+                    parent = "/".join(parts[:5])
+                    if (parent not in declared or declared[parent].get("type") != "directory" or
+                            item.get("type") != "file" or item.get("mode") != 0o644 or
+                            not re.fullmatch(r"[A-Za-z0-9._-]{20,240}\.webp", parts[5]) or
+                            not isinstance(item.get("size"), int) or
+                            not 0 <= item["size"] <= 10 * 1024 * 1024 or
+                            not SHA256.fullmatch(str(item.get("sha256", "")))):
+                        deny("runtime_cache_reconciliation_entries")
+                    continue
+                deny("runtime_cache_reconciliation_entries")
+        elif set(declared) != set(expected_extras):
             deny("runtime_cache_reconciliation_entries")
         for item in entries:
             kind = item.get("type")
@@ -772,8 +879,9 @@ class Driver:
                      not isinstance(item.get("size"), int) or item["size"] < 0 or
                      not SHA256.fullmatch(str(item.get("sha256", "")))))):
                 deny("runtime_cache_reconciliation_entry")
-        sealed = {path: {"path": path, **metadata}
-                  for path, metadata in RUNTIME_CACHE_36B_EXTRAS.items()}
+        sealed = (declared if expected_extras is None else
+                  {path: {"path": path, **metadata}
+                   for path, metadata in expected_extras.items()})
         if declared != sealed:
             deny("runtime_cache_reconciliation_sealed_entries")
         if observed_extras != declared:
@@ -2277,6 +2385,10 @@ class Driver:
             self._health(candidate_asset=True)
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
             if worker != journal.get("previous", {}).get("worker"): deny("finalize_worker_changed")
+            if self.inputs.runtime_cache_reconciliation is not None:
+                recaptured_release = self._release(continuation_journal=journal)
+                if recaptured_release != release:
+                    deny("runtime_cache_reconciliation_changed")
             marker = self.release_root / "DEPLOYED"
             finalize = journal.setdefault("finalize", {})
             first_finalize = not finalize

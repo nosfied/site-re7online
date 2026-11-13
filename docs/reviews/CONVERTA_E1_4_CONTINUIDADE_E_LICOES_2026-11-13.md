@@ -66,3 +66,42 @@ Fotografias relatadas, não ocupação atual comprovada neste momento:
 **Regra para próximas atualizações:** checklist de compatibilidade **antes de abrir geração e antes de solicitar autorização**, com quatro provas: (1) produtor↔lifecycle (roots/cache); (2) export↔handoff↔retirement; (3) retirement↔driver (lock literal); (4) observer↔runtime (privilégios/perfil). Não aceitar novos PRs de infraestrutura apenas porque há um obstáculo: primeiro comparar a última operação equivalente de sucesso e corrigir o delta mínimo; não usar a implantação como laboratório de um novo fluxo.
 
 **Estado documental:** este arquivo é registro dos feitos e pendências; não altera `CURRENT_STATE`, não concede autorização para `finalize`, `pm2 save`, retirada ou limpeza. Após receipts produtivos, reconciliar `CURRENT_STATE.md/json`, documentar fechamento e atualizar o índice.
+
+## 6. Finalização aceita — negativas pré-save e continuação de cache
+
+A primeira tentativa de `finalize` terminou antes do save em
+`DEPLOY_DENY:control_plane_identity`: o driver foi executado de uma cópia privada,
+fora do checkout Git do control plane original. O request e as três evidências foram
+preservados; o journal ficou `FAILED/recoveryAction=finalize/saveCount=0`.
+
+A continuação ordinal 2 autenticou o checkout original e eliminou essa diferença,
+mas terminou, ainda antes do save, em
+`DEPLOY_DENY:runtime_cache_reconciliation_binding`. O journal resultante tem SHA-256
+`5e03099c401dc155522cb2b36b667ffaf32d2d7daed1ba219682f804a672f017`;
+dump anterior `67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171`,
+`saveCount=0` e marker ausente permanecem comprovados.
+
+A inspeção integral da release encontrou as **34.384 entradas indexadas íntegras**,
+zero ausentes, zero divergentes e somente dez extras: dois diretórios-base, quatro
+diretórios de chave e quatro imagens WebP sob
+`frontend-runtime/.next/cache/images`. Nenhum extra é symlink, executável, socket ou
+conteúdo de aplicação. A diferença em relação a `a838bd33` é que aquela ativação foi
+API-only; o frontend candidato não passou a gerar cache. O precedente `36b94c6d`
+reconciliou a mesma classe de cache, mas seu contrato é fechado àquela release.
+
+A continuação sucessora deve preservar o control plane original no binding da
+transação e autenticar separadamente o checkout/driver sucessor. Somente os dois
+argumentos `--runtime-cache-reconciliation` e seu SHA podem ser acrescentados ao
+argv do ordinal anterior. O request sucessor vincula o request e stdout/stderr/exit
+do ordinal imediatamente anterior; não pode saltar a cadeia. O contrato contém a
+lista exata das dez entradas e exige nova leitura integral durante `finalize`, mais
+uma recaptura imediatamente antes do save. Entrada nova, remoção, alteração de bytes,
+modo, tipo ou identidade nega antes de `pm2 save`.
+
+Em fixture integrada, a mesma chamada `wrapper → driver → finalize` foi exercitada
+com checkout Git sucessor real, lock/FD equivalentes, aceite existente e retirement
+de zero comandos. Uma interrupção depois do save deixou evidência durável; a
+continuação seguinte terminou sem segundo save, com marker, journal e receipt
+terminais e liberação do lock. As negativas cobrem cache inesperado ou alterado,
+entrada indexada ausente/divergente, symlink, hash/request adulterado, checkout/HEAD
+divergente e destinos ocupados. Esse ensaio não autoriza execução produtiva.
