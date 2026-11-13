@@ -475,6 +475,43 @@ def stable_regular_hash(path: Path, expected_sha: str, predicate: str) -> tuple[
     return value, after
 
 
+
+def stable_legacy_af26_manifest(path: Path, expected_sha: str) -> tuple[bytes, os.stat_result]:
+    """Read one historical 0664 authority without weakening regular-file policy.
+
+    This exception is bound to the versioned pre-contract manifest path+SHA.
+    The authenticated content is accepted only if the original is byte-stable;
+    no chmod, copied replacement, or arbitrary group-writable file is allowed.
+    """
+    binding = LEGACY_PRECONTRACT_FIVE_BATCH["af26Manifest"]
+    predicate = "legacy_precontract_af26_manifest"
+    if (str(path) != binding["path"] or expected_sha != binding["sha256"] or
+            not path.is_absolute() or not SHA256.fullmatch(expected_sha)):
+        deny(f"{predicate}_authenticated_input")
+    try:
+        before = path.lstat()
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                before.st_gid != os.getegid() or stat.S_IMODE(before.st_mode) != 0o664):
+            deny(f"{predicate}_identity")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+                deny(f"{predicate}_identity")
+            value = stream.read()
+            closed = os.fstat(stream.fileno())
+        after = path.lstat()
+    except OSError:
+        deny(f"{predicate}_read")
+    identity = lambda info: (info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                             info.st_gid, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if (identity(before) != identity(opened) or identity(opened) != identity(closed) or
+            identity(closed) != identity(after) or len(value) != after.st_size or
+            digest_bytes(value) != expected_sha):
+        deny(f"{predicate}_hash_or_drift")
+    return value, after
+
+
 def object_json(raw: bytes, label: str) -> dict[str, Any]:
     try:
         value = json.loads(raw)
@@ -3486,9 +3523,8 @@ def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
     if not isinstance(immediate, dict):
         deny("legacy_precontract_graph_schema")
 
-    af26_raw, _ = stable_regular_hash(Path(binding["af26Manifest"]["path"]),
-                                      binding["af26Manifest"]["sha256"],
-                                      "legacy_precontract_af26_manifest")
+    af26_raw, _ = stable_legacy_af26_manifest(Path(binding["af26Manifest"]["path"]),
+                                               binding["af26Manifest"]["sha256"])
     af26 = object_json(af26_raw, "legacy-precontract-af26")
     file_hashes = af26.get("fileHashes")
     artifacts = af26.get("artifacts")
