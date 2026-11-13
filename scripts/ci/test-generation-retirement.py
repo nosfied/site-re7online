@@ -1098,13 +1098,13 @@ class LegacyPrecontractFiveFixture:
         self.r879_source = self.evidence / "879-src.sha256"
         self.r879_source.write_text(
             f"{sha(source)}  apps/whatsapp-agent/src/base.ts\n")
-        self.r879_source.chmod(0o644)
+        self.r879_source.chmod(0o664)
         self.r879_compiled = self.evidence / "879-dist.sha256"
         self.r879_compiled.write_text(
             f"{sha(compiled)}  apps/whatsapp-agent/dist/base.js\n")
-        self.r879_compiled.chmod(0o644)
+        self.r879_compiled.chmod(0o664)
         self.r879_archive = self.evidence / "879.tar"; self.r879_archive.write_bytes(b"archive")
-        self.r879_archive.chmod(0o644)
+        self.r879_archive.chmod(0o664)
         self.r879_manifest = self.evidence / "879.json"
         private_json(self.r879_manifest, {
             "tarSha256": sha(self.r879_archive),
@@ -1760,24 +1760,42 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
-    def test_legacy_precontract_af26_manifest_exception_is_exact_and_strict(self):
+    def test_legacy_precontract_four_0664_authorities_exact_and_strict(self):
         fixture = LegacyPrecontractFiveFixture()
         try:
-            manifest = fixture.af26_manifest
-            expected = sha(manifest)
+            bindings = [
+                ("af26Manifest", fixture.af26_manifest),
+                ("r879.sourceManifest", fixture.r879_source),
+                ("r879.compiledManifest", fixture.r879_compiled),
+                ("r879.archive", fixture.r879_archive),
+            ]
             with patch.object(MODULE, "LEGACY_PRECONTRACT_FIVE_BATCH", fixture.binding):
-                raw, observed = MODULE.stable_legacy_af26_manifest(manifest, expected)
-                self.assertEqual(MODULE.digest_bytes(raw), expected)
-                self.assertEqual(stat.S_IMODE(observed.st_mode), 0o664)
-                for mode in (0o666, 0o644, 0o600):
-                    manifest.chmod(mode)
-                    with self.assertRaisesRegex(MODULE.Denied, "legacy_precontract_af26_manifest_identity"):
-                        MODULE.stable_legacy_af26_manifest(manifest, expected)
-                manifest.chmod(0o664)
-                with self.assertRaisesRegex(MODULE.Denied, "authenticated_input"):
-                    MODULE.stable_legacy_af26_manifest(manifest, "0" * 64)
-                with self.assertRaisesRegex(MODULE.Denied, "authenticated_input"):
-                    MODULE.stable_legacy_af26_manifest(fixture.r879_manifest, expected)
+                for key, original in bindings:
+                    with self.subTest(authority=key):
+                        expected = sha(original)
+                        raw, observed = MODULE.stable_legacy_precontract_0664(
+                            original, expected, key)
+                        self.assertEqual(MODULE.digest_bytes(raw), expected)
+                        self.assertEqual(stat.S_IMODE(observed.st_mode), 0o664)
+                        for mode in (0o666, 0o644, 0o600):
+                            original.chmod(mode)
+                            with self.assertRaisesRegex(MODULE.Denied, "_identity"):
+                                MODULE.stable_legacy_precontract_0664(original, expected, key)
+                        original.chmod(0o664)
+                        with self.assertRaisesRegex(MODULE.Denied, "authenticated_input"):
+                            MODULE.stable_legacy_precontract_0664(original, "0" * 64, key)
+                        with self.assertRaisesRegex(MODULE.Denied, "authenticated_input"):
+                            MODULE.stable_legacy_precontract_0664(
+                                fixture.afbb_manifest, expected, key)
+                        with self.assertRaisesRegex(MODULE.Denied, "authority_key"):
+                            MODULE.stable_legacy_precontract_0664(original, expected, "r879.manifest")
+                # The globally strict reader must continue rejecting every 0664 original.
+                for key, original in bindings:
+                    with self.assertRaisesRegex(MODULE.Denied, "_identity"):
+                        MODULE.stable_regular_hash(original, sha(original), key)
+                # The 0600 authorities must still be read by the strict reader only.
+                for original in (fixture.r879_manifest, fixture.b9_manifest, fixture.afbb_manifest):
+                    MODULE.stable_regular_hash(original, sha(original), "strict_control")
         finally:
             fixture.close()
 
