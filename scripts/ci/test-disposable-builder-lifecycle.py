@@ -891,6 +891,17 @@ class DisposableLifecycleTests(unittest.TestCase):
         report = self.custody / "observer-installation.private.json"
         helper = {"path": str(MODULE.PRIVILEGED_OBSERVER_PATH), "sha256": "a" * 64,
                   "device": 7, "inode": 11, "uid": 0, "gid": 0, "mode": "0500"}
+        attested_helper = {
+            "path": helper["path"], "sha256": helper["sha256"],
+            "identity": {"device": helper["device"], "inode": helper["inode"],
+                         "uid": helper["uid"], "gid": helper["gid"],
+                         "mode": helper["mode"], "type": "regular", "size": 123,
+                         "mtimeNs": 456, "ctimeNs": 789},
+            "ancestors": [{"path": "/usr/local/libexec/re7online",
+                           "identity": {"type": "directory"}}],
+            "interpreter": {"path": "/usr/bin/python3.12",
+                            "identity": {"type": "regular"}},
+        }
         write(report, {"schemaVersion": 1,
                        "kind": "A838BD33_BUILDER_OBSERVER_INSTALLATION",
                        "state": "UPGRADED",
@@ -919,7 +930,7 @@ class DisposableLifecycleTests(unittest.TestCase):
                 "capturedAtNs": now, "finishedAtNs": now,
                 "observation": {"complete": True, "references": [], "activeWriters": [],
                                 "failures": [], "failureDetailsTruncated": 0},
-                "mechanism": helper,
+                "mechanism": attested_helper,
                 "administrativeExecution": {
                     "mode": "AUTHENTICATED_SUDO", "uid": self.contract["ownerUid"],
                     "gid": self.contract["groupGid"],
@@ -935,6 +946,25 @@ class DisposableLifecycleTests(unittest.TestCase):
             patch.object(MODULE.subprocess, "run", side_effect=run_observer),
         )
         return patches, observations, report
+
+    def test_privileged_attestation_requires_runtime_identity_bound_to_installation(self) -> None:
+        installed = {"path": str(MODULE.PRIVILEGED_OBSERVER_PATH), "sha256": "a" * 64,
+                     "device": 7, "inode": 11, "uid": 0, "gid": 0, "mode": "0500"}
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_privileged_attestation"):
+            MODULE._attested_observer(installed, installed)
+        mechanism = {
+            "path": installed["path"], "sha256": installed["sha256"],
+            "identity": {"device": installed["device"], "inode": installed["inode"],
+                         "uid": 0, "gid": 0, "mode": "0500", "type": "regular",
+                         "size": 123, "mtimeNs": 456, "ctimeNs": 789},
+            "ancestors": [{"path": "/usr/local", "identity": {"type": "directory"}}],
+            "interpreter": {"path": "/usr/bin/python3.12",
+                            "identity": {"type": "regular"}},
+        }
+        MODULE._attested_observer(mechanism, installed)
+        mechanism["identity"]["inode"] += 1
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_privileged_attestation"):
+            MODULE._attested_observer(mechanism, installed)
 
     def test_privileged_profile_bridges_prepare_and_execute_to_sanitized(self) -> None:
         self.export()

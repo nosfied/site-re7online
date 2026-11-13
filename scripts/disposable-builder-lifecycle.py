@@ -730,6 +730,28 @@ def _installed_observer(path: Path, expected: str, report_path: Path,
     return helper
 
 
+def _attested_observer(mechanism: Any, installed: dict[str, Any]) -> None:
+    """Bind the helper's runtime identity to the compact installation receipt."""
+    require(isinstance(mechanism, dict) and
+            set(mechanism) == {"path", "sha256", "identity", "ancestors", "interpreter"},
+            "disposable_privileged_attestation")
+    identity = mechanism.get("identity")
+    require(mechanism.get("path") == installed["path"] and
+            mechanism.get("sha256") == installed["sha256"] and
+            isinstance(identity, dict) and
+            set(identity) == {"device", "inode", "uid", "gid", "mode", "type", "size",
+                              "mtimeNs", "ctimeNs"} and
+            identity.get("device") == installed["device"] and
+            identity.get("inode") == installed["inode"] and
+            identity.get("uid") == installed["uid"] and
+            identity.get("gid") == installed["gid"] and
+            identity.get("mode") == installed["mode"] and
+            identity.get("type") == "regular" and
+            isinstance(mechanism.get("ancestors"), list) and mechanism["ancestors"] and
+            isinstance(mechanism.get("interpreter"), dict),
+            "disposable_privileged_attestation")
+
+
 def _lock_binding(contract: dict[str, Any], descriptors: list[int]) -> list[dict[str, Any]]:
     result = []
     for key, descriptor in zip(("lifecycle", "writer"), descriptors):
@@ -785,6 +807,7 @@ def privileged_process_observation(args: argparse.Namespace, contract: dict[str,
     require(canonical(attestation) == result.stdout,
             "disposable_privileged_observer_output")
     observation = attestation.get("observation")
+    _attested_observer(attestation.get("mechanism"), mechanism)
     now = time.time_ns()
     captured = attestation.get("capturedAtNs")
     finished = attestation.get("finishedAtNs")
@@ -799,7 +822,6 @@ def privileged_process_observation(args: argparse.Namespace, contract: dict[str,
             attestation.get("lifecycleSha256") == digest(lifecycle_raw) and
             attestation.get("candidatePaths") == [contract["disposableRoot"]] and
             attestation.get("consumer") == request["consumer"] and
-            attestation.get("mechanism") == mechanism and
             attestation.get("administrativeExecution") == {
                 "mode": "AUTHENTICATED_SUDO", "uid": contract["ownerUid"],
                 "gid": contract["groupGid"], "user": pwd.getpwuid(contract["ownerUid"]).pw_name,
