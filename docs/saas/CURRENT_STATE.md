@@ -1,5 +1,17 @@
 # Estado canônico do Converta
 
+## Estado vigente — 13/11/2026: Inbox fa10f4f5 ativa, builder sucesso encerrado
+
+**DEPLOYED_RETENTION_INCOMPLETE (fotografia terminal da transação produtiva) / BUILDER_FA10_SANITIZED / PRODUCTION HEALTHY, conforme último report.** API e frontend: `immutable-fa10f4f5-external-20261112T233820Z`, target `fa10f4f59c9a05328e536dd25a1668c3ba25939e`, BUILD_ID `4j3t9N75vsvYu9t3DoFq4`; worker `immutable-e2e7f17a-20261022T005110Z`. O record anterior `a838bd33` é **histórico e retorno da API**, não release viva. O frontend anterior `b8d284b6` é retorno imediato.
+
+Journal terminal da implantação SHA-256 `45579306a46dbd79a963b9176531673124147e8a7e667eaef72fec7591bf11e5`; `saveCount=1`; dump `3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a`; marker `ef3cb8edde127f4de841f49f5a329e74fde4a7d34b5fe787463b20d7228fcf5d`; receipt retirement VPS `f12d8260d27f1bc041afddfe8badc0b46cd9f9a8b0a9a732f71b2ebd6a8fa18b` com **zero comandos e zero remoções**. Lock canônico liberado; três PM2 online, health local/público e guarda aberta na geração 47 na última observação. VPS: `7.080.562.688 B` e `8.743.987` inodes livres no último checkpoint informado — não é medição atual.
+
+Builder descartável desta release terminou `SANITIZED/CLOSURE_RECORDED`: receipt `4b4f1a295e5c24acad2d03a8b816925ec46efb790db6ceddbece1c898f93ca7d`; lifecycle `b28caeaf78e0ce006736f8721a8a6ed2a855de8330f7b0934d5654c0b77d69e0`; raiz ausente, worktree ausente no Git; ganho físico atribuído `2.508.197.888 B` e 75.640 inodes com a raiz. **Não repetir deploy, save, marker ou retirada desse builder.** Permanece separada a geração falha `211724Z`, ~78.295.040 B, e as retenções históricas a838 v1/v2 protegidas; não declarar recuperação nem autorização para elas.
+
+A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
+
+---
+
 **DEPLOYED_RETENTION_INCOMPLETE / API A838BD33 ACTIVE / PRODUCTION HEALTHY**
 
 ## Estado vigente — API-only a838bd33 ativa, retenção externa incompleta

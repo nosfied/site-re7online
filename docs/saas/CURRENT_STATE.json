@@ -1,6 +1,6 @@
 {
   "schemaVersion": 8,
-  "updatedAtUtc": "2026-11-12T18:01:55Z",
+  "updatedAtUtc": "2026-11-13T15:19:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
@@ -1775,5 +1775,61 @@
     "targetCommit": "b8d284b6b2e269e6d284dfaaadda0e79a4685572",
     "repeatBuildInstallActivationOrRetirement": false,
     "nextFront": "NORMAL_CAMPAIGN_OPERATIONS"
+  },
+  "currentVerifiedSnapshot20261113": {
+    "status": "DEPLOYED_RETENTION_INCOMPLETE_WITH_SUCCESSFUL_BUILDER_CLOSURE",
+    "source": "USER_REPORTED_CODEX_TERMINAL_RECEIPTS_NOT_LIVE_RECAPTURE",
+    "record": "docs/saas/releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
+    "components": {
+      "api": "immutable-fa10f4f5-external-20261112T233820Z",
+      "frontend": "immutable-fa10f4f5-external-20261112T233820Z",
+      "worker": "immutable-e2e7f17a-20261022T005110Z"
+    },
+    "target": "fa10f4f59c9a05328e536dd25a1668c3ba25939e",
+    "buildId": "4j3t9N75vsvYu9t3DoFq4",
+    "deployment": {
+      "state": "DEPLOYED_RETENTION_INCOMPLETE",
+      "journalSha256": "45579306a46dbd79a963b9176531673124147e8a7e667eaef72fec7591bf11e5",
+      "saveCount": 1,
+      "dumpSha256": "3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a",
+      "deployedMarkerSha256": "ef3cb8edde127f4de841f49f5a329e74fde4a7d34b5fe787463b20d7228fcf5d",
+      "vpsRetirementReceiptSha256": "f12d8260d27f1bc041afddfe8badc0b46cd9f9a8b0a9a732f71b2ebd6a8fa18b",
+      "vpsRetirementCommands": 0
+    },
+    "builder": {
+      "state": "SANITIZED_CLOSURE_RECORDED",
+      "receiptSha256": "4b4f1a295e5c24acad2d03a8b816925ec46efb790db6ceddbece1c898f93ca7d",
+      "lifecycleSha256": "b28caeaf78e0ce006736f8721a8a6ed2a855de8330f7b0934d5654c0b77d69e0",
+      "recoveredPhysicalBytes": 2508197888,
+      "retiredEntries": 75639,
+      "retiredInodesIncludingRoot": 75640,
+      "rootAndGitWorktreeAbsent": true
+    },
+    "vpsLastReported": {
+      "freeBytes": 7080562688,
+      "freeInodes": 8743987,
+      "notLiveMeasurement": true
+    },
+    "openIndependentDebts": [
+      "builder failed generation immutable-fa10f4f5-external-20261112T211724Z",
+      "builder a838bd33 historical v1 and preserved v2",
+      "VPS historical unqualified remnants"
+    ],
+    "doNotRepeat": [
+      "build",
+      "transfer",
+      "install",
+      "activate",
+      "acceptance",
+      "pm2 save",
+      "VPS terminal retirement",
+      "successful builder removal"
+    ],
+    "policies": {
+      "runbook": "docs/saas/DEPLOY_RUNBOOK.md",
+      "capacity": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
+      "noRework": "docs/saas/WORKING_PRINCIPLES.md"
+    },
+    "legacyValidatorNote": "activeDeploymentRecord/activeOperationalRecord/activeApiDeploymentRecord remain historical a838 references solely for verify-current-state.py schema v8 and E0 closure; this snapshot is the later reported state, and those legacy pointers are not live selections. Migration of schema/validator is a separate future compatibility task."
   }
 }
