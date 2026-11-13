@@ -78,6 +78,124 @@ def _argv_value(argv: list[str], flag: str) -> str:
     return argv[index + 1]
 
 
+def _bound_regular(path: Path, expected_sha256: str) -> bytes:
+    if not path.is_absolute() or not _sha256_value(expected_sha256):
+        raise Denied("request_recovery_binding")
+    raw = stable_regular(path, modes={0o600})
+    if sha256(raw) != expected_sha256:
+        raise Denied("request_recovery_sha256")
+    return raw
+
+
+def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
+    driver = Path(value["driver"])
+    if driver.name != "converta-deploy.py" or driver.parent.name != "scripts":
+        raise Denied("request_driver_checkout")
+    if sha256(stable_regular(driver, modes={0o500, 0o600})) != value["driverSha256"]:
+        raise Denied("request_driver_sha256")
+    repo = driver.parent.parent
+    control_plane = _argv_value(argv, "--control-plane")
+    commands = {
+        "head": ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        "tracked": ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--",
+                    "scripts/converta-deploy.py"],
+        "blob": ["git", "-C", str(repo), "show", f"{control_plane}:scripts/converta-deploy.py"],
+        "status": ["git", "-C", str(repo), "status", "--porcelain=v1",
+                   "--untracked-files=all"],
+    }
+    results = {
+        name: subprocess.run(command, check=False, capture_output=True)
+        for name, command in commands.items()
+    }
+    if (any(result.returncode for result in results.values()) or
+            results["head"].stdout.decode().strip() != control_plane or
+            results["tracked"].stdout.decode().strip() != "scripts/converta-deploy.py" or
+            results["status"].stdout or
+            sha256(results["blob"].stdout) != value["driverSha256"]):
+        raise Denied("request_driver_checkout")
+
+
+def _validate_finalize_continuation(value: dict[str, Any], argv: list[str]) -> None:
+    attempt = value.get("attemptOrdinal")
+    if not isinstance(attempt, int) or isinstance(attempt, bool) or not 2 <= attempt <= 99:
+        raise Denied("request_attempt_ordinal")
+    transaction = Path(value["transactionRoot"])
+    outputs = value.get("evidenceOutputs")
+    if not isinstance(outputs, dict) or set(outputs) != {"stdout", "stderr", "exit"}:
+        raise Denied("request_evidence_outputs")
+    output_paths: list[Path] = []
+    for name in ("stdout", "stderr", "exit"):
+        output = Path(outputs.get(name, ""))
+        expected = f"fixed-current-finalize-continuation-attempt-{attempt:02d}.{name}.private.txt"
+        if not output.is_absolute() or output.parent != transaction or output.name != expected:
+            raise Denied("request_evidence_outputs")
+        output_paths.append(output)
+    if len(set(output_paths)) != 3:
+        raise Denied("request_evidence_outputs")
+
+    recovery = value.get("recovery")
+    expected_recovery = {
+        "priorRequest", "priorRequestSha256", "negativeJournal",
+        "negativeJournalSha256", "priorEvidence",
+    }
+    if not isinstance(recovery, dict) or set(recovery) != expected_recovery:
+        raise Denied("request_recovery_schema")
+    prior_request_path = Path(recovery.get("priorRequest", ""))
+    prior_raw = _bound_regular(prior_request_path, recovery.get("priorRequestSha256", ""))
+    try:
+        prior = json.loads(prior_raw)
+    except json.JSONDecodeError as error:
+        raise Denied("request_recovery_prior_json") from error
+    prior_required = {"schemaVersion", "action", "lockPath", "transactionRoot",
+                      "driver", "driverSha256", "finalizeArgv"}
+    if (not isinstance(prior, dict) or set(prior) != prior_required or
+            prior.get("schemaVersion") != 1 or prior.get("action") != "finalize" or
+            prior.get("lockPath") != value["lockPath"] or
+            prior.get("transactionRoot") != value["transactionRoot"] or
+            prior.get("driverSha256") != value["driverSha256"] or
+            not isinstance(prior.get("finalizeArgv"), list) or
+            prior["finalizeArgv"][:2] != ["/usr/bin/python3", "-B"] or
+            prior["finalizeArgv"][3:4] != ["finalize"] or
+            prior["finalizeArgv"][4:] != argv[4:]):
+        raise Denied("request_recovery_prior_binding")
+
+    journal_path = Path(recovery.get("negativeJournal", ""))
+    if journal_path != transaction / "transaction.v1.private.json":
+        raise Denied("request_recovery_journal_path")
+    journal_raw = _bound_regular(journal_path, recovery.get("negativeJournalSha256", ""))
+    try:
+        journal = json.loads(journal_raw)
+    except json.JSONDecodeError as error:
+        raise Denied("request_recovery_journal_json") from error
+    if (not isinstance(journal, dict) or journal.get("state") != "FAILED" or
+            journal.get("recoveryAction") != "finalize" or
+            journal.get("saveCount") not in {0, 1}):
+        raise Denied("request_recovery_journal_state")
+
+    prior_evidence = recovery.get("priorEvidence")
+    if not isinstance(prior_evidence, dict) or set(prior_evidence) != {"stdout", "stderr", "exit"}:
+        raise Denied("request_recovery_evidence")
+    expected_names = {
+        name: transaction / f"fixed-current-finalize-continuation.{name}.private.txt"
+        for name in ("stdout", "stderr", "exit")
+    }
+    for name, expected_path in expected_names.items():
+        binding = prior_evidence.get(name)
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            raise Denied("request_recovery_evidence")
+        path = Path(binding.get("path", ""))
+        if path != expected_path:
+            raise Denied("request_recovery_evidence")
+        _bound_regular(path, binding.get("sha256", ""))
+    try:
+        exit_code = int(expected_names["exit"].read_text().strip())
+    except (OSError, ValueError) as error:
+        raise Denied("request_recovery_exit") from error
+    if exit_code == 0:
+        raise Denied("request_recovery_exit")
+    _validate_checkout_driver(value, argv)
+
+
 def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
     raw = stable_regular(path, modes={0o600})
     if sha256(raw) != expected_sha256:
@@ -90,8 +208,10 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
     if value.get("schemaVersion") != 1 or not common.issubset(value):
         raise Denied("request_schema")
     action = value.get("action")
-    if action in {"finalize", "finalize_runtime_cache_continuation"}:
+    if action in {"finalize", "finalize_continuation", "finalize_runtime_cache_continuation"}:
         required = common | {"driver", "driverSha256", "finalizeArgv"}
+        if action == "finalize_continuation":
+            required |= {"attemptOrdinal", "evidenceOutputs", "recovery"}
         if action == "finalize_runtime_cache_continuation":
             required |= {"attemptOrdinal", "evidenceOutputs"}
         if set(value) != required:
@@ -139,6 +259,8 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
                 paths.append(output)
             if len(set(paths)) != 3:
                 raise Denied("request_evidence_outputs")
+        elif action == "finalize_continuation":
+            _validate_finalize_continuation(value, argv)
     elif action == "release_terminal_lock":
         required = common | {
             "transactionJournalSha256", "lockSha256", "receiptOutput",
@@ -380,6 +502,8 @@ def run(request: dict[str, Any], lock_fd: int, *,
         runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run) -> int:
     lock_path = Path(request["lockPath"])
     validate_lock(lock_path, lock_fd)
+    if request["action"] == "finalize_continuation":
+        _validate_finalize_continuation(request, request["finalizeArgv"])
     driver = Path(request["driver"])
     if sha256(stable_regular(driver, modes={0o500, 0o600})) != request["driverSha256"]:
         raise Denied("driver_sha256")

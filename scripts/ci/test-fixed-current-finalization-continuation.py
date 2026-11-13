@@ -67,6 +67,68 @@ class Fixture:
             "RUNTIME_CACHE_INTENT_SHA256": "b" * 64,
         }
 
+    def finalize_continuation_request(self, attempt: int = 2) -> tuple[Path, dict[str, str]]:
+        repo = self.root / "control-plane"
+        scripts = repo / "scripts"
+        scripts.mkdir(parents=True)
+        checkout_driver = scripts / "converta-deploy.py"
+        checkout_driver.write_bytes(self.driver.read_bytes())
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "add", "scripts/converta-deploy.py"], check=True)
+        subprocess.run([
+            "git", "-C", str(repo), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid", "commit", "-qm", "control plane",
+        ], check=True)
+        control_plane = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True,
+            text=True, capture_output=True).stdout.strip()
+        checkout_driver.chmod(0o600)
+
+        self.request["finalizeArgv"].extend(["--control-plane", control_plane])
+        prior_request = self.root / "prior-request.private.json"
+        private_json(prior_request, self.request)
+        prior_paths = {
+            name: self.tx / f"fixed-current-finalize-continuation.{name}.private.txt"
+            for name in ("stdout", "stderr", "exit")
+        }
+        prior_paths["stdout"].write_text("")
+        prior_paths["stderr"].write_text("DEPLOY_DENY:control_plane_identity\n")
+        prior_paths["exit"].write_text("2\n")
+        for path in prior_paths.values():
+            path.chmod(0o600)
+        journal = self.tx / "transaction.v1.private.json"
+        private_json(journal, {
+            "state": "FAILED", "recoveryAction": "finalize", "saveCount": 0,
+        })
+        outputs = {
+            name: str(self.tx /
+                      f"fixed-current-finalize-continuation-attempt-{attempt:02d}.{name}.private.txt")
+            for name in ("stdout", "stderr", "exit")
+        }
+        self.request = {
+            "schemaVersion": 1, "action": "finalize_continuation",
+            "attemptOrdinal": attempt, "lockPath": str(self.lock),
+            "transactionRoot": str(self.tx), "driver": str(checkout_driver),
+            "driverSha256": digest(checkout_driver),
+            "evidenceOutputs": outputs,
+            "finalizeArgv": [
+                "/usr/bin/python3", "-B", str(checkout_driver), "finalize",
+                "--release", "immutable-test", "--control-plane", control_plane,
+            ],
+            "recovery": {
+                "priorRequest": str(prior_request),
+                "priorRequestSha256": digest(prior_request),
+                "negativeJournal": str(journal),
+                "negativeJournalSha256": digest(journal),
+                "priorEvidence": {
+                    name: {"path": str(path), "sha256": digest(path)}
+                    for name, path in prior_paths.items()
+                },
+            },
+        }
+        private_json(self.request_path, self.request)
+        return repo, outputs
+
     def lock_fd(self) -> int:
         return CONTINUATION.acquire_lock(self.lock)
 
@@ -279,6 +341,107 @@ class ContinuationTests(unittest.TestCase):
                     with self.assertRaisesRegex(CONTINUATION.Denied, "request_evidence_outputs"):
                         CONTINUATION.load_request(
                             self.fixture.request_path, digest(self.fixture.request_path))
+
+    def test_finalize_continuation_authenticates_checkout_and_preserves_prior_evidence(self):
+        _, outputs = self.fixture.finalize_continuation_request()
+        loaded = CONTINUATION.load_request(
+            self.fixture.request_path, digest(self.fixture.request_path))
+        prior = self.fixture.tx / "fixed-current-finalize-continuation.stderr.private.txt"
+        prior_raw = prior.read_bytes()
+
+        def runner(argv, **kwargs):
+            os.write(kwargs["stdout"], b"terminal\n")
+            return subprocess.CompletedProcess(argv, 0)
+
+        self.assertEqual(CONTINUATION.run(loaded, self.fixture.lock_fd(), runner=runner), 0)
+        self.assertEqual(prior.read_bytes(), prior_raw)
+        self.assertEqual(Path(outputs["stdout"]).read_text(), "terminal\n")
+        self.assertEqual(Path(outputs["stderr"]).read_text(), "")
+        self.assertEqual(Path(outputs["exit"]).read_text(), "0\n")
+
+    def test_finalize_continuation_rejects_private_driver_or_divergent_head(self):
+        for variant in ("private", "head"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                repo, _ = self.fixture.finalize_continuation_request()
+                if variant == "private":
+                    self.fixture.request["driver"] = str(self.fixture.driver)
+                    self.fixture.request["finalizeArgv"][2] = str(self.fixture.driver)
+                else:
+                    extra = repo / "extra.txt"
+                    extra.write_text("successor\n")
+                    subprocess.run(["git", "-C", str(repo), "add", "extra.txt"], check=True)
+                    subprocess.run([
+                        "git", "-C", str(repo), "-c", "user.name=Fixture",
+                        "-c", "user.email=fixture@example.invalid", "commit", "-qm", "successor",
+                    ], check=True)
+                private_json(self.fixture.request_path, self.fixture.request)
+                with self.assertRaisesRegex(CONTINUATION.Denied, "request_driver_checkout"):
+                    CONTINUATION.load_request(
+                        self.fixture.request_path, digest(self.fixture.request_path))
+
+    def test_finalize_continuation_rejects_driver_mode_sha_and_recovery_drift(self):
+        for variant in ("mode", "sha", "journal", "evidence"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                _, _ = self.fixture.finalize_continuation_request()
+                driver = Path(self.fixture.request["driver"])
+                if variant == "mode":
+                    driver.chmod(0o644)
+                elif variant == "sha":
+                    self.fixture.request["driverSha256"] = "0" * 64
+                elif variant == "journal":
+                    journal = Path(self.fixture.request["recovery"]["negativeJournal"])
+                    value = json.loads(journal.read_text()); value["saveCount"] = 2
+                    private_json(journal, value)
+                    self.fixture.request["recovery"]["negativeJournalSha256"] = digest(journal)
+                else:
+                    binding = self.fixture.request["recovery"]["priorEvidence"]["stderr"]
+                    binding["sha256"] = "0" * 64
+                private_json(self.fixture.request_path, self.fixture.request)
+                with self.assertRaises(CONTINUATION.Denied):
+                    CONTINUATION.load_request(
+                        self.fixture.request_path, digest(self.fixture.request_path))
+
+    def test_finalize_continuation_rejects_occupied_new_destination_before_child(self):
+        _, outputs = self.fixture.finalize_continuation_request()
+        loaded = CONTINUATION.load_request(
+            self.fixture.request_path, digest(self.fixture.request_path))
+        Path(outputs["stdout"]).write_text("occupied\n")
+        Path(outputs["stdout"]).chmod(0o600)
+        called = False
+        def runner(*args, **kwargs):
+            nonlocal called; called = True
+            return subprocess.CompletedProcess(args, 0)
+        with self.assertRaisesRegex(CONTINUATION.Denied, "evidence_exists"):
+            CONTINUATION.run(loaded, self.fixture.lock_fd(), runner=runner)
+        self.assertFalse(called)
+
+    def test_finalize_continuation_accepts_durable_post_save_checkpoint(self):
+        self.fixture.finalize_continuation_request()
+        journal = Path(self.fixture.request["recovery"]["negativeJournal"])
+        value = json.loads(journal.read_text()); value["saveCount"] = 1
+        private_json(journal, value)
+        self.fixture.request["recovery"]["negativeJournalSha256"] = digest(journal)
+        private_json(self.fixture.request_path, self.fixture.request)
+        loaded = CONTINUATION.load_request(
+            self.fixture.request_path, digest(self.fixture.request_path))
+        self.assertEqual(loaded["recovery"]["negativeJournalSha256"], digest(journal))
+
+    def test_finalize_continuation_revalidates_recovery_under_lock(self):
+        self.fixture.finalize_continuation_request()
+        loaded = CONTINUATION.load_request(
+            self.fixture.request_path, digest(self.fixture.request_path))
+        journal = Path(loaded["recovery"]["negativeJournal"])
+        value = json.loads(journal.read_text()); value["failure"] = "changed-after-load"
+        private_json(journal, value)
+        called = False
+        def runner(*args, **kwargs):
+            nonlocal called; called = True
+            return subprocess.CompletedProcess(args, 0)
+        with self.assertRaisesRegex(CONTINUATION.Denied, "request_recovery_sha256"):
+            CONTINUATION.run(loaded, self.fixture.lock_fd(), runner=runner)
+        self.assertFalse(called)
 
 
 if __name__ == "__main__":
