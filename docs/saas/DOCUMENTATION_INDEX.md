@@ -10,6 +10,7 @@
 ## Snapshot vigente e política de não retrabalho
 
 - [Padrão preferencial de build externo e ledger VPS + builder (13/11/2026)](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md) — **começar aqui** para capacidade, histórico já retirado, categorias preservadas, dívidas, geração falha, restrições e futura automação; não autoriza exclusões.
+- [Registro terminal de fa10f4f5: deploy + closure do builder](releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json) — referência ativa com proveniência explícita; não substitui os receipts privados.
 - [Estado canônico atualizado](CURRENT_STATE.md) e [snapshot verificável](CURRENT_STATE.json) — API+frontend `fa10f4f5`, worker `e2e7f17a`, implantação `DEPLOYED_RETENTION_INCOMPLETE` e builder da mesma release posteriormente `SANITIZED`.
 - [Inventário VPS de 24/10](VPS_CAPACITY_AUDIT_2026-10-24.md), [inventário de 26/10](VPS_CAPACITY_AUDIT_2026-10-26.md) e [política com receipts P00](CAPACITY_RECOVERY_POLICY.md) — **históricos reaproveitáveis**, lotes terminais irrepetíveis. Não reiniciar coleta massiva; qualificar apenas delta de candidatos pendentes.
 
