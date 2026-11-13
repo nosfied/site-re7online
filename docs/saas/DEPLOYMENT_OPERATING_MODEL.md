@@ -1,35 +1,51 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API A838BD33 ATIVA COM RETENÇÃO EXTERNA INCOMPLETA / FRONTEND B8D284B6 E WORKER E2E7 PRESERVADOS**
+**Status: CANÔNICO / API+FRONTEND FA10F4F5 ATIVOS / WORKER E2E7 PRESERVADO / BUILD EXTERNO DEMONSTRADO**
 
-Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
-define a arquitetura e os princípios vigentes para sua aplicação à implantação. Os comandos executáveis estão
-somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
-[registro a838bd33 implantado com retenção externa incompleta](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json).
+Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md).
+A única instrução executável permanece o [runbook](DEPLOY_RUNBOOK.md). O estado
+produtivo informado em 13/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md),
+com recibos e limites de inferência em
+[CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md).
 
-Na fotografia reconciliada de 12/11/2026, a API selecionada é
-`immutable-a838bd33-external-20261110T130618Z`; o frontend permanece em
-`immutable-b8d284b6-vps-20261108T132846Z`, BUILD_ID
-`zguwjBfQne4CTh6dLIlfq`, e o worker `e2e7f17a` permanece inalterado. O dump PM2
-vigente é `67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171`.
-O fechamento produtivo tem `saveCount=1`; a dívida que impede `SANITIZED` está
-no builder externo e não transforma o antigo registro agregado b8d284b6 em
-registro da implantação API-only.
+**Fotografia de fechamento, sem nova coleta:** API e frontend
+`immutable-fa10f4f5-external-20261112T233820Z`, BUILD_ID
+`4j3t9N75vsvYu9t3DoFq4`; worker
+`immutable-e2e7f17a-20261022T005110Z`. A transação finalizou com um
+`pm2 save`, marker `DEPLOYED`, lock liberado e zero comandos VPS de
+retirada. A geração descartável de sucesso do builder foi posteriormente
+encerrada em `SANITIZED/CLOSURE_RECORDED`, com 2.508.197.888 B físicos
+atribuídos à retirada. As dívidas externas históricas e a geração builder falha
+continuam independentes; `DEPLOYED_RETENTION_INCOMPLETE` permanece o estado
+imutável da fotografia de conclusão produtiva.
 
-O build na VPS continua sendo o procedimento historicamente canônico, hoje
-bloqueado pelo orçamento conhecido. O builder externo descartável é o padrão-alvo
-recomendado e possui ensaio sintético aprovado, mas sua validação produtiva
-completa pertence à E1. Esta reconciliação não altera silenciosamente o padrão e
-não autoriza novo build.
-Preparações e executores anteriores são evidência e não autorizam repetição.
+**Posicionamento arquitetural novo:** builder externo isolado é o **caminho
+preferencial para QUALIFICAR novas gerações**, pois já foi comprovado em release
+API-only e API+frontend, evitando o custo de workspace e build na VPS. A
+operação automatizada integral e a troca do default **ainda não foram
+implantadas**: o runbook vigente requer seleção e qualificação explícitas do
+builder e autorização dos efeitos produtivos. Não inferir autorização permanente
+nem habilitar build no host externo por simples atualização documental. O
+build na VPS é fallback condicionado ao orçamento derivado e à mesma segurança,
+não um motivo para repetir geração equivalente. Todo upgrade futuro deve usar
+evidências históricas da limpeza em vez de reabrir auditorias globais.
+
+**Princípio operacional:** build uma vez, transferir uma vez, instalar
+inertemente, validar fronteiras/retornos/cache, ativar só os componentes
+impactados, aceitar e salvar uma vez, encerrar lifecycle com recibo. A cadeia
+`producer → installer → driver → wrapper → finalize → retirement` deve passar
+em ensaio integrado representativo antes da primeira mutação, incluindo cache
+Next gerado durante execução. O roadmap de automação exige um controlador
+durável, mas não justifica criar outro mecanismo paralelo ou fazer experimentos
+no runtime ativo.
 
 ## Topologia canônica
 
 - O build ocorre uma única vez em worktree Linux `x86_64` isolado, com Node
-  `v20.20.0` e npm compatível com o lockfile. O padrão vigente é build na VPS,
-  autorizado pelo owner após o upgrade de 24/10/2026, com capacidade conferida,
-  saída fora do runtime ativo e sem parar serviços para liberar recursos. Builder
-  externo é alternativa mediante decisão específica. A autorização de cada janela
+  `v20.20.0` e npm compatível com o lockfile. O caminho preferencial para novas qualificações é o builder externo isolado,
+  conforme o padrão-alvo acima; sua execução ainda exige a decisão e qualificação
+  específicas do runbook. O build na VPS permanece fallback sob gate próprio,
+  com saída fora do runtime ativo e sem parar serviços. A autorização de cada janela
   de ativação permanece separada; não se pede novamente autorização para o local
   de build já decidido. O produtor
   canônico é `scripts/converta-release.py`; ativação nunca constrói artefatos.
