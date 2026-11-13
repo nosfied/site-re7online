@@ -2419,22 +2419,103 @@ def authenticate_builder_preservation(bindings: dict[str, Any], contract: dict[s
             "retainedBytes": retained, "expiresAtUtc": request["expiresAtUtc"], "preservedPaths": paths}
 
 
+def authenticate_disposable_builder_debt(bindings: dict[str, Any], producer_contract: dict[str, Any],
+                                          producer_hashes: dict[str, str],
+                                          descriptor: Any) -> dict[str, Any]:
+    """Authenticate EXPORTED/SUCCESS authority without fabricating a closure."""
+    disposable_contract = object_json(bindings["disposableContract"][2],
+                                      "disposable-builder-contract")
+    disposable_lifecycle = object_json(bindings["disposableLifecycle"][2],
+                                       "disposable-builder-lifecycle")
+    export_receipt = object_json(bindings["exportReceipt"][2],
+                                 "disposable-builder-export-receipt")
+    release = producer_contract["releaseId"]
+    target = producer_contract["targetCommit"]
+    root = disposable_contract.get("disposableRoot")
+    custody = disposable_contract.get("custodyRoot")
+    root_identity = disposable_lifecycle.get("rootIdentity")
+    if (disposable_contract.get("schemaVersion") != 1 or
+            disposable_contract.get("generationId") != release or
+            disposable_contract.get("targetCommit") != target or
+            not isinstance(root, str) or not Path(root).is_absolute() or
+            not isinstance(custody, str) or not Path(custody).is_absolute() or
+            Path(root) == Path(custody) or Path(root) in Path(custody).parents or
+            Path(custody) in Path(root).parents or
+            disposable_lifecycle.get("schemaVersion") != 1 or
+            disposable_lifecycle.get("generationId") != release or
+            disposable_lifecycle.get("targetCommit") != target or
+            disposable_lifecycle.get("contractSha256") != bindings["disposableContract"][1] or
+            disposable_lifecycle.get("state") != "EXPORTED" or
+            disposable_lifecycle.get("event") != "AUTHORITY_EXPORTED" or
+            disposable_lifecycle.get("exportReceiptSha256") != bindings["exportReceipt"][1] or
+            not isinstance(root_identity, dict) or root_identity.get("path") != root):
+        deny("external_handoff_disposable_authority")
+    if (export_receipt.get("schemaVersion") != 1 or
+            export_receipt.get("kind") != "DISPOSABLE_BUILDER_EXPORT" or
+            export_receipt.get("generationId") != release or
+            export_receipt.get("contractSha256") != bindings["disposableContract"][1] or
+            export_receipt.get("outcome") != "SUCCESS"):
+        deny("external_handoff_disposable_export")
+    artifacts = export_receipt.get("artifacts")
+    if not isinstance(artifacts, list):
+        deny("external_handoff_disposable_export")
+    by_name = {item.get("name"): item for item in artifacts if isinstance(item, dict)}
+    if set(by_name) != {"package", "manifest", "index", "generation-contract", "generation-lifecycle"}:
+        deny("external_handoff_disposable_export")
+    expected_hashes = {
+        "package": producer_hashes["packageSha256"],
+        "manifest": producer_hashes["manifestSha256"],
+        "index": producer_hashes["indexSha256"],
+        "generation-contract": bindings["contract"][1],
+        "generation-lifecycle": bindings["lifecycle"][1],
+    }
+    if any(by_name[name].get("sha256") != expected or
+           not isinstance(by_name[name].get("path"), str) or
+           not Path(by_name[name]["path"]).is_absolute()
+           for name, expected in expected_hashes.items()):
+        deny("external_handoff_disposable_export")
+    expected_descriptor_fields = {
+        "state", "generationId", "targetCommit", "disposableRoot", "rootIdentity",
+        "custodyRoot", "retainedBytes", "retainedInodes", "preservedPaths",
+    }
+    if (not isinstance(descriptor, dict) or set(descriptor) != expected_descriptor_fields or
+            descriptor.get("state") != "PENDING_RETENTION_DEBT" or
+            descriptor.get("generationId") != release or descriptor.get("targetCommit") != target or
+            descriptor.get("disposableRoot") != root or descriptor.get("rootIdentity") != root_identity or
+            descriptor.get("custodyRoot") != custody or descriptor.get("preservedPaths") != [root] or
+            type(descriptor.get("retainedBytes")) is not int or descriptor["retainedBytes"] < 0 or
+            type(descriptor.get("retainedInodes")) is not int or descriptor["retainedInodes"] < 0):
+        deny("external_handoff_disposable_debt")
+    return {**descriptor, "sourceState": "EXPORTED", "sourceEvent": "AUTHORITY_EXPORTED",
+            "exportOutcome": "SUCCESS", "exportReceiptSha256": bindings["exportReceipt"][1],
+            "disposableContractSha256": bindings["disposableContract"][1],
+            "disposableLifecycleSha256": bindings["disposableLifecycle"][1]}
+
+
 def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: bool) -> dict[str, Any]:
-    """Verify an inert installation and a single completed builder retirement."""
+    """Verify an inert installation plus completed retirement or explicit external debt."""
     raw, _ = stable_private(args.handoff, args.handoff_sha256)
     handoff = object_json(raw, "external-handoff")
     fields = {"schemaVersion", "builderPolicy", "contract", "lifecycle",
               "intent", "authorization", "receipt", "journal", "installation",
               "packagePath", "canonicalVerifierSha256"}
-    if (handoff.get("schemaVersion") not in {1, 2} or
-            set(handoff) != (fields | {"review"} if handoff.get("schemaVersion") == 2 else fields) or
+    disposable_fields = {"schemaVersion", "builderPolicy", "contract", "lifecycle",
+                         "disposableContract", "disposableLifecycle", "exportReceipt",
+                         "retentionDebt", "installation", "packagePath", "canonicalVerifierSha256"}
+    schema = handoff.get("schemaVersion")
+    expected_fields = (fields | {"review"} if schema == 2 else
+                       disposable_fields if schema == 3 else fields)
+    if (schema not in {1, 2, 3} or set(handoff) != expected_fields or
             not SHA256.fullmatch(str(handoff.get("canonicalVerifierSha256", "")))):
         deny("external_handoff_schema")
     policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
     local_policy = validate_root_policy(policy_raw, args.root_policy_sha256)
     evidence_input(args.handoff, local_policy)
-    names = ["builderPolicy", "contract", "lifecycle", "intent", "authorization", "receipt", "journal", "installation"]
-    if handoff["schemaVersion"] == 2:
+    names = (["builderPolicy", "contract", "lifecycle", "disposableContract",
+              "disposableLifecycle", "exportReceipt", "installation"] if schema == 3 else
+             ["builderPolicy", "contract", "lifecycle", "intent", "authorization",
+              "receipt", "journal", "installation"])
+    if schema == 2:
         names.append("review")
     bindings = {key: _closed_file_binding(handoff[key], f"external_handoff:{key}") for key in names}
     _, builder_policy_sha, builder_policy_raw = bindings["builderPolicy"]
@@ -2493,8 +2574,11 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
     if Path(staging[0]["path"]).parent != outputs:
         deny("external_handoff_builder_staging")
     external_debt = None
-    if handoff["schemaVersion"] == 2:
+    if schema == 2:
         external_debt = authenticate_builder_preservation(bindings, contract, builder_policy_sha)
+    elif schema == 3:
+        external_debt = authenticate_disposable_builder_debt(
+            bindings, contract, hashes, handoff["retentionDebt"])
     else:
         intent = object_json(bindings["intent"][2], "external-builder-intent")
         auth = object_json(bindings["authorization"][2], "external-builder-authorization")
@@ -2579,7 +2663,9 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
         stable_regular_hash(installed / "manifest.json", hashes["manifestSha256"], "external_handoff_manifest")
         stable_regular_hash(installed / "index.sha256", hashes["indexSha256"], "external_handoff_index")
     return {"releaseId": release, "targetCommit": target, "installedPath": str(installed),
-            "handoffSha256": args.handoff_sha256, "builderReceiptSha256": bindings["receipt"][1],
+            "handoffSha256": args.handoff_sha256,
+            "builderReceiptSha256": (bindings["receipt"][1] if "receipt" in bindings else
+                                      bindings["exportReceipt"][1]),
             "installationSha256": bindings["installation"][1],
             **({"externalRetentionDebt": external_debt} if external_debt is not None else {}), **hashes}
 

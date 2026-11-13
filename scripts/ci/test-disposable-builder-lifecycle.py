@@ -12,6 +12,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import sys
@@ -883,6 +884,123 @@ class DisposableLifecycleTests(unittest.TestCase):
                 "complete": False, "references": [], "writers": [], "failures": [{"pid": 9}]}):
             with self.assertRaisesRegex(MODULE.Denied, "disposable_process_observation_incomplete"):
                 MODULE.prepare(self.args())
+
+    def privileged_context(self, *, reference_phase=None):
+        original_run = MODULE.subprocess.run
+        observations = []
+        report = self.custody / "observer-installation.private.json"
+        helper = {"path": str(MODULE.PRIVILEGED_OBSERVER_PATH), "sha256": "a" * 64,
+                  "device": 7, "inode": 11, "uid": 0, "gid": 0, "mode": "0500"}
+        write(report, {"schemaVersion": 1,
+                       "kind": "A838BD33_BUILDER_OBSERVER_INSTALLATION",
+                       "state": "UPGRADED",
+                       "installerSha256": MODULE.PRIVILEGED_INSTALLER_SHA256,
+                       "helper": helper, "createdDirectories": [],
+                       "sudoersChanged": False})
+
+        def run_observer(command, **kwargs):
+            if command[:4] != ["/usr/bin/sudo", "-n", "--", "/usr/bin/python3"]:
+                return original_run(command, **kwargs)
+            request_raw = kwargs["input"]
+            request = json.loads(request_raw)
+            observations.append(request)
+            if reference_phase == request["phase"]:
+                return subprocess.CompletedProcess(command, 1, b"", b"reference\n")
+            now = time.time_ns()
+            value = {
+                "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_PROC_ATTESTATION",
+                "state": "COMPLETE", "phase": request["phase"],
+                "requestSha256": MODULE.digest(request_raw), "nonce": request["nonce"],
+                "generationId": request["generationId"], "targetCommit": request["targetCommit"],
+                "contractSha256": request["contractSha256"],
+                "lifecycleSha256": request["lifecycleSha256"],
+                "candidatePaths": [request["root"]["path"]], "root": request["root"],
+                "locks": request["locks"], "consumer": request["consumer"],
+                "capturedAtNs": now, "finishedAtNs": now,
+                "observation": {"complete": True, "references": [], "activeWriters": [],
+                                "failures": [], "failureDetailsTruncated": 0},
+                "mechanism": helper,
+                "administrativeExecution": {
+                    "mode": "AUTHENTICATED_SUDO", "uid": self.contract["ownerUid"],
+                    "gid": self.contract["groupGid"],
+                    "user": MODULE.pwd.getpwuid(self.contract["ownerUid"]).pw_name,
+                    "commandSha256": MODULE.digest(("/usr/bin/python3 -I -B -E -s " +
+                        str(MODULE.PRIVILEGED_OBSERVER_PATH) + " " +
+                        MODULE.PRIVILEGED_OBSERVER_COMMAND).encode())},
+            }
+            return subprocess.CompletedProcess(command, 0, MODULE.canonical(value), b"")
+
+        patches = (
+            patch.object(MODULE, "PRIVILEGED_GENERATION", self.contract["generationId"]),
+            patch.object(MODULE.subprocess, "run", side_effect=run_observer),
+        )
+        return patches, observations, report
+
+    def test_privileged_profile_bridges_prepare_and_execute_to_sanitized(self) -> None:
+        self.export()
+        patches, observations, report = self.privileged_context()
+        with patches[0], patches[1]:
+            prepared = MODULE.prepare(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256="a" * 64,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes())))
+            intent = json.loads((self.custody / "disposable-builder.intent.private.json").read_bytes())
+            self.assertEqual(intent["processObservation"]["kind"], "PRIVILEGED")
+            authorization, auth_sha = self.authorize(prepared["intentSha256"])
+            result = MODULE.execute(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256="a" * 64,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes()),
+                intent=self.custody / "disposable-builder.intent.private.json",
+                intent_sha256=prepared["intentSha256"], authorization=authorization,
+                authorization_sha256=auth_sha))
+        self.assertEqual(result["state"], "SANITIZED")
+        self.assertEqual([item["phase"] for item in observations], ["PREPARE", "EXECUTE"])
+        self.assertNotEqual(observations[0]["nonce"], observations[1]["nonce"])
+        receipt = json.loads((self.custody / "disposable-builder.terminal-receipt.private.json").read_bytes())
+        self.assertEqual(receipt["processObservation"]["phase"], "EXECUTE")
+        self.assertFalse(self.root.exists())
+        self.assertNotIn(str(self.worktree),
+                         run("git", "worktree", "list", "--porcelain", cwd=self.repository))
+
+    def test_privileged_execute_reference_denies_before_first_attempt(self) -> None:
+        self.export()
+        patches, observations, report = self.privileged_context(reference_phase="EXECUTE")
+        with patches[0], patches[1]:
+            prepared = MODULE.prepare(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256="a" * 64,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes())))
+            authorization, auth_sha = self.authorize(prepared["intentSha256"])
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_privileged_observer_execution"):
+                MODULE.execute(self.args(
+                    process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                    process_observer_sha256="a" * 64,
+                    process_observer_installation_report=report,
+                    process_observer_installation_report_sha256=sha(report.read_bytes()),
+                    intent=self.custody / "disposable-builder.intent.private.json",
+                    intent_sha256=prepared["intentSha256"], authorization=authorization,
+                    authorization_sha256=auth_sha))
+        self.assertEqual([item["phase"] for item in observations], ["PREPARE", "EXECUTE"])
+        self.assertFalse((self.custody / "disposable-builder.journal.private.jsonl").exists())
+        self.assertTrue(self.root.exists())
+
+    def test_privileged_profile_denies_divergent_installation_proof(self) -> None:
+        self.export()
+        patches, _, report = self.privileged_context()
+        value = json.loads(report.read_bytes())
+        value["helper"]["sha256"] = "b" * 64
+        report_sha = write(report, value)
+        with patches[0], patches[1], self.assertRaisesRegex(
+                MODULE.Denied, "disposable_privileged_observer_installation"):
+            MODULE.prepare(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256="a" * 64,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=report_sha))
 
 
 if __name__ == "__main__":

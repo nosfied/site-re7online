@@ -56,6 +56,20 @@ class BuilderObserverInstaller(unittest.TestCase):
             installer.install()
         self.assertEqual(self.target.read_bytes(), b"foreign")
 
+    def test_authenticated_predecessor_is_atomically_upgraded(self):
+        installer.ensure_target_parent()
+        predecessor = b"authenticated historical observer\n"
+        self.target.write_bytes(predecessor)
+        self.target.chmod(0o500)
+        old_inode = self.target.stat().st_ino
+        with patch.object(installer, "PREDECESSOR_SHA256", installer.digest(predecessor)):
+            result = installer.install()
+        self.assertEqual(result["state"], "UPGRADED")
+        self.assertEqual(result["helper"]["sha256"], installer.SOURCE_SHA256)
+        self.assertNotEqual(self.target.stat().st_ino, old_inode)
+        self.assertEqual(self.target.read_bytes(), installer.SOURCE.read_bytes())
+        self.assertFalse(installer.TEMPORARY.exists())
+
     def test_source_hash_is_required(self):
         installer.SOURCE.write_bytes(b"tampered")
         with self.assertRaisesRegex(RuntimeError, "IDENTITY"):

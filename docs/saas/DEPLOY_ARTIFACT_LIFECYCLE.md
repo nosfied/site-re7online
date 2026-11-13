@@ -578,6 +578,25 @@ primeiro efeito. Se houver queda depois de `git worktree remove`, a retomada exi
 o `ATTEMPT` já durável e confirma a ausência no Git antes de seguir; efeitos
 `VERIFIED` não são repetidos.
 
+O perfil fechado da geração real `immutable-fa10f4f5-external-20261112T233820Z`
+reutiliza o observador privilegiado instalado pelo mecanismo do PR #375 sem
+ampliar o comando histórico `collect-builder-a838bd33`. O sucessor acrescenta o
+comando literal `collect-disposable-builder-fa10f4f5`; a prova privada do
+instalador autentica o helper `root:root 0500`, e o helper exige geração, target,
+contrato, lifecycle, raiz, worktree, locks e consumidor exatos. O consumidor
+mantém os dois locks durante a coleta, usa prova distinta em `prepare` e `execute`
+e nega cobertura incompleta, referência, writer, identidade divergente ou prova
+vencida antes do primeiro `ATTEMPT`. O sudoers existente permanece byte-intacto.
+
+O handoff externo schema 3 representa uma autoridade exportada bem-sucedida ainda
+aberta: contrato e lifecycle do produtor, contrato e lifecycle descartáveis,
+export receipt, pacote, manifesto, índice e instalação precisam concordar por
+hash. A raiz fica `PENDING_RETENTION_DEBT`; não se fabrica autorização, journal,
+receipt terminal ou closure. Na VPS, `generation-retirement.py` materializa
+projeção e intenção com zero comandos e permite o preflight fixed-current, mas a
+dívida somente termina com o receipt real do builder e a ausência comprovada da
+raiz e do registro Git.
+
 O receipt preservado fora da raiz separa `retiredBytes`/`retiredInodes` dos bytes
 da custódia. O saldo terminal admissível é zero dentro da raiz efêmera. Evidências
 e pacote exportados não são resíduos: sua disposição segue o contrato de custódia.

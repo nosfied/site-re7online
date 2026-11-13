@@ -401,6 +401,7 @@ class ReleaseProducerTest(unittest.TestCase):
             bind = lambda path: {"path": str(path), "sha256": MODULE.sha256_bytes(path.read_bytes())}
             package = evidence / self.package.name
             shutil.copyfile(self.package, package)
+            package.chmod(0o644)
             install = invoke("install", "--package", str(package), "--target", self.target,
                              "--release-id", self.release_id, "--components", COMPONENTS,
                              "--installed-releases-root", str(receiver / "releases"),
@@ -646,7 +647,8 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertTrue((self.release / "api-runtime").exists())
         self.assertTrue((self.release / "frontend-runtime").exists())
 
-    def check_preserved_builder_driver(self, receiver, policy_path, policy, manifest, bind, debt) -> None:
+    def check_preserved_builder_driver(self, receiver, policy_path, policy, manifest, bind, debt,
+                                       *, preflight_only=False) -> None:
         import dataclasses
 
         spec = importlib.util.spec_from_file_location("preserved_builder_driver_tests",
@@ -753,7 +755,14 @@ class ReleaseProducerTest(unittest.TestCase):
             driver = case.api_only()
             frontend_pid = case.host.rows[driver_tests.deploy.PROCESS_NAMES["frontend"]]["pid"]
             worker_pid = case.host.rows[driver_tests.deploy.PROCESS_NAMES["worker"]]["pid"]
-            driver.preflight(); driver.activate(); case.acceptance()
+            driver.preflight()
+            if preflight_only:
+                journal = driver._journal_read()
+                self.assertEqual(journal["state"], "PREFLIGHT_PASS")
+                self.assertEqual(case.host.save_calls, 0)
+                self.assertEqual(case.host.retirement_calls, 0)
+                return
+            driver.activate(); case.acceptance()
             continuation = driver_tests.continuation
             copied_driver = control / "converta-deploy.py"
             continuation_request = {
@@ -789,6 +798,121 @@ class ReleaseProducerTest(unittest.TestCase):
             self.assertEqual(case.host.rows[driver_tests.deploy.PROCESS_NAMES["worker"]]["pid"], worker_pid)
         finally:
             case.tearDown()
+
+    def test_disposable_exported_success_handoff_reaches_fixed_current_preflight(self) -> None:
+        tool = ROOT / "scripts/generation-retirement.py"
+        bind = lambda path: {"path": str(path), "sha256": MODULE.sha256_bytes(path.read_bytes())}
+        with tempfile.TemporaryDirectory(prefix="disposable-handoff-receiver-") as directory:
+            receiver = Path(directory)
+            policy = json.loads(self.root_policy.read_bytes())
+            for key, definition in policy["canonicalRoots"].items():
+                entry = definition[0] if key == "evidence" else definition
+                destination = receiver / key
+                destination.mkdir(mode=0o700 if key == "evidence" else 0o755)
+                entry.update(path=str(destination), allowedModes=["0700" if key == "evidence" else "0755"])
+            receiver_policy = receiver / "policy.private.json"
+            write(receiver_policy, json.dumps(policy), 0o600)
+            evidence = receiver / "evidence"
+            package = evidence / self.package.name
+            shutil.copyfile(self.package, package)
+            package.chmod(0o644)
+            installed = invoke("install", "--package", str(package), "--target", self.target,
+                               "--release-id", self.release_id, "--components", COMPONENTS,
+                               "--installed-releases-root", str(receiver / "releases"),
+                               "--root-policy", str(receiver_policy),
+                               "--root-policy-sha256", bind(receiver_policy)["sha256"])
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+            installation = evidence / "installation.private.json"
+            write(installation, installed.stdout, 0o600)
+            producer_contract = self.output_a / "generation-artifacts.private.json"
+            producer_lifecycle = self.output_a / "generation-lifecycle.private.json"
+            disposable_root = Path(directory) / "builder-root"
+            custody = Path(directory) / "builder-custody"
+            root_identity = {"path": str(disposable_root), "device": 77, "inode": 88,
+                             "ownerUid": os.getuid(), "groupGid": os.getgid(), "mode": "0700"}
+            disposable_contract = evidence / "disposable-contract.private.json"
+            write(disposable_contract, json.dumps({
+                "schemaVersion": 1, "generationId": self.release_id, "targetCommit": self.target,
+                "repository": str(Path(directory) / "repo"), "disposableRoot": str(disposable_root),
+                "custodyRoot": str(custody), "ownerUid": os.getuid(), "groupGid": os.getgid(),
+                "rootMode": "0700", "budget": {}, "roots": {},
+                "worktreePath": str(disposable_root / "worktrees/source"),
+                "locks": {"lifecycle": str(custody / "lifecycle.lock"),
+                          "writer": str(custody / "writer.lock")}, "protectedPaths": [],
+            }), 0o600)
+            export_receipt = evidence / "disposable-export-receipt.private.json"
+            exported = {
+                "package": bind(package)["sha256"],
+                "manifest": bind(self.release / "manifest.json")["sha256"],
+                "index": bind(self.release / "index.sha256")["sha256"],
+                "generation-contract": bind(producer_contract)["sha256"],
+                "generation-lifecycle": bind(producer_lifecycle)["sha256"],
+            }
+            write(export_receipt, json.dumps({
+                "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_EXPORT",
+                "generationId": self.release_id, "contractSha256": bind(disposable_contract)["sha256"],
+                "requestSha256": "1" * 64, "outcome": "SUCCESS",
+                "artifacts": [{"name": name, "path": str(custody / name), "sha256": value}
+                              for name, value in exported.items()],
+            }), 0o600)
+            disposable_lifecycle = evidence / "disposable-lifecycle.private.json"
+            write(disposable_lifecycle, json.dumps({
+                "schemaVersion": 1, "generationId": self.release_id, "targetCommit": self.target,
+                "contractSha256": bind(disposable_contract)["sha256"], "state": "EXPORTED",
+                "event": "AUTHORITY_EXPORTED", "rootIdentity": root_identity,
+                "rootIdentities": {}, "exportReceiptSha256": bind(export_receipt)["sha256"],
+            }), 0o600)
+            copies = {}
+            for name, source in {"builderPolicy": self.root_policy, "contract": producer_contract,
+                                 "lifecycle": producer_lifecycle}.items():
+                destination = evidence / f"{name}.private.json"
+                shutil.copyfile(source, destination); destination.chmod(0o600)
+                copies[name] = bind(destination)
+            debt = {"state": "PENDING_RETENTION_DEBT", "generationId": self.release_id,
+                    "targetCommit": self.target, "disposableRoot": str(disposable_root),
+                    "rootIdentity": root_identity, "custodyRoot": str(custody),
+                    "retainedBytes": 2508197888, "retainedInodes": 75640,
+                    "preservedPaths": [str(disposable_root)]}
+            descriptor = {"schemaVersion": 3, **copies,
+                          "disposableContract": bind(disposable_contract),
+                          "disposableLifecycle": bind(disposable_lifecycle),
+                          "exportReceipt": bind(export_receipt), "retentionDebt": debt,
+                          "installation": bind(installation), "packagePath": str(package),
+                          "canonicalVerifierSha256": bind(PRODUCER)["sha256"]}
+            manifest = evidence / "handoff.private.json"
+            write(manifest, json.dumps(descriptor), 0o600)
+
+            def verify(value):
+                write(manifest, json.dumps(value), 0o600)
+                return subprocess.run([
+                    sys.executable, str(tool), "verify-external-handoff",
+                    "--handoff", str(manifest), "--handoff-sha256", bind(manifest)["sha256"],
+                    "--root-policy", str(receiver_policy),
+                    "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                ], text=True, capture_output=True)
+
+            accepted = verify(descriptor)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            authenticated_debt = json.loads(accepted.stdout)["externalRetentionDebt"]
+            self.assertEqual(authenticated_debt["state"], "PENDING_RETENTION_DEBT")
+            for field, predicate in (("contract", "external_handoff_disposable_authority"),
+                                     ("retentionDebt", "external_handoff_disposable_debt")):
+                with self.subTest(field=field):
+                    altered = json.loads(json.dumps(descriptor))
+                    if field == "contract":
+                        receipt = json.loads(export_receipt.read_bytes())
+                        receipt["artifacts"][3]["sha256"] = "f" * 64
+                        bad_receipt = evidence / "bad-disposable-export-receipt.private.json"
+                        write(bad_receipt, json.dumps(receipt), 0o600)
+                        altered["exportReceipt"] = bind(bad_receipt)
+                    else:
+                        altered[field]["state"] = "SANITIZED"
+                    denied = verify(altered)
+                    self.assertEqual(denied.returncode, 2, denied.stderr)
+                    self.assertIn(predicate, denied.stderr)
+            verify(descriptor)
+            self.check_preserved_builder_driver(receiver, receiver_policy, policy, manifest, bind,
+                                                authenticated_debt, preflight_only=True)
 
     def check_external_retirement_route(self, receiver, policy_path, policy, manifest, bind, debt=None) -> None:
         evidence = receiver / "evidence"

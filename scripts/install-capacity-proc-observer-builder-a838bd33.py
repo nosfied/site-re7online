@@ -12,7 +12,8 @@ from typing import Any
 
 INSTALLER = Path(__file__).resolve()
 SOURCE = INSTALLER.with_name("capacity-proc-observer-builder-a838bd33.py")
-SOURCE_SHA256 = "30af1520bfcf1726674a57193b0f8c4b5178fc7be7aec5f0e97b982abd57630b"
+SOURCE_SHA256 = "f154dcfebc3d767cbb319dc2c30cf2b125c178401af3775c4dea93969d1d4003"
+PREDECESSOR_SHA256 = "30af1520bfcf1726674a57193b0f8c4b5178fc7be7aec5f0e97b982abd57630b"
 TARGET_BASE = Path("/usr/local")
 TARGET = TARGET_BASE / "libexec/re7online/capacity-proc-observer.py"
 TEMPORARY = TARGET.with_name(".capacity-proc-observer.py.a838bd33.installing")
@@ -190,27 +191,45 @@ def install() -> dict[str, Any]:
     installer_raw, _ = stable(INSTALLER, None, {0o600})
     source_raw, _ = stable(SOURCE, SOURCE_SHA256, {0o600})
     created = ensure_target_parent()
+    predecessor = None
     try:
         current_raw, current = stable(TARGET, SOURCE_SHA256, {0o500}, {1, 2})
     except FileNotFoundError:
+        current_raw = current = None
+    except RuntimeError:
+        predecessor_raw, predecessor = stable(TARGET, PREDECESSOR_SHA256, {0o500}, {1})
+        del predecessor_raw
+        current_raw = current = None
+    if current is None:
         temporary_raw, temporary = write_temporary(source_raw)
         if (temporary.st_uid, temporary.st_gid, temporary.st_nlink) != (ROOT_UID, ROOT_GID, 1):
             raise RuntimeError("TEMPORARY_IDENTITY")
-        try:
-            os.link(TEMPORARY, TARGET, follow_symlinks=False)
-        except FileExistsError:
-            raise RuntimeError("TARGET_APPEARED")
-        sync_directory(TARGET.parent)
-        linked = TARGET.lstat()
-        if ((linked.st_dev, linked.st_ino) != (temporary.st_dev, temporary.st_ino) or
-                linked.st_nlink != 2):
-            raise RuntimeError("PUBLISHED_TARGET_IDENTITY")
-        os.unlink(TEMPORARY)
-        sync_directory(TARGET.parent)
+        if predecessor is None:
+            try:
+                os.link(TEMPORARY, TARGET, follow_symlinks=False)
+            except FileExistsError:
+                raise RuntimeError("TARGET_APPEARED")
+            sync_directory(TARGET.parent)
+            linked = TARGET.lstat()
+            if ((linked.st_dev, linked.st_ino) != (temporary.st_dev, temporary.st_ino) or
+                    linked.st_nlink != 2):
+                raise RuntimeError("PUBLISHED_TARGET_IDENTITY")
+            os.unlink(TEMPORARY)
+            sync_directory(TARGET.parent)
+            state = "INSTALLED"
+        else:
+            current_predecessor = TARGET.lstat()
+            if ((current_predecessor.st_dev, current_predecessor.st_ino, current_predecessor.st_size,
+                 current_predecessor.st_mtime_ns, current_predecessor.st_ctime_ns) !=
+                    (predecessor.st_dev, predecessor.st_ino, predecessor.st_size,
+                     predecessor.st_mtime_ns, predecessor.st_ctime_ns)):
+                raise RuntimeError("TARGET_CHANGED")
+            os.replace(TEMPORARY, TARGET)
+            sync_directory(TARGET.parent)
+            state = "UPGRADED"
         current_raw, current = stable(TARGET, SOURCE_SHA256, {0o500})
         if current_raw != temporary_raw:
             raise RuntimeError("PUBLISHED_TARGET_CONTENT")
-        state = "INSTALLED"
     else:
         current_raw, current = recover_published_target(current_raw, current)
         state = "RECOVERED"

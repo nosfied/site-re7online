@@ -218,5 +218,129 @@ class BuilderProcProfile(unittest.TestCase):
             observer.builder_administrative_execution((os.getuid(), os.getgid()))
 
 
+class DisposableBuilderProcProfile(unittest.TestCase):
+    def setUp(self):
+        temp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.root = temp / "disposable"
+        self.custody = temp / "custody"
+        self.root.mkdir(mode=0o700); self.custody.mkdir(mode=0o700)
+        roots = {}
+        for name in ("worktrees", "outputs", "releases", "staging", "npm-cache", "temporary", "auxiliary"):
+            path = self.root / name
+            path.mkdir(mode=0o700)
+            roots[name] = path
+        self.worktree = roots["worktrees"] / "source"
+        self.worktree.mkdir(mode=0o700)
+        self.locks = (self.custody / "lifecycle.lock", self.custody / "writer.lock")
+        for path in self.locks:
+            path.touch(mode=0o600)
+        self.contract = {
+            "schemaVersion": 1, "generationId": observer.DISPOSABLE_GENERATION,
+            "targetCommit": observer.DISPOSABLE_TARGET, "repository": str(temp / "repo"),
+            "disposableRoot": str(self.root), "custodyRoot": str(self.custody),
+            "ownerUid": os.getuid(), "groupGid": os.getgid(), "rootMode": "0700",
+            "budget": {"requiredFreeBytes": 1, "requiredFreeInodes": 1,
+                       "operationalReserveBytes": 1, "operationalReserveInodes": 1},
+            "roots": {"worktrees": str(roots["worktrees"]), "outputs": str(roots["outputs"]),
+                      "releases": str(roots["releases"]), "staging": str(roots["staging"]),
+                      "cache": str(roots["npm-cache"]), "temporary": str(roots["temporary"]),
+                      "auxiliary": str(roots["auxiliary"])},
+            "worktreePath": str(self.worktree),
+            "locks": {"lifecycle": str(self.locks[0]), "writer": str(self.locks[1])},
+            "protectedPaths": [],
+        }
+        contract_raw = observer.canonical(self.contract)
+        root_info = self.root.stat()
+        self.lifecycle = {
+            "schemaVersion": 1, "generationId": observer.DISPOSABLE_GENERATION,
+            "targetCommit": observer.DISPOSABLE_TARGET,
+            "contractSha256": observer.digest(contract_raw), "state": "EXPORTED",
+            "event": "AUTHORITY_EXPORTED",
+            "rootIdentity": {"path": str(self.root), "device": root_info.st_dev,
+                             "inode": root_info.st_ino, "ownerUid": os.getuid(),
+                             "groupGid": os.getgid(), "mode": "0700"},
+        }
+        lifecycle_raw = observer.canonical(self.lifecycle)
+        self.enterContext(patch.multiple(
+            observer, DISPOSABLE_ROOT=self.root, DISPOSABLE_CUSTODY=self.custody,
+            DISPOSABLE_LOCKS=self.locks,
+            DISPOSABLE_CONTRACT_SHA256=observer.digest(contract_raw),
+            DISPOSABLE_LIFECYCLE_SHA256=observer.digest(lifecycle_raw)))
+        self.descriptors = []
+        for path in self.locks:
+            descriptor = os.open(path, os.O_RDWR)
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.descriptors.append(descriptor)
+            self.addCleanup(os.close, descriptor)
+        self.request = {
+            "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_PROC_REQUEST", "phase": "PREPARE",
+            "generationId": observer.DISPOSABLE_GENERATION, "targetCommit": observer.DISPOSABLE_TARGET,
+            "contractSha256": observer.DISPOSABLE_CONTRACT_SHA256,
+            "lifecycleSha256": observer.DISPOSABLE_LIFECYCLE_SHA256,
+            "contract": contract_raw.decode(), "lifecycle": lifecycle_raw.decode(),
+            "nonce": "2" * 64,
+            "consumer": {"pid": os.getpid(),
+                         "startTicks": observer.start_ticks(Path("/proc") / str(os.getpid()))},
+            "root": self.lifecycle["rootIdentity"], "worktree": str(self.worktree),
+            "locks": [{"path": str(path), "device": path.stat().st_dev, "inode": path.stat().st_ino,
+                       "sha256": observer.digest(path.read_bytes())} for path in self.locks],
+            "maxAgeSeconds": 300,
+        }
+        self.scan = self.enterContext(patch.object(observer, "scan_proc", return_value={
+            "complete": True, "references": [], "activeWriters": [], "failures": [],
+            "failureDetailsTruncated": 0,
+        }))
+
+    def collect(self):
+        return observer.collect_disposable(observer.canonical(self.request))
+
+    def test_valid_request_is_bound_to_consumer_locks_and_root(self):
+        result = self.collect()
+        self.assertEqual(result["requestSha256"], observer.digest(observer.canonical(self.request)))
+        self.assertEqual(result["candidatePaths"], [str(self.root)])
+        self.assertEqual(result["consumer"], self.request["consumer"])
+        self.assertTrue(result["observation"]["complete"])
+
+    def test_missing_consumer_lock_is_denied(self):
+        fcntl.flock(self.descriptors[-1], fcntl.LOCK_UN)
+        with self.assertRaisesRegex(observer.Refused, "DISPOSABLE_CONSUMER_LOCKS"):
+            self.collect()
+        self.scan.assert_not_called()
+
+    def test_incomplete_reference_and_writer_are_denied(self):
+        for key, value, predicate in (
+            ("complete", False, "DISPOSABLE_PROCESS_OBSERVATION_INCOMPLETE"),
+            ("references", [{"pid": 1}], "DISPOSABLE_PROCESS_REFERENCE"),
+            ("activeWriters", [{"pid": 1}], "DISPOSABLE_ACTIVE_WRITER"),
+        ):
+            with self.subTest(key=key):
+                original = copy.deepcopy(self.scan.return_value)
+                self.scan.return_value[key] = value
+                with self.assertRaisesRegex(observer.Refused, predicate):
+                    self.collect()
+                self.scan.return_value = original
+
+    def test_contract_lifecycle_or_root_identity_drift_is_denied(self):
+        for key in ("contract", "lifecycle"):
+            with self.subTest(key=key):
+                original = self.request[key]
+                self.request[key] += " "
+                with self.assertRaisesRegex(observer.Refused, "DISPOSABLE_AUTHORITY"):
+                    self.collect()
+                self.request[key] = original
+        moved = self.root.with_name("moved")
+        self.root.rename(moved)
+        self.root.mkdir(mode=0o700)
+        with self.assertRaisesRegex(observer.Refused, "DISPOSABLE_PATH_IDENTITY"):
+            self.collect()
+
+    def test_execute_phase_has_closed_validity(self):
+        self.request.update(phase="EXECUTE", maxAgeSeconds=60)
+        self.assertEqual(self.collect()["phase"], "EXECUTE")
+        self.request["maxAgeSeconds"] = 300
+        with self.assertRaisesRegex(observer.Refused, "DISPOSABLE_REQUEST_SCHEMA"):
+            self.collect()
+
+
 if __name__ == "__main__":
     unittest.main()

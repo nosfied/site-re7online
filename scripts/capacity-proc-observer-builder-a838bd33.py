@@ -93,6 +93,23 @@ BUILDER_SUDO_COMMAND = (
     "/usr/local/libexec/re7online/capacity-proc-observer.py "
     "collect-builder-a838bd33"
 )
+DISPOSABLE_GENERATION = "immutable-fa10f4f5-external-20261112T233820Z"
+DISPOSABLE_TARGET = "fa10f4f59c9a05328e536dd25a1668c3ba25939e"
+DISPOSABLE_ROOT = Path("/tmp/re7-disposable-builder-e1-fa10f4f5-20261112T233820Z")
+DISPOSABLE_CUSTODY = Path(
+    "/home/deifson-oliveira/DEIFSON/re7-disposable-builder-custody/"
+    "immutable-fa10f4f5-external-20261112T233820Z")
+DISPOSABLE_CONTRACT_SHA256 = "ababa172ff6a11bc1702b084ddf7668819e82db48690a4970ef479788799a0b2"
+DISPOSABLE_LIFECYCLE_SHA256 = "b17053bf86407bce39870018e6eeaac967ce9e6b6f86af8f4da672c861b0c03a"
+DISPOSABLE_LOCKS = (
+    DISPOSABLE_CUSTODY / "disposable-builder.lifecycle.lock",
+    DISPOSABLE_CUSTODY / "disposable-builder.writer.lock",
+)
+DISPOSABLE_SUDO_COMMAND = (
+    "/usr/bin/python3 -I -B -E -s "
+    "/usr/local/libexec/re7online/capacity-proc-observer.py "
+    "collect-disposable-builder-fa10f4f5"
+)
 
 
 class Refused(RuntimeError):
@@ -661,7 +678,8 @@ def builder_path_identity(path: Path, binding: dict[str, Any], owner: tuple[int,
     return identity(info)
 
 
-def builder_administrative_execution(owner: tuple[int, int]) -> dict[str, Any]:
+def builder_administrative_execution(owner: tuple[int, int],
+                                     expected_command: str = BUILDER_SUDO_COMMAND) -> dict[str, Any]:
     if os.geteuid() != 0:
         refuse("BUILDER_ROOT_REQUIRED")
     sudo = {key: value for key, value in os.environ.items() if key.startswith("SUDO_")}
@@ -674,10 +692,167 @@ def builder_administrative_execution(owner: tuple[int, int]) -> dict[str, Any]:
         refuse("BUILDER_SUDO_CALLER_IDENTITY")
     if (set(sudo) != expected_keys or sudo["SUDO_UID"] != str(owner[0]) or
             sudo["SUDO_GID"] != str(owner[1]) or sudo["SUDO_USER"] != account.pw_name or
-            sudo["SUDO_COMMAND"] != BUILDER_SUDO_COMMAND):
+            sudo["SUDO_COMMAND"] != expected_command):
         refuse("BUILDER_SUDO_CALLER_IDENTITY")
     return {"mode": "AUTHENTICATED_SUDO", "uid": owner[0], "gid": owner[1],
-            "user": account.pw_name, "commandSha256": digest(BUILDER_SUDO_COMMAND.encode())}
+            "user": account.pw_name, "commandSha256": digest(expected_command.encode())}
+
+
+def disposable_request(raw: bytes) -> dict[str, Any]:
+    if len(raw) > MAX_REQUEST_BYTES:
+        refuse("REQUEST_VOLUME")
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        refuse("REQUEST_JSON")
+    expected_fields = {
+        "schemaVersion", "kind", "phase", "generationId", "targetCommit",
+        "contractSha256", "lifecycleSha256", "contract", "lifecycle", "nonce",
+        "consumer", "root", "worktree", "locks", "maxAgeSeconds",
+    }
+    if (not isinstance(value, dict) or set(value) != expected_fields or canonical(value) != raw or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != "DISPOSABLE_BUILDER_PROC_REQUEST" or
+            value.get("phase") not in {"PREPARE", "EXECUTE"} or
+            value.get("generationId") != DISPOSABLE_GENERATION or
+            value.get("targetCommit") != DISPOSABLE_TARGET or
+            value.get("contractSha256") != DISPOSABLE_CONTRACT_SHA256 or
+            value.get("lifecycleSha256") != DISPOSABLE_LIFECYCLE_SHA256 or
+            value.get("maxAgeSeconds") != (300 if value.get("phase") == "PREPARE" else 60)):
+        refuse("DISPOSABLE_REQUEST_SCHEMA")
+    nonce = value.get("nonce")
+    if (not isinstance(nonce, str) or len(nonce) != SHA256_LENGTH or
+            any(char not in "0123456789abcdef" for char in nonce)):
+        refuse("REQUEST_NONCE")
+    try:
+        contract_raw = value["contract"].encode()
+        lifecycle_raw = value["lifecycle"].encode()
+    except (AttributeError, UnicodeEncodeError):
+        refuse("DISPOSABLE_AUTHORITY")
+    if (digest(contract_raw) != DISPOSABLE_CONTRACT_SHA256 or
+            digest(lifecycle_raw) != DISPOSABLE_LIFECYCLE_SHA256):
+        refuse("DISPOSABLE_AUTHORITY")
+    try:
+        contract = json.loads(contract_raw)
+        lifecycle = json.loads(lifecycle_raw)
+    except json.JSONDecodeError:
+        refuse("DISPOSABLE_AUTHORITY")
+    if (contract.get("schemaVersion") != 1 or contract.get("generationId") != DISPOSABLE_GENERATION or
+            contract.get("targetCommit") != DISPOSABLE_TARGET or
+            contract.get("disposableRoot") != str(DISPOSABLE_ROOT) or
+            contract.get("custodyRoot") != str(DISPOSABLE_CUSTODY) or
+            contract.get("locks") != {"lifecycle": str(DISPOSABLE_LOCKS[0]),
+                                      "writer": str(DISPOSABLE_LOCKS[1])} or
+            lifecycle.get("schemaVersion") != 1 or lifecycle.get("generationId") != DISPOSABLE_GENERATION or
+            lifecycle.get("targetCommit") != DISPOSABLE_TARGET or lifecycle.get("state") != "EXPORTED" or
+            lifecycle.get("event") != "AUTHORITY_EXPORTED" or
+            lifecycle.get("contractSha256") != DISPOSABLE_CONTRACT_SHA256):
+        refuse("DISPOSABLE_AUTHORITY")
+    root_binding = value.get("root")
+    if (not isinstance(root_binding, dict) or root_binding != lifecycle.get("rootIdentity")):
+        refuse("DISPOSABLE_ROOT_BINDING")
+    if value.get("worktree") != contract.get("worktreePath"):
+        refuse("DISPOSABLE_WORKTREE_BINDING")
+    locks = value.get("locks")
+    if (not isinstance(locks, list) or len(locks) != 2 or
+            [item.get("path") for item in locks if isinstance(item, dict)] !=
+            [str(path) for path in DISPOSABLE_LOCKS]):
+        refuse("DISPOSABLE_LOCK_BINDING")
+    consumer = value.get("consumer")
+    if (not isinstance(consumer, dict) or set(consumer) != {"pid", "startTicks"} or
+            type(consumer.get("pid")) is not int or type(consumer.get("startTicks")) is not int or
+            consumer["pid"] <= 0 or consumer["startTicks"] <= 0):
+        refuse("DISPOSABLE_CONSUMER_BINDING")
+    return value
+
+
+def _disposable_identity(path: Path, expected: dict[str, Any], owner: tuple[int, int],
+                         *, lock: bool = False) -> dict[str, Any]:
+    info = path.lstat()
+    projected = identity(info)
+    if (path.resolve(strict=True) != path or (info.st_uid, info.st_gid) != owner or
+            projected.get("device") != expected.get("device") or
+            projected.get("inode") != expected.get("inode")):
+        refuse("DISPOSABLE_PATH_IDENTITY")
+    if lock:
+        if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or
+                info.st_nlink != 1 or digest(path.read_bytes()) != expected.get("sha256")):
+            refuse("DISPOSABLE_LOCK_IDENTITY")
+    elif (not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700):
+        refuse("DISPOSABLE_ROOT_IDENTITY")
+    return projected
+
+
+def _consumer_holds_locks(consumer: dict[str, int], locks: list[dict[str, Any]],
+                          owner: tuple[int, int]) -> None:
+    process = Path("/proc") / str(consumer["pid"])
+    if (start_ticks(process) != consumer["startTicks"] or status_uids(process) != (owner[0],) * 4):
+        refuse("DISPOSABLE_CONSUMER_IDENTITY")
+    wanted = {(item["device"], item["inode"]) for item in locks}
+    observed: set[tuple[int, int]] = set()
+    try:
+        descriptors = list((process / "fd").iterdir())
+    except OSError:
+        refuse("DISPOSABLE_CONSUMER_LOCKS")
+    for descriptor in descriptors:
+        try:
+            info = descriptor.stat()
+        except OSError:
+            continue
+        key = (info.st_dev, info.st_ino)
+        if key in wanted:
+            observed.add(key)
+    if observed != wanted:
+        refuse("DISPOSABLE_CONSUMER_LOCKS")
+    for item in locks:
+        descriptor = os.open(item["path"], os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            refuse("DISPOSABLE_CONSUMER_LOCKS")
+        finally:
+            os.close(descriptor)
+
+
+def collect_disposable(raw: bytes) -> dict[str, Any]:
+    request = disposable_request(raw)
+    root = DISPOSABLE_ROOT.lstat()
+    owner = (root.st_uid, root.st_gid)
+    if owner[0] == 0:
+        refuse("DISPOSABLE_OWNER")
+    before_root = _disposable_identity(DISPOSABLE_ROOT, request["root"], owner)
+    before_locks = [
+        _disposable_identity(Path(item["path"]), item, owner, lock=True)
+        for item in request["locks"]
+    ]
+    _consumer_holds_locks(request["consumer"], request["locks"], owner)
+    started = time.time_ns()
+    observation = scan_proc([str(DISPOSABLE_ROOT)], owner[0])
+    if observation.get("complete") is not True:
+        refuse("DISPOSABLE_PROCESS_OBSERVATION_INCOMPLETE")
+    if observation.get("references"):
+        refuse("DISPOSABLE_PROCESS_REFERENCE")
+    if observation.get("activeWriters"):
+        refuse("DISPOSABLE_ACTIVE_WRITER")
+    if (_disposable_identity(DISPOSABLE_ROOT, request["root"], owner) != before_root or
+            [_disposable_identity(Path(item["path"]), item, owner, lock=True)
+             for item in request["locks"]] != before_locks):
+        refuse("DISPOSABLE_PATH_CHANGED")
+    _consumer_holds_locks(request["consumer"], request["locks"], owner)
+    return {
+        "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_PROC_ATTESTATION",
+        "state": "COMPLETE", "phase": request["phase"],
+        "requestSha256": digest(raw), "nonce": request["nonce"],
+        "generationId": DISPOSABLE_GENERATION, "targetCommit": DISPOSABLE_TARGET,
+        "contractSha256": DISPOSABLE_CONTRACT_SHA256,
+        "lifecycleSha256": DISPOSABLE_LIFECYCLE_SHA256,
+        "candidatePaths": [str(DISPOSABLE_ROOT)], "root": before_root,
+        "locks": before_locks, "consumer": request["consumer"],
+        "capturedAtNs": started, "finishedAtNs": time.time_ns(),
+        "observation": observation,
+    }
 
 
 def collect_builder(raw: bytes) -> dict[str, Any]:
@@ -733,6 +908,17 @@ def collect_builder(raw: bytes) -> dict[str, Any]:
 
 
 def run() -> dict[str, Any]:
+    if sys.argv[1:] == ["collect-disposable-builder-fa10f4f5"]:
+        mechanism = installation_identity()
+        root = DISPOSABLE_ROOT.lstat()
+        administrative_execution = builder_administrative_execution(
+            (root.st_uid, root.st_gid), DISPOSABLE_SUDO_COMMAND)
+        result = collect_disposable(sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1))
+        result["mechanism"] = mechanism
+        result["administrativeExecution"] = administrative_execution
+        if len(canonical(result)) > MAX_RESPONSE_BYTES:
+            refuse("RESPONSE_VOLUME")
+        return result
     if sys.argv[1:] == ["collect-builder-a838bd33"]:
         mechanism = installation_identity()
         root = BUILDER_ROOT.lstat()
