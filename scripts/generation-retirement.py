@@ -476,15 +476,25 @@ def stable_regular_hash(path: Path, expected_sha: str, predicate: str) -> tuple[
 
 
 
-def stable_legacy_af26_manifest(path: Path, expected_sha: str) -> tuple[bytes, os.stat_result]:
-    """Read one historical 0664 authority without weakening regular-file policy.
+def stable_legacy_precontract_0664(
+        path: Path, expected_sha: str, authority_key: str,
+) -> tuple[bytes, os.stat_result]:
+    """One closed reader for the four historically observed 0664 authorities.
 
-    This exception is bound to the versioned pre-contract manifest path+SHA.
-    The authenticated content is accepted only if the original is byte-stable;
-    no chmod, copied replacement, or arbitrary group-writable file is allowed.
+    No other authority accepts 0664 and stable_regular_hash remains unchanged.
     """
-    binding = LEGACY_PRECONTRACT_FIVE_BATCH["af26Manifest"]
-    predicate = "legacy_precontract_af26_manifest"
+    bindings = LEGACY_PRECONTRACT_FIVE_BATCH
+    allowed = {
+        "af26Manifest": bindings["af26Manifest"],
+        "r879.sourceManifest": bindings["r879"]["sourceManifest"],
+        "r879.compiledManifest": bindings["r879"]["compiledManifest"],
+        "r879.archive": bindings["r879"]["archive"],
+    }
+    binding = allowed.get(authority_key)
+    predicate = ("legacy_precontract_af26_manifest" if authority_key == "af26Manifest"
+                 else f"legacy_precontract_{authority_key.replace('.', '_')}")
+    if binding is None:
+        deny("legacy_precontract_0664_authority_key")
     if (str(path) != binding["path"] or expected_sha != binding["sha256"] or
             not path.is_absolute() or not SHA256.fullmatch(expected_sha)):
         deny(f"{predicate}_authenticated_input")
@@ -3523,8 +3533,8 @@ def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
     if not isinstance(immediate, dict):
         deny("legacy_precontract_graph_schema")
 
-    af26_raw, _ = stable_legacy_af26_manifest(Path(binding["af26Manifest"]["path"]),
-                                               binding["af26Manifest"]["sha256"])
+    af26_raw, _ = stable_legacy_precontract_0664(
+        Path(binding["af26Manifest"]["path"]), binding["af26Manifest"]["sha256"], "af26Manifest")
     af26 = object_json(af26_raw, "legacy-precontract-af26")
     file_hashes = af26.get("fileHashes")
     artifacts = af26.get("artifacts")
@@ -3554,8 +3564,12 @@ def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
     authority_bindings: list[dict[str, str]] = [binding["af26Manifest"]]
     for name in ("manifest", "sourceManifest", "compiledManifest", "archive"):
         item = binding["r879"][name]
-        raw, _ = stable_regular_hash(Path(item["path"]), item["sha256"],
-                                     f"legacy_precontract_r879_{name}")
+        if name in {"sourceManifest", "compiledManifest", "archive"}:
+            raw, _ = stable_legacy_precontract_0664(
+                Path(item["path"]), item["sha256"], f"r879.{name}")
+        else:
+            raw, _ = stable_regular_hash(Path(item["path"]), item["sha256"],
+                                         f"legacy_precontract_r879_{name}")
         authority_raw[f"r879.{name}"] = raw
         authority_bindings.append(item)
     for name in ("b9Manifest", "afbbManifest"):

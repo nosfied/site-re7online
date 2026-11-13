@@ -1565,3 +1565,29 @@ posterior, e SHA do conteúdo. `stable_regular_hash` permanece inalterada; outra
 autoridades continuam negando escrita por grupo. A exceção não converte
 qualificação em autorização de retirada e não autoriza `chmod` da fonte produtiva.
 A próxima tentativa deve usar nova prova e apenas recapturar observações voláteis.
+
+##### Correção consolidada de autoridade r879 — 13/11/2026
+
+A retomada com merge `c775753772751e6fa4a54025461d80af99bdb1ba`
+autenticou o manifesto `af26` e negou em
+`legacy_precontract_r879_sourceManifest_identity`, antes de avaliar qualquer runtime.
+A inspeção dirigida identificou o mesmo modo histórico `0664` em **três
+autoridades literais adicionais já fixadas pelo qualificador**:
+`incident-6683-879cb1fa/api-src.sha256` (SHA
+`e7a92bf07f996f0776e64893e35e8368a630a3d5c2457baa7e6a243c9b5693ca`),
+`api-dist.sha256` e `api-src-dist.tar`; todos UID/GID `1000:1000`, com SHA
+original íntegro. Os manifests `r879.manifest`, `b9` e `afbb`, o grafo e
+demais evidências continuam `0600` e sujeitos à autenticação estrita.
+
+Em vez de novos reparos um a um, o mesmo leitor `stable_legacy_precontract_0664`
+aceita **somente quatro bindings literais**: manifesto `af26` mais sourceManifest,
+compiledManifest e archive `r879`, exigindo em cada um caminho, SHA, UID/GID,
+modo exato `0664`, `O_NOFOLLOW` e `lstat/fstat` estáveis. A função
+`stable_regular_hash` não foi alterada, os demais manifests continuam pelo
+leitor estrito, e nenhuma fonte original é modificada. A fixture atribui os
+modos históricos reais aos quatro arquivos e exercita qualificação integral,
+negativas por modo/caminho/hash/chave e segregação dos demais controles.
+
+O audit produtivo que negou é terminal e não deve ser repetido; a futura qualificação
+deve usar nova custódia e preservar as autoridades e provas imutáveis existentes.
+**Nenhum prepare, autorização ou efeito de retirada está implícito.**
