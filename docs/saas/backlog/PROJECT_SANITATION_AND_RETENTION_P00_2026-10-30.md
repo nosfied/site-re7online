@@ -1511,3 +1511,34 @@ Os 987.512.832 B permanecem apenas potenciais até `prepare`, intenção revisad
 `AUTHORIZE_ONCE`, receipt terminal e nova medição. A projeção anterior de
 9.687.744.512 B deixa somente 24.068.096 B sobre o gate então vigente; portanto a
 retirada fecha a dívida, mas não autoriza automaticamente outro build.
+
+#### Cinco runtimes pré-contrato — qualificação fechada de 13/11/2026
+
+O inventário dirigido `re7-five-historical-runtime-readonly-20261113.json`, SHA-256
+`4c83d13f7ad11e2576378528c4bfec40e4599e7df2ff11663cf1d5d223a7b3b0`,
+registrou cinco runtimes presentes, totalizando 5.055.369.216 B. O grafo
+`7b9ea5fe…cb41` mantém os cinco apenas em `installedVerifiedReleases`; nenhum é
+ativo, retorno imediato/transitivo ou candidato. PM2 vivo, dump `3a756660…64a` e
+as referências dirigidas não apontam para essas árvores. Essa ausência de
+referência não é, sozinha, autoridade de retirada.
+
+A fronteira `qualify-legacy-precontract-five` autentica as identidades e caminhos
+literais e reconstrói a linhagem sem fabricar manifesto moderno. `af26` é provado
+pelo manifesto de executáveis preservado; `879` pelos manifests completos de
+source/dist e pelo baseline `af26` preservado; `b9` e `afbb` pelos deltas exatos e
+encadeados. A comparação dirigida comprovou 425 hashes de API e 1.645 de frontend
+em `af26`, 428 hashes de source e 425 de dist em `879`, 26 caminhos no delta
+`879→b9` e 22 no delta `b9→afbb`, sem diferença não manifestada. Os symlinks
+`api-runtime/.data` devem continuar apontando para o destino externo literal e
+são classificados `EXTERNAL_DATA_PRESERVE`, nunca incluídos como efeito.
+
+A prova separa `releases` qualificadas de `protectedReleases`; a união deve ser
+exatamente o conjunto fechado dos cinco candidatos. Falha de autoridade protege
+o candidato e, quando aplicável, seus descendentes de linhagem, mas não impede a
+conclusão dos independentes já comprovados. O materializador schema 3 aceita
+somente o subconjunto qualificado e exige, por candidato, contrato/lifecycle,
+review, fotografia e uma única `RELEASE_RUNTIME`. A cadeia de regressão usa os
+consumidores reais para qualificação, materialização, `prepare`, negativa por
+drift e execução sintética com receipt terminal. Nenhuma qualificação ou retirada
+produtiva é efeito desta revisão; a próxima etapa, após integração, é recapturar a
+fronteira operacional na VPS e materializar contratos privados antes dos prepares.

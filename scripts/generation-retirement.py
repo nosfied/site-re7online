@@ -307,6 +307,99 @@ LEGACY_P00_INSTALLED_BATCH = {
 }
 LEGACY_P00_CUSTODY_RESERVE_BYTES = 16 * 1024 * 1024
 
+# Closed qualification boundary for the five pre-contract runtimes from the
+# af26 -> 879 -> b9 -> afbb lineage.  Unlike modern releases, these trees do
+# not have package/index/DEPLOYED triplets.  Their authority is the preserved
+# executable manifest plus the immutable, per-transition manifests below.
+# Qualification derives current evidence only; it never fabricates a
+# historical marker or grants destructive authority.
+LEGACY_PRECONTRACT_FIVE_BATCH = {
+    "schemaVersion": 1,
+    "batchId": "p00-precontract-five-runtimes-20261113-v1",
+    "sourceInventorySha256":
+        "4c83d13f7ad11e2576378528c4bfec40e4599e7df2ff11663cf1d5d223a7b3b0",
+    "sourceGraph": {
+        "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+                "immutable-fa10f4f5-external-20261112T233820Z-api-frontend-88a5e8b7-v1-once/"
+                "generation-release-graph.final.private.json",
+        "sha256": "7b9ea5fe44f0a280d314a463aaff9b4e13413071cf42e1177fc4e0756505cb41",
+    },
+    "externalDataTarget": "/opt/re7online/site-re7online/apps/whatsapp-agent/.data",
+    "af26Manifest": {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/"
+                "immutable-708f018c-vps-20261027T152109Z-fixed-current-bd83b8b5-v2/"
+                "control-plane/docs/reviews/automation-freeform-window-release-af26/"
+                "executables-manifest.json",
+        "sha256": "017c8d678f885026a574ee0b241c9cd156b015ea0b978b53714196ab53364989",
+    },
+    "r879": {
+        "manifest": {
+            "path": "/opt/re7online/backups/converta-persistent/preparations/"
+                    "incident-6683-879cb1fa/manifest.private.json",
+            "sha256": "742f00bfd5c599230de775a8d5e623e1589bfd175380d01ab88fa6304c118c0b",
+        },
+        "sourceManifest": {
+            "path": "/opt/re7online/backups/converta-persistent/preparations/"
+                    "incident-6683-879cb1fa/api-src.sha256",
+            "sha256": "e7a92bf07f996f0776e64893e35e8368a630a3d5c2457baa7e6a243c9b5693ca",
+        },
+        "compiledManifest": {
+            "path": "/opt/re7online/backups/converta-persistent/preparations/"
+                    "incident-6683-879cb1fa/api-dist.sha256",
+            "sha256": "2aefa4e68320b3ee4e41e4443c93694db6c9daf66f79300522640a0c121c4928",
+        },
+        "archive": {
+            "path": "/opt/re7online/backups/converta-persistent/preparations/"
+                    "incident-6683-879cb1fa/api-src-dist.tar",
+            "sha256": "91524e85e42fc50b8b98abab4468710286a31bf551a08bd800738fb3221a0f61",
+        },
+    },
+    "b9Manifest": {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/"
+                "incident-6683-v4-hybrid-b9-capture-20261005T143500Z/window/"
+                "release-manifest.private.json",
+        "sha256": "9bee0449146946ffc1e445bc5b826d5c842f3e05f044d2f3076450d99e329edd",
+    },
+    "afbbManifest": {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/"
+                "incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/"
+                "release-manifest.private.json",
+        "sha256": "b275d1221f5d483ddcc04ab4316ba6aa82552cba583cc00f6661cfe44a1158a2",
+    },
+    "releases": (
+        {"releaseId": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api",
+         "targetCommit": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+         "installedReleasePath": "/opt/re7online/releases/"
+                                 "af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api",
+         "component": "api", "authority": "AF26_EXECUTABLE_MANIFEST",
+         "device": 64769, "inode": 2968201, "allocatedBytes": 1000439808},
+        {"releaseId": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front",
+         "targetCommit": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+         "installedReleasePath": "/opt/re7online/releases/"
+                                 "af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front",
+         "component": "frontend", "authority": "AF26_EXECUTABLE_MANIFEST",
+         "device": 64769, "inode": 4504637, "allocatedBytes": 1001848832},
+        {"releaseId": "879cb1faa88493cd78dd789b71f85043d6c8ff9c-api",
+         "targetCommit": "879cb1faa88493cd78dd789b71f85043d6c8ff9c",
+         "installedReleasePath": "/opt/re7online/releases/"
+                                 "879cb1faa88493cd78dd789b71f85043d6c8ff9c-api",
+         "component": "api", "authority": "R879_FULL_SOURCE_COMPILED_MANIFESTS",
+         "device": 64769, "inode": 4980737, "allocatedBytes": 1017536512},
+        {"releaseId": "b9b58177880e729854580def1180f3edb2fb83e8-api",
+         "targetCommit": "b9b58177880e729854580def1180f3edb2fb83e8",
+         "installedReleasePath": "/opt/re7online/releases/"
+                                 "b9b58177880e729854580def1180f3edb2fb83e8-api",
+         "component": "api", "authority": "B9_EXACT_LINEAGE_DELTA",
+         "device": 64769, "inode": 5505040, "allocatedBytes": 1017683968},
+        {"releaseId": "afbb7455f320793e05a25875e8a5f13f98cabf90-api",
+         "targetCommit": "afbb7455f320793e05a25875e8a5f13f98cabf90",
+         "installedReleasePath": "/opt/re7online/releases/"
+                                 "afbb7455f320793e05a25875e8a5f13f98cabf90-api",
+         "component": "api", "authority": "AFBB_EXACT_LINEAGE_DELTA",
+         "device": 64769, "inode": 5565834, "allocatedBytes": 1017860096},
+    ),
+}
+
 
 class Denied(RuntimeError):
     pass
@@ -3206,6 +3299,368 @@ def qualify_legacy_p00_installed_batch(args: argparse.Namespace) -> None:
                      "authorizationGranted": False, "executionPermitted": False}).decode().strip())
 
 
+def _historical_file_sha256(path: Path, predicate: str) -> str:
+    try:
+        before = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(before.st_mode):
+            deny(f"{predicate}_identity")
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(block)
+        after = path.lstat()
+    except OSError:
+        deny(f"{predicate}_read")
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
+                             item.st_mtime_ns, item.st_ctime_ns)
+    if identity(before) != identity(after):
+        deny(f"{predicate}_drift")
+    return digest.hexdigest()
+
+
+def _historical_hash_manifest(raw: bytes, predicate: str) -> dict[str, str]:
+    try:
+        lines = raw.decode().splitlines()
+    except UnicodeDecodeError:
+        deny(f"{predicate}_encoding")
+    result: dict[str, str] = {}
+    for line in lines:
+        fields = line.split("  ", 1)
+        if (len(fields) != 2 or not SHA256.fullmatch(fields[0]) or
+                not fields[1] or Path(fields[1]).is_absolute() or
+                ".." in Path(fields[1]).parts or fields[1] in result):
+            deny(f"{predicate}_schema")
+        result[fields[1]] = fields[0]
+    if not result:
+        deny(f"{predicate}_empty")
+    return result
+
+
+def _verify_historical_hashes(root: Path, values: dict[str, str], predicate: str) -> None:
+    for relative, expected in values.items():
+        path = root / relative
+        if _historical_file_sha256(path, predicate) != expected:
+            deny(f"{predicate}_content")
+
+
+def _historical_leaf_map(root: Path, predicate: str) -> dict[str, tuple[Any, ...]]:
+    """Hash each leaf once; directory metadata is intentionally excluded.
+
+    The lineage proof compares bytes, executable modes and symlink targets.  It
+    does not confuse copied directory mtimes with content differences.
+    """
+    result: dict[str, tuple[Any, ...]] = {}
+    digest_cache: dict[tuple[int, int, int, int], str] = {}
+    try:
+        items = sorted(root.rglob("*"), key=lambda item: os.fsencode(
+            item.relative_to(root).as_posix()))
+    except OSError:
+        deny(f"{predicate}_walk")
+    for item in items:
+        try:
+            info = item.lstat()
+        except OSError:
+            deny(f"{predicate}_walk")
+        relative = item.relative_to(root).as_posix()
+        mode = stat.S_IMODE(info.st_mode)
+        if stat.S_ISDIR(info.st_mode):
+            continue
+        if stat.S_ISLNK(info.st_mode):
+            result[relative] = ("symlink", mode, os.readlink(item))
+        elif stat.S_ISREG(info.st_mode):
+            identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+            digest = digest_cache.get(identity)
+            if digest is None:
+                digest = _historical_file_sha256(item, predicate)
+                digest_cache[identity] = digest
+            result[relative] = ("regular", mode, digest)
+        else:
+            result[relative] = ("other", mode, info.st_rdev)
+    return result
+
+
+def _historical_manifest_delta(raw: bytes, predicate: str) -> tuple[dict[str, Any], set[str]]:
+    value = object_json(raw, predicate)
+    files = value.get("apiFiles")
+    if not isinstance(files, list) or not files:
+        deny(f"{predicate}_schema")
+    allowed: set[str] = set()
+    for item in files:
+        required = {"source", "compiled", "sourceAfterSha256", "sourceBeforeSha256",
+                    "compiledSha256"}
+        if (not isinstance(item, dict) or set(item) != required or
+                not SHA256.fullmatch(str(item.get("sourceAfterSha256", ""))) or
+                item.get("sourceBeforeSha256") is not None and
+                not SHA256.fullmatch(str(item.get("sourceBeforeSha256", ""))) or
+                not SHA256.fullmatch(str(item.get("compiledSha256", "")))):
+            deny(f"{predicate}_schema")
+        for key in ("source", "compiled"):
+            relative = item.get(key)
+            if (not isinstance(relative, str) or not relative or Path(relative).is_absolute() or
+                    ".." in Path(relative).parts or relative in allowed):
+                deny(f"{predicate}_schema")
+            allowed.add(relative)
+    return value, allowed
+
+
+def _verify_historical_delta(parent: Path, child: Path, parent_map: dict[str, tuple[Any, ...]],
+                             child_map: dict[str, tuple[Any, ...]], raw: bytes,
+                             predicate: str) -> dict[str, Any]:
+    manifest, allowed = _historical_manifest_delta(raw, predicate)
+    observed = {key for key in set(parent_map) | set(child_map)
+                if parent_map.get(key) != child_map.get(key)}
+    if observed != allowed:
+        deny(f"{predicate}_unmanifested_difference")
+    for item in manifest["apiFiles"]:
+        if (_historical_file_sha256(child / item["source"], predicate) !=
+                item["sourceAfterSha256"] or
+                _historical_file_sha256(child / item["compiled"], predicate) !=
+                item["compiledSha256"]):
+            deny(f"{predicate}_after")
+        before = item["sourceBeforeSha256"]
+        parent_source = parent / item["source"]
+        if before is None:
+            if parent_source.exists() or parent_source.is_symlink():
+                deny(f"{predicate}_before")
+        elif _historical_file_sha256(parent_source, predicate) != before:
+            deny(f"{predicate}_before")
+    return {"manifestSha256": digest_bytes(raw), "changedPaths": len(observed)}
+
+
+def _historical_external_data_link(release: Path, expected: str, predicate: str) -> dict[str, str]:
+    link = release / "apps/whatsapp-agent/.data"
+    try:
+        info = link.lstat()
+        target = os.readlink(link)
+    except OSError:
+        deny(f"{predicate}_private_data_link")
+    if not stat.S_ISLNK(info.st_mode) or target != expected:
+        deny(f"{predicate}_private_data_link")
+    return {"path": str(link), "target": target, "classification": "EXTERNAL_DATA_PRESERVE"}
+
+
+def qualify_legacy_precontract_five(args: argparse.Namespace) -> None:
+    binding = LEGACY_PRECONTRACT_FIVE_BATCH
+    if binding.get("schemaVersion") != 1 or not binding.get("batchId"):
+        deny("legacy_precontract_binding")
+    if args.inventory_sha256 != binding["sourceInventorySha256"]:
+        deny("legacy_precontract_inventory_binding")
+    inventory_raw, _ = stable_private(args.inventory, args.inventory_sha256)
+    inventory = object_json(inventory_raw, "legacy-precontract-inventory")
+    inventory_targets = inventory.get("targets")
+    if not isinstance(inventory_targets, dict):
+        deny("legacy_precontract_inventory_schema")
+
+    graph_binding = binding["sourceGraph"]
+    graph_raw, _ = stable_regular_hash(Path(graph_binding["path"]), graph_binding["sha256"],
+                                       "legacy_precontract_graph")
+    graph = object_json(graph_raw, "legacy-precontract-graph")
+    graph_lists = ("activeReleases", "rollbackReleases", "transitiveReturnReleases",
+                   "candidateReleases", "installedVerifiedReleases")
+    if any(not isinstance(graph.get(key), list) for key in graph_lists):
+        deny("legacy_precontract_graph_schema")
+    immediate = graph.get("immediateRollbackReleases", {})
+    if not isinstance(immediate, dict):
+        deny("legacy_precontract_graph_schema")
+
+    af26_raw, _ = stable_regular_hash(Path(binding["af26Manifest"]["path"]),
+                                      binding["af26Manifest"]["sha256"],
+                                      "legacy_precontract_af26_manifest")
+    af26 = object_json(af26_raw, "legacy-precontract-af26")
+    file_hashes = af26.get("fileHashes")
+    artifacts = af26.get("artifacts")
+    if (not isinstance(file_hashes, dict) or not isinstance(artifacts, dict) or
+            not isinstance(file_hashes.get("api"), dict) or
+            not isinstance(file_hashes.get("frontend"), dict)):
+        deny("legacy_precontract_af26_schema")
+
+    authority_raw: dict[str, bytes] = {}
+    authority_bindings: list[dict[str, str]] = [binding["af26Manifest"]]
+    for name in ("manifest", "sourceManifest", "compiledManifest", "archive"):
+        item = binding["r879"][name]
+        raw, _ = stable_regular_hash(Path(item["path"]), item["sha256"],
+                                     f"legacy_precontract_r879_{name}")
+        authority_raw[f"r879.{name}"] = raw
+        authority_bindings.append(item)
+    for name in ("b9Manifest", "afbbManifest"):
+        item = binding[name]
+        raw, _ = stable_regular_hash(Path(item["path"]), item["sha256"],
+                                     f"legacy_precontract_{name}")
+        authority_raw[name] = raw
+        authority_bindings.append(item)
+    r879_manifest = object_json(authority_raw["r879.manifest"], "legacy-precontract-r879")
+    if (r879_manifest.get("tarSha256") != binding["r879"]["archive"]["sha256"] or
+            r879_manifest.get("baselineApi") != binding["releases"][0]["installedReleasePath"] or
+            r879_manifest.get("candidateApi") != binding["releases"][2]["installedReleasePath"] or
+            r879_manifest.get("unchangedFrontend") != binding["releases"][1]["installedReleasePath"]):
+        deny("legacy_precontract_r879_schema")
+
+    descriptors = {item["releaseId"]: item for item in binding["releases"]}
+    qualified: list[dict[str, Any]] = []
+    protected: list[dict[str, str]] = []
+    content_maps: dict[str, dict[str, tuple[Any, ...]]] = {}
+    authority_ok: dict[str, bool] = {}
+
+    def attempt(descriptor: dict[str, Any], verifier: Any) -> None:
+        release = descriptor["releaseId"]
+        path = Path(descriptor["installedReleasePath"])
+        try:
+            row = inventory_targets.get(str(path))
+            if (not isinstance(row, dict) or row.get("present") is not True or
+                    row.get("device") != descriptor["device"] or
+                    row.get("inode") != descriptor["inode"] or
+                    row.get("physicalBytes") != descriptor["allocatedBytes"]):
+                deny("inventory_identity")
+            info = path.lstat()
+            if (not stat.S_ISDIR(info.st_mode) or info.st_dev != descriptor["device"] or
+                    info.st_ino != descriptor["inode"] or info.st_uid != os.geteuid() or
+                    stat.S_IMODE(info.st_mode) != 0o700):
+                deny("runtime_identity")
+            if (release not in graph["installedVerifiedReleases"] or
+                    any(release in graph[key] for key in graph_lists[:-1]) or
+                    release in immediate.values()):
+                deny("runtime_referenced")
+            evidence = verifier(path)
+            metrics = structural_metrics(path)
+            if metrics["allocatedBytes"] != descriptor["allocatedBytes"]:
+                deny("runtime_allocated_bytes")
+            qualified.append({"releaseId": release, "targetCommit": descriptor["targetCommit"],
+                              "path": str(path), **metrics, "classification": "RETIREMENT_READY",
+                              "component": descriptor["component"],
+                              "authority": descriptor["authority"], "authorityEvidence": evidence})
+            authority_ok[release] = True
+        except Denied as error:
+            authority_ok[release] = False
+            protected.append({"releaseId": release, "path": str(path),
+                              "predicate": str(error)})
+
+    af26_api = binding["releases"][0]
+    af26_front = binding["releases"][1]
+    r879 = binding["releases"][2]
+    b9 = binding["releases"][3]
+    afbb_descriptor = binding["releases"][4]
+
+    def verify_af26(path: Path, component: str) -> dict[str, Any]:
+        scope = "api" if component == "api" else "frontend"
+        prefix = Path("apps/whatsapp-agent/dist") if scope == "api" else Path(".next")
+        values = file_hashes[scope]
+        if (artifacts.get(scope, {}).get("path") != str(path) or
+                artifacts.get(scope, {}).get("fileCount") != len(values)):
+            deny(f"af26_{scope}_schema")
+        normalized = {}
+        for relative, digest in values.items():
+            if not isinstance(relative, str) or not SHA256.fullmatch(str(digest)):
+                deny(f"af26_{scope}_schema")
+            normalized[(prefix / relative).as_posix()] = digest
+        _verify_historical_hashes(path, normalized, f"af26_{scope}")
+        observed = {relative for relative in _historical_leaf_map(
+            path, f"af26_{scope}_inventory") if relative.startswith(prefix.as_posix() + "/")}
+        missing = set(normalized) - observed
+        extra = observed - set(normalized)
+        allowed_cache = (scope == "frontend" and all(
+            item.startswith(".next/cache/images/") for item in extra))
+        if missing or extra and not allowed_cache:
+            deny(f"af26_{scope}_unmanifested_executable")
+        return {"manifestSha256": binding["af26Manifest"]["sha256"],
+                "verifiedFiles": len(normalized),
+                "derivedRuntimeCacheFiles": len(extra)}
+
+    attempt(af26_api, lambda path: {**verify_af26(path, "api"),
+        "externalData": _historical_external_data_link(
+            path, binding["externalDataTarget"], "af26_api")})
+    attempt(af26_front, lambda path: verify_af26(path, "frontend"))
+
+    def verify_879(path: Path) -> dict[str, Any]:
+        if not authority_ok.get(af26_api["releaseId"]):
+            deny("r879_parent_authority")
+        source_values = _historical_hash_manifest(authority_raw["r879.sourceManifest"],
+                                                  "r879_source_manifest")
+        compiled_values = _historical_hash_manifest(authority_raw["r879.compiledManifest"],
+                                                    "r879_compiled_manifest")
+        _verify_historical_hashes(path, source_values, "r879_source")
+        _verify_historical_hashes(path, compiled_values, "r879_compiled")
+        parent = Path(af26_api["installedReleasePath"])
+        if str(parent) not in content_maps:
+            content_maps[str(parent)] = _historical_leaf_map(parent, "af26_map")
+        if str(path) not in content_maps:
+            content_maps[str(path)] = _historical_leaf_map(path, "r879_map")
+        parent_map = content_maps[str(parent)]
+        child_map = content_maps[str(path)]
+        current_entries = {key for key in child_map if key.startswith(
+            ("apps/whatsapp-agent/src/", "apps/whatsapp-agent/dist/"))}
+        if current_entries != set(source_values) | set(compiled_values):
+            deny("r879_unmanifested_current")
+        current_prefixes = ("apps/whatsapp-agent/src/", "apps/whatsapp-agent/dist/")
+        outside = {key for key in set(parent_map) | set(child_map)
+                   if parent_map.get(key) != child_map.get(key) and
+                   not key.startswith(current_prefixes)}
+        preserved = {f"apps/whatsapp-agent/src.af26-preserved/{key.removeprefix('apps/whatsapp-agent/src/')}"
+                     for key in parent_map if key.startswith("apps/whatsapp-agent/src/")}
+        preserved |= {f"apps/whatsapp-agent/dist.af26-preserved/{key.removeprefix('apps/whatsapp-agent/dist/')}"
+                      for key in parent_map if key.startswith("apps/whatsapp-agent/dist/")}
+        if outside != preserved:
+            deny("r879_unmanifested_difference")
+        for relative in preserved:
+            if "/src.af26-preserved/" in relative:
+                original = relative.replace("/src.af26-preserved/", "/src/", 1)
+            else:
+                original = relative.replace("/dist.af26-preserved/", "/dist/", 1)
+            if child_map.get(relative) != parent_map.get(original):
+                deny("r879_preserved_baseline")
+        return {"manifestSha256": binding["r879"]["manifest"]["sha256"],
+                "sourceManifestSha256": binding["r879"]["sourceManifest"]["sha256"],
+                "compiledManifestSha256": binding["r879"]["compiledManifest"]["sha256"],
+                "archiveSha256": binding["r879"]["archive"]["sha256"],
+                "verifiedFiles": len(source_values) + len(compiled_values),
+                "preservedBaselineFiles": len(preserved),
+                "externalData": _historical_external_data_link(
+                    path, binding["externalDataTarget"], "r879")}
+
+    attempt(r879, verify_879)
+
+    def verify_delta(descriptor: dict[str, Any], parent_descriptor: dict[str, Any],
+                     raw_key: str, predicate: str) -> Any:
+        def verifier(path: Path) -> dict[str, Any]:
+            if not authority_ok.get(parent_descriptor["releaseId"]):
+                deny(f"{predicate}_parent_authority")
+            parent = Path(parent_descriptor["installedReleasePath"])
+            if str(parent) not in content_maps:
+                content_maps[str(parent)] = _historical_leaf_map(parent, predicate)
+            if str(path) not in content_maps:
+                content_maps[str(path)] = _historical_leaf_map(path, predicate)
+            parent_map = content_maps[str(parent)]
+            child_map = content_maps[str(path)]
+            result = _verify_historical_delta(parent, path, parent_map, child_map,
+                                              authority_raw[raw_key], predicate)
+            result["externalData"] = _historical_external_data_link(
+                path, binding["externalDataTarget"], predicate)
+            return result
+        return verifier
+
+    attempt(b9, verify_delta(b9, r879, "b9Manifest", "b9_lineage"))
+    attempt(afbb_descriptor, verify_delta(afbb_descriptor, b9, "afbbManifest", "afbb_lineage"))
+
+    total = sum(item["allocatedBytes"] for item in qualified)
+    proof = {"schemaVersion": 1, "kind": "LEGACY_PRECONTRACT_BATCH_QUALIFICATION",
+             "batchId": binding["batchId"],
+             "sourceInventorySha256": binding["sourceInventorySha256"],
+             "sourceGraph": graph_binding, "authorityFiles": authority_bindings,
+             "releases": qualified, "protectedReleases": protected,
+             "totalAllocatedBytes": total,
+             "capacityBudget": {"custodyAndClosureReserveBytes": LEGACY_P00_CUSTODY_RESERVE_BYTES,
+                                "grossRecoverableBytes": total,
+                                "netRecoverableBytes": max(0, total - LEGACY_P00_CUSTODY_RESERVE_BYTES)},
+             "authorizationGranted": False, "executionPermitted": False,
+             "destructiveCommands": 0,
+             "nextRequiredStep": "CANONICAL_CONTRACT_LIFECYCLE_MATERIALIZATION"}
+    write_exclusive(args.proof_output, canonical(proof))
+    print(canonical({"result": "LEGACY_PRECONTRACT_BATCH_QUALIFIED",
+                     "batchId": binding["batchId"], "qualifiedCount": len(qualified),
+                     "protectedCount": len(protected), "totalAllocatedBytes": total,
+                     "proofSha256": digest_bytes(canonical(proof)),
+                     "authorizationGranted": False, "executionPermitted": False}).decode().strip())
+
+
 def _legacy_tree_root(path: Path, root: Path, policy: dict[str, Any], key: str) -> None:
     _strict_child(path, root, f"legacy_path_outside_root:{key}")
     if _path_has_symlink(path, root):
@@ -5289,6 +5744,11 @@ def parser() -> argparse.ArgumentParser:
     p00_batch_parser = commands.add_parser("qualify-legacy-p00-installed-batch")
     p00_batch_parser.add_argument("--proof-output", type=Path, required=True)
     p00_batch_parser.set_defaults(handler=qualify_legacy_p00_installed_batch)
+    precontract_parser = commands.add_parser("qualify-legacy-precontract-five")
+    precontract_parser.add_argument("--inventory", type=Path, required=True)
+    precontract_parser.add_argument("--inventory-sha256", required=True)
+    precontract_parser.add_argument("--proof-output", type=Path, required=True)
+    precontract_parser.set_defaults(handler=qualify_legacy_precontract_five)
     reconciliation_parser = commands.add_parser("reconcile-release-graph")
     reconciliation_parser.add_argument("--request", type=Path, required=True)
     reconciliation_parser.add_argument("--request-sha256", required=True)
