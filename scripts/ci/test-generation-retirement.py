@@ -1010,6 +1010,181 @@ class LegacyP00InstalledBatchFixture:
         self.temp.cleanup()
 
 
+class LegacyPrecontractFiveFixture:
+    """Small, exact af26 -> 879 -> b9 -> afbb lineage."""
+
+    RELEASES = (
+        ("af26-api", "a" * 40, "api"),
+        ("af26-front", "a" * 40, "frontend"),
+        ("879-api", "8" * 40, "api"),
+        ("b9-api", "b" * 40, "api"),
+        ("afbb-api", "f" * 40, "api"),
+    )
+
+    def __init__(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="legacy-precontract-five-")
+        self.root = Path(self.temp.name)
+        self.releases = self.root / "releases"; self.releases.mkdir()
+        self.evidence = self.root / "evidence"; self.evidence.mkdir()
+        self.data = self.root / "private-data"; self.data.mkdir()
+        self.source_root = self.root / "preserved-af26-source"; self.source_root.mkdir(mode=0o700)
+        (self.source_root / "apps/whatsapp-agent/src").mkdir(parents=True)
+        (self.source_root / "apps/whatsapp-agent/src/base.ts").write_text("base\n")
+        (self.source_root / "node_modules/package").mkdir(parents=True)
+        (self.source_root / "node_modules/package/index.js").write_text("dependency\n")
+        (self.source_root / "README.md").write_text("tracked\n")
+        os.symlink(self.data, self.source_root / "apps/whatsapp-agent/.data")
+        self.paths = {}
+        for release, _, component in self.RELEASES:
+            path = self.releases / release; path.mkdir(mode=0o700)
+            self.paths[release] = path
+            if component == "api":
+                (path / "apps/whatsapp-agent/dist").mkdir(parents=True)
+                (path / "apps/whatsapp-agent/src").mkdir()
+                os.symlink(self.data, path / "apps/whatsapp-agent/.data")
+            else:
+                (path / ".next").mkdir()
+        (self.paths["af26-api"] / "apps/whatsapp-agent/src/base.ts").write_text("base\n")
+        (self.paths["af26-api"] / "apps/whatsapp-agent/dist/base.js").write_text("base\n")
+        (self.paths["af26-front"] / ".next/app.js").write_text("front\n")
+        for release in ("af26-api", "af26-front"):
+            (self.paths[release] / "README.md").write_text("tracked\n")
+            (self.paths[release] / "node_modules/package").mkdir(parents=True)
+            (self.paths[release] / "node_modules/package/index.js").write_text("dependency\n")
+        (self.paths["af26-front"] / "apps/whatsapp-agent/src").mkdir(parents=True)
+        (self.paths["af26-front"] / "apps/whatsapp-agent/src/base.ts").write_text("base\n")
+        (self.paths["af26-front"] / ".next/cache/images/key").mkdir(parents=True)
+        (self.paths["af26-front"] / ".next/cache/images/key/item.webp").write_text("derived\n")
+
+        shutil.rmtree(self.paths["879-api"])
+        shutil.copytree(self.paths["af26-api"], self.paths["879-api"], symlinks=True)
+        source = self.paths["879-api"] / "apps/whatsapp-agent/src/base.ts"
+        compiled = self.paths["879-api"] / "apps/whatsapp-agent/dist/base.js"
+        preserved_src = self.paths["879-api"] / "apps/whatsapp-agent/src.af26-preserved"
+        preserved_dist = self.paths["879-api"] / "apps/whatsapp-agent/dist.af26-preserved"
+        preserved_src.mkdir(); preserved_dist.mkdir()
+        shutil.copy2(self.paths["af26-api"] / "apps/whatsapp-agent/src/base.ts",
+                     preserved_src / "base.ts")
+        shutil.copy2(self.paths["af26-api"] / "apps/whatsapp-agent/dist/base.js",
+                     preserved_dist / "base.js")
+        source.write_text("879\n"); compiled.write_text("879\n")
+        shutil.rmtree(self.paths["b9-api"])
+        shutil.copytree(self.paths["879-api"], self.paths["b9-api"], symlinks=True)
+        b9_source = self.paths["b9-api"] / "apps/whatsapp-agent/src/base.ts"
+        b9_compiled = self.paths["b9-api"] / "apps/whatsapp-agent/dist/base.js"
+        b9_before = sha(b9_source); b9_source.write_text("b9\n"); b9_compiled.write_text("b9\n")
+        shutil.rmtree(self.paths["afbb-api"])
+        shutil.copytree(self.paths["b9-api"], self.paths["afbb-api"], symlinks=True)
+        afbb_source = self.paths["afbb-api"] / "apps/whatsapp-agent/src/base.ts"
+        afbb_compiled = self.paths["afbb-api"] / "apps/whatsapp-agent/dist/base.js"
+        afbb_before = sha(afbb_source)
+        afbb_source.write_text("afbb\n"); afbb_compiled.write_text("afbb\n")
+
+        self.af26_manifest = self.evidence / "af26.json"
+        private_json(self.af26_manifest, {
+            "artifacts": {
+                "api": {"path": str(self.paths["af26-api"]), "fileCount": 1},
+                "frontend": {"path": str(self.paths["af26-front"]), "fileCount": 1},
+            },
+            "fileHashes": {
+                "api": {"base.js": sha(self.paths["af26-api"] /
+                                         "apps/whatsapp-agent/dist/base.js")},
+                "frontend": {"app.js": sha(self.paths["af26-front"] / ".next/app.js")},
+            },
+            "preservation": {"metadata": {"candidateDestinations": {
+                str(self.source_root): True}}},
+        })
+        self.r879_source = self.evidence / "879-src.sha256"
+        self.r879_source.write_text(
+            f"{sha(source)}  apps/whatsapp-agent/src/base.ts\n")
+        self.r879_source.chmod(0o644)
+        self.r879_compiled = self.evidence / "879-dist.sha256"
+        self.r879_compiled.write_text(
+            f"{sha(compiled)}  apps/whatsapp-agent/dist/base.js\n")
+        self.r879_compiled.chmod(0o644)
+        self.r879_archive = self.evidence / "879.tar"; self.r879_archive.write_bytes(b"archive")
+        self.r879_archive.chmod(0o644)
+        self.r879_manifest = self.evidence / "879.json"
+        private_json(self.r879_manifest, {
+            "tarSha256": sha(self.r879_archive),
+            "baselineApi": str(self.paths["af26-api"]),
+            "candidateApi": str(self.paths["879-api"]),
+            "unchangedFrontend": str(self.paths["af26-front"]),
+        })
+        self.b9_manifest = self._delta_manifest(
+            "b9", b9_before, b9_source, b9_compiled)
+        self.afbb_manifest = self._delta_manifest(
+            "afbb", afbb_before, afbb_source, afbb_compiled)
+        self.graph = self.evidence / "graph.json"
+        private_json(self.graph, {
+            "activeReleases": [], "rollbackReleases": [],
+            "transitiveReturnReleases": [], "candidateReleases": [],
+            "installedVerifiedReleases": [item[0] for item in self.RELEASES],
+            "supersededCandidates": [], "immediateRollbackReleases": {},
+        })
+        self.inventory = self.evidence / "inventory.json"
+        self.proof = self.evidence / "proof.json"
+        self.binding = self._binding()
+        self._write_inventory()
+        self.binding["sourceInventorySha256"] = sha(self.inventory)
+
+    def _delta_manifest(self, name, before, source, compiled):
+        path = self.evidence / f"{name}.json"
+        private_json(path, {"apiFiles": [{
+            "source": "apps/whatsapp-agent/src/base.ts",
+            "compiled": "apps/whatsapp-agent/dist/base.js",
+            "sourceBeforeSha256": before,
+            "sourceAfterSha256": sha(source),
+            "compiledSha256": sha(compiled),
+        }]})
+        return path
+
+    def _binding(self):
+        releases = []
+        authorities = ("AF26_EXECUTABLE_MANIFEST", "AF26_EXECUTABLE_MANIFEST",
+                       "R879_FULL_SOURCE_COMPILED_MANIFESTS", "B9_EXACT_LINEAGE_DELTA",
+                       "AFBB_EXACT_LINEAGE_DELTA")
+        for (release, target, component), authority in zip(self.RELEASES, authorities):
+            info = self.paths[release].lstat()
+            metrics = MODULE.structural_metrics(self.paths[release])
+            releases.append({"releaseId": release, "targetCommit": target,
+                             "installedReleasePath": str(self.paths[release]),
+                             "component": component, "authority": authority,
+                             "device": info.st_dev, "inode": info.st_ino,
+                             "allocatedBytes": metrics["allocatedBytes"]})
+        item = lambda path: {"path": str(path), "sha256": sha(path)}
+        return {"schemaVersion": 1, "batchId": "fixture-five",
+                "sourceInventorySha256": "0" * 64,
+                "sourceGraph": item(self.graph), "externalDataTarget": str(self.data),
+                "af26SourceRoot": str(self.source_root),
+                "af26Manifest": item(self.af26_manifest),
+                "r879": {"manifest": item(self.r879_manifest),
+                          "sourceManifest": item(self.r879_source),
+                          "compiledManifest": item(self.r879_compiled),
+                          "archive": item(self.r879_archive)},
+                "b9Manifest": item(self.b9_manifest),
+                "afbbManifest": item(self.afbb_manifest), "releases": tuple(releases)}
+
+    def _write_inventory(self):
+        targets = {}
+        for item in self.binding["releases"]:
+            targets[item["installedReleasePath"]] = {
+                "present": True, "device": item["device"], "inode": item["inode"],
+                "physicalBytes": item["allocatedBytes"],
+            }
+        private_json(self.inventory, {"targets": targets})
+
+    def qualify(self):
+        if self.proof.exists(): self.proof.unlink()
+        with patch.object(MODULE, "LEGACY_PRECONTRACT_FIVE_BATCH", self.binding):
+            MODULE.qualify_legacy_precontract_five(SimpleNamespace(
+                inventory=self.inventory, inventory_sha256=sha(self.inventory),
+                proof_output=self.proof))
+        return json.loads(self.proof.read_text())
+
+    def close(self): self.temp.cleanup()
+
+
 class GenerationRetirementTest(unittest.TestCase):
 
     def builder_lock_fixture(self):
@@ -1581,6 +1756,86 @@ class GenerationRetirementTest(unittest.TestCase):
             fixture.refresh_graph(graph)
             with self.assertRaisesRegex(fixture.module.Denied, "legacy_p00_release_referenced"):
                 fixture.qualify()
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_five_qualifies_exact_lineage_independently(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            proof = fixture.qualify()
+            self.assertEqual(len(proof["releases"]), 5)
+            self.assertEqual(proof["protectedReleases"], [])
+            self.assertEqual(proof["totalAllocatedBytes"],
+                             sum(item["allocatedBytes"] for item in fixture.binding["releases"]))
+            self.assertFalse(proof["authorizationGranted"])
+            self.assertFalse(proof["executionPermitted"])
+            self.assertEqual(proof["destructiveCommands"], 0)
+            for item in proof["releases"]:
+                if item["component"] == "api":
+                    self.assertEqual(item["authorityEvidence"]["externalData"]["target"],
+                                     str(fixture.data))
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_five_protects_only_drifted_lineage(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            (fixture.paths["b9-api"] / "unexpected").write_text("drift\n")
+            # Refresh the physical inventory: the proof must reject content drift,
+            # rather than merely noticing that allocated blocks changed.
+            for item in fixture.binding["releases"]:
+                if item["releaseId"] == "b9-api":
+                    item["allocatedBytes"] = MODULE.structural_metrics(
+                        fixture.paths["b9-api"])["allocatedBytes"]
+            fixture._write_inventory()
+            fixture.binding["sourceInventorySha256"] = sha(fixture.inventory)
+            proof = fixture.qualify()
+            self.assertEqual({item["releaseId"] for item in proof["releases"]},
+                             {"af26-api", "af26-front", "879-api"})
+            protected = {item["releaseId"]: item["predicate"]
+                         for item in proof["protectedReleases"]}
+            self.assertIn("unmanifested_difference", protected["b9-api"])
+            self.assertIn("parent_authority", protected["afbb-api"])
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_five_protects_uncovered_leaf_only(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            (fixture.paths["af26-front"] / "unique-outside-next.txt").write_text("unknown\n")
+            for item in fixture.binding["releases"]:
+                if item["releaseId"] == "af26-front":
+                    item["allocatedBytes"] = MODULE.structural_metrics(
+                        fixture.paths["af26-front"])["allocatedBytes"]
+            fixture._write_inventory()
+            fixture.binding["sourceInventorySha256"] = sha(fixture.inventory)
+            proof = fixture.qualify()
+            self.assertEqual({item["releaseId"] for item in proof["releases"]},
+                             {"af26-api", "879-api", "b9-api", "afbb-api"})
+            self.assertEqual(proof["protectedReleases"], [{
+                "releaseId": "af26-front", "path": str(fixture.paths["af26-front"]),
+                "predicate": "af26_frontend_uncovered_leaf"}])
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_five_protects_reference_and_external_data_drift(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            graph = json.loads(fixture.graph.read_text())
+            graph["rollbackReleases"].append("af26-front")
+            private_json(fixture.graph, graph)
+            fixture.binding["sourceGraph"] = {"path": str(fixture.graph),
+                                              "sha256": sha(fixture.graph)}
+            os.unlink(fixture.paths["879-api"] / "apps/whatsapp-agent/.data")
+            os.symlink(fixture.root / "wrong-data",
+                       fixture.paths["879-api"] / "apps/whatsapp-agent/.data")
+            proof = fixture.qualify()
+            protected = {item["releaseId"] for item in proof["protectedReleases"]}
+            self.assertIn("af26-front", protected)
+            self.assertIn("879-api", protected)
+            self.assertIn("b9-api", protected)
+            self.assertIn("afbb-api", protected)
+            self.assertEqual({item["releaseId"] for item in proof["releases"]}, {"af26-api"})
         finally:
             fixture.close()
 

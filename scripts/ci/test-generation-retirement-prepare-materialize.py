@@ -325,7 +325,8 @@ class PrepareMaterializationFixture:
 
 
 class LegacyP00PrepareMaterializationFixture:
-    def __init__(self):
+    def __init__(self, *, precontract=False):
+        self.precontract = precontract
         self.temp = tempfile.TemporaryDirectory(prefix="legacy-p00-prepare-materialized-")
         self.root = Path(self.temp.name)
         self.repo = self.root / "repo"; self.repo.mkdir(mode=0o755)
@@ -380,9 +381,23 @@ class LegacyP00PrepareMaterializationFixture:
         self.current_frontend = self.root / "current-frontend"
         self.current_frontend.symlink_to(self.active_frontend)
 
-        identities = [(item["releaseId"], item["targetCommit"],
-                       item["runtimeCacheOverlay"])
-                      for item in RETIREMENT.LEGACY_P00_INSTALLED_BATCH["releases"]]
+        if precontract:
+            identities = [
+                ("af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api",
+                 "af26f48a9c309b24ec4d23cfa97cc1e407c09d98", False),
+                ("af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front",
+                 "af26f48a9c309b24ec4d23cfa97cc1e407c09d98", False),
+                ("879cb1faa88493cd78dd789b71f85043d6c8ff9c-api",
+                 "879cb1faa88493cd78dd789b71f85043d6c8ff9c", False),
+                ("b9b58177880e729854580def1180f3edb2fb83e8-api",
+                 "b9b58177880e729854580def1180f3edb2fb83e8", False),
+                ("afbb7455f320793e05a25875e8a5f13f98cabf90-api",
+                 "afbb7455f320793e05a25875e8a5f13f98cabf90", False),
+            ]
+        else:
+            identities = [(item["releaseId"], item["targetCommit"],
+                           item["runtimeCacheOverlay"])
+                          for item in RETIREMENT.LEGACY_P00_INSTALLED_BATCH["releases"]]
         self.generation_data = []
         verifier_values = {}
         for release, target, cache in identities:
@@ -432,20 +447,45 @@ class LegacyP00PrepareMaterializationFixture:
         chain = self.evidence / "chain.private.json"
         private_json(chain, {"state": "DEPLOYED", "scope": "fixture-chain"})
         self.qualification = self.evidence / "qualification.private.json"
-        binding_value = {"schemaVersion": 1,
-            "batchId": "p00-legacy-installed-releases-20261107-v1",
-            "canonicalVerifierSha256": sha(self.verifier),
-            "sourceGraph": binding(self.graph), "releases": tuple(self.generation_data),
-            "chainEvidence": ({"path": str(chain), "sha256": sha(chain),
-                               "expected": {"state": "DEPLOYED",
-                                            "scope": "fixture-chain"}},)}
-        output = io.StringIO()
-        with patch.object(RETIREMENT, "LEGACY_P00_INSTALLED_BATCH", binding_value), \
-                patch.object(RETIREMENT, "canonical_release_verifier",
-                             return_value=self.verifier), redirect_stdout(output):
-            RETIREMENT.qualify_legacy_p00_installed_batch(
-                SimpleNamespace(proof_output=self.qualification))
-        self.qualification_result = json.loads(output.getvalue())
+        if precontract:
+            releases = []
+            for identity in self.generation_data:
+                metrics = RETIREMENT.structural_metrics(Path(identity["installedReleasePath"]))
+                releases.append({"releaseId": identity["releaseId"],
+                    "targetCommit": identity["targetCommit"],
+                    "path": identity["installedReleasePath"], **metrics,
+                    "classification": "RETIREMENT_READY", "component": "api",
+                    "authority": "FIXTURE_AUTHORITY", "authorityEvidence": {}})
+            total = sum(item["allocatedBytes"] for item in releases)
+            private_json(self.qualification, {"schemaVersion": 1,
+                "kind": "LEGACY_PRECONTRACT_BATCH_QUALIFICATION",
+                "batchId": "p00-precontract-five-runtimes-20261113-v1",
+                "sourceInventorySha256": "4" * 64,
+                "sourceGraph": binding(self.graph), "authorityFiles": [],
+                "releases": releases, "protectedReleases": [],
+                "totalAllocatedBytes": total,
+                "capacityBudget": {"custodyAndClosureReserveBytes": 16 * 1024 * 1024,
+                    "grossRecoverableBytes": total,
+                    "netRecoverableBytes": max(0, total - 16 * 1024 * 1024)},
+                "authorizationGranted": False, "executionPermitted": False,
+                "destructiveCommands": 0,
+                "nextRequiredStep": "CANONICAL_CONTRACT_LIFECYCLE_MATERIALIZATION"})
+            self.qualification_result = {"qualifiedCount": 5}
+        else:
+            binding_value = {"schemaVersion": 1,
+                "batchId": "p00-legacy-installed-releases-20261107-v1",
+                "canonicalVerifierSha256": sha(self.verifier),
+                "sourceGraph": binding(self.graph), "releases": tuple(self.generation_data),
+                "chainEvidence": ({"path": str(chain), "sha256": sha(chain),
+                                   "expected": {"state": "DEPLOYED",
+                                                "scope": "fixture-chain"}},)}
+            output = io.StringIO()
+            with patch.object(RETIREMENT, "LEGACY_P00_INSTALLED_BATCH", binding_value), \
+                    patch.object(RETIREMENT, "canonical_release_verifier",
+                                 return_value=self.verifier), redirect_stdout(output):
+                RETIREMENT.qualify_legacy_p00_installed_batch(
+                    SimpleNamespace(proof_output=self.qualification))
+            self.qualification_result = json.loads(output.getvalue())
         proof = json.loads(self.qualification.read_text())
         proof_by_release = {item["releaseId"]: item for item in proof["releases"]}
 
@@ -458,7 +498,8 @@ class LegacyP00PrepareMaterializationFixture:
             private_json(lifecycle, {"schemaVersion": 1, "generationId": release,
                                      "targetCommit": target, "state": "COMPLETE"})
             installed = Path(identity["installedReleasePath"]); info = installed.lstat()
-            proof_dependency = f"legacy_p00_qualification:{sha(self.qualification)}"
+            proof_dependency = (("legacy_precontract_qualification:" if precontract else
+                                 "legacy_p00_qualification:") + sha(self.qualification))
             lifecycle_info = lifecycle.lstat()
             lifecycle_artifact = {"path": str(lifecycle), "releaseId": release,
                 "targetCommit": target, "expectedType": "regular_file",
@@ -479,7 +520,8 @@ class LegacyP00PrepareMaterializationFixture:
                 "structuralSha256": qualified["structuralSha256"],
                 "digest": {"qualificationSha256": sha(self.qualification)},
                 "class": "RELEASE_RUNTIME", "state": "RETIREMENT_READY",
-                "retirableOn": "LEGACY_P00_QUALIFICATION",
+                "retirableOn": ("LEGACY_PRECONTRACT_QUALIFICATION" if precontract else
+                                "LEGACY_P00_QUALIFICATION"),
                 "dependencies": [proof_dependency]}
             contract = output_root / "generation-artifacts.private.json"
             private_json(contract, {"schemaVersion": 1, "generationId": release,
@@ -520,7 +562,7 @@ class LegacyP00PrepareMaterializationFixture:
                 "targetCommit": target, "release": installed, "contract": contract,
                 "lifecycle": lifecycle, "review": review, "operational": operational})
         self.request = self.evidence / "prepare-request.private.json"
-        private_json(self.request, {"schemaVersion": 2,
+        private_json(self.request, {"schemaVersion": 3 if precontract else 2,
             "deploymentLock": str(self.deploy_lock), "rootPolicy": binding(self.policy),
             "sourceQualification": {"proof": binding(self.qualification)},
             "generations": [{"name": item["name"], "releaseId": item["releaseId"],
@@ -528,7 +570,8 @@ class LegacyP00PrepareMaterializationFixture:
                 "lifecycle": binding(item["lifecycle"]),
                 "operationalState": binding(item["operational"]),
                 "review": binding(item["review"]), "reviewer": "fixture-owner",
-                "reason": "closed four-release P00 qualification"}
+                "reason": ("closed pre-contract qualification" if precontract else
+                           "closed four-release P00 qualification")}
                 for item in self.generations]})
         self.entrypoint = self.root / "outside" / TOOL.name
         self.entrypoint.parent.mkdir(mode=0o700)
@@ -574,6 +617,93 @@ class LegacyP00PrepareMaterializationFixture:
 
 
 class GenerationRetirementPrepareMaterializeTest(unittest.TestCase):
+    def test_precontract_five_materializes_prepares_denies_drift_and_executes_terminal(self):
+        fixture = LegacyP00PrepareMaterializationFixture(precontract=True)
+        try:
+            result = fixture.materialize()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = json.loads(
+                (fixture.custody / "prepare-materialization.private.json").read_text())
+            self.assertEqual(len(manifest["prepares"]), 5)
+            for plan in manifest["prepares"]:
+                prepared = subprocess.run(plan["argv"], text=True,
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(prepared.returncode, 0,
+                                 prepared.stdout + prepared.stderr)
+                intent = json.loads(Path(plan["intentOutput"]).read_text())
+                self.assertEqual(len(intent["commands"]), 1)
+                self.assertEqual(intent["commands"][0]["class"], "RELEASE_RUNTIME")
+
+            drifted = manifest["prepares"][1]
+            drifted_release = fixture.generation(drifted["releaseId"])["release"]
+            (drifted_release / "late-drift").write_text("deny\n")
+            drift_authorization = fixture.authorize(drifted, "precontract-drift")
+            drift_receipt = fixture.evidence / "precontract-drift-receipt"
+            denied = subprocess.run(
+                fixture.execution_argv(drifted, drift_authorization, drift_receipt),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("artifact_drift", denied.stderr)
+            self.assertTrue(drifted_release.is_dir())
+            self.assertFalse(drift_receipt.exists())
+
+            clean = manifest["prepares"][0]
+            clean_authorization = fixture.authorize(clean, "precontract-clean")
+            clean_receipt = fixture.evidence / "precontract-clean-receipt"
+            executed = subprocess.run(
+                fixture.execution_argv(clean, clean_authorization, clean_receipt),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)
+            receipt = json.loads(
+                (clean_receipt / "execution-receipt.private.json").read_text())
+            self.assertEqual(receipt["state"], "SANITIZED")
+            self.assertEqual(receipt["completedCommands"], 1)
+            self.assertFalse(fixture.generation(clean["releaseId"])["release"].exists())
+        finally:
+            fixture.close()
+
+    def test_precontract_protected_candidate_cannot_enter_materialization(self):
+        fixture = LegacyP00PrepareMaterializationFixture(precontract=True)
+        try:
+            proof = json.loads(fixture.qualification.read_text())
+            protected = proof["releases"].pop()
+            proof["protectedReleases"] = [{"releaseId": protected["releaseId"],
+                "path": protected["path"], "predicate": "fixture_missing_authority"}]
+            proof["totalAllocatedBytes"] -= protected["allocatedBytes"]
+            proof["capacityBudget"] = {"custodyAndClosureReserveBytes": 16 * 1024 * 1024,
+                "grossRecoverableBytes": proof["totalAllocatedBytes"],
+                "netRecoverableBytes": max(0, proof["totalAllocatedBytes"] - 16 * 1024 * 1024)}
+            private_json(fixture.qualification, proof)
+            request = json.loads(fixture.request.read_text())
+            request["sourceQualification"] = {"proof": binding(fixture.qualification)}
+            request["generations"] = [item for item in request["generations"]
+                                      if item["releaseId"] != protected["releaseId"]]
+            dependency = f"legacy_precontract_qualification:{sha(fixture.qualification)}"
+            for item in fixture.generations:
+                if item["releaseId"] == protected["releaseId"]:
+                    continue
+                contract = json.loads(item["contract"].read_text())
+                for artifact in contract["artifacts"]:
+                    artifact["dependencies"] = [dependency]
+                private_json(item["contract"], contract)
+                review = json.loads(item["review"].read_text())
+                review["evidenceSha256"] = sha(fixture.qualification)
+                private_json(item["review"], review)
+                request_item = next(entry for entry in request["generations"]
+                                    if entry["releaseId"] == item["releaseId"])
+                request_item["contract"] = binding(item["contract"])
+                request_item["review"] = binding(item["review"])
+            private_json(fixture.request, request)
+            result = fixture.materialize()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = json.loads(
+                (fixture.custody / "prepare-materialization.private.json").read_text())
+            self.assertEqual(len(manifest["prepares"]), 4)
+            self.assertNotIn(protected["releaseId"],
+                             {item["releaseId"] for item in manifest["prepares"]})
+        finally:
+            fixture.close()
+
     def test_legacy_p00_qualification_materializes_four_real_prepare_intents(self):
         fixture = LegacyP00PrepareMaterializationFixture()
         try:
