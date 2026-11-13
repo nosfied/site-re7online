@@ -1094,6 +1094,7 @@ class LegacyPrecontractFiveFixture:
             "preservation": {"metadata": {"candidateDestinations": {
                 str(self.source_root): True}}},
         })
+        self.af26_manifest.chmod(0o664)  # preserved legacy authority; never chmod on the VPS
         self.r879_source = self.evidence / "879-src.sha256"
         self.r879_source.write_text(
             f"{sha(source)}  apps/whatsapp-agent/src/base.ts\n")
@@ -1756,6 +1757,27 @@ class GenerationRetirementTest(unittest.TestCase):
             fixture.refresh_graph(graph)
             with self.assertRaisesRegex(fixture.module.Denied, "legacy_p00_release_referenced"):
                 fixture.qualify()
+        finally:
+            fixture.close()
+
+    def test_legacy_precontract_af26_manifest_exception_is_exact_and_strict(self):
+        fixture = LegacyPrecontractFiveFixture()
+        try:
+            manifest = fixture.af26_manifest
+            expected = sha(manifest)
+            with patch.object(MODULE, "LEGACY_PRECONTRACT_FIVE_BATCH", fixture.binding):
+                raw, observed = MODULE.stable_legacy_af26_manifest(manifest, expected)
+                self.assertEqual(MODULE.digest_bytes(raw), expected)
+                self.assertEqual(stat.S_IMODE(observed.st_mode), 0o664)
+                for mode in (0o666, 0o644, 0o600):
+                    manifest.chmod(mode)
+                    with self.assertRaisesRegex(MODULE.Denied, "legacy_precontract_af26_manifest_identity"):
+                        MODULE.stable_legacy_af26_manifest(manifest, expected)
+                manifest.chmod(0o664)
+                with self.assertRaisesRegex(MODULE.Denied, "authenticated_input"):
+                    MODULE.stable_legacy_af26_manifest(manifest, "0" * 64)
+                with self.assertRaisesRegex(MODULE.Denied, "authenticated_input"):
+                    MODULE.stable_legacy_af26_manifest(fixture.r879_manifest, expected)
         finally:
             fixture.close()
 

@@ -1545,3 +1545,23 @@ consumidores reais para qualificação, materialização, `prepare`, negativa po
 drift e execução sintética com receipt terminal. Nenhuma qualificação ou retirada
 produtiva é efeito desta revisão; a próxima etapa, após integração, é recapturar a
 fronteira operacional na VPS e materializar contratos privados antes dos prepares.
+
+##### Qualificação produtiva negada por manifesto histórico 0664 — 13/11/2026
+
+A tentativa de qualificação somente leitura do lote precontract five, após o merge
+`6012e256381f24bed9025d8e1b2229418bb084ec`, encerrou
+`QUALIFICATION_DENY:legacy_precontract_af26_manifest_identity` antes da avaliação
+individual. O manifesto original `af26` mantém SHA-256
+`017c8d678f885026a574ee0b241c9cd156b015ea0b978b53714196ab53364989`,
+mas seu modo histórico observado é `0664`; o verificador regular global proíbe
+escrita por grupo. Nenhum byte foi qualificado, nenhum `prepare` foi executado e
+nenhuma operação alterou o arquivo original ou a produção.
+
+A correção delimitada adiciona uma **exceção de leitura exclusivamente para o
+caminho e SHA exatos** de `af26Manifest`, exigindo owner e grupo do processo
+`deploy`, modo histórico exato `0664`, diretório físico não-symlink de autoridade
+pela verificação já existente, `O_NOFOLLOW`, confronto `lstat/fstat` anterior e
+posterior, e SHA do conteúdo. `stable_regular_hash` permanece inalterada; outras
+autoridades continuam negando escrita por grupo. A exceção não converte
+qualificação em autorização de retirada e não autoriza `chmod` da fonte produtiva.
+A próxima tentativa deve usar nova prova e apenas recapturar observações voláteis.
