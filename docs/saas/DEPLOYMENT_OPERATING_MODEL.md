@@ -2,7 +2,8 @@
 
 **Status: CANÔNICO / API+FRONTEND FA10F4F5 ATIVOS / WORKER E2E7 PRESERVADO / BUILD EXTERNO DEMONSTRADO**
 
-Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md).
+Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
+define a arquitetura e os princípios vigentes para sua aplicação à implantação.
 A única instrução executável permanece o [runbook](DEPLOY_RUNBOOK.md). O estado
 produtivo informado em 13/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md),
 e com o registro legado E0 ainda validado por
