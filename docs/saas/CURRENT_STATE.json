@@ -2,9 +2,9 @@
   "schemaVersion": 8,
   "updatedAtUtc": "2026-11-13T15:19:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
-  "activeOperationalRecord": "docs/saas/releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
-  "activeApiDeploymentRecord": "docs/saas/releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
+  "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
+  "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
+  "activeApiDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
   "transitionAudit": {
     "state": "E0_PASS",
     "closureRecord": "docs/saas/releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json",
@@ -1779,7 +1779,7 @@
   "currentVerifiedSnapshot20261113": {
     "status": "DEPLOYED_RETENTION_INCOMPLETE_WITH_SUCCESSFUL_BUILDER_CLOSURE",
     "source": "USER_REPORTED_CODEX_TERMINAL_RECEIPTS_NOT_LIVE_RECAPTURE",
-    "record": "docs/saas/CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md",
+    "record": "docs/saas/releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
     "components": {
       "api": "immutable-fa10f4f5-external-20261112T233820Z",
       "frontend": "immutable-fa10f4f5-external-20261112T233820Z",
@@ -1829,8 +1829,7 @@
       "runbook": "docs/saas/DEPLOY_RUNBOOK.md",
       "capacity": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
       "noRework": "docs/saas/WORKING_PRINCIPLES.md"
-    }
-  },
-  "previousActiveDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
-  "activeFrontendDeploymentRecord": "docs/saas/releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json"
+    },
+    "legacyValidatorNote": "activeDeploymentRecord/activeOperationalRecord/activeApiDeploymentRecord remain historical a838 references solely for verify-current-state.py schema v8 and E0 closure; this snapshot is the later reported state, and those legacy pointers are not live selections. Migration of schema/validator is a separate future compatibility task."
+  }
 }
