@@ -28,6 +28,14 @@ RUNTIME_CACHE_TRANSACTION = Path(
     "immutable-36b94c6d-vps-20261107T165118Z-api-frontend-6fd93b08-v4-once"
 )
 RUNTIME_CACHE_INTENT_SHA256 = "6064a4a98ede89bb085b09e4e474048d976aa9cf31a4c0cd03207be18a0c4f7c"
+FA10_RUNTIME_CACHE_RELEASE = "immutable-fa10f4f5-external-20261112T233820Z"
+FA10_RUNTIME_CACHE_TARGET = "fa10f4f59c9a05328e536dd25a1668c3ba25939e"
+FA10_RUNTIME_CACHE_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-fa10f4f5-external-20261112T233820Z-api-frontend-88a5e8b7-v1-once"
+)
+FA10_RUNTIME_CACHE_INTENT_SHA256 = "cf22eb0f466b448092e1bebd9bf83279c076cf654b6b00b4e57e725ade3b9bc2"
+RUNTIME_CACHE_RECONCILIATION_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
 
 
 class Denied(RuntimeError):
@@ -87,6 +95,73 @@ def _bound_regular(path: Path, expected_sha256: str) -> bytes:
     return raw
 
 
+def _runtime_cache_arguments(argv: list[str]) -> tuple[str, str] | None:
+    path_flag = "--runtime-cache-reconciliation"
+    sha_flag = "--runtime-cache-reconciliation-sha256"
+    if argv.count(path_flag) != argv.count(sha_flag):
+        raise Denied("request_runtime_cache_binding")
+    if argv.count(path_flag) == 0:
+        return None
+    if argv.count(path_flag) != 1:
+        raise Denied("request_runtime_cache_binding")
+    return _argv_value(argv, path_flag), _argv_value(argv, sha_flag)
+
+
+def _without_runtime_cache_arguments(argv: list[str]) -> list[str]:
+    binding = _runtime_cache_arguments(argv)
+    if binding is None:
+        return list(argv)
+    result = list(argv)
+    for flag in ("--runtime-cache-reconciliation-sha256",
+                 "--runtime-cache-reconciliation"):
+        index = result.index(flag)
+        del result[index:index + 2]
+    return result
+
+
+def _runtime_cache_successor(value: dict[str, Any], argv: list[str]) -> tuple[str, str] | None:
+    binding = _runtime_cache_arguments(argv)
+    if binding is None:
+        return None
+    path_value, expected_sha256 = binding
+    path = Path(path_value)
+    raw = _bound_regular(path, expected_sha256)
+    try:
+        manifest = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise Denied("request_runtime_cache_json") from error
+    required = {
+        "schemaVersion", "kind", "releaseId", "targetCommit", "transactionRoot",
+        "indexSha256", "manifestSha256", "retirementIntentSha256",
+        "originalControlPlane", "continuationControlPlane",
+        "continuationDriverSha256", "negativeJournal", "acceptanceSha256",
+        "lockSha256", "cacheEntries",
+    }
+    original = _argv_value(argv, "--control-plane")
+    if (not isinstance(manifest, dict) or set(manifest) != required or
+            manifest.get("schemaVersion") != 1 or
+            manifest.get("kind") != RUNTIME_CACHE_RECONCILIATION_KIND or
+            manifest.get("releaseId") != FA10_RUNTIME_CACHE_RELEASE or
+            manifest.get("targetCommit") != FA10_RUNTIME_CACHE_TARGET or
+            manifest.get("transactionRoot") != str(FA10_RUNTIME_CACHE_TRANSACTION) or
+            manifest.get("retirementIntentSha256") != FA10_RUNTIME_CACHE_INTENT_SHA256 or
+            manifest.get("originalControlPlane") != original or
+            _argv_value(argv, "--release") != FA10_RUNTIME_CACHE_RELEASE or
+            _argv_value(argv, "--target") != FA10_RUNTIME_CACHE_TARGET or
+            _argv_value(argv, "--transaction-root") != str(FA10_RUNTIME_CACHE_TRANSACTION) or
+            _argv_value(argv, "--generation-retirement-intent-sha256") !=
+            FA10_RUNTIME_CACHE_INTENT_SHA256 or
+            not _sha256_value(manifest.get("continuationDriverSha256")) or
+            not isinstance(manifest.get("continuationControlPlane"), str) or
+            len(manifest["continuationControlPlane"]) != 40 or
+            any(character not in "0123456789abcdef"
+                for character in manifest["continuationControlPlane"])):
+        raise Denied("request_runtime_cache_scope")
+    if manifest["continuationDriverSha256"] != value.get("driverSha256"):
+        raise Denied("request_runtime_cache_driver")
+    return manifest["continuationControlPlane"], manifest["continuationDriverSha256"]
+
+
 def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
     driver = Path(value["driver"])
     if driver.name != "converta-deploy.py" or driver.parent.name != "scripts":
@@ -95,11 +170,15 @@ def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
         raise Denied("request_driver_sha256")
     repo = driver.parent.parent
     control_plane = _argv_value(argv, "--control-plane")
+    successor = _runtime_cache_successor(value, argv)
+    expected_head, expected_driver_sha256 = (
+        successor if successor is not None else (control_plane, value["driverSha256"])
+    )
     commands = {
         "head": ["git", "-C", str(repo), "rev-parse", "HEAD"],
         "tracked": ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--",
                     "scripts/converta-deploy.py"],
-        "blob": ["git", "-C", str(repo), "show", f"{control_plane}:scripts/converta-deploy.py"],
+        "blob": ["git", "-C", str(repo), "show", f"{expected_head}:scripts/converta-deploy.py"],
         "status": ["git", "-C", str(repo), "status", "--porcelain=v1",
                    "--untracked-files=all"],
     }
@@ -108,10 +187,10 @@ def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
         for name, command in commands.items()
     }
     if (any(result.returncode for result in results.values()) or
-            results["head"].stdout.decode().strip() != control_plane or
+            results["head"].stdout.decode().strip() != expected_head or
             results["tracked"].stdout.decode().strip() != "scripts/converta-deploy.py" or
             results["status"].stdout or
-            sha256(results["blob"].stdout) != value["driverSha256"]):
+            sha256(results["blob"].stdout) != expected_driver_sha256):
         raise Denied("request_driver_checkout")
 
 
@@ -146,17 +225,38 @@ def _validate_finalize_continuation(value: dict[str, Any], argv: list[str]) -> N
         prior = json.loads(prior_raw)
     except json.JSONDecodeError as error:
         raise Denied("request_recovery_prior_json") from error
+    if not isinstance(prior, dict):
+        raise Denied("request_recovery_prior_binding")
+    prior_action = prior.get("action")
     prior_required = {"schemaVersion", "action", "lockPath", "transactionRoot",
                       "driver", "driverSha256", "finalizeArgv"}
-    if (not isinstance(prior, dict) or set(prior) != prior_required or
-            prior.get("schemaVersion") != 1 or prior.get("action") != "finalize" or
+    if prior_action == "finalize_continuation":
+        prior_required |= {"attemptOrdinal", "evidenceOutputs", "recovery"}
+    if (set(prior) != prior_required or prior.get("schemaVersion") != 1 or
+            prior_action not in {"finalize", "finalize_continuation"} or
             prior.get("lockPath") != value["lockPath"] or
             prior.get("transactionRoot") != value["transactionRoot"] or
-            prior.get("driverSha256") != value["driverSha256"] or
             not isinstance(prior.get("finalizeArgv"), list) or
             prior["finalizeArgv"][:2] != ["/usr/bin/python3", "-B"] or
-            prior["finalizeArgv"][3:4] != ["finalize"] or
-            prior["finalizeArgv"][4:] != argv[4:]):
+            prior["finalizeArgv"][3:4] != ["finalize"]):
+        raise Denied("request_recovery_prior_binding")
+    prior_cache = _runtime_cache_arguments(prior["finalizeArgv"])
+    current_cache = _runtime_cache_arguments(argv)
+    if current_cache is None:
+        if prior_cache is not None or prior["finalizeArgv"][4:] != argv[4:] or \
+                prior.get("driverSha256") != value["driverSha256"]:
+            raise Denied("request_recovery_prior_binding")
+    elif prior_cache is None:
+        if (_without_runtime_cache_arguments(argv)[4:] != prior["finalizeArgv"][4:] or
+                _runtime_cache_successor(value, argv) is None):
+            raise Denied("request_recovery_prior_binding")
+    elif (prior_cache != current_cache or prior["finalizeArgv"][4:] != argv[4:] or
+          prior.get("driverSha256") != value["driverSha256"]):
+        raise Denied("request_recovery_prior_binding")
+    if prior_action == "finalize_continuation" and (
+            prior.get("attemptOrdinal") != attempt - 1 or
+            not isinstance(prior.get("evidenceOutputs"), dict) or
+            set(prior["evidenceOutputs"]) != {"stdout", "stderr", "exit"}):
         raise Denied("request_recovery_prior_binding")
 
     journal_path = Path(recovery.get("negativeJournal", ""))
@@ -175,10 +275,21 @@ def _validate_finalize_continuation(value: dict[str, Any], argv: list[str]) -> N
     prior_evidence = recovery.get("priorEvidence")
     if not isinstance(prior_evidence, dict) or set(prior_evidence) != {"stdout", "stderr", "exit"}:
         raise Denied("request_recovery_evidence")
-    expected_names = {
+    expected_names = ({
+        name: Path(prior["evidenceOutputs"][name])
+        for name in ("stdout", "stderr", "exit")
+    } if prior_action == "finalize_continuation" else {
         name: transaction / f"fixed-current-finalize-continuation.{name}.private.txt"
         for name in ("stdout", "stderr", "exit")
-    }
+    })
+    if prior_action == "finalize_continuation":
+        expected_prior_names = {
+            name: transaction /
+            f"fixed-current-finalize-continuation-attempt-{attempt - 1:02d}.{name}.private.txt"
+            for name in ("stdout", "stderr", "exit")
+        }
+        if expected_names != expected_prior_names:
+            raise Denied("request_recovery_evidence")
     for name, expected_path in expected_names.items():
         binding = prior_evidence.get(name)
         if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:

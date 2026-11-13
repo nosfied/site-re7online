@@ -1628,6 +1628,263 @@ if config_path:
         self.assertEqual(receipt["state"], "DEPLOYED_SANITIZED")
         self.assertEqual(json.loads(real_retirement.review.read_text())["state"], "SANITIZED")
 
+    def test_fa10_wrapper_chain_reconciles_cache_and_resumes_after_save(self) -> None:
+        control = self.base / "fa10-successor-control"
+        scripts = control / "scripts"; scripts.mkdir(parents=True)
+        shutil.copyfile(ROOT / "scripts/pm2-definition-env-allowlist.v1.json",
+                        scripts / "pm2-definition-env-allowlist.v1.json")
+        (scripts / "converta-deploy.py").write_text("# original control plane\n")
+        subprocess.run(["git", "init", "-q", str(control)], check=True)
+        subprocess.run(["git", "-C", str(control), "config", "user.email",
+                        "fixture@example.test"], check=True)
+        subprocess.run(["git", "-C", str(control), "config", "user.name", "Fixture"], check=True)
+        subprocess.run(["git", "-C", str(control), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(control), "commit", "-q", "-m", "original"], check=True)
+        original_head = subprocess.run(
+            ["git", "-C", str(control), "rev-parse", "HEAD"], check=True,
+            capture_output=True, text=True).stdout.strip()
+
+        intent = json.loads(self.retirement.intent.read_text())
+        intent["commands"] = []
+        put(self.retirement.intent, intent)
+        self.retirement = replace(self.retirement, intent_sha256=sha(self.retirement.intent))
+        runtime = json.loads(self.runtime_manifest.read_text())
+        runtime["controlPlaneSha"] = original_head
+        put(self.runtime_manifest, runtime)
+        self.control_plane = original_head
+        self.inputs = replace(
+            self.inputs, control_plane=original_head,
+            runtime_manifest_sha256=sha(self.runtime_manifest), retirement=self.retirement)
+        original_run = self.host.run
+
+        def real_git(command: list[str], *, timeout: float = 40,
+                     pass_fds: tuple[int, ...] = (), env: dict[str, str] | None = None
+                     ) -> subprocess.CompletedProcess[str]:
+            if command and command[0] == "git":
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False)
+            return original_run(command, timeout=timeout, pass_fds=pass_fds, env=env)
+
+        self.host.run = real_git  # type: ignore[method-assign]
+        self.driver = self._driver(control)
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+
+        shutil.copyfile(ROOT / "scripts/converta-deploy.py", scripts / "converta-deploy.py")
+        subprocess.run(["git", "-C", str(control), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(control), "commit", "-q", "-m", "successor"], check=True)
+        successor_head = subprocess.run(
+            ["git", "-C", str(control), "rev-parse", "HEAD"], check=True,
+            capture_output=True, text=True).stdout.strip()
+        driver, manifest, old_constants = self.runtime_cache_finalize(
+            repo=control, prepare_transaction=False,
+            continuation_control_plane=successor_head, preserve_retirement=True)
+        fa10_constants = {
+            "RUNTIME_CACHE_36B_RELEASE": deploy.RUNTIME_CACHE_36B_RELEASE,
+            "RUNTIME_CACHE_FA10_RELEASE": self.candidate,
+            "RUNTIME_CACHE_FA10_TARGET": self.target,
+            "RUNTIME_CACHE_FA10_TRANSACTION": self.transaction,
+            "RUNTIME_CACHE_FA10_INDEX_SHA256": old_constants["RUNTIME_CACHE_36B_INDEX_SHA256"],
+            "RUNTIME_CACHE_FA10_MANIFEST_SHA256":
+                old_constants["RUNTIME_CACHE_36B_MANIFEST_SHA256"],
+            "RUNTIME_CACHE_FA10_INTENT_SHA256": old_constants["RUNTIME_CACHE_36B_INTENT_SHA256"],
+            "RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256":
+                old_constants["RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256"],
+            "RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256":
+                old_constants["RUNTIME_CACHE_36B_ACCEPTANCE_SHA256"],
+            "RUNTIME_CACHE_FA10_LOCK_SHA256": old_constants["RUNTIME_CACHE_36B_LOCK_SHA256"],
+            "RUNTIME_CACHE_FA10_EXTRAS": old_constants["RUNTIME_CACHE_36B_EXTRAS"],
+        }
+        self.assertEqual(json.loads(self.retirement.intent.read_text())["commands"], [])
+
+        custody = self.base / "fa10-continuation-custody"; custody.mkdir(mode=0o700)
+        wrapper = custody / "fixed-current-finalization-continuation.py"
+        shutil.copyfile(ROOT / "scripts/fixed-current-finalization-continuation.py", wrapper)
+        wrapper.chmod(0o600)
+        checkout_driver = control / "scripts/converta-deploy.py"
+        checkout_driver.chmod(0o600)
+        finalize_argv = [
+            "/usr/bin/python3", "-B", str(checkout_driver), "finalize",
+            "--release", self.candidate, "--target", self.target,
+            "--control-plane", original_head, "--components", "api,frontend",
+            "--runtime-manifest", str(self.runtime_manifest),
+            "--runtime-manifest-sha256", sha(self.runtime_manifest),
+            "--transaction-root", str(self.transaction),
+            "--generation-retirement-tool", str(self.retirement.tool),
+            "--generation-retirement-tool-sha256", self.retirement.tool_sha256,
+            "--generation-retirement-intent", str(self.retirement.intent),
+            "--generation-retirement-intent-sha256", self.retirement.intent_sha256,
+            "--generation-retirement-authorization", str(self.retirement.authorization),
+            "--generation-retirement-authorization-sha256",
+            self.retirement.authorization_sha256,
+            "--generation-retirement-operational-state", str(self.retirement.operational_state),
+            "--generation-retirement-operational-state-sha256",
+            self.retirement.operational_state_sha256,
+            "--generation-retirement-root-policy", str(self.retirement.root_policy),
+            "--generation-retirement-root-policy-sha256", self.retirement.root_policy_sha256,
+            "--generation-retirement-receipt-root", str(self.retirement.receipt_root),
+            "--generation-retirement-review-output", str(self.retirement.review_output),
+            "--generation-retirement-deployment-lock", str(self.retirement.deployment_lock),
+            "--runtime-cache-reconciliation", str(manifest),
+            "--runtime-cache-reconciliation-sha256", sha(manifest),
+        ]
+        failpoint = custody / "fail-after-save.once"
+        failpoint.write_text("after_save\n"); failpoint.chmod(0o600)
+        save_log = custody / "pm2-save.calls"
+        fixture_config = custody / "subprocess-fixture.private.json"
+        serialized_constants = {
+            name: (str(value) if isinstance(value, Path) else value)
+            for name, value in fa10_constants.items()
+        }
+        put(fixture_config, {
+            "driver": str(checkout_driver), "wrapper": str(wrapper),
+            "repo": str(control), "testModule": str(Path(__file__).resolve()),
+            "controlPlane": successor_head, "node": str(self.node),
+            "rows": list(self.host.rows.values()), "dump": str(self.dump),
+            "pm2": str(self.pm2), "releases": str(self.releases),
+            "stable": {name: str(path) for name, path in self.stable.items()},
+            "lock": str(self.lock), "failpoint": str(failpoint), "saveLog": str(save_log),
+            "constants": serialized_constants,
+            "wrapperConstants": {
+                "FA10_RUNTIME_CACHE_RELEASE": self.candidate,
+                "FA10_RUNTIME_CACHE_TARGET": self.target,
+                "FA10_RUNTIME_CACHE_TRANSACTION": str(self.transaction),
+                "FA10_RUNTIME_CACHE_INTENT_SHA256": self.retirement.intent_sha256,
+            },
+        })
+        fixture_python = custody / "fixture-python"; fixture_python.mkdir(mode=0o700)
+        (fixture_python / "sitecustomize.py").write_text("""
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+config_path = os.environ.get("RE7_FINALIZE_SUBPROCESS_FIXTURE")
+if config_path:
+    config = json.loads(Path(config_path).read_text())
+    def install_fixture(frame, event, argument):
+        if event != "call" or frame.f_code.co_name != "main": return install_fixture
+        executable = Path(frame.f_code.co_filename).resolve()
+        if executable == Path(config["wrapper"]).resolve():
+            sys.settrace(None)
+            for name, value in config["wrapperConstants"].items():
+                frame.f_globals[name] = Path(value) if name.endswith("TRANSACTION") else value
+            return None
+        if executable != Path(config["driver"]).resolve(): return install_fixture
+        sys.settrace(None)
+        globals_ = frame.f_globals
+        spec = importlib.util.spec_from_file_location("deploy_fixture", config["testModule"])
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        host = module.FakeHost(config["controlPlane"], Path(config["node"]))
+        host.rows = {row["name"]: row for row in config["rows"]}
+        host.process_cwds = {row["pid"]: Path(row["pm2_env"]["pm_cwd"]).resolve()
+                             for row in host.rows.values()}
+        host.dump = Path(config["dump"])
+        original_run = host.run
+        def run(command, *, timeout=40, pass_fds=(), env=None):
+            if command and command[0] == "git":
+                return subprocess.run(command, timeout=timeout, text=True,
+                                      capture_output=True, check=False)
+            return original_run(command, timeout=timeout, pass_fds=pass_fds, env=env)
+        host.run = run
+        original_mutate = host.pm2_mutate
+        def mutate(pm2, args):
+            original_mutate(pm2, args)
+            if args == ["save"]:
+                with open(config["saveLog"], "a", encoding="utf-8") as stream:
+                    stream.write("save\\n")
+        host.pm2_mutate = mutate
+        original_driver = globals_["Driver"]; denied = globals_["Denied"]
+        class SubprocessDriver(original_driver):
+            def _ticks(self, pid): return pid * 100
+            def _failpoint(self, name):
+                marker = Path(config["failpoint"])
+                if name == "after_save" and marker.exists():
+                    marker.unlink(); raise denied("injected:after_save")
+        def driver_factory(inputs):
+            return SubprocessDriver(inputs, host=host, repo=Path(config["repo"]),
+                releases=Path(config["releases"]),
+                stable={name: Path(path) for name, path in config["stable"].items()},
+                lock=Path(config["lock"]), dump=Path(config["dump"]),
+                pm2=Path(config["pm2"]), clock=lambda: 1234567890.0)
+        globals_["Driver"] = driver_factory
+        for name, value in config["constants"].items():
+            globals_[name] = Path(value) if name.endswith("TRANSACTION") else value
+        return None
+    sys.settrace(install_fixture)
+""")
+
+        ordinal2_outputs = {
+            name: str(self.transaction /
+                      f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt")
+            for name in ("stdout", "stderr", "exit")
+        }
+        ordinal2 = {
+            "schemaVersion": 1, "action": "finalize_continuation", "attemptOrdinal": 2,
+            "lockPath": str(self.lock), "transactionRoot": str(self.transaction),
+            "driver": str(checkout_driver), "driverSha256": sha(checkout_driver),
+            "finalizeArgv": finalize_argv[:-4], "evidenceOutputs": ordinal2_outputs,
+            "recovery": {},
+        }
+        ordinal2_path = custody / "attempt-02.request.private.json"; put(ordinal2_path, ordinal2)
+        for name, path_value in ordinal2_outputs.items():
+            path = Path(path_value)
+            path.write_text("2\n" if name == "exit" else
+                            ("DEPLOY_DENY:runtime_cache_reconciliation_binding\n"
+                             if name == "stderr" else "")); path.chmod(0o600)
+
+        environment = dict(os.environ)
+        environment.update(PYTHONPATH=str(fixture_python),
+                           RE7_FINALIZE_SUBPROCESS_FIXTURE=str(fixture_config))
+
+        def request_for(attempt: int, prior_path: Path,
+                        prior_outputs: dict[str, str]) -> tuple[Path, dict[str, str]]:
+            outputs = {name: str(self.transaction /
+                f"fixed-current-finalize-continuation-attempt-{attempt:02d}.{name}.private.txt")
+                for name in ("stdout", "stderr", "exit")}
+            request = {
+                "schemaVersion": 1, "action": "finalize_continuation",
+                "attemptOrdinal": attempt, "lockPath": str(self.lock),
+                "transactionRoot": str(self.transaction), "driver": str(checkout_driver),
+                "driverSha256": sha(checkout_driver), "finalizeArgv": finalize_argv,
+                "evidenceOutputs": outputs,
+                "recovery": {
+                    "priorRequest": str(prior_path), "priorRequestSha256": sha(prior_path),
+                    "negativeJournal": str(driver.journal),
+                    "negativeJournalSha256": sha(driver.journal),
+                    "priorEvidence": {name: {"path": path, "sha256": sha(Path(path))}
+                                      for name, path in prior_outputs.items()},
+                },
+            }
+            path = custody / f"attempt-{attempt:02d}.request.private.json"; put(path, request)
+            return path, outputs
+
+        attempt3, outputs3 = request_for(3, ordinal2_path, ordinal2_outputs)
+        first = subprocess.run(["/usr/bin/python3", "-B", str(wrapper),
+            "--request", str(attempt3), "--request-sha256", sha(attempt3)],
+            text=True, capture_output=True, check=False, env=environment)
+        self.assertEqual(first.returncode, 2, (first.stdout, first.stderr))
+        self.assertIn("finalize_exit:2", first.stderr)
+        self.assertTrue(self.lock.is_file())
+        attempt4, outputs4 = request_for(4, attempt3, outputs3)
+        second = subprocess.run(["/usr/bin/python3", "-B", str(wrapper),
+            "--request", str(attempt4), "--request-sha256", sha(attempt4)],
+            text=True, capture_output=True, check=False, env=environment)
+        self.assertEqual(second.returncode, 0, (second.stdout, second.stderr))
+        self.assertFalse(self.lock.exists())
+        self.assertEqual(save_log.read_text().splitlines(), ["save"])
+        terminal = json.loads(driver.journal.read_text())
+        self.assertEqual(terminal["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(terminal["saveCount"], 1)
+        self.assertEqual(Path(outputs3["exit"]).read_text(), "2\n")
+        self.assertEqual(Path(outputs4["exit"]).read_text(), "0\n")
+        receipt = json.loads((self.retirement.receipt_root /
+                              "execution-receipt.private.json").read_text())
+        self.assertEqual(receipt["attemptedCommands"], 0)
+        self.assertEqual(receipt["completedCommands"], 0)
+
     def test_36b_runtime_cache_continuation_denies_inventory_and_crossed_evidence(self) -> None:
         variants = ("cache_altered", "extra", "symlink", "indexed_missing",
                     "indexed_divergent", "crossed_evidence", "successor_head",
@@ -1680,6 +1937,127 @@ if config_path:
                         driver.finalize()
                 self.assertEqual(self.host.save_calls, 0)
                 self.assertEqual(self.host.retirement_calls, 0)
+
+    def test_fa10_runtime_cache_profile_finishes_with_zero_command_retirement(self) -> None:
+        intent = json.loads(self.retirement.intent.read_text())
+        intent["commands"] = []
+        put(self.retirement.intent, intent)
+        self.retirement = replace(self.retirement, intent_sha256=sha(self.retirement.intent))
+        self.inputs = replace(self.inputs, retirement=self.retirement)
+        self.driver = self._driver()
+        driver, _, old = self.runtime_cache_finalize(preserve_retirement=True)
+        constants = {
+            "RUNTIME_CACHE_36B_RELEASE": deploy.RUNTIME_CACHE_36B_RELEASE,
+            "RUNTIME_CACHE_FA10_RELEASE": self.candidate,
+            "RUNTIME_CACHE_FA10_TARGET": self.target,
+            "RUNTIME_CACHE_FA10_TRANSACTION": self.transaction,
+            "RUNTIME_CACHE_FA10_INDEX_SHA256": old["RUNTIME_CACHE_36B_INDEX_SHA256"],
+            "RUNTIME_CACHE_FA10_MANIFEST_SHA256": old["RUNTIME_CACHE_36B_MANIFEST_SHA256"],
+            "RUNTIME_CACHE_FA10_INTENT_SHA256": old["RUNTIME_CACHE_36B_INTENT_SHA256"],
+            "RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256":
+                old["RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256"],
+            "RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256": old["RUNTIME_CACHE_36B_ACCEPTANCE_SHA256"],
+            "RUNTIME_CACHE_FA10_LOCK_SHA256": old["RUNTIME_CACHE_36B_LOCK_SHA256"],
+            "RUNTIME_CACHE_FA10_EXTRAS": old["RUNTIME_CACHE_36B_EXTRAS"],
+        }
+        with patch.multiple(deploy, **constants):
+            driver.finalize()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_fa10_runtime_cache_profile_recaptures_before_save(self) -> None:
+        driver, _, old = self.runtime_cache_finalize()
+        constants = {
+            "RUNTIME_CACHE_36B_RELEASE": deploy.RUNTIME_CACHE_36B_RELEASE,
+            "RUNTIME_CACHE_FA10_RELEASE": self.candidate,
+            "RUNTIME_CACHE_FA10_TARGET": self.target,
+            "RUNTIME_CACHE_FA10_TRANSACTION": self.transaction,
+            "RUNTIME_CACHE_FA10_INDEX_SHA256": old["RUNTIME_CACHE_36B_INDEX_SHA256"],
+            "RUNTIME_CACHE_FA10_MANIFEST_SHA256": old["RUNTIME_CACHE_36B_MANIFEST_SHA256"],
+            "RUNTIME_CACHE_FA10_INTENT_SHA256": old["RUNTIME_CACHE_36B_INTENT_SHA256"],
+            "RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256":
+                old["RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256"],
+            "RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256": old["RUNTIME_CACHE_36B_ACCEPTANCE_SHA256"],
+            "RUNTIME_CACHE_FA10_LOCK_SHA256": old["RUNTIME_CACHE_36B_LOCK_SHA256"],
+            "RUNTIME_CACHE_FA10_EXTRAS": old["RUNTIME_CACHE_36B_EXTRAS"],
+        }
+        original_release = driver._release
+        calls = 0
+
+        def release(*args, **kwargs):
+            nonlocal calls
+            result = original_release(*args, **kwargs)
+            calls += 1
+            if calls == 1:
+                path = self.releases / self.candidate / "frontend-runtime/.next/cache/new-after-snapshot"
+                path.write_text("concurrent cache\n")
+            return result
+
+        driver._release = release  # type: ignore[method-assign]
+        with patch.multiple(deploy, **constants):
+            with self.assertRaisesRegex(deploy.Denied, "runtime_cache_reconciliation_inventory"):
+                driver.finalize()
+        self.assertEqual(self.host.save_calls, 0)
+        self.assertEqual(self.host.retirement_calls, 0)
+
+    def test_fa10_runtime_cache_profile_resumes_before_save_without_duplicate(self) -> None:
+        driver, _, old = self.runtime_cache_finalize()
+        constants = {
+            "RUNTIME_CACHE_36B_RELEASE": deploy.RUNTIME_CACHE_36B_RELEASE,
+            "RUNTIME_CACHE_FA10_RELEASE": self.candidate,
+            "RUNTIME_CACHE_FA10_TARGET": self.target,
+            "RUNTIME_CACHE_FA10_TRANSACTION": self.transaction,
+            "RUNTIME_CACHE_FA10_INDEX_SHA256": old["RUNTIME_CACHE_36B_INDEX_SHA256"],
+            "RUNTIME_CACHE_FA10_MANIFEST_SHA256": old["RUNTIME_CACHE_36B_MANIFEST_SHA256"],
+            "RUNTIME_CACHE_FA10_INTENT_SHA256": old["RUNTIME_CACHE_36B_INTENT_SHA256"],
+            "RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256":
+                old["RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256"],
+            "RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256": old["RUNTIME_CACHE_36B_ACCEPTANCE_SHA256"],
+            "RUNTIME_CACHE_FA10_LOCK_SHA256": old["RUNTIME_CACHE_36B_LOCK_SHA256"],
+            "RUNTIME_CACHE_FA10_EXTRAS": old["RUNTIME_CACHE_36B_EXTRAS"],
+        }
+        driver.failpoints.add("before_save")
+        with patch.multiple(deploy, **constants):
+            with self.assertRaisesRegex(deploy.Denied, "injected:before_save"):
+                driver.finalize()
+            self.assertEqual(self.host.save_calls, 0)
+            driver.finalize()
+        self.assertEqual(driver._journal_read()["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+
+    def test_fa10_runtime_cache_profile_rejects_arbitrary_extra_path(self) -> None:
+        driver, manifest, old = self.runtime_cache_finalize()
+        constants = {
+            "RUNTIME_CACHE_36B_RELEASE": deploy.RUNTIME_CACHE_36B_RELEASE,
+            "RUNTIME_CACHE_FA10_RELEASE": self.candidate,
+            "RUNTIME_CACHE_FA10_TARGET": self.target,
+            "RUNTIME_CACHE_FA10_TRANSACTION": self.transaction,
+            "RUNTIME_CACHE_FA10_INDEX_SHA256": old["RUNTIME_CACHE_36B_INDEX_SHA256"],
+            "RUNTIME_CACHE_FA10_MANIFEST_SHA256": old["RUNTIME_CACHE_36B_MANIFEST_SHA256"],
+            "RUNTIME_CACHE_FA10_INTENT_SHA256": old["RUNTIME_CACHE_36B_INTENT_SHA256"],
+            "RUNTIME_CACHE_FA10_NEGATIVE_JOURNAL_SHA256":
+                old["RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256"],
+            "RUNTIME_CACHE_FA10_ACCEPTANCE_SHA256": old["RUNTIME_CACHE_36B_ACCEPTANCE_SHA256"],
+            "RUNTIME_CACHE_FA10_LOCK_SHA256": old["RUNTIME_CACHE_36B_LOCK_SHA256"],
+        }
+        extra = self.releases / self.candidate / "frontend-runtime/.next/cache/arbitrary.txt"
+        extra.write_text("not an image cache entry\n"); extra.chmod(0o644)
+        payload = json.loads(manifest.read_text())
+        payload["cacheEntries"].append({
+            "path": "frontend-runtime/.next/cache/arbitrary.txt", "type": "file",
+            "mode": 0o644, "size": extra.stat().st_size, "sha256": sha(extra),
+        })
+        put(manifest, payload)
+        self.inputs = replace(self.inputs,
+                              runtime_cache_reconciliation_sha256=sha(manifest))
+        driver = self._driver()
+        with patch.multiple(deploy, **constants):
+            with self.assertRaisesRegex(deploy.Denied, "runtime_cache_reconciliation_entries"):
+                driver.finalize()
+        self.assertEqual(self.host.save_calls, 0)
 
     def test_private_data_overlay_is_fail_closed_without_relaxing_other_inventory(self) -> None:
         for drift, predicate in (("extra", "release_index_inventory"),

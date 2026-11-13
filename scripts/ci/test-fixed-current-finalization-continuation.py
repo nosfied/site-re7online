@@ -129,6 +129,98 @@ class Fixture:
         private_json(self.request_path, self.request)
         return repo, outputs
 
+    def fa10_cache_continuation_request(self) -> tuple[dict[str, object], dict[str, str], Path]:
+        repo, ordinal2_outputs = self.finalize_continuation_request(attempt=2)
+        original_head = self.request["finalizeArgv"][
+            self.request["finalizeArgv"].index("--control-plane") + 1]
+        target = "a" * 40
+        intent_sha256 = "b" * 64
+        self.request["finalizeArgv"].extend([
+            "--target", target,
+            "--transaction-root", str(self.tx),
+            "--generation-retirement-intent-sha256", intent_sha256,
+        ])
+        ordinal2_request = self.root / "ordinal-02-request.private.json"
+        private_json(ordinal2_request, self.request)
+        for name, path_value in ordinal2_outputs.items():
+            path = Path(path_value)
+            path.write_text("2\n" if name == "exit" else
+                            ("DEPLOY_DENY:runtime_cache_reconciliation_binding\n"
+                             if name == "stderr" else ""))
+            path.chmod(0o600)
+
+        driver = repo / "scripts/converta-deploy.py"
+        driver.write_text("# successor driver\n")
+        subprocess.run(["git", "-C", str(repo), "add", "scripts/converta-deploy.py"], check=True)
+        subprocess.run([
+            "git", "-C", str(repo), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid", "commit", "-qm", "successor",
+        ], check=True)
+        successor_head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True,
+            text=True, capture_output=True).stdout.strip()
+        driver.chmod(0o600)
+        reconciliation = self.root / "fa10-runtime-cache-reconciliation.private.json"
+        private_json(reconciliation, {
+            "schemaVersion": 1,
+            "kind": CONTINUATION.RUNTIME_CACHE_RECONCILIATION_KIND,
+            "releaseId": "immutable-test",
+            "targetCommit": target,
+            "transactionRoot": str(self.tx),
+            "indexSha256": "c" * 64,
+            "manifestSha256": "d" * 64,
+            "retirementIntentSha256": intent_sha256,
+            "originalControlPlane": original_head,
+            "continuationControlPlane": successor_head,
+            "continuationDriverSha256": digest(driver),
+            "negativeJournal": {"path": str(self.tx / "negative.private.json"),
+                                "sha256": "e" * 64},
+            "acceptanceSha256": "f" * 64,
+            "lockSha256": "1" * 64,
+            "cacheEntries": [],
+        })
+        outputs = {
+            name: str(self.tx /
+                      f"fixed-current-finalize-continuation-attempt-03.{name}.private.txt")
+            for name in ("stdout", "stderr", "exit")
+        }
+        journal = self.tx / "transaction.v1.private.json"
+        private_json(journal, {
+            "state": "FAILED", "recoveryAction": "finalize", "saveCount": 0,
+            "failure": "runtime_cache_reconciliation_binding",
+        })
+        current_argv = [
+            "/usr/bin/python3", "-B", str(driver), "finalize",
+            *self.request["finalizeArgv"][4:],
+            "--runtime-cache-reconciliation", str(reconciliation),
+            "--runtime-cache-reconciliation-sha256", digest(reconciliation),
+        ]
+        self.request = {
+            "schemaVersion": 1, "action": "finalize_continuation",
+            "attemptOrdinal": 3, "lockPath": str(self.lock),
+            "transactionRoot": str(self.tx), "driver": str(driver),
+            "driverSha256": digest(driver), "evidenceOutputs": outputs,
+            "finalizeArgv": current_argv,
+            "recovery": {
+                "priorRequest": str(ordinal2_request),
+                "priorRequestSha256": digest(ordinal2_request),
+                "negativeJournal": str(journal),
+                "negativeJournalSha256": digest(journal),
+                "priorEvidence": {
+                    name: {"path": path, "sha256": digest(Path(path))}
+                    for name, path in ordinal2_outputs.items()
+                },
+            },
+        }
+        private_json(self.request_path, self.request)
+        constants = {
+            "FA10_RUNTIME_CACHE_RELEASE": "immutable-test",
+            "FA10_RUNTIME_CACHE_TARGET": target,
+            "FA10_RUNTIME_CACHE_TRANSACTION": self.tx,
+            "FA10_RUNTIME_CACHE_INTENT_SHA256": intent_sha256,
+        }
+        return constants, outputs, ordinal2_request
+
     def lock_fd(self) -> int:
         return CONTINUATION.acquire_lock(self.lock)
 
@@ -442,6 +534,70 @@ class ContinuationTests(unittest.TestCase):
         with self.assertRaisesRegex(CONTINUATION.Denied, "request_recovery_sha256"):
             CONTINUATION.run(loaded, self.fixture.lock_fd(), runner=runner)
         self.assertFalse(called)
+
+    def test_fa10_cache_continuation_binds_ordinal2_and_successor_checkout(self):
+        constants, outputs, prior_request = self.fixture.fa10_cache_continuation_request()
+        prior_raw = prior_request.read_bytes()
+        prior_evidence = {
+            name: Path(binding["path"]).read_bytes()
+            for name, binding in self.fixture.request["recovery"]["priorEvidence"].items()
+        }
+        with patch.multiple(CONTINUATION, **constants):
+            loaded = CONTINUATION.load_request(
+                self.fixture.request_path, digest(self.fixture.request_path))
+
+            def runner(argv, **kwargs):
+                os.write(kwargs["stdout"], b"DEPLOYED_RETENTION_INCOMPLETE\n")
+                return subprocess.CompletedProcess(argv, 0)
+
+            self.assertEqual(CONTINUATION.run(
+                loaded, self.fixture.lock_fd(), runner=runner), 0)
+        self.assertEqual(prior_request.read_bytes(), prior_raw)
+        for name, binding in self.fixture.request["recovery"]["priorEvidence"].items():
+            self.assertEqual(Path(binding["path"]).read_bytes(), prior_evidence[name])
+        self.assertEqual(Path(outputs["exit"]).read_text(), "0\n")
+
+    def test_fa10_cache_continuation_rejects_argument_and_chain_drift(self):
+        variants = ("missing_pair", "changed_argument", "crossed_prior", "wrong_head",
+                    "wrong_driver", "occupied_output")
+        for variant in variants:
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                constants, outputs, _ = self.fixture.fa10_cache_continuation_request()
+                argv = self.fixture.request["finalizeArgv"]
+                if variant == "missing_pair":
+                    index = argv.index("--runtime-cache-reconciliation-sha256")
+                    del argv[index:index + 2]
+                elif variant == "changed_argument":
+                    argv[argv.index("--target") + 1] = "9" * 40
+                elif variant == "crossed_prior":
+                    self.fixture.request["recovery"]["priorRequestSha256"] = "0" * 64
+                elif variant == "wrong_head":
+                    manifest = Path(argv[argv.index("--runtime-cache-reconciliation") + 1])
+                    payload = json.loads(manifest.read_text())
+                    payload["continuationControlPlane"] = "9" * 40
+                    private_json(manifest, payload)
+                    argv[argv.index("--runtime-cache-reconciliation-sha256") + 1] = digest(manifest)
+                elif variant == "wrong_driver":
+                    manifest = Path(argv[argv.index("--runtime-cache-reconciliation") + 1])
+                    payload = json.loads(manifest.read_text())
+                    payload["continuationDriverSha256"] = "9" * 64
+                    private_json(manifest, payload)
+                    argv[argv.index("--runtime-cache-reconciliation-sha256") + 1] = digest(manifest)
+                else:
+                    Path(outputs["stdout"]).write_text("occupied\n")
+                    Path(outputs["stdout"]).chmod(0o600)
+                private_json(self.fixture.request_path, self.fixture.request)
+                called = False
+                def runner(*args, **kwargs):
+                    nonlocal called; called = True
+                    return subprocess.CompletedProcess(args, 0)
+                with patch.multiple(CONTINUATION, **constants):
+                    with self.assertRaises(CONTINUATION.Denied):
+                        loaded = CONTINUATION.load_request(
+                            self.fixture.request_path, digest(self.fixture.request_path))
+                        CONTINUATION.run(loaded, self.fixture.lock_fd(), runner=runner)
+                self.assertFalse(called)
 
 
 if __name__ == "__main__":
