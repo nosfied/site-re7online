@@ -2128,19 +2128,38 @@
       {
         "name": "PRIVATE_DATA_DEPENDENCY_RELEASES",
         "physicalBytes": 8897130496,
-        "decision": "PRESERVE_PRIVATE_AND_TENANT_DEPENDENCIES"
+        "identifiedPrivateDataBytes": 1167360,
+        "potentialDerivedBytes": 8895963136,
+        "decision": "PENDING_SPECIFIC_PROOF_EMBEDDED_DATA_INSIDE_EFFECT_ROOT"
       },
       {
         "name": "BUILD_OUTPUT_PLUS_RELEASE_SOURCES",
         "physicalBytes": 5558226944,
-        "decision": "PRESERVE_HETEROGENEOUS_AUTHORITIES_NOT_A_BATCH"
+        "buildOutputPhysicalBytes": 3548393472,
+        "releaseSourcesPhysicalBytes": 2009833472,
+        "decision": "PENDING_SPECIFIC_PROOF_HETEROGENEOUS_AUTHORITIES_NOT_A_BATCH"
       },
       {
         "name": "PERSISTENT_PREPARATIONS_ROOT",
         "physicalBytes": 13658386432,
-        "decision": "PRESERVE_EVIDENCE_AND_RECEIPTS"
+        "decision": "PENDING_SPECIFIC_PROOF_MIXED_EVIDENCE_AND_PAYLOADS"
       }
     ],
+    "objectiveRetentionClassification": {
+      "vitalProven": [
+        "ACTIVE_ROLLBACK_AND_TRANSITIVE_RETURN_RELEASES",
+        "EMBEDDED_DOT_DATA_BYTES",
+        "TERMINAL_RECEIPTS_JOURNALS_MANIFESTS_AND_INDEXES",
+        "UNIQUE_AF26_RELEASE_SOURCES"
+      ],
+      "residueProvenAboveEconomicFloor": [],
+      "pendingSpecificProof": [
+        "PRIVATE_RELEASE_DERIVED_REMAINDER",
+        "PREPARATION_PAYLOAD_PARTITION",
+        "BUILD_OUTPUT_EXTERNAL_DUPLICATION",
+        "HISTORICAL_UNQUALIFIED_RELEASE_BINDINGS"
+      ]
+    },
     "terminalSanitizedPathCountExcluded": 19,
     "productionMutationPerformed": false,
     "destructiveCommandsExecuted": 0,

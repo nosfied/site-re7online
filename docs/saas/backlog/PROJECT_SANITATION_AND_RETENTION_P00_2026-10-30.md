@@ -1073,6 +1073,23 @@ Nenhum é lote elegível equivalente aos sucessos anteriores. Resultado:
 `NO_ELIGIBLE_ECONOMIC_BATCH`, 0 B qualificados e descoberta encerrada sem criar
 nova frente.
 
+A reavaliação objetiva não usa os rótulos como prova de vitalidade integral. Nas
+nove releases privadas, `.data` físico identificado soma 1.167.360 B e o restante
+derivado potencial soma 8.895.963.136 B. A diferença contra os lotes concluídos é
+concreta: `.data` está dentro da raiz candidata, e não em destino externo de
+symlink. Preservar um archive fora da VPS não prova sozinho disponibilidade
+operacional de sessão/credencial tenant. Logo o conjunto fica
+`PENDENTE_POR_PROVA_ESPECIFICA`, sem iniciar adaptação.
+
+As preparações não são integralmente vitais, mas misturam 176 escopos e
+autoridades únicas com payloads possivelmente duplicados; não há partição física
+autenticada de 5 GB. `build-output` está isoladamente abaixo do piso e conserva
+pacotes/índices/lifecycles; somá-lo a `release-sources` é ilegítimo porque as duas
+fontes AF26 são autoridades únicas. Os históricos restantes totalizam somente
+2.510.159.872 B. Portanto não há lote de pelo menos 5 GB em
+`RESIDUO_COMPROVADO`; necessidade concreta, resíduo potencial e prova faltante
+ficam separados sem nova auditoria ou implementação.
+
 O audit v5 e seu plano terminal permanecem imutáveis e não serão repetidos sem
 delta material. A leitura dirigida já existente confirmou raiz, ancestrais e
 autoridade e enumerou 1.023 diretórios internos `deploy:deploy 0775`. O contrato

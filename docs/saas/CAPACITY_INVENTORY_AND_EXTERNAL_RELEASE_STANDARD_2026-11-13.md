@@ -159,9 +159,9 @@ e não fez hashing de conteúdo. O saldo observado foi 22.894.850.048 B e
 | --- | --- | ---: | --- | --- | --- | --- | --- |
 | Releases históricas não qualificadas | 28 filhos literais remanescentes de `/opt/re7online/releases`; maior subconjunto são os três workers já preservados | **2.510.159.872** | `HISTORICAL_UNQUALIFIED`; inventário estrutural + custódia worker 3/3 | procedimento excepcional seria conhecido, mas o conjunto inteiro não alcança o piso | parcial; workers 3/3 preservados | abaixo de 5 GB e referências/contratos distintos | **não selecionar** |
 | Releases produtivas e retornos | seis releases `ACTIVE`, `ROLLBACK_REQUIRED` ou `TRANSITIVE_RETURN` | **6.325.665.792** | grafo atual e seleção produtiva | nenhuma: exclusão viola produção/rollback | não aplicável | risco produtivo inaceitável | **PRESERVE** |
-| Releases com conteúdo privado | nove releases imutáveis classificadas `PRIVATE_DATA_DEPENDENCY` | **8.897.130.496** | `.data`/configuração privada medida e autoridades de retorno | não equivalem aos lotes sanitizados enquanto a dependência existe | não substitui persistência viva | dados únicos/tenant e recuperação | **PRESERVE** |
-| Outputs + fontes | `/opt/re7online/build-output` e `/opt/re7online/release-sources` | **5.558.226.944** | pacotes, manifests, índices, lifecycles e fontes históricas | não é lote homogêneo; classes e efeitos diferentes | autoridades ficam nesses próprios caminhos | exigiria nova classificação/adaptador, vedados pela regra econômica | **PRESERVE / NOT A BATCH** |
-| Preparações persistentes | `/opt/re7online/backups/converta-persistent/preparations` | **13.658.386.432** na medição da raiz | receipts, journals, provas, manifests e preparações históricas | não corresponde a runtime legado fechado | contém custódias/autoridades essenciais | varredura ou retirada ampla arriscaria evidência única | **EVIDENCE_REQUIRED / PRESERVE** |
+| Releases com conteúdo privado | nove releases imutáveis classificadas `PRIVATE_DATA_DEPENDENCY` | **8.897.130.496**; `.data` físico: **1.167.360**; restante derivado potencial: **8.895.963.136** | `.data` físico interno e runtime instalado | difere dos sucessos: `.data` não é symlink externo e entraria no efeito sobre o pai | nenhuma custódia integral/restauração das nove está vinculada | risco de retirar sessões/credenciais/arquivos tenant; diretório inteiro não é vital, mas o efeito atual é indivisível | **PENDENTE POR PROVA ESPECÍFICA** |
+| Outputs + fontes | `/opt/re7online/build-output` (**3.548.393.472**) e `/opt/re7online/release-sources` (**2.009.833.472**) | **5.558.226.944** | outputs guardam pacote/manifest/índice/lifecycle; fontes `freeform-window-af26*` são autoridades históricas únicas | não é lote homogêneo; `build-output` isolado fica abaixo do piso e fontes não equivalem a resíduos | autoridades ficam nesses próprios caminhos | remover fontes perderia prova; separar payload de controle exigiria qualificação própria | **PENDENTE POR PROVA ESPECÍFICA / fontes VITAIS** |
+| Preparações persistentes | `/opt/re7online/backups/converta-persistent/preparations` | **13.658.386.432** na medição da raiz | receipts, journals, requests, manifests, provas e payloads históricos coexistem | difere dos sucessos: 176 preparações e várias classes, sem efeito/runtime fechado comum | custódias externas existem somente para lotes terminais específicos | raiz inteira não é vital, mas inexiste partição autenticada entre evidência única e cópia dispensável | **PENDENTE POR PROVA ESPECÍFICA** |
 
 Resultado: **zero lotes elegíveis de pelo menos 5.000.000.000 B** e potencial
 físico qualificado igual a **0 B**. Não existe “melhor lote” executável. A menor
@@ -169,6 +169,23 @@ próxima ação é nenhuma: encerrar a descoberta e só reabrir se um inventári
 futuro, produzido por necessidade operacional independente, revelar um lote
 homogêneo acima do piso. Não criar coleta, PR ou adaptação para fabricar esse
 resultado.
+
+### Reavaliação objetiva das retenções
+
+| Conjunto | VITAL COMPROVADO | RESÍDUO COMPROVADO | PENDENTE POR PROVA ESPECÍFICA |
+| --- | --- | --- | --- |
+| Nove releases privadas | 1.167.360 B de `.data` físico, potencialmente contendo sessões, credenciais e persistência tenant | 8.895.963.136 B são runtime derivado potencial, mas não efeito isolado autenticado | provar inatividade ou preservar/restaurar cada `.data` com disponibilidade adequada; o efeito excepcional atual remove o pai inteiro |
+| Preparações | receipts, journals, manifests, índices, requests e provas necessários a recuperação e não repetição | payloads duplicados podem existir, mas nenhum subconjunto de 5 GB está autenticado como dispensável | relação literal por preparação, blocos sem dupla contagem e autoridade externa dos payloads |
+| `build-output` | pacotes, manifests, índices e lifecycle preservados por contrato | runtimes derivados anteriores já foram retirados ou estão ausentes; não há 5 GB de runtime descartável comprovado | duplicação externa dos payloads remanescentes; não usar `release-sources` para completar artificialmente o piso |
+| `release-sources` | `freeform-window-af26` e `freeform-window-af26-cumulative-20261002`, autoridades históricas únicas | nenhum resíduo comprovado | somente autoridade sucessora poderia permitir reclassificação; não é necessária à operação atual |
+| Releases históricas não qualificadas | três workers têm custódia 3/3; `afbb` ainda é citado por `PWD` herdado | nenhum conjunto de 5 GB; soma total 2.510.159.872 B | referências/contratos individuais e piso econômico; não agrupar com classes diferentes |
+
+Não existe lote de pelo menos 5 GB classificado integralmente como `RESÍDUO
+COMPROVADO`. O maior potencial técnico é o restante derivado das nove releases
+(8.895.963.136 B), mas `.data` interno é diferença operacional relevante e impede
+aplicar diretamente o precedente dos lotes com `.data` externo. Pela regra do
+owner, registrar a incompatibilidade e seguir; os demais conjuntos também não
+produzem lote direto. Nenhuma implementação ou cópia foi iniciada.
 
 A descoberta reutilizou a fotografia estrutural
 `/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256

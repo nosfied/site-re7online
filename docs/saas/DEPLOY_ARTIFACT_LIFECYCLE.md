@@ -17,6 +17,17 @@ geração de retirement. A decisão terminal desta seleção é
 `NO_ELIGIBLE_ECONOMIC_BATCH / NO_FURTHER_DISCOVERY`. Nenhum receipt existente,
 custódia ou autorização foi modificado.
 
+A classificação não torna diretórios inteiros vitais por rótulo. Nas nove
+releases privadas, `.data` físico soma somente 1.167.360 B; o restante
+8.895.963.136 B é derivado potencial. O bloqueio concreto é topológico: `.data`
+fica dentro da raiz que o efeito excepcional removeria, enquanto os lotes
+anteriores preservaram destinos externos de symlinks. Sem custódia/restauração e
+prova de disponibilidade operacional dessas persistências, não há equivalência
+direta. Em `preparations`, receipts/journals convivem com payloads; em
+`build-output`, controles convivem com pacotes; e `release-sources` contém fonte
+única. Esses conjuntos são `PENDING_SPECIFIC_PROOF`, não autorização de retenção
+integral nem de retirada ampla.
+
 ## Fechamento excepcional da Campaign API histórica — terminal
 
 O lote `p00-campaign-api-exceptional-20261114-v1` terminou
