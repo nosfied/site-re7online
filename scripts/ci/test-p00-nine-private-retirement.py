@@ -19,6 +19,11 @@ SPEC = importlib.util.spec_from_file_location(
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
+OBSERVER_SPEC = importlib.util.spec_from_file_location(
+    "capacity_proc_observer_nine_integration", ROOT / "capacity-proc-observer.py")
+OBSERVER = importlib.util.module_from_spec(OBSERVER_SPEC)
+assert OBSERVER_SPEC.loader is not None
+OBSERVER_SPEC.loader.exec_module(OBSERVER)
 
 
 def nine_receipt() -> dict:
@@ -177,6 +182,64 @@ class NinePrivateRetirementTest(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.Denied,
                                         "exceptional_private_data_identity"):
                 MODULE._exceptional_roots({root})
+
+    def test_observer_request_is_sorted_and_accepted_by_real_helper_contract(self):
+        captured = {}
+        def exercise():
+            output = MODULE.EXCEPTIONAL_NINE_RECEIPT_PARENT / (
+                "process-observation-prepare-attempt-02.private.json")
+            args = SimpleNamespace(
+                process_observer=Path("/usr/local/libexec/re7online/capacity-proc-observer.py"),
+                process_observer_sha256=MODULE.EXCEPTIONAL_NINE_HELPER_SHA256)
+            def runner(_command, **kwargs):
+                request = OBSERVER.validate_request(kwargs["input"])
+                captured["paths"] = request["candidatePaths"]
+                response = {
+                    "kind": "CAPACITY_PROC_OBSERVATION", "state": "COMPLETE",
+                    "phase": "prepare", "candidatePaths": request["candidatePaths"],
+                    "requestSha256": MODULE.digest_bytes(kwargs["input"]),
+                    "mechanism": {
+                        "path": str(args.process_observer),
+                        "sha256": args.process_observer_sha256,
+                        "identity": {"device": 64769, "inode": 900002,
+                                     "uid": 0, "gid": 0, "mode": "0500"},
+                    },
+                    "observation": {"complete": True, "references": [],
+                                    "activeWriters": [], "failures": []},
+                }
+                return subprocess.CompletedProcess(_command, 0, MODULE.canonical(response), b"")
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=runner), \
+                    mock.patch.object(MODULE, "write_exclusive"):
+                MODULE._exceptional_observe(
+                    args, "prepare", output, {"inode": 900002})
+        self.in_profile(exercise)
+        self.assertEqual(captured["paths"], sorted(MODULE.EXCEPTIONAL_NINE_PATHS))
+
+    def test_nine_profile_uses_attempt_02_without_changing_literal_effect_order(self):
+        def exercise():
+            parent = MODULE.EXCEPTIONAL_NINE_RECEIPT_PARENT
+            args = SimpleNamespace(
+                preservation_receipt=parent / "preservation-receipt.private.json",
+                observer_installation_report=parent / "observer-installation.private.json",
+                custody_attestation=parent /
+                    "custody-attestation-prepare-attempt-02.private.json",
+                process_observation_output=parent /
+                    "process-observation-prepare-attempt-02.private.json",
+                release_graph=MODULE.EXCEPTIONAL_CAMPAIGN_API_GRAPH_PATH,
+                pm2=Path("/home/deploy/.npm-global/bin/pm2"),
+                pm2_dump=Path("/home/deploy/.pm2/dump.pm2"),
+                deployment_lock=Path("/opt/re7online/.deploy-canonical.lock"),
+                generation_lock=Path("/opt/re7online/build-output/.generation-build.lock"),
+                receipt_root=parent / "execution-v2",
+                intent_output=parent / "retirement-intent-attempt-02.private.json",
+                commands_output=parent / "retirement-commands-attempt-02.private.txt",
+            )
+            MODULE._exceptional_bindings(args, "prepare")
+            args.custody_attestation = (
+                parent / "custody-attestation-prepare-attempt-01.private.json")
+            with self.assertRaisesRegex(MODULE.Denied, "exceptional_literal_binding"):
+                MODULE._exceptional_bindings(args, "prepare")
+        self.in_profile(exercise)
 
     def test_nine_commands_and_interruption_reconcile_without_repeating(self):
         def exercise():

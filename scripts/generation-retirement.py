@@ -137,6 +137,7 @@ EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY = {
     "device": 64769, "inode": 786605, "uid": 0, "gid": 0, "mode": "0500",
 }
 EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES: dict[str, list[int]] = {}
+EXCEPTIONAL_ATTEMPT_ORDINAL = 1
 EXCEPTIONAL_ROOT_UID = 1000
 EXCEPTIONAL_ROOT_GID = 1000
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
@@ -5875,35 +5876,37 @@ def _exceptional_lock(path: Path) -> int:
 
 
 def _exceptional_bindings(args: argparse.Namespace, phase: str) -> None:
+    attempt = f"attempt-{EXCEPTIONAL_ATTEMPT_ORDINAL:02d}"
     fixed = {
         "preservation_receipt": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
             "preservation-receipt.private.json",
         "observer_installation_report": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
             "observer-installation.private.json",
         "custody_attestation": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
-            f"custody-attestation-{phase}-attempt-01.private.json",
+            f"custody-attestation-{phase}-{attempt}.private.json",
         "process_observation_output": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
-            f"process-observation-{phase}-attempt-01.private.json",
+            f"process-observation-{phase}-{attempt}.private.json",
         "release_graph": EXCEPTIONAL_CAMPAIGN_API_GRAPH_PATH,
         "pm2": Path("/home/deploy/.npm-global/bin/pm2"),
         "pm2_dump": Path("/home/deploy/.pm2/dump.pm2"),
         "deployment_lock": Path("/opt/re7online/.deploy-canonical.lock"),
         "generation_lock": Path("/opt/re7online/build-output/.generation-build.lock"),
-        "receipt_root": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT / "execution-v1",
+        "receipt_root": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+            f"execution-v{EXCEPTIONAL_ATTEMPT_ORDINAL}",
     }
     if phase == "prepare":
         fixed.update({
             "intent_output": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
-                "retirement-intent-attempt-01.private.json",
+                f"retirement-intent-{attempt}.private.json",
             "commands_output": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
-                "retirement-commands-attempt-01.private.txt",
+                f"retirement-commands-{attempt}.private.txt",
         })
     else:
         fixed.update({
             "intent": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
-                "retirement-intent-attempt-01.private.json",
+                f"retirement-intent-{attempt}.private.json",
             "authorization": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
-                "retirement-authorization-attempt-01.private.json",
+                f"retirement-authorization-{attempt}.private.json",
         })
     if any(getattr(args, name) != value for name, value in fixed.items()):
         deny("exceptional_literal_binding")
@@ -6110,7 +6113,7 @@ def _exceptional_mounts(expected_present: set[str]) -> None:
 
 def _exceptional_receipt_root(path: Path, *, allow_existing: bool) -> None:
     if (not path.is_absolute() or path.parent != EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT or
-            path.name != "execution-v1"):
+            path.name != f"execution-v{EXCEPTIONAL_ATTEMPT_ORDINAL}"):
         deny("exceptional_receipt_root")
     try:
         parent = path.parent.lstat()
@@ -6207,9 +6210,10 @@ def _exceptional_observe(args: argparse.Namespace, phase: str, output: Path,
             output.parent != EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT or
             output.exists() or output.is_symlink()):
         deny("exceptional_process_observer_binding")
+    candidate_paths = sorted(EXCEPTIONAL_CAMPAIGN_API_PATHS)
     request = {"schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
                "phase": phase, "nonce": hashlib.sha256(os.urandom(32)).hexdigest(),
-               "deployUid": os.getuid(), "candidatePaths": list(EXCEPTIONAL_CAMPAIGN_API_PATHS),
+               "deployUid": os.getuid(), "candidatePaths": candidate_paths,
                "consumer": {"pid": os.getpid(), "startTicks": _exceptional_start_ticks()}}
     request_raw = canonical(request)
     command = ["/usr/bin/sudo", "-n", "/usr/bin/python3", "-I", "-B", "-E", "-s",
@@ -6226,7 +6230,7 @@ def _exceptional_observe(args: argparse.Namespace, phase: str, output: Path,
     mechanism = observation.get("mechanism")
     if (observation.get("kind") != "CAPACITY_PROC_OBSERVATION" or
             observation.get("state") != "COMPLETE" or observation.get("phase") != phase or
-            observation.get("candidatePaths") != list(EXCEPTIONAL_CAMPAIGN_API_PATHS) or
+            observation.get("candidatePaths") != candidate_paths or
             observation.get("requestSha256") != digest_bytes(request_raw) or
             not isinstance(mechanism, dict) or mechanism.get("sha256") != args.process_observer_sha256 or
             mechanism.get("path") != str(args.process_observer) or
@@ -6273,6 +6277,7 @@ def _with_exceptional_nine(handler: Any, args: argparse.Namespace) -> None:
     global EXCEPTIONAL_INSTALLATION_KIND, EXCEPTIONAL_INSTALLATION_PREDECESSOR_SHA256
     global EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY
     global EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES
+    global EXCEPTIONAL_ATTEMPT_ORDINAL
     names = (
         "EXCEPTIONAL_CAMPAIGN_API_BATCH_ID", "EXCEPTIONAL_CAMPAIGN_API_PATHS",
         "EXCEPTIONAL_CAMPAIGN_API_IDENTITIES", "EXCEPTIONAL_CAMPAIGN_API_MODES",
@@ -6285,6 +6290,7 @@ def _with_exceptional_nine(handler: Any, args: argparse.Namespace) -> None:
         "EXCEPTIONAL_INSTALLATION_KIND", "EXCEPTIONAL_INSTALLATION_PREDECESSOR_SHA256",
         "EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY",
         "EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES",
+        "EXCEPTIONAL_ATTEMPT_ORDINAL",
     )
     previous = {name: globals()[name] for name in names}
     globals().update({
@@ -6310,6 +6316,7 @@ def _with_exceptional_nine(handler: Any, args: argparse.Namespace) -> None:
             "device": 64769, "inode": 786791, "uid": 0, "gid": 0, "mode": "0500",
         },
         "EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES": EXCEPTIONAL_NINE_DATA_IDENTITIES,
+        "EXCEPTIONAL_ATTEMPT_ORDINAL": 2,
     })
     try:
         handler(args)
