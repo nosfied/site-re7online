@@ -89,6 +89,27 @@ runtimes — foi superada pelo fechamento excepcional terminal. Ele não deve se
 integrado automaticamente; qualquer utilidade genérica remanescente exige revisão
 independente e não reabre o lote 5/5.
 
+### Comparação com `worker-package-audit`
+
+| Controle | Lote terminal 5/5 | `worker-package-audit` | Decisão |
+| --- | --- | --- | --- |
+| Natureza | cinco releases runtime pré-contrato | árvore derivada enumerada de preparação | usar primeiro o consumidor normal, que já conhece a classe |
+| Autoridade de conteúdo | custódia integral externa + restore | autoridade física `worker-minimal-reactive-afbb7455-verified`, relações de arquivos e 11 links | não copiar novamente enquanto a autoridade continuar íntegra |
+| Dados únicos/privados | archive integral; `.data` externo não seguido | manifesto fecha exatamente a árvore; autoridade/overlay ficam fora dos efeitos | qualquer extra ou relação divergente preserva |
+| Produção/rollback | grafo, current, PM2, dump e `/proc` recapturados | mesmos controles já fazem parte de `capacity-recovery.py` | reutilizar, sem perfil paralelo |
+| Permissões | cinco raízes literais `0700` | raiz/ancestrais corretos, mas 1.023 diretórios internos `0775` | negativa atual é legítima pelo contrato |
+| Efeito | cinco `rm -r --one-file-system` fechados | `unlink` por folha e `rmdir` pós-ordem, sem `rm -r` | efeito normal é mais restrito e deve ser preservado |
+
+O modo `0775` não prova, isoladamente, writer ativo; na fotografia ele representa
+incompatibilidade com a regra que proíbe árvore candidata gravável por grupo ou
+outros. Ainda assim é risco concreto de mutabilidade entre relação autenticada e
+efeito, e o audit anterior não pode ser convertido em PASS. A menor ação segura é
+uma admissão fechada **somente se** o grupo autenticado não ampliar os principais,
+os modos `0775` coincidirem com a autoridade enumerada, as relações forem
+revalidadas antes de `prepare` e `execute` e writers/referências continuarem zero.
+Essa decisão requer correção e regressão específicas no consumidor existente;
+`chmod`, exceção global ou reutilização direta do perfil 5/5 são proibidos.
+
 ## 3. Classes e decisões de limpeza
 
 | Classe operacional | Exemplos | Tratamento |

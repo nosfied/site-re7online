@@ -1805,6 +1805,23 @@
       "retain": true
     },
     "productionPreserved": true,
+    "implementation": {
+      "commit": "fc58a1f3f320bfa1827af5cf4fdb6ce021d5346b",
+      "tree": "a18513473953272fe5011faa29a1d43a211323fa",
+      "consumerSha256": "a0cf7090b4e9a4d22166a32f7094573db7244e032977de4eb357d231586ec4c9",
+      "helperSha256": "aedc012bda4cda9aeccaff709465b1783cd57e15fc1d8066346cd785d4b5e57a",
+      "installerSha256": "4d363aa00cdf222968c6c2fbc6423465ebc6b2da5a6a7a6fd2a724158399f8f4",
+      "profileReusable": false,
+      "methodologyReusableWithNewClosedBindings": true
+    },
+    "documentedCustodyCost": {
+      "archivePhysicalBytes": 4844023808,
+      "restorePhysicalBytes": 5056057344,
+      "indexEntries": 180707,
+      "totalDurationAvailable": false,
+      "peakMemoryAvailable": false,
+      "cpuCostAvailable": false
+    },
     "authorizationReusable": false,
     "repeatPermitted": false,
     "nextCapacityBatch": {

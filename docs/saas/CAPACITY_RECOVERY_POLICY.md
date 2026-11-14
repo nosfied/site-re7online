@@ -17,6 +17,73 @@ executor. No `execute`, o supervisor contém o executor sem assumir autoridade
 sobre locks, journal ou efeitos: esses contratos continuam pertencendo
 exclusivamente a `capacity-recovery.py`.
 
+## Precedente excepcional fechado — cinco runtimes pré-contrato
+
+O lote `p00-five-runtimes-exceptional-20261113-v1` foi uma exceção do owner,
+implementada no consumidor existente `generation-retirement.py`, não uma nova
+classe normal de `capacity-recovery.py`. O executor efetivo foi o commit isolado
+`fc58a1f3f320bfa1827af5cf4fdb6ce021d5346b`, árvore
+`a18513473953272fe5011faa29a1d43a211323fa`; SHA-256 do consumidor
+`a0cf7090b4e9a4d22166a32f7094573db7244e032977de4eb357d231586ec4c9`.
+O helper privilegiado instalado tinha SHA-256
+`aedc012bda4cda9aeccaff709465b1783cd57e15fc1d8066346cd785d4b5e57a`,
+`root:root 0500`, e o instalador atômico SHA-256
+`4d363aa00cdf222968c6c2fbc6423465ebc6b2da5a6a7a6fd2a724158399f8f4`.
+O sudoers permaneceu byte-intacto.
+
+### Mecanismos comprovados e escopo específico
+
+Foram reutilizados: leitura privada estável por SHA, criação exclusiva e `fsync`,
+os dois locks canônicos, current/PM2/dump, grafo de releases, observador root
+somente leitura de `/proc`, intenção selada, autorização por SHA, journal
+`ATTEMPT → RESULT → VERIFIED`, receipt terminal e reconciliação de interrupção.
+Foram específicos desta exceção: batch id, cinco caminhos e device/inode
+literais, raiz de receipts, grafo final, hashes da custódia, fingerprint SSH,
+helper/instalador e os cinco comandos `/usr/bin/rm -r --one-file-system --
+<caminho-literal>`. Nenhum desses bindings admite sexto caminho ou substituição
+por nome/prefixo.
+
+Antes do primeiro efeito, o consumidor exigiu receipt de preservação
+`f9151e22c0ce044d10e79fe736f62730d66e605e553c3110d96e535a6fb031c2`,
+archive `e806a178239525e093466b6bf962f7c1025f38a8245da26ee9f2c3584e26a739`
+de 4.843.970.560 bytes, índice
+`43e84827b27d9dcf68cac9a2eecfee0cace4d5099b63c0c952b55dc316f33cd5`
+com 180.707 entradas e restauração isolada PASS com 180.708 entradas incluindo a
+raiz. Os quatro symlinks `.data` não foram seguidos e mantiveram o destino externo
+literal. A atestação cross-host foi distinta em `prepare` e `execute`, com nonce,
+prazo de 300/60 segundos, direção builder→VPS, principal e fingerprints SSH
+fechados e `StrictHostKeyChecking=true`.
+
+Sob os locks, cada fase recapturou identidades, mounts aninhados, current, três
+processos PM2 online, dump, grafo e `/proc`. `execute` exigiu cobertura completa,
+zero referências, zero writers e zero falhas. Ausência sem `ATTEMPT` negava;
+`ATTEMPT` com caminho ainda presente era ambíguo e negava; ausência após
+`ATTEMPT` podia ser reconciliada sem repetir o comando. Receipt existente tornava
+a autorização consumida.
+
+O fechamento terminal é receipt
+`3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`,
+journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`,
+5/5 efeitos e recuperação medida de 5.055.328.256 bytes/180.704 inodes.
+Archive e restauração ocuparam respectivamente 4.844.023.808 e
+5.056.057.344 bytes físicos no ThinkPad; somados ao índice, o piso documentado
+da custódia simultânea foi aproximadamente 9,92 GB. Tempo total, pico de memória
+e CPU não foram medidos de forma comparável e permanecem indisponíveis — não
+devem ser inferidos pelos timestamps dos arquivos.
+
+### Regra de reaproveitamento
+
+A metodologia pode ser reaplicada; o perfil não. Um novo lote precisa demonstrar
+separadamente: caminhos e identidades fechados, ausência de papel ativo/rollback,
+conteúdo único preservado integralmente fora da VPS, restauração comprovada,
+`.data` e outros destinos externos não seguidos, atestação cross-host fresca,
+helper com allowlist própria, observação `/proc` completa, locks, intenção e
+autorização específicas, efeitos literais, retomada testada e receipt com ausência
+e medição física. Custódia já existente deve ser autenticada antes de nova cópia.
+Sem qualquer um desses controles, o resultado é PRESERVE. O precedente não
+autoriza relaxar o consumidor normal, ampliar o helper ou retirar por idade,
+prefixo, modo ou semelhança.
+
 ## Estados e separação de autoridade
 
 O fluxo possui três fases independentes:

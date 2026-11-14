@@ -21,6 +21,13 @@ de preservação `f9151e22…31c2` permanecem evidência recuperável e não ent
 limpeza. A autorização foi específica para os cinco caminhos e não constitui
 política genérica para releases legadas.
 
+O controle excepcional efetivamente executado foi o commit isolado
+`fc58a1f3f320bfa1827af5cf4fdb6ce021d5346b`, árvore
+`a18513473953272fe5011faa29a1d43a211323fa`, consumidor SHA-256
+`a0cf7090…ec4c9`, helper `aedc012b…57a` e instalador `4d363aa0…f8f4`.
+Ele permanece evidência histórica fechada, não control plane geral. As condições
+de eventual reaproveitamento metodológico estão na política de capacidade.
+
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
 ---
