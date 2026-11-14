@@ -149,6 +149,17 @@ diretamente compatível com a metodologia comprovada. A VPS tinha
 22.894.850.048 B e 9.290.193 inodes disponíveis na captura; nenhuma produção ou
 dado tenant foi alterado.
 
+A leitura dirigida seguinte das nove releases privadas tem SHA-256
+`d164399b2ac6d51a3d44e2950d4452856391ac72117f18adbf5e0eb1c61e3354`.
+Ela confirmou zero seleção `current`, zero referência PM2 viva/salva e somente
+registro em `installedVerifiedReleases`; nenhuma release foi retirada. Os nove
+`.data` são internos e somam 1.167.360 B/158 entradas. Assim, o lote material de
+8.895.963.136 B derivados fica `MIGRATION_OR_CUSTODY_REQUIRED_BEFORE_RETIREMENT`.
+A política sucessora limita novas releases à ativa + um retorno por componente,
+nega persistência tenant dentro da raiz imutável e exige orçamento de bytes/inodes
+e destino terminal antes da alocação. Nenhuma migração, custódia ou exclusão foi
+executada nesta frente.
+
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
 ---

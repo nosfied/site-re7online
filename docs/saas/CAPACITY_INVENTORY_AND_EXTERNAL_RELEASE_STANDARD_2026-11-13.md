@@ -187,6 +187,80 @@ aplicar diretamente o precedente dos lotes com `.data` externo. Pela regra do
 owner, registrar a incompatibilidade e seguir; os demais conjuntos também não
 produzem lote direto. Nenhuma implementação ou cópia foi iniciada.
 
+### Saneamento estrutural dirigido e política local definitiva — 14/11/2026
+
+Uma leitura dirigida, sem conteúdo de tenants e sem hashing integral, reabriu
+somente os bindings voláteis das nove releases privadas. A evidência tem SHA-256
+`d164399b2ac6d51a3d44e2950d4452856391ac72117f18adbf5e0eb1c61e3354`.
+Nenhum dos nove caminhos aparece em `current`, PM2 vivo ou dump salvo; também não
+há mount interno. As ocorrências no grafo estão exclusivamente no catálogo
+`installedVerifiedReleases`, e não em papéis de seleção ou retorno. A varredura
+dirigida de 27 processos do usuário `deploy` encontrou zero referências, mas
+registrou 52 falhas transitórias de leitura em `/proc`; portanto ela sustenta o
+planejamento, não substitui a observação privilegiada completa exigida antes de
+qualquer efeito.
+
+Os nove `api-runtime/.data` são diretórios físicos internos, não symlinks. Eles
+somam **1.167.360 B físicos, 836.313 B lógicos e 158 entradas**, sem falha de
+leitura na agregação. Seu conteúdo não foi exibido. A ausência em PM2/current não
+prova dispensabilidade de sessões, credenciais ou persistência; por isso esses
+bytes continuam `VITAL_UNTIL_MIGRATED_OR_INDEPENDENTLY_RECOVERABLE`. O restante
+**8.895.963.136 B** é runtime derivado potencial, mas só se torna
+`RESÍDUO_COMPROVADO` depois de cada `.data` estar fora da raiz candidata, com
+identidade, integridade, disponibilidade e restauração autenticadas, e depois de
+uma observação privilegiada completa negar referências e writers.
+
+| CONJUNTO | BYTES FÍSICOS | NECESSIDADE REAL NA VPS | CONTEÚDO VITAL | CUSTÓDIA DISPONÍVEL | DESTINAÇÃO | POTENCIAL RECUPERÁVEL | BLOQUEIO |
+| --- | ---: | --- | --- | --- | --- | ---: | --- |
+| nove releases privadas | 8.897.130.496 | nenhuma seleção/PM2/retorno; catálogo apenas registra instalação verificada | `.data` interno: 1.167.360 B | nenhuma custódia integral/restauração vinculada | mover cada `.data` para raiz persistente dedicada ou custódia operacional restaurável; preservar release integral; depois aposentar pais literais | 8.895.963.136 B mantendo `.data` local fora dos pais; até 8.897.130.496 B somente se disponibilidade externa substituir legitimamente a local | migração/custódia ainda não executada; `/proc` privilegiado pendente |
+| preparações persistentes | 13.658.386.432 | controles terminais pequenos precisam permanecer consultáveis; payloads não precisam necessariamente permanecer locais | receipts, journals, requests, manifests, índices e única prova de recuperação | externa apenas para lotes terminais específicos | por transação: preservar o conjunto de controle local e externalizar payload/archive depois de readback; nunca retirar a raiz agregada | **não quantificado** sem partição literal já autenticada | 176 escopos/classes misturados; não há subconjunto físico ≥5 GB provado como resíduo |
+| `build-output` | 3.548.393.472 | não participa do runtime ativo; serve como autoridade de pacote/exportação | pacote, manifesto, índice, lifecycle e evidências ainda sem sucessor | parcial, por geração | após aceite e custódia externa: payload sai; localmente permanecem hashes/receipts mínimos | abaixo do piso econômico isoladamente; **não qualificado** | ausência de mapa geração→custódia para todo o estoque |
+| `release-sources` | 2.009.833.472 | não serve tráfego, mas sustenta prova e recuperação histórica AF26 | duas fontes históricas únicas | não demonstrada | permanecer local até existir sucessora externa autenticada e restaurável; não somar a outputs para fabricar lote | 0 B hoje | única autoridade conhecida |
+
+**Decisão executável:** o único lote material prioritário é o das nove releases,
+mas sua primeira operação não é retirada: é um contrato de migração/preservação
+dos nove `.data` literais, sem leitura de conteúdo além do necessário, seguido de
+archive integral, readback e restauração. A retirada só pode ser preparada numa
+fronteira posterior, com intenção literal e autorização própria. Preparações,
+outputs e fontes não formam lote de exclusão; nenhum total bruto autoriza
+`rm`, glob ou descarte agregado.
+
+#### Política permanente de armazenamento
+
+1. **Releases locais:** por componente, manter a release ativa e **um** retorno
+   imediato autenticado. Retorno transitivo adicional só permanece com binding
+   explícito, `retainUntil` e owner; sem esses campos, a instalação seguinte
+   deve negar, não apagar automaticamente.
+2. **Persistência tenant:** nenhuma release imutável nova pode conter `.data`,
+   upload, sessão, mídia, credencial ou volume gravável dentro de sua raiz. O
+   instalador deve exigir raiz persistente externa e vínculo autenticado. A
+   existência de persistência interna é negativa de admissão, nunca convite a
+   excluí-la.
+3. **Orçamento por geração:** contrato antes da alocação deve fixar bytes e
+   inodes máximos para worktree, cache, build, pacote, staging, release,
+   evidências e reserva. O teto duro é `capacityReservationBytes/Inodes`; excedê-lo
+   nega a fase. Após fechamento, o limite local é o conjunto de controle
+   enumerado no contrato; payloads terminais têm residual local alvo **zero**
+   depois de custódia/readback ou disposição autorizada.
+4. **Preparações e evidências:** journal, receipt, índice, hashes e autoridades
+   mínimas permanecem consultáveis. Archives, cópias, staging e pacotes terminais
+   vão para custódia externa autenticada quando ainda necessários; caso contrário
+   recebem disposição literal. `EVIDENCE_REQUIRED` não preserva automaticamente
+   toda a árvore pai.
+5. **Fechamento automático permitido:** somente classificação, medição,
+   publicação durável de receipts e solicitação única de aprovação. Exclusão
+   produtiva continua exigindo intenção literal, gates de produção/tenants,
+   locks, observação completa e autorização aplicável.
+6. **Interrupção e contabilidade:** toda disposição usa journal
+   `ATTEMPT → RESULT → VERIFIED`, reconcilia efeitos já concluídos e registra
+   bytes/inodes antes, pico, depois e residual. Nenhum efeito é repetido por
+   ausência de resposta.
+
+Essa política evita recriar a dívida: build descartável termina sem raiz;
+instalação não incorpora persistência; e cada geração já nasce com destino
+terminal e orçamento verificáveis. Ela não autoriza migração ou retirada nesta
+frente.
+
 A descoberta reutilizou a fotografia estrutural
 `/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256
 `8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`,

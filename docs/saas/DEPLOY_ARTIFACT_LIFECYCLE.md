@@ -28,6 +28,23 @@ direta. Em `preparations`, receipts/journals convivem com payloads; em
 única. Esses conjuntos são `PENDING_SPECIFIC_PROOF`, não autorização de retenção
 integral nem de retirada ampla.
 
+Uma leitura dirigida posterior, SHA-256 `d164399b2a…3354`, confirmou que as
+nove releases privadas não estão em `current`, PM2 vivo ou dump e aparecem no
+grafo apenas em `installedVerifiedReleases`. Seus `.data` são, porém, diretórios
+físicos internos: 1.167.360 B/158 entradas. A disposição do pai permanece negada
+até migração ou custódia operacional restaurável de cada persistência e
+observação privilegiada completa. O potencial derivado de 8.895.963.136 B não é
+recuperação autorizada.
+
+Para novas gerações, release local fica limitada à ativa e a um retorno imediato
+por componente; retorno transitivo exige binding, owner e `retainUntil`.
+Persistência tenant deve ficar em raiz externa autenticada: `.data` físico dentro
+de release imutável é negativa de admissão. O contrato de capacidade fixa teto de
+bytes/inodes por geração e residual terminal enumerado; depois do fechamento,
+payload local tem alvo zero, preservando somente controles mínimos ou custódia
+externa autenticada. Automatização pode classificar e solicitar aprovação, mas
+não excluir sem intenção literal e autorização.
+
 ## Fechamento excepcional da Campaign API histórica — terminal
 
 O lote `p00-campaign-api-exceptional-20261114-v1` terminou

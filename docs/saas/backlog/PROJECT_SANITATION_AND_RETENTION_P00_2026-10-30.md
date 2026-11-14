@@ -1081,6 +1081,17 @@ symlink. Preservar um archive fora da VPS não prova sozinho disponibilidade
 operacional de sessão/credencial tenant. Logo o conjunto fica
 `PENDENTE_POR_PROVA_ESPECIFICA`, sem iniciar adaptação.
 
+A leitura dirigida sucessora `d164399b2a…3354` eliminou a ambiguidade
+operacional sem autorizar retirada: os nove caminhos não estão em `current`, PM2
+vivo ou dump; as ocorrências do grafo são apenas o catálogo
+`installedVerifiedReleases`. Os `.data`, contudo, são diretórios internos e
+somam 1.167.360 B/158 entradas. A próxima operação material, caso autorizada em
+frente própria, é migrar ou preservar de forma operacionalmente restaurável
+esses nove escopos e arquivar integralmente os pais. Somente depois o potencial
+derivado de 8.895.963.136 B pode chegar a `prepare`. A varredura de processos
+dirigida teve 52 falhas transitórias; observação privilegiada completa continua
+gate obrigatório na fronteira do efeito.
+
 As preparações não são integralmente vitais, mas misturam 176 escopos e
 autoridades únicas com payloads possivelmente duplicados; não há partição física
 autenticada de 5 GB. `build-output` está isoladamente abaixo do piso e conserva

@@ -2160,10 +2160,39 @@
         "HISTORICAL_UNQUALIFIED_RELEASE_BINDINGS"
       ]
     },
+    "privateReleaseDirectedReview": {
+      "evidenceSha256": "d164399b2ac6d51a3d44e2950d4452856391ac72117f18adbf5e0eb1c61e3354",
+      "candidateCount": 9,
+      "currentReferenceCount": 0,
+      "livePm2ReferenceCount": 0,
+      "savedPm2ReferenceCount": 0,
+      "graphOccurrences": "INSTALLED_VERIFIED_RELEASES_CATALOG_ONLY",
+      "embeddedDataPhysicalBytes": 1167360,
+      "embeddedDataLogicalBytes": 836313,
+      "embeddedDataEntries": 158,
+      "embeddedDataSymlinkCount": 0,
+      "potentialDerivedBytes": 8895963136,
+      "processObservation": {
+        "deployProcessesInspected": 27,
+        "referencesFound": 0,
+        "readFailures": 52,
+        "terminalPrivilegedProof": false
+      },
+      "decision": "MIGRATION_OR_CUSTODY_REQUIRED_BEFORE_RETIREMENT"
+    },
+    "permanentStoragePolicy": {
+      "localReleaseLimitPerComponent": "ACTIVE_PLUS_ONE_IMMEDIATE_RETURN",
+      "transitiveReturnRequires": ["binding", "owner", "retainUntil"],
+      "embeddedTenantPersistenceInImmutableRelease": "DENY_ADMISSION",
+      "generationCapacityLimit": "CONTRACTED_BYTES_AND_INODES_HARD_CEILING",
+      "terminalLocalPayloadTargetBytes": 0,
+      "destructiveAutomaticClosure": false,
+      "destructiveDispositionRequiresLiteralIntentAndAuthorization": true
+    },
     "terminalSanitizedPathCountExcluded": 19,
     "productionMutationPerformed": false,
     "destructiveCommandsExecuted": 0,
-    "nextAction": "NONE_UNTIL_INDEPENDENT_INVENTORY_REVEALS_HOMOGENEOUS_BATCH_ABOVE_FLOOR"
+    "nextAction": "AUTHORIZE_SEPARATE_EMBEDDED_DATA_MIGRATION_AND_WHOLE_RELEASE_CUSTODY_PLAN_FOR_NINE_LITERAL_RELEASES"
   },
   "updatedAtDate": "2026-11-14",
   "updatedAtUtcScope": "P00_NO_ELIGIBLE_ECONOMIC_BATCH_WORKERS_PM2_PENDING",
