@@ -1,5 +1,12 @@
 # Converta — padrão de atualização e ledger de capacidade (VPS + builder)
 
+## Atualização terminal posterior — 14/11/2026: P00 extraordinário encerrado
+
+**Esta atualização substitui apenas os números P00 consolidados anteriores (19 caminhos / 15.859.646.464 B); não altera os receipts de cada lote.** O lote de nove releases com `.data` físico concluiu `RETIREMENT_TERMINAL_VERIFIED`, 9/9, journal `f5839ac5161d4138ea42e58eac7574e1a4490c472a0fa28db828fa24f5b677a9`, receipt `4c834211cf16c0b4b7418e18641bbc090c04280d8e30b7f2b2c4661969f8dc2a`. Acrescentou **8.897.097.728 B e 309.433 inodes**. Consolidado dos cinco lotes excepcionais: **28 caminhos / 24.756.744.192 B / 855.823 inodes**. Última medição reportada: **31.786.229.760 B / 9.599.605 inodes livres**. Cuidado: não somar os valores antigos com o consolidado novo, nem confundir disponibilidade atual com reserva de capacidade.
+
+O procedimento completo, custódia, restauração, regras de `.data` interno/externo e lições de integração estão no [fechamento terminal P00](../reviews/CONVERTA_P00_TERMINAL_CLOSURE_AND_REUSABLE_RETIREMENT_METHOD_2026-11-14.md). `DO_NOT_REPEAT` para todos os 28. A prioridade operacional passa ao backlog funcional e ao lifecycle preventivo por geração; não há nova rodada extraordinária autorizada.
+
+
 **13/11/2026. Status: orientação operacional para novas gerações, SEM autorização de build, deploy ou retirada.** A única fonte de comandos executáveis de deploy permanece [DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md); retirada extraordinária segue [CAPACITY_RECOVERY_POLICY.md](CAPACITY_RECOVERY_POLICY.md), e ciclo de vida segue [DEPLOY_ARTIFACT_LIFECYCLE.md](DEPLOY_ARTIFACT_LIFECYCLE.md). [WORKING_PRINCIPLES.md](WORKING_PRINCIPLES.md) prevalece. Valores abaixo são **fotografias históricas ou últimos reports operacionais informados**, não inspeção ao vivo.
 
 ## 1. Estado comprovado e irrepetível

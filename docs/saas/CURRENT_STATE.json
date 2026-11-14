@@ -1,6 +1,6 @@
 {
   "schemaVersion": 8,
-  "updatedAtUtc": "2026-11-14T10:47:04Z",
+  "updatedAtUtc": "2026-11-14T20:54:02Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
@@ -2049,7 +2049,10 @@
     "reportedDate": "2026-11-14",
     "batchId": "p00-campaign-api-exceptional-20261114-v1",
     "candidate": "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008",
-    "candidateIdentity": [64769, 6029469],
+    "candidateIdentity": [
+      64769,
+      6029469
+    ],
     "candidateMode": "0700",
     "candidatePhysicalBytes": 363339776,
     "candidateInodesIncludingRoot": 9842,
@@ -2207,7 +2210,11 @@
     },
     "permanentStoragePolicy": {
       "localReleaseLimitPerComponent": "ACTIVE_PLUS_ONE_IMMEDIATE_RETURN",
-      "transitiveReturnRequires": ["binding", "owner", "retainUntil"],
+      "transitiveReturnRequires": [
+        "binding",
+        "owner",
+        "retainUntil"
+      ],
       "embeddedTenantPersistenceInImmutableRelease": "DENY_ADMISSION",
       "generationCapacityLimit": "CONTRACTED_BYTES_AND_INODES_HARD_CEILING",
       "terminalLocalPayloadTargetBytes": 0,
@@ -2220,7 +2227,7 @@
     "nextAction": "AUTHORIZE_SEPARATE_EMBEDDED_DATA_MIGRATION_AND_WHOLE_RELEASE_CUSTODY_PLAN_FOR_NINE_LITERAL_RELEASES"
   },
   "updatedAtDate": "2026-11-14",
-  "updatedAtUtcScope": "P00_NO_ELIGIBLE_ECONOMIC_BATCH_WORKERS_PM2_PENDING",
+  "updatedAtUtcScope": "PROJECT_AUDIT_COMPLETE_BACKLOG_READY_AFTER_P00_TERMINAL_CLOSURE",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",
@@ -2285,5 +2292,105 @@
       "noRework": "docs/saas/WORKING_PRINCIPLES.md"
     },
     "legacyValidatorNote": "activeDeploymentRecord/activeOperationalRecord/activeApiDeploymentRecord remain historical a838 references solely for verify-current-state.py schema v8 and E0 closure; this snapshot is the later reported state, and those legacy pointers are not live selections. Migration of schema/validator is a separate future compatibility task."
+  },
+  "projectAudit20261114": {
+    "state": "PROJECT_AUDIT_COMPLETE_BACKLOG_READY",
+    "record": "docs/reviews/CONVERTA_PROJECT_AUDIT_AND_BACKLOG_READINESS_2026-11-14.md",
+    "productionReadOnlySnapshot": {
+      "api": "immutable-fa10f4f5-external-20261112T233820Z",
+      "frontend": "immutable-fa10f4f5-external-20261112T233820Z",
+      "worker": "immutable-e2e7f17a-20261022T005110Z",
+      "buildId": "4j3t9N75vsvYu9t3DoFq4",
+      "pm2Online": 3,
+      "restartCount": 0,
+      "apiHealthy": true,
+      "databaseHealthy": true,
+      "frontendHttpStatus": 200,
+      "pm2DumpSha256": "3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a",
+      "freeBytes": 31785975808,
+      "freeInodes": 9599604,
+      "productionMutationPerformed": false
+    },
+    "validatedSurfaces": [
+      "architecture",
+      "api",
+      "frontend",
+      "worker",
+      "database_and_multitenancy",
+      "crm_and_conversations",
+      "campaigns_and_meta",
+      "security",
+      "deploy_and_rollback",
+      "backups_and_restore",
+      "cra_pr",
+      "secult_pe",
+      "capacity_and_p00"
+    ],
+    "trackedGaps": [
+      "offsite backup and current periodic restore drill not proven",
+      "CRA-PR customer contractual evidence package incomplete",
+      "SECULT-PE presence and session audit remains a separate P1 improvement",
+      "worker PM2 inherited PWD contamination awaits its own window",
+      "schema v8 top-level deployment pointers remain historical a838 compatibility fields",
+      "ESLint baseline and worker noCheck remain technical debt"
+    ],
+    "p00ReopenPermitted": false,
+    "functionalBacklogMayProceedIndependently": true
+  },
+  "p00TerminalClosure20261114": {
+    "state": "P00_EXTRAORDINARY_CLEANUP_CLOSED_TERMINAL_SANITIZED_DO_NOT_REPEAT",
+    "source": "USER_REPORTED_CODEX_TERMINAL_RECEIPTS_NOT_LIVE_RECAPTURE",
+    "methodology": "docs/reviews/CONVERTA_P00_TERMINAL_CLOSURE_AND_REUSABLE_RETIREMENT_METHOD_2026-11-14.md",
+    "batches": 5,
+    "retiredPathCount": 28,
+    "recoveredPhysicalBytes": 24756744192,
+    "recoveredInodes": 855823,
+    "ninePrivateReleases": {
+      "batchId": "p00-nine-private-releases-exceptional-20261114-v1",
+      "state": "RETIREMENT_TERMINAL_VERIFIED_DO_NOT_REPEAT",
+      "count": 9,
+      "candidatePhysicalBytesBefore": 8897130496,
+      "recoveredPhysicalBytes": 8897097728,
+      "recoveredInodes": 309433,
+      "preservationReceiptSha256": "46d3049a71396c7f7fcef8cae511a79bc5eb28bbf21ba09b9d65c6afbfb3ad87",
+      "custodyIndexSha256": "48eb52f4736fb0a3f9eebf00490df04a9424792dbc8f67b8534ec501a9d41699",
+      "intentSha256": "6b3a69abff2176854e1c47edaa6a0f775171d130cd7e6ae8054c225e9eec2a7d",
+      "commandsSha256": "9d5be058ea18e93ba7ad0534d137d3d78a066dde96c754288fae85c68f2b634d",
+      "authorizationSha256": "f3965d7e1f44882ee1cb42f94270b0dba846e3c1861d6b3c50cc4f1a7ceee728",
+      "executeObservationSha256": "4b674ca1b69dd27c8749d2929c6c090fc3fb1eae8d67c9a678897f4ded735599",
+      "journalSha256": "f5839ac5161d4138ea42e58eac7574e1a4490c472a0fa28db828fa24f5b677a9",
+      "terminalReceiptSha256": "4c834211cf16c0b4b7418e18641bbc090c04280d8e30b7f2b2c4661969f8dc2a",
+      "journalEvents": {
+        "ATTEMPT": 9,
+        "RESULT_EXIT_0": 9,
+        "VERIFIED": 9
+      },
+      "freeBytesBefore": 22889132032,
+      "freeBytesAfter": 31786229760,
+      "freeInodesBefore": 9290172,
+      "freeInodesAfter": 9599605,
+      "pathsAbsent": 9,
+      "tenantDataPreserved": true,
+      "productionModified": false,
+      "repeatPermitted": false
+    },
+    "productionSnapshot": {
+      "apiFrontend": "immutable-fa10f4f5-external-20261112T233820Z",
+      "worker": "immutable-e2e7f17a-20261022T005110Z",
+      "pm2Online": 3,
+      "restarts": 0,
+      "apiHealthy": true,
+      "databaseHealthy": true,
+      "frontendHttpStatus": 200,
+      "notLiveMeasurement": true
+    },
+    "economicSelection20261114": "HISTORICAL_SNAPSHOT_SUPERSEDED_FOR_NINE_RELEASES",
+    "remainingIndependentDebts": [
+      "p00-worker-package-audit-afbb7455-v1 economically suspended",
+      "p00 three workers PM2 PWD maintenance separately blocked",
+      "heterogeneous preparation/output retention by generation lifecycle"
+    ],
+    "nextAction": "RETURN_TO_PRODUCT_BACKLOG_NO_EXTRAORDINARY_CAPACITY_SCAN_OR_RETIREMENT",
+    "newAuthorizationGranted": false
   }
 }
