@@ -221,9 +221,9 @@ class ProcObserverTests(unittest.TestCase):
         self.assertEqual(observation["summary"]["emptyCmdlineProcessesInspected"], 0)
 
     def test_helper_rejects_roots_and_accepts_only_canonical_candidates(self):
-        def request(paths):
+        def request(paths, phase="audit"):
             value = {"schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
-                     "phase": "audit", "nonce": "0" * 64, "deployUid": 1000,
+                     "phase": phase, "nonce": "0" * 64, "deployUid": 1000,
                      "candidatePaths": sorted(paths), "consumer": {"pid": 99, "startTicks": 1}}
             return OBSERVER.canonical(value)
         rejected = ["/", "/home/deploy/.npm", "/tmp/runtime",
@@ -248,6 +248,36 @@ class ProcObserverTests(unittest.TestCase):
         accepted.extend(sorted(OBSERVER.MANIFEST_DISPOSITION_PATHS))
         accepted.extend(sorted(OBSERVER.DEPLOY_CONTROL_DERIVED_PATHS))
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
+        exceptional = sorted(OBSERVER.LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS)
+        self.assertEqual(OBSERVER.validate_request(request(exceptional))["candidatePaths"], exceptional)
+        exceptional_ten = sorted(OBSERVER.P00_EXCEPTIONAL_TEN_PATHS)
+        self.assertEqual(OBSERVER.validate_request(request(exceptional_ten))["candidatePaths"],
+                         exceptional_ten)
+        frontends = sorted(OBSERVER.P00_EXCEPTIONAL_THREE_FRONTEND_PATHS)
+        self.assertEqual(OBSERVER.validate_request(request(frontends, "prepare"))["candidatePaths"],
+                         frontends)
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_THREE_FRONTEND_SCOPE"):
+            OBSERVER.validate_request(request(frontends[:1], "prepare"))
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_THREE_FRONTEND_SCOPE"):
+            OBSERVER.validate_request(request(frontends, "audit"))
+        campaign = sorted(OBSERVER.P00_EXCEPTIONAL_CAMPAIGN_API_PATHS)
+        self.assertEqual(OBSERVER.validate_request(
+            request(campaign, "prepare"))["candidatePaths"], campaign)
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_CAMPAIGN_API_SCOPE"):
+            OBSERVER.validate_request(request(campaign + [OBSERVER.NPM_CACHE], "prepare"))
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_CAMPAIGN_API_SCOPE"):
+            OBSERVER.validate_request(request(campaign, "audit"))
+        nine = sorted(OBSERVER.P00_EXCEPTIONAL_NINE_PRIVATE_PATHS)
+        self.assertEqual(OBSERVER.validate_request(
+            request(nine, "prepare"))["candidatePaths"], nine)
+        self.assertEqual(OBSERVER.validate_request(
+            request(nine, "execute"))["candidatePaths"], nine)
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_NINE_PRIVATE_SCOPE"):
+            OBSERVER.validate_request(request(nine[:-1], "prepare"))
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_NINE_PRIVATE_SCOPE"):
+            OBSERVER.validate_request(request(nine + [OBSERVER.NPM_CACHE], "execute"))
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_NINE_PRIVATE_SCOPE"):
+            OBSERVER.validate_request(request(nine, "audit"))
         preserve = json.loads(request([OBSERVER.LEGACY_EMPTY_TRANSACTION]))
         preserve["phase"] = "preserve"
         preserve["preservationRequestSha256"] = "1" * 64
@@ -278,6 +308,18 @@ class ProcObserverTests(unittest.TestCase):
             OBSERVER.validate_request(request([
                 deploy_control_root + "/apps/whatsapp-agent/dist-extra"]))
         for path in OBSERVER.CRM_INACTIVE_STAGING_PATHS:
+            with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path + "-other"]))
+        for path in OBSERVER.LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS:
+            with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path + "-other"]))
+        for path in OBSERVER.P00_EXCEPTIONAL_TEN_PATHS:
+            with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path + "-other"]))
+        for path in OBSERVER.P00_EXCEPTIONAL_CAMPAIGN_API_PATHS:
+            with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path + "-other"]))
+        for path in OBSERVER.P00_EXCEPTIONAL_NINE_PRIVATE_PATHS:
             with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
                 OBSERVER.validate_request(request([path + "-other"]))
 

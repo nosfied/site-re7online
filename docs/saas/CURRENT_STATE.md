@@ -116,20 +116,64 @@ zero referências, writers e falhas. API/frontend `fa10f4f5`, worker `e2e7f17a`,
 PM2, dump, banco reportado pelo health e persistências dos tenants permaneceram
 fora do efeito. Não repetir preservação, autorização ou retirada deste caminho.
 
-O próximo lote permanece exclusivamente `worker-package-audit`, com
-365.674.496 B documentados, mas está
-`CONTRACT_DELTA_REVIEWED_MERGE_READY`. O audit v5 negou por
-`DISPOSITION_TREE_DIRECTORY_IDENTITY`; a evidência dirigida já existente conta
-1.023 diretórios internos `deploy:deploy 0775`, e não deve ser recapturada por
-novo audit sem mudança material. A decisão mínima é vincular, somente à
-disposição literal existente, a relação exata de diretórios derivada das folhas
-e links selados e exigir principal/grupo fechados, locks, zero referências e
-writers e revalidação em cada fase. O consumidor e o materializador vinculados
-passaram a suíte integral 154/154; a revisão final do HEAD `d65a8f0a…` e a CI
-`43614190415` passaram 4/4. A integração autenticada ainda precede o único novo
-audit produtivo somente leitura. Não há `chmod`, relaxamento global, `prepare`,
-autorização ou retirada nesta atualização. A correção da definição
-PM2 do worker produtivo continua independente e sem restart, save ou mutação.
+`worker-package-audit`, com 365.674.496 B documentados, está
+`ECONOMICALLY_SUSPENDED_BELOW_5GB`. O audit v5 e a negativa posterior
+`HELPER_PROOF_IDENTITY` permanecem preservados; o PR #396, HEAD `fdc69b64…`,
+árvore `7b69126d…`, CI `43618491422` 4/4, foi encerrado sem merge por decisão do
+owner. Não repetir o audit, instalar o helper sucessor, criar `prepare` ou retirar
+esse candidato. As regressões e a sucessão fechada continuam somente como prova
+histórica reutilizável. A manutenção PM2 do worker produtivo permanece separada,
+sem restart, save ou mutação.
+
+A seleção econômica seguinte usou a fotografia estrutural autenticada de 13/11 e
+uma única recaptura estrutural dirigida em 14/11, SHA-256
+`cc8fa5959f8097a237ea1b7ffa7c194995220e7332a068ae62fbcff97f772024`,
+47,3 s, sob `ionice`/`nice`, sem hashing de conteúdo. Após excluir os 19 caminhos
+terminais, há **zero lotes elegíveis de pelo menos 5.000.000.000 B**. Todos os
+históricos não qualificados ainda presentes em `releases` somam apenas
+2.510.159.872 B. Os grupos acima do piso não são diretórios integralmente vitais
+nem lotes prontos. Nas nove releases com dependência privada, somente 1.167.360 B
+correspondem a `.data` físico identificado; 8.895.963.136 B são runtime derivado
+potencial. A diferença material para os lotes concluídos é que `.data` está dentro
+do caminho que seria retirado, não em symlink externo preservado. Sem prova de
+preservação, restauração e disponibilidade operacional dessas persistências, o
+grupo fica `PENDENTE POR PROVA ESPECÍFICA`, não `PRESERVE` integral nem
+`RESÍDUO COMPROVADO`.
+
+`build-output` + `release-sources` somam 5.558.226.944 B, mas não formam lote:
+`build-output` guarda pacotes/manifests/índices/evidências e está isoladamente
+abaixo do piso; `release-sources` contém duas fontes históricas únicas. As
+preparações misturam receipts/journals indispensáveis com payloads possivelmente
+duplicados, sem partição física autenticada. Resultado permanece zero lote
+diretamente compatível com a metodologia comprovada. A VPS tinha
+22.894.850.048 B e 9.290.193 inodes disponíveis na captura; nenhuma produção ou
+dado tenant foi alterado.
+
+A leitura dirigida seguinte das nove releases privadas tem SHA-256
+`d164399b2ac6d51a3d44e2950d4452856391ac72117f18adbf5e0eb1c61e3354`.
+Ela confirmou zero seleção `current`, zero referência PM2 viva/salva e somente
+registro em `installedVerifiedReleases`; nenhuma release foi retirada. Os nove
+`.data` são internos e somam 1.167.360 B/158 entradas. Assim, o lote material de
+8.895.963.136 B derivados fica `MIGRATION_OR_CUSTODY_REQUIRED_BEFORE_RETIREMENT`.
+A política sucessora limita novas releases à ativa + um retorno por componente,
+nega persistência tenant dentro da raiz imutável e exige orçamento de bytes/inodes
+e destino terminal antes da alocação. Nenhuma migração, custódia ou exclusão foi
+executada nesta frente.
+
+A custódia sucessora `p00-nine-private-releases-exceptional-20261114-v1`
+encerrou em `PRESERVATION_VERIFIED / RESTORE_9_OF_9_PASS`. O receipt integral é
+`46d3049a71396c7f7fcef8cae511a79bc5eb28bbf21ba09b9d65c6afbfb3ad87` e o
+índice privado da custódia é
+`48eb52f4736fb0a3f9eebf00490df04a9424792dbc8f67b8534ec501a9d41699`.
+Foram preservados 1.351.376.292 B de pacotes autenticados e 747.520 B de
+complementos `.data` separados, total útil transferido de **1.352.123.812 B**.
+As nove restaurações isoladas cobriram integralmente índices, arquivos, modos e
+symlinks, sem seguir destinos externos e sem efeito destrutivo. A variação física
+do restore (8.899.563.520 B) decorre da alocação do filesystem local; o potencial
+físico do lote na VPS permanece **8.897.130.496 B**. API/frontend `fa10f4f5`,
+worker `e2e7f17a`, PM2 e health local/público permaneceram saudáveis; os nove
+candidatos continuam presentes. A próxima fronteira é observação privilegiada
+completa e intenção literal 9/9. A retirada continua sem autorização.
 
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 

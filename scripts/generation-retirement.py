@@ -16,6 +16,7 @@ import re
 import stat
 import subprocess
 import sys
+import time
 from typing import Any
 
 import importlib.util
@@ -46,6 +47,98 @@ PRESERVE_CLASSES = {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "PRIVATE_DATA_NEVER
 F160_CACHE_CLASS = "EPHEMERAL_RUNTIME_CACHE"
 DERIVED_CLASSES = {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING"}
 RETIRABLE_CLASSES = DERIVED_CLASSES | {"RELEASE_RUNTIME"}
+EXCEPTIONAL_CAMPAIGN_API_BATCH_ID = "p00-campaign-api-exceptional-20261114-v1"
+EXCEPTIONAL_CAMPAIGN_API_PATHS = (
+    "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008",
+)
+EXCEPTIONAL_CAMPAIGN_API_IDENTITIES = {
+    EXCEPTIONAL_CAMPAIGN_API_PATHS[0]: [64769, 6029469],
+}
+EXCEPTIONAL_CAMPAIGN_API_MODES = {
+    EXCEPTIONAL_CAMPAIGN_API_PATHS[0]: 0o700,
+}
+EXCEPTIONAL_CAMPAIGN_API_INVENTORY_SHA256 = "4fe74088465073e07269329a0c14267427c61173e04b65e85f7d847bd5b5263c"
+EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256 = "167bd932b1e477925fa8d655878047b032b415311288334e0bd1a12699e0786b"
+EXCEPTIONAL_CAMPAIGN_API_GRAPH_SHA256 = "7b9ea5fe44f0a280d314a463aaff9b4e13413071cf42e1177fc4e0756505cb41"
+EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256 = "0c8f6d00c5895af2ffaebcc1e5dee54fdeeaa91eec0879e626801d544b45da6a"
+EXCEPTIONAL_CAMPAIGN_API_INDEX_SHA256 = "4fe74088465073e07269329a0c14267427c61173e04b65e85f7d847bd5b5263c"
+EXCEPTIONAL_CAMPAIGN_API_SUPPLEMENT_SHA256 = "2c6b80ddfe38ea229102fb96400a4ff5e482dfae19b5550ecfb6fbe16a5c19bf"
+EXCEPTIONAL_CAMPAIGN_API_INSTALLATION_REPORT_SHA256 = "INSTALLATION_REPORT_PENDING"
+EXCEPTIONAL_CAMPAIGN_API_HELPER_SHA256 = "1d808c3955d5d7db4902200b8669e02ec4ae7718e65bd62cd6b20b697c5e306e"
+EXCEPTIONAL_CAMPAIGN_API_HELPER_INODE = -1
+EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS = {
+    EXCEPTIONAL_CAMPAIGN_API_PATHS[0]: {
+        "apps/whatsapp-agent/.data":
+            "/opt/re7online/site-re7online/apps/whatsapp-agent/.data",
+    },
+}
+EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "p00-campaign-api-exceptional-retirement-20261114-v1"
+)
+EXCEPTIONAL_CAMPAIGN_API_GRAPH_PATH = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-fa10f4f5-external-20261112T233820Z-api-frontend-88a5e8b7-v1-once/"
+    "generation-release-graph.final.private.json"
+)
+EXCEPTIONAL_NINE_BATCH_ID = "p00-nine-private-releases-exceptional-20261114-v1"
+EXCEPTIONAL_NINE_PATHS = (
+    "/opt/re7online/releases/immutable-17cc77a8-vps-20261104T141039Z",
+    "/opt/re7online/releases/immutable-785bde80-vps-20261103T103429Z",
+    "/opt/re7online/releases/immutable-911a9708-vps-20261102T221325Z",
+    "/opt/re7online/releases/immutable-0fdec8b0-vps-20261028T224726Z",
+    "/opt/re7online/releases/immutable-fa63994a-vps-20261030T153352Z",
+    "/opt/re7online/releases/immutable-754281d3-vps-20261029T174145Z",
+    "/opt/re7online/releases/immutable-708f018c-vps-20261027T152109Z",
+    "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z",
+    "/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z",
+)
+EXCEPTIONAL_NINE_IDENTITIES = dict(zip(EXCEPTIONAL_NINE_PATHS, (
+    [64769, 3242216], [64769, 3207808], [64769, 3169958],
+    [64769, 1058990], [64769, 2926371], [64769, 2699551],
+    [64769, 2402996], [64769, 1058392], [64769, 2109327],
+)))
+EXCEPTIONAL_NINE_MODES = {path: 0o755 for path in EXCEPTIONAL_NINE_PATHS}
+EXCEPTIONAL_NINE_DATA_IDENTITIES = dict(zip(EXCEPTIONAL_NINE_PATHS, (
+    [64769, 3242208, 0o755], [64769, 3242183, 0o755],
+    [64769, 3207787, 0o755], [64769, 1057857, 0o755],
+    [64769, 3173244, 0o755], [64769, 2731271, 0o755],
+    [64769, 2699461, 0o755], [64769, 1123852, 0o755],
+    [64769, 2143681, 0o775],
+)))
+EXCEPTIONAL_NINE_INVENTORY_SHA256 = "d164399b2ac6d51a3d44e2950d4452856391ac72117f18adbf5e0eb1c61e3354"
+EXCEPTIONAL_NINE_PRESERVATION_SHA256 = "46d3049a71396c7f7fcef8cae511a79bc5eb28bbf21ba09b9d65c6afbfb3ad87"
+EXCEPTIONAL_NINE_INDEX_SHA256 = "48eb52f4736fb0a3f9eebf00490df04a9424792dbc8f67b8534ec501a9d41699"
+EXCEPTIONAL_NINE_SUPPLEMENT_SHA256 = "8c22c6d19a49c15845a1aa4388551f98cc759c16842867dbf6c12ecdfd9617f4"
+EXCEPTIONAL_NINE_PACKAGE_SHA256S = [
+    "77332d56543fabc94a5d60b69092ae1754e12f7e8f29d663c57277616f1de434",
+    "4013a865f6b521bc0aba54fc4d985b2aaf0a11cebbc30430023da4b469ebdc3f",
+    "83a91d1455670c12731e79e4e4dd7d060c0ff4d65ef3a59dba4dea9729ac59e2",
+    "51e46c6054646c97caa138a63c651bf687dc6434adffbd6d9f1291a66166515a",
+    "c397b392ced3c3e676b028adb3cc1002c35f3baab4c62a199e0585e82644ca11",
+    "2e640995821cfdfbe16cd03044ee81824ad6d432be2fb4043ab8913d44beaa61",
+    "f9f0aeeac26be8e0aa690ccaf1b4d6abcfd6fa3e9c226b5605a8192c7133f5ff",
+    "fdac4ef8ddcd787f0e6ef0709d19fa2dc86ae6964eaf4b7b1c6941cd3a0366e4",
+    "bf92c4773ce45d243097e19b39efc677b302ebec34fe29f2b79e8a5c3a72aeb9",
+]
+EXCEPTIONAL_NINE_HELPER_SHA256 = "84d5909b6cfb53b1fe38ca0c1d699d4297dfc3b4d7c1b61fdf027078ba82975c"
+EXCEPTIONAL_NINE_RECEIPT_PARENT = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "p00-nine-private-releases-exceptional-retirement-20261114-v1"
+)
+EXCEPTIONAL_PACKAGE_SHA256S = [EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256]
+EXCEPTIONAL_INSTALLATION_KIND = "P00_CAMPAIGN_API_OBSERVER_INSTALLATION"
+EXCEPTIONAL_INSTALLATION_PREDECESSOR_SHA256 = (
+    "e47ae66c9855e989e6f0c97a7b82c21714797ce4823842bec5ab9b5d431c04aa"
+)
+EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY = {
+    "path": "/usr/local/libexec/re7online/capacity-proc-observer.py",
+    "sha256": EXCEPTIONAL_INSTALLATION_PREDECESSOR_SHA256,
+    "device": 64769, "inode": 786605, "uid": 0, "gid": 0, "mode": "0500",
+}
+EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES: dict[str, list[int]] = {}
+EXCEPTIONAL_ROOT_UID = 1000
+EXCEPTIONAL_ROOT_GID = 1000
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
@@ -5762,6 +5855,741 @@ def reconcile_release_graph(args: argparse.Namespace) -> None:
                      "receiptSha256": digest_bytes(receipt_raw)}).decode().strip())
 
 
+def _exceptional_lock(path: Path) -> int:
+    try:
+        info = path.lstat()
+        if (path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                info.st_gid != os.getgid() or stat.S_IMODE(info.st_mode) not in {0o600, 0o664} or
+                info.st_nlink != 1):
+            deny("exceptional_lock_identity")
+        fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+        opened = os.fstat(fd)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            deny("exceptional_lock_identity")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fd
+    except BlockingIOError:
+        deny("exceptional_lock_busy")
+    except OSError:
+        deny("exceptional_lock_identity")
+
+
+def _exceptional_bindings(args: argparse.Namespace, phase: str) -> None:
+    fixed = {
+        "preservation_receipt": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+            "preservation-receipt.private.json",
+        "observer_installation_report": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+            "observer-installation.private.json",
+        "custody_attestation": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+            f"custody-attestation-{phase}-attempt-01.private.json",
+        "process_observation_output": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+            f"process-observation-{phase}-attempt-01.private.json",
+        "release_graph": EXCEPTIONAL_CAMPAIGN_API_GRAPH_PATH,
+        "pm2": Path("/home/deploy/.npm-global/bin/pm2"),
+        "pm2_dump": Path("/home/deploy/.pm2/dump.pm2"),
+        "deployment_lock": Path("/opt/re7online/.deploy-canonical.lock"),
+        "generation_lock": Path("/opt/re7online/build-output/.generation-build.lock"),
+        "receipt_root": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT / "execution-v1",
+    }
+    if phase == "prepare":
+        fixed.update({
+            "intent_output": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+                "retirement-intent-attempt-01.private.json",
+            "commands_output": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+                "retirement-commands-attempt-01.private.txt",
+        })
+    else:
+        fixed.update({
+            "intent": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+                "retirement-intent-attempt-01.private.json",
+            "authorization": EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT /
+                "retirement-authorization-attempt-01.private.json",
+        })
+    if any(getattr(args, name) != value for name, value in fixed.items()):
+        deny("exceptional_literal_binding")
+
+
+def _exceptional_start_ticks() -> int:
+    raw = Path("/proc/self/stat").read_text()
+    closing = raw.rfind(") ")
+    if closing < 0:
+        deny("exceptional_consumer_identity")
+    fields = raw[closing + 2:].split()
+    try:
+        return int(fields[19])
+    except (IndexError, ValueError):
+        deny("exceptional_consumer_identity")
+
+
+def _exceptional_preservation(path: Path, expected_sha: str) -> dict[str, Any]:
+    raw, _ = stable_private(path, expected_sha)
+    receipt = object_json(raw, "exceptional-preservation")
+    if EXCEPTIONAL_CAMPAIGN_API_BATCH_ID == EXCEPTIONAL_NINE_BATCH_ID:
+        if (expected_sha != EXCEPTIONAL_NINE_PRESERVATION_SHA256 or
+                receipt.get("schemaVersion") != 1 or
+                receipt.get("kind") != "P00_NINE_PRIVATE_RELEASES_PRESERVATION" or
+                receipt.get("batchId") != EXCEPTIONAL_NINE_BATCH_ID or
+                receipt.get("state") != "PRESERVATION_VERIFIED" or
+                receipt.get("restoreState") != "RESTORE_9_OF_9_PASS" or
+                receipt.get("inventorySha256") != EXCEPTIONAL_NINE_INVENTORY_SHA256 or
+                receipt.get("sourcePrivateDataManifestSha256") !=
+                EXCEPTIONAL_NINE_SUPPLEMENT_SHA256 or
+                receipt.get("externalSymlinksFollowed") is not False or
+                receipt.get("productionModified") is not False or
+                receipt.get("destructiveEffects") != 0 or
+                receipt.get("totals") != {
+                    "candidateAllocatedBytes": 8_897_130_496,
+                    "packageBytes": 1_351_376_292,
+                    "privateDataArchiveBytes": 747_520,
+                    "releaseCount": 9,
+                    "restoredAllocatedBytes": 8_899_563_520,
+                    "uniqueTransportBytes": 1_352_123_812,
+                }):
+            deny("exceptional_preservation_receipt")
+        releases = receipt.get("releases")
+        if not isinstance(releases, list) or len(releases) != len(EXCEPTIONAL_NINE_PATHS):
+            deny("exceptional_preservation_content")
+        by_path = {item.get("candidatePath"): item for item in releases
+                   if isinstance(item, dict)}
+        if set(by_path) != set(EXCEPTIONAL_NINE_PATHS):
+            deny("exceptional_preservation_content")
+        for candidate, package_sha in zip(EXCEPTIONAL_NINE_PATHS,
+                                          EXCEPTIONAL_NINE_PACKAGE_SHA256S):
+            item = by_path[candidate]
+            private = item.get("privateDataAuthority")
+            if (item.get("schemaVersion") != 1 or
+                    item.get("kind") != "P00_NINE_PRIVATE_RELEASE_RESTORE" or
+                    item.get("state") != "RESTORE_PASS" or
+                    item.get("packageSha256") != package_sha or
+                    item.get("sourcePrivateDataManifestSha256") !=
+                    EXCEPTIONAL_NINE_SUPPLEMENT_SHA256 or
+                    item.get("externalSymlinksFollowed") is not False or
+                    item.get("productionModified") is not False or
+                    not isinstance(private, dict) or
+                    private.get("sourceIdentity") !=
+                    EXCEPTIONAL_NINE_DATA_IDENTITIES[candidate][:2] or
+                    private.get("archiveOwnershipVerified") is not True or
+                    not SHA256.fullmatch(item.get("privateDataArchiveSha256", ""))):
+                deny("exceptional_preservation_content")
+        return receipt
+    if (expected_sha != EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256 or
+            receipt.get("schemaVersion") != 1 or
+            receipt.get("kind") != "P00_CAMPAIGN_API_INCREMENTAL_PRESERVATION" or
+            receipt.get("batchId") != EXCEPTIONAL_CAMPAIGN_API_BATCH_ID or
+            receipt.get("state") != "PRESERVATION_VERIFIED" or
+            receipt.get("productionModified") is not False or
+            receipt.get("historicalManifestSha256") != EXCEPTIONAL_CAMPAIGN_API_INDEX_SHA256 or
+            receipt.get("supplementSha256") != EXCEPTIONAL_CAMPAIGN_API_SUPPLEMENT_SHA256):
+        deny("exceptional_preservation_receipt")
+    restoration = receipt.get("restoration")
+    if (receipt.get("candidate") != EXCEPTIONAL_CAMPAIGN_API_PATHS[0] or
+            receipt.get("candidateIdentity") != EXCEPTIONAL_CAMPAIGN_API_IDENTITIES[
+                EXCEPTIONAL_CAMPAIGN_API_PATHS[0]] or
+            receipt.get("candidateAllocatedBytes") != 363_339_776 or
+            receipt.get("candidateInodesIncludingRoot") != 9_842 or
+            receipt.get("archiveSha256") != EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256 or
+            receipt.get("archiveBytes") != 105_917_138 or
+            not isinstance(restoration, dict) or
+            restoration != {"state": "RESTORE_PASS", "historicalManifestFiles": 8_820,
+                            "supplementalLeaves": 1, "symlinks": 11,
+                            "allocatedBytes": 363_376_640, "inodesIncludingRoot": 9_842,
+                            "externalDataFollowed": False,
+                            "externalDataLink":
+                            "/opt/re7online/site-re7online/apps/whatsapp-agent/.data"}):
+        deny("exceptional_preservation_content")
+    return receipt
+
+
+def _exceptional_installation_report(path: Path, expected_sha: str) -> dict[str, Any]:
+    if not SHA256.fullmatch(expected_sha):
+        deny("exceptional_observer_installation_binding")
+    raw, _ = stable_private(path, expected_sha)
+    value = object_json(raw, "exceptional-observer-installation")
+    helper = value.get("helper")
+    previous = value.get("previous")
+    if (set(value) != {"schemaVersion", "kind", "state", "helper", "previous",
+                       "sudoersChanged", "sudoersSha256"} or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != EXCEPTIONAL_INSTALLATION_KIND or
+            value.get("state") not in {"INSTALLED", "RECOVERED_ALREADY_INSTALLED"} or
+            not isinstance(helper, dict) or
+            helper.get("path") != "/usr/local/libexec/re7online/capacity-proc-observer.py" or
+            helper.get("sha256") != EXCEPTIONAL_CAMPAIGN_API_HELPER_SHA256 or
+            helper.get("device") != 64769 or not isinstance(helper.get("inode"), int) or
+            helper["inode"] <= 0 or helper.get("uid") != 0 or helper.get("gid") != 0 or
+            helper.get("mode") != "0500" or
+            not isinstance(previous, dict) or
+            previous != EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY or
+            value.get("sudoersChanged") is not False or
+            value.get("sudoersSha256") !=
+            "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"):
+        deny("exceptional_observer_installation")
+    return value
+
+
+def _exceptional_attestation(path: Path, expected_sha: str, phase: str) -> dict[str, Any]:
+    raw, _ = stable_private(path, expected_sha)
+    value = object_json(raw, "exceptional-custody-attestation")
+    required = {"schemaVersion", "kind", "batchId", "phase", "nonce", "capturedAtNs",
+                "preservationReceiptSha256", "indexSha256", "supplementSha256",
+                "packageSha256s", "restoreCompare", "sshBinding"}
+    ssh = value.get("sshBinding")
+    now = time.time_ns()
+    if (set(value) != required or value.get("schemaVersion") != 1 or
+            value.get("kind") != "EXCEPTIONAL_EXTERNAL_CUSTODY_ATTESTATION" or
+            value.get("batchId") != EXCEPTIONAL_CAMPAIGN_API_BATCH_ID or value.get("phase") != phase or
+            not isinstance(value.get("nonce"), str) or not SHA256.fullmatch(value["nonce"]) or
+            not isinstance(value.get("capturedAtNs"), int) or
+            value["capturedAtNs"] > now or now - value["capturedAtNs"] >
+            (300_000_000_000 if phase == "prepare" else 60_000_000_000) or
+            value.get("preservationReceiptSha256") != EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256 or
+            value.get("indexSha256") != EXCEPTIONAL_CAMPAIGN_API_INDEX_SHA256 or
+            value.get("supplementSha256") != EXCEPTIONAL_CAMPAIGN_API_SUPPLEMENT_SHA256 or
+            value.get("packageSha256s") != EXCEPTIONAL_PACKAGE_SHA256S or
+            value.get("restoreCompare") != "PASS" or
+            ssh != {"direction": "builder_to_vps", "host": "admin.re7online.com",
+                    "principal": "deploy", "hostKeyFingerprint":
+                    "SHA256:+rTaH6fXSuhNP65KZ5f3gMt3sAm5jCjzNSrYzkdKdEE",
+                    "clientKeyFingerprint":
+                    "SHA256:PMzqpz35ZQ1XnNzAaatXufF989gbsKZR+uoPBP6c11w",
+                    "strictHostKeyChecking": True}):
+        deny("exceptional_custody_attestation")
+    return value
+
+
+def _exceptional_roots(expected_present: set[str]) -> None:
+    for raw_path, expected in EXCEPTIONAL_CAMPAIGN_API_IDENTITIES.items():
+        path = Path(raw_path)
+        if raw_path not in expected_present:
+            if path.exists() or path.is_symlink():
+                deny("exceptional_path_remains")
+            continue
+        try:
+            info = path.lstat()
+        except OSError:
+            deny("exceptional_root_missing")
+        if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                (info.st_dev, info.st_ino) != tuple(expected) or
+                (info.st_uid, info.st_gid) != (EXCEPTIONAL_ROOT_UID, EXCEPTIONAL_ROOT_GID) or
+                stat.S_IMODE(info.st_mode) != EXCEPTIONAL_CAMPAIGN_API_MODES[raw_path]):
+            deny("exceptional_root_identity")
+        for relative, target in EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS.get(raw_path, {}).items():
+            data = path / relative
+            if not data.is_symlink() or os.readlink(data) != target:
+                deny("exceptional_data_link")
+        physical = EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES.get(raw_path)
+        if physical is not None:
+            data = path / "api-runtime/.data"
+            try:
+                data_info = data.lstat()
+            except OSError:
+                deny("exceptional_private_data_missing")
+            if (data.is_symlink() or not stat.S_ISDIR(data_info.st_mode) or
+                    (data_info.st_dev, data_info.st_ino) != tuple(physical[:2]) or
+                    (data_info.st_uid, data_info.st_gid) !=
+                    (EXCEPTIONAL_ROOT_UID, EXCEPTIONAL_ROOT_GID) or
+                    stat.S_IMODE(data_info.st_mode) != physical[2]):
+                deny("exceptional_private_data_identity")
+
+
+def _exceptional_mounts(expected_present: set[str]) -> None:
+    try:
+        rows = Path("/proc/self/mountinfo").read_text().splitlines()
+    except OSError:
+        deny("exceptional_mount_observation")
+    candidates = [Path(item) for item in expected_present]
+    for row in rows:
+        fields = row.split()
+        if len(fields) < 5:
+            deny("exceptional_mount_observation")
+        mount = Path(fields[4].replace("\\040", " ").replace("\\011", "\t")
+                     .replace("\\134", "\\"))
+        if any(mount == candidate or candidate in mount.parents for candidate in candidates):
+            deny("exceptional_nested_mount")
+
+
+def _exceptional_receipt_root(path: Path, *, allow_existing: bool) -> None:
+    if (not path.is_absolute() or path.parent != EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT or
+            path.name != "execution-v1"):
+        deny("exceptional_receipt_root")
+    try:
+        parent = path.parent.lstat()
+    except OSError:
+        deny("exceptional_receipt_parent")
+    if (path.parent.is_symlink() or not stat.S_ISDIR(parent.st_mode) or
+            (parent.st_uid, parent.st_gid) != (os.geteuid(), os.getegid()) or
+            stat.S_IMODE(parent.st_mode) != 0o700):
+        deny("exceptional_receipt_parent")
+    exists = path.exists() or path.is_symlink()
+    if exists != allow_existing:
+        deny("exceptional_receipt_state")
+    if exists:
+        info = path.lstat()
+        if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                (info.st_uid, info.st_gid) != (os.geteuid(), os.getegid()) or
+                stat.S_IMODE(info.st_mode) != 0o700):
+            deny("exceptional_receipt_identity")
+
+
+def _exceptional_graph(graph_path: Path, graph_sha256: str) -> dict[str, Any]:
+    if graph_sha256 != EXCEPTIONAL_CAMPAIGN_API_GRAPH_SHA256:
+        deny("exceptional_graph_binding")
+    raw, _ = stable_private(graph_path, graph_sha256)
+    graph = object_json(raw, "exceptional-release-graph")
+    protected = set()
+    for key in ("activeReleases", "rollbackReleases", "transitiveReturnReleases",
+                "candidateReleases"):
+        values = graph.get(key)
+        if not isinstance(values, list):
+            deny("exceptional_graph_schema")
+        protected.update(values)
+    if protected & {Path(item).name for item in EXCEPTIONAL_CAMPAIGN_API_PATHS}:
+        deny("exceptional_graph_reference")
+    rollback = graph.get("immediateRollbackReleases")
+    if not isinstance(rollback, dict) or set(rollback.values()) & {
+            Path(item).name for item in EXCEPTIONAL_CAMPAIGN_API_PATHS}:
+        deny("exceptional_graph_reference")
+    return graph
+
+
+def _exceptional_runtime(pm2_path: Path, dump_path: Path) -> dict[str, Any]:
+    try:
+        result = subprocess.run([str(pm2_path), "jlist"], stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        deny("exceptional_pm2_live")
+    if result.returncode:
+        deny("exceptional_pm2_live")
+    try:
+        rows = json.loads(result.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny("exceptional_pm2_live")
+    required = {"re7-whatsapp-agent", "re7-admin-front", "re7-whatsapp-web-worker"}
+    live = {}
+    for row in rows if isinstance(rows, list) else []:
+        env = row.get("pm2_env") if isinstance(row, dict) and isinstance(row.get("pm2_env"), dict) else {}
+        name = row.get("name") if isinstance(row, dict) else None
+        if name in required:
+            if env.get("status") != "online" or not isinstance(row.get("pid"), int) or row["pid"] <= 1:
+                deny("exceptional_pm2_process")
+            live[name] = {"pid": row["pid"], "restartTime": env.get("restart_time"),
+                          "pmCwd": env.get("pm_cwd"), "pmExecPath": env.get("pm_exec_path")}
+    if set(live) != required:
+        deny("exceptional_pm2_process")
+    dump_raw, _ = stable_private(dump_path)
+    combined = result.stdout + dump_raw
+    if any(path.encode() in combined for path in EXCEPTIONAL_CAMPAIGN_API_PATHS):
+        deny("exceptional_pm2_reference")
+    links = {}
+    for label in ("api", "frontend"):
+        path = Path("/opt/re7online/current") / label
+        try:
+            if not path.is_symlink():
+                deny("exceptional_current_link")
+            target = path.resolve(strict=True)
+        except OSError:
+            deny("exceptional_current_link")
+        if any(target == Path(candidate) or Path(candidate) in target.parents
+               for candidate in EXCEPTIONAL_CAMPAIGN_API_PATHS):
+            deny("exceptional_current_reference")
+        links[label] = str(target)
+    for data_links in EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS.values():
+        for target in data_links.values():
+            if not Path(target).is_dir():
+                deny("exceptional_external_data_missing")
+    return {"processes": live, "current": links, "dumpSha256": digest_bytes(dump_raw)}
+
+
+def _exceptional_observe(args: argparse.Namespace, phase: str, output: Path,
+                         helper_identity: dict[str, Any]) -> dict[str, Any]:
+    if (args.process_observer != Path("/usr/local/libexec/re7online/capacity-proc-observer.py") or
+            args.process_observer_sha256 != EXCEPTIONAL_CAMPAIGN_API_HELPER_SHA256 or
+            output.parent != EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT or
+            output.exists() or output.is_symlink()):
+        deny("exceptional_process_observer_binding")
+    request = {"schemaVersion": 1, "kind": "CAPACITY_PROC_OBSERVATION_REQUEST",
+               "phase": phase, "nonce": hashlib.sha256(os.urandom(32)).hexdigest(),
+               "deployUid": os.getuid(), "candidatePaths": list(EXCEPTIONAL_CAMPAIGN_API_PATHS),
+               "consumer": {"pid": os.getpid(), "startTicks": _exceptional_start_ticks()}}
+    request_raw = canonical(request)
+    command = ["/usr/bin/sudo", "-n", "/usr/bin/python3", "-I", "-B", "-E", "-s",
+               str(args.process_observer), "collect"]
+    try:
+        result = subprocess.run(command, input=request_raw, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        deny("exceptional_privileged_observation")
+    if result.returncode:
+        deny("exceptional_privileged_observation")
+    observation = object_json(result.stdout, "exceptional-process-observation")
+    detail = observation.get("observation")
+    mechanism = observation.get("mechanism")
+    if (observation.get("kind") != "CAPACITY_PROC_OBSERVATION" or
+            observation.get("state") != "COMPLETE" or observation.get("phase") != phase or
+            observation.get("candidatePaths") != list(EXCEPTIONAL_CAMPAIGN_API_PATHS) or
+            observation.get("requestSha256") != digest_bytes(request_raw) or
+            not isinstance(mechanism, dict) or mechanism.get("sha256") != args.process_observer_sha256 or
+            mechanism.get("path") != str(args.process_observer) or
+            mechanism.get("identity", {}).get("device") != 64769 or
+            mechanism.get("identity", {}).get("inode") != helper_identity.get("inode") or
+            mechanism.get("identity", {}).get("uid") != 0 or
+            mechanism.get("identity", {}).get("gid") != 0 or
+            mechanism.get("identity", {}).get("mode") != "0500" or
+            not isinstance(detail, dict) or detail.get("complete") is not True or
+            detail.get("references") != [] or detail.get("activeWriters") != [] or
+            detail.get("failures") != []):
+        deny("exceptional_privileged_observation")
+    write_exclusive(output, result.stdout)
+    return {"requestSha256": digest_bytes(request_raw),
+            "observationSha256": digest_bytes(result.stdout),
+            "helperSha256": mechanism["sha256"], "phase": phase}
+
+
+def _exceptional_snapshot(args: argparse.Namespace, expected_present: set[str] | None = None) -> dict[str, Any]:
+    present = set(EXCEPTIONAL_CAMPAIGN_API_PATHS) if expected_present is None else expected_present
+    _exceptional_roots(present)
+    _exceptional_mounts(present)
+    _exceptional_graph(args.release_graph, args.release_graph_sha256)
+    runtime = _exceptional_runtime(args.pm2, args.pm2_dump)
+    return {"runtime": runtime, "freeBytes": os.statvfs("/opt/re7online").f_bavail *
+            os.statvfs("/opt/re7online").f_frsize,
+            "freeInodes": os.statvfs("/opt/re7online").f_favail}
+
+
+def _exceptional_same_operational(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return left.get("runtime") == right.get("runtime")
+
+
+def _with_exceptional_nine(handler: Any, args: argparse.Namespace) -> None:
+    """Run the proven exceptional consumer with the literal nine-release profile."""
+    global EXCEPTIONAL_CAMPAIGN_API_BATCH_ID, EXCEPTIONAL_CAMPAIGN_API_PATHS
+    global EXCEPTIONAL_CAMPAIGN_API_IDENTITIES, EXCEPTIONAL_CAMPAIGN_API_MODES
+    global EXCEPTIONAL_CAMPAIGN_API_INVENTORY_SHA256
+    global EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256
+    global EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256
+    global EXCEPTIONAL_CAMPAIGN_API_INDEX_SHA256, EXCEPTIONAL_CAMPAIGN_API_SUPPLEMENT_SHA256
+    global EXCEPTIONAL_CAMPAIGN_API_HELPER_SHA256, EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS
+    global EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT, EXCEPTIONAL_PACKAGE_SHA256S
+    global EXCEPTIONAL_INSTALLATION_KIND, EXCEPTIONAL_INSTALLATION_PREDECESSOR_SHA256
+    global EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY
+    global EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES
+    names = (
+        "EXCEPTIONAL_CAMPAIGN_API_BATCH_ID", "EXCEPTIONAL_CAMPAIGN_API_PATHS",
+        "EXCEPTIONAL_CAMPAIGN_API_IDENTITIES", "EXCEPTIONAL_CAMPAIGN_API_MODES",
+        "EXCEPTIONAL_CAMPAIGN_API_INVENTORY_SHA256",
+        "EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256",
+        "EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256",
+        "EXCEPTIONAL_CAMPAIGN_API_INDEX_SHA256", "EXCEPTIONAL_CAMPAIGN_API_SUPPLEMENT_SHA256",
+        "EXCEPTIONAL_CAMPAIGN_API_HELPER_SHA256", "EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS",
+        "EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT", "EXCEPTIONAL_PACKAGE_SHA256S",
+        "EXCEPTIONAL_INSTALLATION_KIND", "EXCEPTIONAL_INSTALLATION_PREDECESSOR_SHA256",
+        "EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY",
+        "EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES",
+    )
+    previous = {name: globals()[name] for name in names}
+    globals().update({
+        "EXCEPTIONAL_CAMPAIGN_API_BATCH_ID": EXCEPTIONAL_NINE_BATCH_ID,
+        "EXCEPTIONAL_CAMPAIGN_API_PATHS": EXCEPTIONAL_NINE_PATHS,
+        "EXCEPTIONAL_CAMPAIGN_API_IDENTITIES": EXCEPTIONAL_NINE_IDENTITIES,
+        "EXCEPTIONAL_CAMPAIGN_API_MODES": EXCEPTIONAL_NINE_MODES,
+        "EXCEPTIONAL_CAMPAIGN_API_INVENTORY_SHA256": EXCEPTIONAL_NINE_INVENTORY_SHA256,
+        "EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256": EXCEPTIONAL_NINE_INDEX_SHA256,
+        "EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256": EXCEPTIONAL_NINE_PRESERVATION_SHA256,
+        "EXCEPTIONAL_CAMPAIGN_API_INDEX_SHA256": EXCEPTIONAL_NINE_INDEX_SHA256,
+        "EXCEPTIONAL_CAMPAIGN_API_SUPPLEMENT_SHA256": EXCEPTIONAL_NINE_SUPPLEMENT_SHA256,
+        "EXCEPTIONAL_CAMPAIGN_API_HELPER_SHA256": EXCEPTIONAL_NINE_HELPER_SHA256,
+        "EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS": {},
+        "EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT": EXCEPTIONAL_NINE_RECEIPT_PARENT,
+        "EXCEPTIONAL_PACKAGE_SHA256S": EXCEPTIONAL_NINE_PACKAGE_SHA256S,
+        "EXCEPTIONAL_INSTALLATION_KIND": "P00_NINE_PRIVATE_RELEASES_OBSERVER_INSTALLATION",
+        "EXCEPTIONAL_INSTALLATION_PREDECESSOR_SHA256":
+            "1d808c3955d5d7db4902200b8669e02ec4ae7718e65bd62cd6b20b697c5e306e",
+        "EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY": {
+            "path": "/usr/local/libexec/re7online/capacity-proc-observer.py",
+            "sha256": "1d808c3955d5d7db4902200b8669e02ec4ae7718e65bd62cd6b20b697c5e306e",
+            "device": 64769, "inode": 786791, "uid": 0, "gid": 0, "mode": "0500",
+        },
+        "EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES": EXCEPTIONAL_NINE_DATA_IDENTITIES,
+    })
+    try:
+        handler(args)
+    finally:
+        globals().update(previous)
+
+
+def prepare_exceptional_nine(args: argparse.Namespace) -> None:
+    _with_exceptional_nine(prepare_exceptional_campaign_api, args)
+
+
+def execute_exceptional_nine(args: argparse.Namespace) -> None:
+    _with_exceptional_nine(execute_exceptional_campaign_api, args)
+
+
+def prepare_exceptional_campaign_api(args: argparse.Namespace) -> None:
+    _exceptional_bindings(args, "prepare")
+    _exceptional_preservation(args.preservation_receipt, args.preservation_receipt_sha256)
+    installation = _exceptional_installation_report(
+        args.observer_installation_report, args.observer_installation_report_sha256)
+    attestation = _exceptional_attestation(args.custody_attestation,
+                                           args.custody_attestation_sha256, "prepare")
+    deployment_fd = _exceptional_lock(args.deployment_lock)
+    generation_fd = _exceptional_lock(args.generation_lock)
+    try:
+        _exceptional_receipt_root(args.receipt_root, allow_existing=False)
+        for destination in (args.commands_output, args.intent_output, args.process_observation_output):
+            if (destination.parent != EXCEPTIONAL_CAMPAIGN_API_RECEIPT_PARENT or
+                    destination.exists() or destination.is_symlink()):
+                deny("exceptional_prepare_destination")
+        before = _exceptional_snapshot(args)
+        observation = _exceptional_observe(
+            args, "prepare", args.process_observation_output, installation["helper"])
+        after = _exceptional_snapshot(args)
+        if not _exceptional_same_operational(before, after):
+            deny("exceptional_operational_drift")
+        commands = [{"ordinal": index, "path": path, "class": "RELEASE_RUNTIME",
+                     "argv": ["/usr/bin/rm", "-r", "--one-file-system", "--", path]}
+                    for index, path in enumerate(EXCEPTIONAL_CAMPAIGN_API_PATHS, 1)]
+        intent = {"schemaVersion": 1, "kind": "EXCEPTIONAL_OWNER_AUTHORIZED_RETIREMENT",
+                  "batchId": EXCEPTIONAL_CAMPAIGN_API_BATCH_ID, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+                  "preservationReceiptSha256": args.preservation_receipt_sha256,
+                  "custodyAttestationSha256": args.custody_attestation_sha256,
+                  "inventorySha256": EXCEPTIONAL_CAMPAIGN_API_INVENTORY_SHA256,
+                  "qualificationProofSha256": EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256,
+                  "graphSha256": EXCEPTIONAL_CAMPAIGN_API_GRAPH_SHA256,
+                  "processObservation": observation, "identities": EXCEPTIONAL_CAMPAIGN_API_IDENTITIES,
+                  "commands": commands, "operationalSnapshot": before,
+                  "automaticRetry": False, "canonicalQualificationClaimed": False}
+        commands_raw = ("\n".join(" ".join(item["argv"]) for item in commands) + "\n").encode()
+        intent["commandsSha256"] = digest_bytes(commands_raw)
+        write_exclusive(args.commands_output, commands_raw)
+        write_exclusive(args.intent_output, canonical(intent))
+        print(canonical({"result": "EXCEPTIONAL_OWNER_AUTHORIZED_PREPARED",
+                         "intentSha256": digest_bytes(canonical(intent)),
+                         "commandsSha256": intent["commandsSha256"],
+                         "commandCount": len(EXCEPTIONAL_CAMPAIGN_API_PATHS),
+                         "freeBytes": before["freeBytes"], "freeInodes": before["freeInodes"]}).decode().strip())
+    finally:
+        os.close(generation_fd); os.close(deployment_fd)
+
+
+def _exceptional_authorities(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
+    intent_raw, _ = stable_private(args.intent, args.intent_sha256)
+    authorization_raw, _ = stable_private(args.authorization, args.authorization_sha256)
+    intent = object_json(intent_raw, "exceptional-intent")
+    authorization = object_json(authorization_raw, "exceptional-authorization")
+    expected_commands = [{"ordinal": index, "path": path, "class": "RELEASE_RUNTIME",
+                          "argv": ["/usr/bin/rm", "-r", "--one-file-system", "--", path]}
+                         for index, path in enumerate(EXCEPTIONAL_CAMPAIGN_API_PATHS, 1)]
+    required_intent = {"schemaVersion", "kind", "batchId", "state", "preservationReceiptSha256",
+                       "custodyAttestationSha256", "inventorySha256", "qualificationProofSha256",
+                       "graphSha256", "processObservation", "identities", "commands",
+                       "operationalSnapshot", "automaticRetry", "canonicalQualificationClaimed",
+                       "commandsSha256"}
+    if (set(intent) != required_intent or intent.get("schemaVersion") != 1 or
+            intent.get("kind") != "EXCEPTIONAL_OWNER_AUTHORIZED_RETIREMENT" or
+            intent.get("batchId") != EXCEPTIONAL_CAMPAIGN_API_BATCH_ID or
+            intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
+            intent.get("preservationReceiptSha256") != EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256 or
+            intent.get("inventorySha256") != EXCEPTIONAL_CAMPAIGN_API_INVENTORY_SHA256 or
+            intent.get("qualificationProofSha256") != EXCEPTIONAL_CAMPAIGN_API_QUALIFICATION_SHA256 or
+            intent.get("graphSha256") != EXCEPTIONAL_CAMPAIGN_API_GRAPH_SHA256 or
+            intent.get("identities") != EXCEPTIONAL_CAMPAIGN_API_IDENTITIES or
+            intent.get("commands") != expected_commands or intent.get("automaticRetry") is not False or
+            intent.get("canonicalQualificationClaimed") is not False):
+        deny("exceptional_intent")
+    commands_raw = ("\n".join(" ".join(item["argv"]) for item in expected_commands) + "\n").encode()
+    if intent.get("commandsSha256") != digest_bytes(commands_raw):
+        deny("exceptional_commands")
+    required_auth = {"schemaVersion", "authorizationId", "decision", "intentSha256",
+                     "approvedPaths", "owner", "authorityClass"}
+    if (set(authorization) != required_auth or authorization.get("schemaVersion") != 1 or
+            authorization.get("decision") != "AUTHORIZE_ONCE" or
+            authorization.get("authorityClass") != "EXCEPTIONAL_OWNER_AUTHORIZED" or
+            authorization.get("intentSha256") != args.intent_sha256 or
+            authorization.get("approvedPaths") != list(EXCEPTIONAL_CAMPAIGN_API_PATHS) or
+            not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
+        deny("exceptional_authorization")
+    return intent, authorization
+
+
+def _exceptional_journal_state(journal: Path) -> tuple[set[int], set[int]]:
+    raw, _ = stable_private(journal)
+    by_ordinal: dict[int, list[dict[str, Any]]] = {}
+    if raw:
+        for line in raw.splitlines():
+            event = object_json(line, "exceptional-journal-event")
+            ordinal = event.get("ordinal")
+            if (not isinstance(ordinal, int) or ordinal < 1 or
+                    ordinal > len(EXCEPTIONAL_CAMPAIGN_API_PATHS)):
+                deny("exceptional_journal_ordinal")
+            by_ordinal.setdefault(ordinal, []).append(event)
+    completed: set[int] = set()
+    pending: set[int] = set()
+    for ordinal, command in enumerate(
+            [{"path": path, "argv": ["/usr/bin/rm", "-r", "--one-file-system", "--", path]}
+             for path in EXCEPTIONAL_CAMPAIGN_API_PATHS], 1):
+        events = by_ordinal.get(ordinal, [])
+        attempt = {"event": "ATTEMPT", "ordinal": ordinal,
+                   "path": command["path"], "argv": command["argv"]}
+        if not events:
+            continue
+        if events[0] != attempt or len(events) > 3:
+            deny("exceptional_journal_attempt")
+        if len(events) == 1:
+            pending.add(ordinal)
+            continue
+        result = events[1]
+        if (set(result) != {"event", "ordinal", "path", "exitCode", "stdoutSha256",
+                            "stderrSha256", "reconciledAbsent"} or
+                result.get("event") != "RESULT" or result.get("ordinal") != ordinal or
+                result.get("path") != command["path"] or
+                result.get("exitCode") not in {0, None} or
+                not SHA256.fullmatch(result.get("stdoutSha256", "")) or
+                not SHA256.fullmatch(result.get("stderrSha256", "")) or
+                not isinstance(result.get("reconciledAbsent"), bool)):
+            deny("exceptional_journal_result")
+        if len(events) == 2:
+            pending.add(ordinal)
+            continue
+        if events[2] != {"event": "VERIFIED", "ordinal": ordinal,
+                         "path": command["path"], "absent": True}:
+            deny("exceptional_journal_verified")
+        completed.add(ordinal)
+    if set(by_ordinal) - set(range(1, len(EXCEPTIONAL_CAMPAIGN_API_PATHS) + 1)):
+        deny("exceptional_journal_scope")
+    return completed, pending
+
+
+def _exceptional_result_event(ordinal: int, path: str, result: subprocess.CompletedProcess[bytes] | None) -> dict[str, Any]:
+    return {"event": "RESULT", "ordinal": ordinal, "path": path,
+            "exitCode": result.returncode if result is not None else None,
+            "stdoutSha256": digest_bytes(result.stdout if result is not None else b""),
+            "stderrSha256": digest_bytes(result.stderr if result is not None else b""),
+            "reconciledAbsent": result is None}
+
+
+def _exceptional_execute_commands(intent: dict[str, Any], journal: Path,
+                                  *, resume: bool) -> tuple[int, int]:
+    completed_ordinals: set[int] = set()
+    pending_ordinals: set[int] = set()
+    if resume:
+        completed_ordinals, pending_ordinals = _exceptional_journal_state(journal)
+    for ordinal in pending_ordinals:
+        path = Path(EXCEPTIONAL_CAMPAIGN_API_PATHS[ordinal - 1])
+        if path.exists() or path.is_symlink():
+            deny(f"exceptional_interrupted_effect_ambiguous:{ordinal}")
+    for ordinal in sorted(pending_ordinals):
+        path = EXCEPTIONAL_CAMPAIGN_API_PATHS[ordinal - 1]
+        append_event(journal, _exceptional_result_event(ordinal, path, None))
+        append_event(journal, {"event": "VERIFIED", "ordinal": ordinal,
+                               "path": path, "absent": True})
+        completed_ordinals.add(ordinal)
+    attempted = completed = len(completed_ordinals)
+    for command in intent["commands"]:
+        if command["ordinal"] in completed_ordinals:
+            continue
+        path = Path(command["path"])
+        if not path.exists() and not path.is_symlink():
+            deny(f"exceptional_absent_without_attempt:{command['ordinal']}")
+        attempted += 1
+        append_event(journal, {"event": "ATTEMPT", "ordinal": command["ordinal"],
+                               "path": command["path"], "argv": command["argv"]})
+        result = subprocess.run(command["argv"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        append_event(journal, _exceptional_result_event(
+            command["ordinal"], command["path"], result))
+        if result.returncode:
+            deny(f"exceptional_command:{command['ordinal']}:exit_{result.returncode}")
+        if path.exists() or path.is_symlink():
+            deny(f"exceptional_path_remains:{command['ordinal']}")
+        completed += 1
+        append_event(journal, {"event": "VERIFIED", "ordinal": command["ordinal"],
+                               "path": command["path"], "absent": True})
+    return attempted, completed
+
+
+def execute_exceptional_campaign_api(args: argparse.Namespace) -> None:
+    _exceptional_bindings(args, "execute")
+    intent, authorization = _exceptional_authorities(args)
+    _exceptional_preservation(args.preservation_receipt, args.preservation_receipt_sha256)
+    installation = _exceptional_installation_report(
+        args.observer_installation_report, args.observer_installation_report_sha256)
+    _exceptional_attestation(args.custody_attestation, args.custody_attestation_sha256, "execute")
+    deployment_fd = _exceptional_lock(args.deployment_lock)
+    generation_fd = _exceptional_lock(args.generation_lock)
+    attempted = completed = 0
+    try:
+        existing = args.receipt_root.exists() or args.receipt_root.is_symlink()
+        _exceptional_receipt_root(args.receipt_root, allow_existing=existing)
+        journal = args.receipt_root / "command-results.private.jsonl"
+        completed_ordinals: set[int] = set()
+        pending_ordinals: set[int] = set()
+        if existing:
+            if (args.receipt_root / "execution-receipt.private.json").exists():
+                deny("exceptional_authorization_already_consumed")
+            completed_ordinals, pending_ordinals = _exceptional_journal_state(journal)
+        expected_present = {path for index, path in enumerate(EXCEPTIONAL_CAMPAIGN_API_PATHS, 1)
+                            if index not in completed_ordinals | pending_ordinals}
+        before = _exceptional_snapshot(args, expected_present)
+        observation = _exceptional_observe(
+            args, "execute", args.process_observation_output, installation["helper"])
+        if not _exceptional_same_operational(
+                _exceptional_snapshot(args, expected_present), before):
+            deny("exceptional_operational_drift")
+        if not existing:
+            args.receipt_root.mkdir(mode=0o700, parents=False)
+            fsync_dir(args.receipt_root.parent)
+            write_exclusive(journal, b"")
+        attempted, completed = _exceptional_execute_commands(intent, journal, resume=existing)
+        _exceptional_roots(set())
+        _exceptional_mounts(set())
+        final_runtime = _exceptional_runtime(args.pm2, args.pm2_dump)
+        _exceptional_graph(args.release_graph, args.release_graph_sha256)
+        filesystem = os.statvfs("/opt/re7online")
+        after = {"freeBytes": filesystem.f_bavail * filesystem.f_frsize,
+                 "freeInodes": filesystem.f_favail}
+        receipt = {"schemaVersion": 1, "kind": "EXCEPTIONAL_OWNER_AUTHORIZED_RETIREMENT_RECEIPT",
+                   "batchId": EXCEPTIONAL_CAMPAIGN_API_BATCH_ID, "state": "SANITIZED",
+                   "intentSha256": args.intent_sha256,
+                   "authorizationSha256": args.authorization_sha256,
+                   "preservationReceiptSha256": EXCEPTIONAL_CAMPAIGN_API_PRESERVATION_SHA256,
+                   "processObservation": observation, "attemptedCommands": attempted,
+                   "completedCommands": completed, "removedPaths": list(EXCEPTIONAL_CAMPAIGN_API_PATHS),
+                   "journalSha256": digest_bytes(journal.read_bytes()),
+                   "filesystemBefore": {"freeBytes": before["freeBytes"],
+                                        "freeInodes": before["freeInodes"]},
+                   "filesystemAfter": after,
+                   "filesystemDelta": {"freeBytes": after["freeBytes"] - before["freeBytes"],
+                                       "freeInodes": after["freeInodes"] - before["freeInodes"]},
+                   "runtime": final_runtime, "canonicalQualificationClaimed": False,
+                   "automaticRetry": False,
+                   "locks": {"deploymentHeldThroughReceiptFsync": True,
+                             "generationHeldThroughReceiptFsync": True}}
+        receipt_raw = canonical(receipt)
+        write_exclusive(args.receipt_root / "execution-receipt.private.json", receipt_raw)
+        print(canonical({"result": "EXCEPTIONAL_OWNER_AUTHORIZED_SANITIZED",
+                         "receiptSha256": digest_bytes(receipt_raw), **receipt["filesystemDelta"],
+                         "attemptedCommands": attempted, "completedCommands": completed}).decode().strip())
+    except BaseException as error:
+        if args.receipt_root.is_dir() and not (args.receipt_root / "execution-receipt.private.json").exists():
+            failure = {"schemaVersion": 1,
+                       "kind": "EXCEPTIONAL_OWNER_AUTHORIZED_RETIREMENT_RECEIPT",
+                       "batchId": EXCEPTIONAL_CAMPAIGN_API_BATCH_ID, "state": "QUARANTINED",
+                       "failurePredicate": str(error), "intentSha256": args.intent_sha256,
+                       "authorizationSha256": args.authorization_sha256,
+                       "attemptedCommands": attempted, "completedCommands": completed,
+                       "automaticRetry": False,
+                       "journalSha256": (digest_bytes((args.receipt_root /
+                           "command-results.private.jsonl").read_bytes()) if
+                           (args.receipt_root / "command-results.private.jsonl").exists() else
+                           digest_bytes(b""))}
+            failure_path = args.receipt_root / "execution-failure.private.json"
+            if not failure_path.exists() and not failure_path.is_symlink():
+                write_exclusive(failure_path, canonical(failure))
+        raise
+    finally:
+        os.close(generation_fd); os.close(deployment_fd)
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
@@ -5903,6 +6731,41 @@ def parser() -> argparse.ArgumentParser:
         preservation_record.add_argument(f"--{name}-sha256", required=True)
     preservation_record.add_argument("--receipt-root", type=Path, required=True)
     preservation_record.set_defaults(handler=record_builder_preservation)
+    exceptional_prepare = commands.add_parser("prepare-exceptional-owner-authorized-campaign-api")
+    exceptional_execute = commands.add_parser("execute-exceptional-owner-authorized-campaign-api")
+    nine_prepare = commands.add_parser(
+        "prepare-exceptional-owner-authorized-nine-private-releases")
+    nine_execute = commands.add_parser(
+        "execute-exceptional-owner-authorized-nine-private-releases")
+    for operation in (exceptional_prepare, exceptional_execute, nine_prepare, nine_execute):
+        for name in ("preservation-receipt", "custody-attestation",
+                     "observer-installation-report"):
+            operation.add_argument(f"--{name}", type=Path, required=True)
+            operation.add_argument(f"--{name}-sha256", required=True)
+        operation.add_argument("--process-observer", type=Path, required=True)
+        operation.add_argument("--process-observer-sha256", required=True)
+        operation.add_argument("--process-observation-output", type=Path, required=True)
+        operation.add_argument("--release-graph", type=Path, required=True)
+        operation.add_argument("--release-graph-sha256", required=True)
+        operation.add_argument("--pm2", type=Path, required=True)
+        operation.add_argument("--pm2-dump", type=Path, required=True)
+        operation.add_argument("--deployment-lock", type=Path, required=True)
+        operation.add_argument("--generation-lock", type=Path, required=True)
+    exceptional_prepare.add_argument("--intent-output", type=Path, required=True)
+    exceptional_prepare.add_argument("--commands-output", type=Path, required=True)
+    exceptional_prepare.add_argument("--receipt-root", type=Path, required=True)
+    exceptional_prepare.set_defaults(handler=prepare_exceptional_campaign_api)
+    nine_prepare.add_argument("--intent-output", type=Path, required=True)
+    nine_prepare.add_argument("--commands-output", type=Path, required=True)
+    nine_prepare.add_argument("--receipt-root", type=Path, required=True)
+    nine_prepare.set_defaults(handler=prepare_exceptional_nine)
+    for execute_operation in (exceptional_execute, nine_execute):
+        for name in ("intent", "authorization"):
+            execute_operation.add_argument(f"--{name}", type=Path, required=True)
+            execute_operation.add_argument(f"--{name}-sha256", required=True)
+        execute_operation.add_argument("--receipt-root", type=Path, required=True)
+    exceptional_execute.set_defaults(handler=execute_exceptional_campaign_api)
+    nine_execute.set_defaults(handler=execute_exceptional_nine)
     return root
 
 

@@ -140,6 +140,220 @@ independente e não reabre o lote 5/5.
 
 ## 2-C. Descoberta dirigida posterior aos lotes 5/5 e 10/10 — 14/11/2026
 
+### Corte econômico posterior — lotes mínimos de 5 GB
+
+O candidato `worker-package-audit` foi suspenso por decisão do owner: seus
+365.674.496 B não justificam a sucessão administrativa preparada. O PR #396 foi
+encerrado sem merge, preservando HEAD `fdc69b64…`, árvore `7b69126d…`, CI
+`43618491422` 4/4 e `HELPER_PROOF_IDENTITY` como histórico. Não repetir audit v5,
+instalação, `prepare` ou retirada.
+
+Como a fotografia de 13/11 não identificava lote elegível acima do novo piso, foi
+executada uma única recaptura pelo coletor estrutural comprovado, limitada a
+metadados e ocupação, sob `timeout 310`, `ionice -c3` e `nice -n10`. A captura
+durou 47,3 s, tem SHA-256 `cc8fa5959f8097a237ea1b7ffa7c194995220e7332a068ae62fbcff97f772024`
+e não fez hashing de conteúdo. O saldo observado foi 22.894.850.048 B e
+9.290.193 inodes disponíveis.
+
+| Lote/grupo | Caminhos | Bytes físicos | Classe/evidência | Equivalência com sucessos | Custódia | Custo/risco | Decisão |
+| --- | --- | ---: | --- | --- | --- | --- | --- |
+| Releases históricas não qualificadas | 28 filhos literais remanescentes de `/opt/re7online/releases`; maior subconjunto são os três workers já preservados | **2.510.159.872** | `HISTORICAL_UNQUALIFIED`; inventário estrutural + custódia worker 3/3 | procedimento excepcional seria conhecido, mas o conjunto inteiro não alcança o piso | parcial; workers 3/3 preservados | abaixo de 5 GB e referências/contratos distintos | **não selecionar** |
+| Releases produtivas e retornos | seis releases `ACTIVE`, `ROLLBACK_REQUIRED` ou `TRANSITIVE_RETURN` | **6.325.665.792** | grafo atual e seleção produtiva | nenhuma: exclusão viola produção/rollback | não aplicável | risco produtivo inaceitável | **PRESERVE** |
+| Releases com conteúdo privado | nove releases imutáveis classificadas `PRIVATE_DATA_DEPENDENCY` | **8.897.130.496**; `.data` físico: **1.167.360**; restante derivado potencial: **8.895.963.136** | `.data` físico interno e runtime instalado | difere dos sucessos: `.data` não é symlink externo e entraria no efeito sobre o pai | nenhuma custódia integral/restauração das nove está vinculada | risco de retirar sessões/credenciais/arquivos tenant; diretório inteiro não é vital, mas o efeito atual é indivisível | **PENDENTE POR PROVA ESPECÍFICA** |
+| Outputs + fontes | `/opt/re7online/build-output` (**3.548.393.472**) e `/opt/re7online/release-sources` (**2.009.833.472**) | **5.558.226.944** | outputs guardam pacote/manifest/índice/lifecycle; fontes `freeform-window-af26*` são autoridades históricas únicas | não é lote homogêneo; `build-output` isolado fica abaixo do piso e fontes não equivalem a resíduos | autoridades ficam nesses próprios caminhos | remover fontes perderia prova; separar payload de controle exigiria qualificação própria | **PENDENTE POR PROVA ESPECÍFICA / fontes VITAIS** |
+| Preparações persistentes | `/opt/re7online/backups/converta-persistent/preparations` | **13.658.386.432** na medição da raiz | receipts, journals, requests, manifests, provas e payloads históricos coexistem | difere dos sucessos: 176 preparações e várias classes, sem efeito/runtime fechado comum | custódias externas existem somente para lotes terminais específicos | raiz inteira não é vital, mas inexiste partição autenticada entre evidência única e cópia dispensável | **PENDENTE POR PROVA ESPECÍFICA** |
+
+Resultado: **zero lotes elegíveis de pelo menos 5.000.000.000 B** e potencial
+físico qualificado igual a **0 B**. Não existe “melhor lote” executável. A menor
+próxima ação é nenhuma: encerrar a descoberta e só reabrir se um inventário
+futuro, produzido por necessidade operacional independente, revelar um lote
+homogêneo acima do piso. Não criar coleta, PR ou adaptação para fabricar esse
+resultado.
+
+### Reavaliação objetiva das retenções
+
+| Conjunto | VITAL COMPROVADO | RESÍDUO COMPROVADO | PENDENTE POR PROVA ESPECÍFICA |
+| --- | --- | --- | --- |
+| Nove releases privadas | 1.167.360 B de `.data` físico, potencialmente contendo sessões, credenciais e persistência tenant | 8.895.963.136 B são runtime derivado potencial, mas não efeito isolado autenticado | provar inatividade ou preservar/restaurar cada `.data` com disponibilidade adequada; o efeito excepcional atual remove o pai inteiro |
+| Preparações | receipts, journals, manifests, índices, requests e provas necessários a recuperação e não repetição | payloads duplicados podem existir, mas nenhum subconjunto de 5 GB está autenticado como dispensável | relação literal por preparação, blocos sem dupla contagem e autoridade externa dos payloads |
+| `build-output` | pacotes, manifests, índices e lifecycle preservados por contrato | runtimes derivados anteriores já foram retirados ou estão ausentes; não há 5 GB de runtime descartável comprovado | duplicação externa dos payloads remanescentes; não usar `release-sources` para completar artificialmente o piso |
+| `release-sources` | `freeform-window-af26` e `freeform-window-af26-cumulative-20261002`, autoridades históricas únicas | nenhum resíduo comprovado | somente autoridade sucessora poderia permitir reclassificação; não é necessária à operação atual |
+| Releases históricas não qualificadas | três workers têm custódia 3/3; `afbb` ainda é citado por `PWD` herdado | nenhum conjunto de 5 GB; soma total 2.510.159.872 B | referências/contratos individuais e piso econômico; não agrupar com classes diferentes |
+
+Não existe lote de pelo menos 5 GB classificado integralmente como `RESÍDUO
+COMPROVADO`. O maior potencial técnico é o restante derivado das nove releases
+(8.895.963.136 B), mas `.data` interno é diferença operacional relevante e impede
+aplicar diretamente o precedente dos lotes com `.data` externo. Pela regra do
+owner, registrar a incompatibilidade e seguir; os demais conjuntos também não
+produzem lote direto. Nenhuma implementação ou cópia foi iniciada.
+
+### Saneamento estrutural dirigido e política local definitiva — 14/11/2026
+
+Uma leitura dirigida, sem conteúdo de tenants e sem hashing integral, reabriu
+somente os bindings voláteis das nove releases privadas. A evidência tem SHA-256
+`d164399b2ac6d51a3d44e2950d4452856391ac72117f18adbf5e0eb1c61e3354`.
+Nenhum dos nove caminhos aparece em `current`, PM2 vivo ou dump salvo; também não
+há mount interno. As ocorrências no grafo estão exclusivamente no catálogo
+`installedVerifiedReleases`, e não em papéis de seleção ou retorno. A varredura
+dirigida de 27 processos do usuário `deploy` encontrou zero referências, mas
+registrou 52 falhas transitórias de leitura em `/proc`; portanto ela sustenta o
+planejamento, não substitui a observação privilegiada completa exigida antes de
+qualquer efeito.
+
+Os nove `api-runtime/.data` são diretórios físicos internos, não symlinks. Eles
+somam **1.167.360 B físicos, 836.313 B lógicos e 158 entradas**, sem falha de
+leitura na agregação. Seu conteúdo não foi exibido. A ausência em PM2/current não
+prova dispensabilidade de sessões, credenciais ou persistência; por isso esses
+bytes continuam `VITAL_UNTIL_MIGRATED_OR_INDEPENDENTLY_RECOVERABLE`. O restante
+**8.895.963.136 B** é runtime derivado potencial, mas só se torna
+`RESÍDUO_COMPROVADO` depois de cada `.data` estar fora da raiz candidata, com
+identidade, integridade, disponibilidade e restauração autenticadas, e depois de
+uma observação privilegiada completa negar referências e writers.
+
+| CONJUNTO | BYTES FÍSICOS | NECESSIDADE REAL NA VPS | CONTEÚDO VITAL | CUSTÓDIA DISPONÍVEL | DESTINAÇÃO | POTENCIAL RECUPERÁVEL | BLOQUEIO |
+| --- | ---: | --- | --- | --- | --- | ---: | --- |
+| nove releases privadas | 8.897.130.496 | nenhuma seleção/PM2/retorno; catálogo apenas registra instalação verificada | `.data` interno: 1.167.360 B | nenhuma custódia integral/restauração vinculada | mover cada `.data` para raiz persistente dedicada ou custódia operacional restaurável; preservar release integral; depois aposentar pais literais | 8.895.963.136 B mantendo `.data` local fora dos pais; até 8.897.130.496 B somente se disponibilidade externa substituir legitimamente a local | migração/custódia ainda não executada; `/proc` privilegiado pendente |
+| preparações persistentes | 13.658.386.432 | controles terminais pequenos precisam permanecer consultáveis; payloads não precisam necessariamente permanecer locais | receipts, journals, requests, manifests, índices e única prova de recuperação | externa apenas para lotes terminais específicos | por transação: preservar o conjunto de controle local e externalizar payload/archive depois de readback; nunca retirar a raiz agregada | **não quantificado** sem partição literal já autenticada | 176 escopos/classes misturados; não há subconjunto físico ≥5 GB provado como resíduo |
+| `build-output` | 3.548.393.472 | não participa do runtime ativo; serve como autoridade de pacote/exportação | pacote, manifesto, índice, lifecycle e evidências ainda sem sucessor | parcial, por geração | após aceite e custódia externa: payload sai; localmente permanecem hashes/receipts mínimos | abaixo do piso econômico isoladamente; **não qualificado** | ausência de mapa geração→custódia para todo o estoque |
+| `release-sources` | 2.009.833.472 | não serve tráfego, mas sustenta prova e recuperação histórica AF26 | duas fontes históricas únicas | não demonstrada | permanecer local até existir sucessora externa autenticada e restaurável; não somar a outputs para fabricar lote | 0 B hoje | única autoridade conhecida |
+
+**Decisão executável:** o único lote material prioritário é o das nove releases,
+mas sua primeira operação não é retirada: é um contrato de migração/preservação
+dos nove `.data` literais, sem leitura de conteúdo além do necessário, seguido de
+archive integral, readback e restauração. A retirada só pode ser preparada numa
+fronteira posterior, com intenção literal e autorização própria. Preparações,
+outputs e fontes não formam lote de exclusão; nenhum total bruto autoriza
+`rm`, glob ou descarte agregado.
+
+#### Política permanente de armazenamento
+
+1. **Releases locais:** por componente, manter a release ativa e **um** retorno
+   imediato autenticado. Retorno transitivo adicional só permanece com binding
+   explícito, `retainUntil` e owner; sem esses campos, a instalação seguinte
+   deve negar, não apagar automaticamente.
+2. **Persistência tenant:** nenhuma release imutável nova pode conter `.data`,
+   upload, sessão, mídia, credencial ou volume gravável dentro de sua raiz. O
+   instalador deve exigir raiz persistente externa e vínculo autenticado. A
+   existência de persistência interna é negativa de admissão, nunca convite a
+   excluí-la.
+3. **Orçamento por geração:** contrato antes da alocação deve fixar bytes e
+   inodes máximos para worktree, cache, build, pacote, staging, release,
+   evidências e reserva. O teto duro é `capacityReservationBytes/Inodes`; excedê-lo
+   nega a fase. Após fechamento, o limite local é o conjunto de controle
+   enumerado no contrato; payloads terminais têm residual local alvo **zero**
+   depois de custódia/readback ou disposição autorizada.
+4. **Preparações e evidências:** journal, receipt, índice, hashes e autoridades
+   mínimas permanecem consultáveis. Archives, cópias, staging e pacotes terminais
+   vão para custódia externa autenticada quando ainda necessários; caso contrário
+   recebem disposição literal. `EVIDENCE_REQUIRED` não preserva automaticamente
+   toda a árvore pai.
+5. **Fechamento automático permitido:** somente classificação, medição,
+   publicação durável de receipts e solicitação única de aprovação. Exclusão
+   produtiva continua exigindo intenção literal, gates de produção/tenants,
+   locks, observação completa e autorização aplicável.
+6. **Interrupção e contabilidade:** toda disposição usa journal
+   `ATTEMPT → RESULT → VERIFIED`, reconcilia efeitos já concluídos e registra
+   bytes/inodes antes, pico, depois e residual. Nenhum efeito é repetido por
+   ausência de resposta.
+
+Essa política evita recriar a dívida: build descartável termina sem raiz;
+instalação não incorpora persistência; e cada geração já nasce com destino
+terminal e orçamento verificáveis. Ela não autoriza migração ou retirada nesta
+frente.
+
+### Reaproveitamento local das nove releases privadas — 14/11/2026
+
+A reconciliação seguinte reutilizou a evidência `d164399b2a…3354`, os registros
+de deploy, as custódias existentes no ThinkPad e somente metadados dirigidos das
+autoridades que permanecem na VPS. O relatório complementar tem SHA-256
+`d80144956c52f425d589b2bb195d867a044f2eed4e622e4e69e601c4054343d1`.
+Não houve hashing integral, leitura de conteúdo privado, transferência, build ou
+efeito produtivo.
+
+Os nove pacotes originais continuam presentes: sete em seus `build-output`
+canônicos, um no output `a62da468` e um como `.incoming-5c339b2e.tar.xz`. Os
+bindings imutáveis de pacote/índice coincidem com os registros versionados. O
+total lógico dos pacotes é **1.351.254.084 B** (**1.351.290.880 B físicos**).
+Nenhuma das custódias autenticadas já existentes no ThinkPad cobre integralmente
+essas nove identidades; a custódia `a62da468` contém evidências de preparações
+falhas, não a release instalada nem seu pacote autenticado. Logo, hash documentado
+não deve ser confundido com bytes restauráveis locais.
+
+Os `.data` não mostraram escrita depois de **07/11/2026 09:59:06 -03:00**; o
+`.data` da API ativa mostrou escrita em **13/11/2026 17:09:08 -03:00**. Combinado
+com zero vínculo em `current`, PM2 vivo/salvo e papéis operacionais do grafo, isso
+classifica os nove como `HISTORICAL_PRIVATE_DATA` para preservação — não como
+conteúdo descartável. A observação de processos anterior teve cobertura
+incompleta, portanto o perfil privilegiado ainda é gate obrigatório antes de um
+futuro `prepare/execute`.
+
+| CAMINHO | BYTES FÍSICOS | `.DATA` | REFERÊNCIAS PRODUTIVAS | CUSTÓDIA LOCAL | COMPLEMENTO BRUTO MÍNIMO | RESTAURAÇÃO | DECISÃO |
+| --- | ---: | ---: | --- | --- | ---: | --- | --- |
+| `immutable-17cc77a8-vps-20261104T141039Z` | 989.769.728 | 602.112 | nenhuma; catálogo apenas | não | 148.732.320 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-785bde80-vps-20261103T103429Z` | 989.036.544 | 90.112 | nenhuma; catálogo apenas | não | 148.216.180 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-911a9708-vps-20261102T221325Z` | 988.966.912 | 81.920 | nenhuma; catálogo apenas | não | 148.211.996 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-0fdec8b0-vps-20261028T224726Z` | 988.868.608 | 110.592 | nenhuma; catálogo apenas | não | 148.220.020 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-fa63994a-vps-20261030T153352Z` | 988.852.224 | 45.056 | nenhuma; catálogo apenas | não | 148.144.564 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-754281d3-vps-20261029T174145Z` | 988.798.976 | 32.768 | nenhuma; catálogo apenas | não | 148.180.076 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-708f018c-vps-20261027T152109Z` | 988.770.304 | 110.592 | nenhuma; catálogo apenas | não | 148.186.660 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-a62da468-vps-20261024T124726Z` | 988.495.872 | 12.288 | nenhuma; catálogo apenas | não | 148.004.244 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-5c339b2e-20261022T125717Z` | 985.571.328 | 81.920 | nenhuma; catálogo apenas | não | 166.525.384 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+
+Resultado: **0/9** integralmente restauráveis do ThinkPad agora; **9/9** com
+persistência histórica sem dependência operacional encontrada; **9/9** exigem
+preservação adicional. O payload bruto mínimo calculado é
+**1.352.421.444 B** (pacotes + `.data`), acrescido somente dos pequenos controles
+e do overhead do archive a serem selados. Depois de archive, readback e
+restauração 9/9, o potencial habilitável é **8.897.130.496 B**. Antes disso, o
+potencial destrutivo autorizado permanece **0 B**.
+
+A menor próxima operação é uma custódia única e fechada: reutilizar os nove
+pacotes autenticados na VPS, transferir cada pacote uma vez e anexar somente os
+nove `.data` como suplementos privados, sem copiar os runtimes expandidos. O
+receipt deve vincular package/manifests/índices, identidades dos `.data`, archive,
+readback e restauração isolada por release. Só então cabem observação privilegiada
+fresca, intenção literal e autorização destrutiva separada. Não há impedimento que
+justifique novo executor ou migração de produção; falta apenas executar e provar
+essa custódia já compatível com o precedente excepcional.
+
+#### Custódia e restauração integral 9/9 — concluída em 14/11/2026
+
+A operação posterior executou exatamente a custódia fechada acima, sem copiar os
+runtimes expandidos e sem efeito destrutivo. O lote
+`p00-nine-private-releases-exceptional-20261114-v1` terminou em
+`PRESERVATION_VERIFIED / RESTORE_9_OF_9_PASS`:
+
+- inventário de origem: `d164399b2a…3354`;
+- manifesto privado dirigido dos 158 itens `.data`: `8c22c6d19a…17f4`;
+- receipt de transferência: `0eae77e095…eaa9`;
+- receipt de preservação: `46d3049a71…ad87`;
+- índice privado da custódia: `48eb52f473…1699`;
+- fotografia sanitizada pós-operação: `273911dd35…a5e8`.
+
+Os nove pacotes úteis somam **1.351.376.292 B** lógicos e **1.351.413.760 B**
+físicos na VPS. Os nove complementos `.data`,
+preservados separadamente e sem seguir symlinks, somam **747.520 B** como
+archives; o transporte útil sem duplicação foi **1.352.123.812 B**. A diferença
+contra a estimativa anterior decorre do pacote autoritativo `a62da468`: o caminho
+pré-correção continha `05f1452f…e252`, enquanto o deployment record vincula o
+repack `fdac4ef8…66e4` em `…-repacked-uploads-fix`. O parcial divergente não foi
+publicado e foi descartado; as sete publicações anteriores foram reaproveitadas.
+
+Cada restore validou cobertura exaustiva, hashes, tipos, modos e destinos de
+symlink. O pacote legado `5c339b2e` usa os nomes históricos
+`release-manifest.json`/`release-index.json`; seus hashes coincidem com as
+autoridades registradas, sem flexibilização do verificador. A alocação física
+reconstruída foi **8.899.563.520 B**, diferença de blocos do filesystem local em
+relação aos **8.897.130.496 B** medidos na VPS, sem diferença material de folhas.
+Os nove candidatos permaneceram presentes, a produção e os tenants não foram
+alterados e a quantidade de comandos destrutivos foi zero.
+
+Estado sucessor: **9/9 restauráveis**, potencial físico preparado
+**8.897.130.496 B**, retirada autorizada **0 B**. A próxima operação mínima é
+instalar/reutilizar perfil privilegiado fechado para as nove identidades,
+recapturar referências/writers sob locks e materializar a intenção 9/9. Nenhum
+`AUTHORIZE_ONCE` ou `execute` pertence a esta etapa.
+
 A descoberta reutilizou a fotografia estrutural
 `/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256
 `8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`,

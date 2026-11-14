@@ -1,5 +1,50 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Seleção econômica P00 — nenhum lote elegível acima de 5 GB
+
+O owner suspendeu `p00-worker-package-audit-afbb7455-v1` em
+`ECONOMICALLY_SUSPENDED_BELOW_5GB`. O PR #396 foi encerrado sem merge; seu HEAD
+`fdc69b64…`, CI 4/4, regressões e predicado `HELPER_PROOF_IDENTITY` permanecem
+evidência histórica, não autorização nem lifecycle consumível. Não repetir audit
+v5, instalação do helper, `prepare` ou retirada.
+
+A recaptura estrutural dirigida de 14/11, SHA-256 `cc8fa595…2024`, eliminou os
+19 caminhos terminais e encontrou zero lote remanescente elegível com pelo menos
+5.000.000.000 B físicos. Grupos brutos acima desse piso estão classificados como
+`ACTIVE`, `ROLLBACK_REQUIRED`, `TRANSITIVE_RETURN`,
+`PRIVATE_DATA_DEPENDENCY` ou `EVIDENCE_REQUIRED`; portanto não nascem como nova
+geração de retirement. A decisão terminal desta seleção é
+`NO_ELIGIBLE_ECONOMIC_BATCH / NO_FURTHER_DISCOVERY`. Nenhum receipt existente,
+custódia ou autorização foi modificado.
+
+A classificação não torna diretórios inteiros vitais por rótulo. Nas nove
+releases privadas, `.data` físico soma somente 1.167.360 B; o restante
+8.895.963.136 B é derivado potencial. O bloqueio concreto é topológico: `.data`
+fica dentro da raiz que o efeito excepcional removeria, enquanto os lotes
+anteriores preservaram destinos externos de symlinks. Sem custódia/restauração e
+prova de disponibilidade operacional dessas persistências, não há equivalência
+direta. Em `preparations`, receipts/journals convivem com payloads; em
+`build-output`, controles convivem com pacotes; e `release-sources` contém fonte
+única. Esses conjuntos são `PENDING_SPECIFIC_PROOF`, não autorização de retenção
+integral nem de retirada ampla.
+
+Uma leitura dirigida posterior, SHA-256 `d164399b2a…3354`, confirmou que as
+nove releases privadas não estão em `current`, PM2 vivo ou dump e aparecem no
+grafo apenas em `installedVerifiedReleases`. Seus `.data` são, porém, diretórios
+físicos internos: 1.167.360 B/158 entradas. A disposição do pai permanece negada
+até migração ou custódia operacional restaurável de cada persistência e
+observação privilegiada completa. O potencial derivado de 8.895.963.136 B não é
+recuperação autorizada.
+
+Para novas gerações, release local fica limitada à ativa e a um retorno imediato
+por componente; retorno transitivo exige binding, owner e `retainUntil`.
+Persistência tenant deve ficar em raiz externa autenticada: `.data` físico dentro
+de release imutável é negativa de admissão. O contrato de capacidade fixa teto de
+bytes/inodes por geração e residual terminal enumerado; depois do fechamento,
+payload local tem alvo zero, preservando somente controles mínimos ou custódia
+externa autenticada. Automatização pode classificar e solicitar aprovação, mas
+não excluir sem intenção literal e autorização.
+
 ## Fechamento excepcional da Campaign API histórica — terminal
 
 O lote `p00-campaign-api-exceptional-20261114-v1` terminou

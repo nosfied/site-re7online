@@ -68,6 +68,44 @@ CRM_INACTIVE_STAGING_PATHS = {
     "/opt/re7online/releases/crm-csv-front-ea3d2788-20261016",
     "/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016",
 }
+LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS = {
+    "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api",
+    "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front",
+    "/opt/re7online/releases/879cb1faa88493cd78dd789b71f85043d6c8ff9c-api",
+    "/opt/re7online/releases/b9b58177880e729854580def1180f3edb2fb83e8-api",
+    "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api",
+}
+P00_EXCEPTIONAL_TEN_PATHS = {
+    "/opt/re7online/releases/immutable-aa9527cc-vps-20261029T222733Z",
+    "/opt/re7online/releases/immutable-c085e53f-20261021T094952Z",
+    "/opt/re7online/releases/immutable-a62da468-20261024T112857Z",
+    "/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6",
+    "/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api",
+    "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
+    "/opt/re7online/releases/worker-minimal-hybrid-b9b58177-20261004",
+    "/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window",
+    "/opt/re7online/releases/3227b2d752110873f0eff4ee5253a6f06ca51549-front",
+    "/opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z",
+}
+P00_EXCEPTIONAL_THREE_FRONTEND_PATHS = {
+    "/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front",
+    "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front",
+    "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8",
+}
+P00_EXCEPTIONAL_CAMPAIGN_API_PATHS = {
+    "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008",
+}
+P00_EXCEPTIONAL_NINE_PRIVATE_PATHS = {
+    "/opt/re7online/releases/immutable-17cc77a8-vps-20261104T141039Z",
+    "/opt/re7online/releases/immutable-785bde80-vps-20261103T103429Z",
+    "/opt/re7online/releases/immutable-911a9708-vps-20261102T221325Z",
+    "/opt/re7online/releases/immutable-0fdec8b0-vps-20261028T224726Z",
+    "/opt/re7online/releases/immutable-fa63994a-vps-20261030T153352Z",
+    "/opt/re7online/releases/immutable-754281d3-vps-20261029T174145Z",
+    "/opt/re7online/releases/immutable-708f018c-vps-20261027T152109Z",
+    "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z",
+    "/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z",
+}
 PF_KTHREAD = 0x00200000
 
 
@@ -159,6 +197,11 @@ def canonical_candidate(value: Any) -> str:
         return candidate
     if candidate in CRM_INACTIVE_STAGING_PATHS:
         return candidate
+    if candidate in (LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS | P00_EXCEPTIONAL_TEN_PATHS |
+                     P00_EXCEPTIONAL_THREE_FRONTEND_PATHS |
+                     P00_EXCEPTIONAL_CAMPAIGN_API_PATHS |
+                     P00_EXCEPTIONAL_NINE_PRIVATE_PATHS):
+        return candidate
     path = Path(candidate)
     try:
         preparation_relative = path.relative_to(PREPARATIONS_ROOT)
@@ -241,6 +284,18 @@ def validate_request(raw: bytes) -> dict[str, Any]:
     normalized = [canonical_candidate(item) for item in candidates]
     if normalized != sorted(set(normalized)):
         refuse("REQUEST_CANDIDATES_ORDER")
+    frontend_scope = sorted(P00_EXCEPTIONAL_THREE_FRONTEND_PATHS)
+    if any(item in P00_EXCEPTIONAL_THREE_FRONTEND_PATHS for item in normalized):
+        if normalized != frontend_scope or value["phase"] not in {"prepare", "execute"}:
+            refuse("P00_THREE_FRONTEND_SCOPE")
+    campaign_scope = sorted(P00_EXCEPTIONAL_CAMPAIGN_API_PATHS)
+    if any(item in P00_EXCEPTIONAL_CAMPAIGN_API_PATHS for item in normalized):
+        if normalized != campaign_scope or value["phase"] not in {"prepare", "execute"}:
+            refuse("P00_CAMPAIGN_API_SCOPE")
+    nine_private_scope = sorted(P00_EXCEPTIONAL_NINE_PRIVATE_PATHS)
+    if any(item in P00_EXCEPTIONAL_NINE_PRIVATE_PATHS for item in normalized):
+        if normalized != nine_private_scope or value["phase"] not in {"prepare", "execute"}:
+            refuse("P00_NINE_PRIVATE_SCOPE")
     consumer = value.get("consumer")
     if (not isinstance(consumer, dict) or set(consumer) != {"pid", "startTicks"} or
             not isinstance(consumer.get("pid"), int) or consumer["pid"] <= 1 or
