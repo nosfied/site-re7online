@@ -1053,6 +1053,26 @@ Nenhum request, plano ou intenção novos foi produzido.
 
 #### Decisão contratual sucessora de `worker-package-audit` — 14/11/2026
 
+##### Suspensão econômica e corte de 5 GB — 14/11/2026
+
+O owner suspendeu esta frente em `ECONOMICALLY_SUSPENDED_BELOW_5GB`. O PR #396,
+HEAD `fdc69b64…`, árvore `7b69126d…`, CI `43618491422` 4/4, foi encerrado sem
+merge. O predicado `HELPER_PROOF_IDENTITY`, o audit v5 e as regressões da sucessão
+fechada permanecem como histórico reutilizável, mas não justificam instalação,
+novo audit, `prepare` ou retirada para 365.674.496 B. A manutenção PM2 do worker
+continua separada e sem mutação.
+
+A seleção econômica reaproveitou a fotografia `8962e14a…d92` e fez somente uma
+recaptura estrutural dirigida, SHA-256 `cc8fa595…2024`, duração 47,3 s, sem
+hashing. Depois de eliminar os 19 caminhos terminais, os históricos não
+qualificados remanescentes em `releases` somam 2.510.159.872 B. Os agregados
+brutos acima de 5 GB são produção/rollback (6.325.665.792 B), releases com
+dependência privada (8.897.130.496 B), preparações/evidências protegidas ou a
+combinação heterogênea `build-output` + `release-sources` (5.558.226.944 B).
+Nenhum é lote elegível equivalente aos sucessos anteriores. Resultado:
+`NO_ELIGIBLE_ECONOMIC_BATCH`, 0 B qualificados e descoberta encerrada sem criar
+nova frente.
+
 O audit v5 e seu plano terminal permanecem imutáveis e não serão repetidos sem
 delta material. A leitura dirigida já existente confirmou raiz, ancestrais e
 autoridade e enumerou 1.023 diretórios internos `deploy:deploy 0775`. O contrato

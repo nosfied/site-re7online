@@ -1828,8 +1828,8 @@
       "candidate": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
       "class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
       "documentedPhysicalBytes": 365674496,
-      "state": "CONTRACT_DELTA_REVIEWED_MERGE_READY",
-      "lastPredicate": "DISPOSITION_TREE_DIRECTORY_IDENTITY",
+      "state": "ECONOMICALLY_SUSPENDED_BELOW_5GB",
+      "lastPredicate": "HELPER_PROOF_IDENTITY",
       "directedReadOnlyCheck": {
         "candidateRootAndAncestorsMatchManifest": true,
         "authorityRootMatchesManifest": true,
@@ -1856,6 +1856,20 @@
         "reviewedTree": "954217f207196ce4a346f21bbd5e0abfd0326746",
         "reviewCiRun": 43614190415,
         "reviewCiJobsPassed": 4
+      },
+      "suspension": {
+        "ownerDecision": "SUSPEND_BELOW_ECONOMIC_FLOOR",
+        "minimumBatchPhysicalBytes": 5000000000,
+        "pullRequest": 396,
+        "pullRequestState": "CLOSED_WITHOUT_MERGE",
+        "head": "fdc69b64df985d0f5c6bf6e9f74bb3c5d29896c9",
+        "tree": "7b69126d19ff63499cbf052c24d227e0cfb7f092",
+        "ciRun": 43618491422,
+        "ciJobsPassed": 4,
+        "evidenceReusable": true,
+        "repeatAuditV5": false,
+        "installSuccessorHelper": false,
+        "preparePermitted": false
       },
       "destructiveAuthorizationGranted": false
     }
@@ -2086,8 +2100,54 @@
       "recoveredInodes": 9839
     }
   },
+  "p00EconomicCapacitySelection20261114": {
+    "state": "NO_ELIGIBLE_ECONOMIC_BATCH",
+    "minimumBatchPhysicalBytes": 5000000000,
+    "eligibleBatchCount": 0,
+    "qualifiedPhysicalBytes": 0,
+    "priorInventorySha256": "8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92",
+    "directedRecapture": {
+      "sha256": "cc8fa5959f8097a237ea1b7ffa7c194995220e7332a068ae62fbcff97f772024",
+      "elapsedSeconds": 47.3,
+      "contentHashingPerformed": false,
+      "tenantFileContentReadPerformed": false,
+      "availableBytes": 22894850048,
+      "availableInodes": 9290193
+    },
+    "rankedGroups": [
+      {
+        "name": "HISTORICAL_UNQUALIFIED_RELEASES",
+        "physicalBytes": 2510159872,
+        "decision": "BELOW_ECONOMIC_FLOOR"
+      },
+      {
+        "name": "ACTIVE_ROLLBACK_AND_TRANSITIVE_RETURN_RELEASES",
+        "physicalBytes": 6325665792,
+        "decision": "PRESERVE_PRODUCTION_AND_RECOVERY"
+      },
+      {
+        "name": "PRIVATE_DATA_DEPENDENCY_RELEASES",
+        "physicalBytes": 8897130496,
+        "decision": "PRESERVE_PRIVATE_AND_TENANT_DEPENDENCIES"
+      },
+      {
+        "name": "BUILD_OUTPUT_PLUS_RELEASE_SOURCES",
+        "physicalBytes": 5558226944,
+        "decision": "PRESERVE_HETEROGENEOUS_AUTHORITIES_NOT_A_BATCH"
+      },
+      {
+        "name": "PERSISTENT_PREPARATIONS_ROOT",
+        "physicalBytes": 13658386432,
+        "decision": "PRESERVE_EVIDENCE_AND_RECEIPTS"
+      }
+    ],
+    "terminalSanitizedPathCountExcluded": 19,
+    "productionMutationPerformed": false,
+    "destructiveCommandsExecuted": 0,
+    "nextAction": "NONE_UNTIL_INDEPENDENT_INVENTORY_REVEALS_HOMOGENEOUS_BATCH_ABOVE_FLOOR"
+  },
   "updatedAtDate": "2026-11-14",
-  "updatedAtUtcScope": "P00_CAMPAIGN_API_TERMINAL_SANITIZED_WORKERS_PM2_PENDING",
+  "updatedAtUtcScope": "P00_NO_ELIGIBLE_ECONOMIC_BATCH_WORKERS_PM2_PENDING",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",

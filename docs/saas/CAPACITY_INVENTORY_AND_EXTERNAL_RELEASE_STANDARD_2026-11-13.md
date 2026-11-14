@@ -140,6 +140,36 @@ independente e não reabre o lote 5/5.
 
 ## 2-C. Descoberta dirigida posterior aos lotes 5/5 e 10/10 — 14/11/2026
 
+### Corte econômico posterior — lotes mínimos de 5 GB
+
+O candidato `worker-package-audit` foi suspenso por decisão do owner: seus
+365.674.496 B não justificam a sucessão administrativa preparada. O PR #396 foi
+encerrado sem merge, preservando HEAD `fdc69b64…`, árvore `7b69126d…`, CI
+`43618491422` 4/4 e `HELPER_PROOF_IDENTITY` como histórico. Não repetir audit v5,
+instalação, `prepare` ou retirada.
+
+Como a fotografia de 13/11 não identificava lote elegível acima do novo piso, foi
+executada uma única recaptura pelo coletor estrutural comprovado, limitada a
+metadados e ocupação, sob `timeout 310`, `ionice -c3` e `nice -n10`. A captura
+durou 47,3 s, tem SHA-256 `cc8fa5959f8097a237ea1b7ffa7c194995220e7332a068ae62fbcff97f772024`
+e não fez hashing de conteúdo. O saldo observado foi 22.894.850.048 B e
+9.290.193 inodes disponíveis.
+
+| Lote/grupo | Caminhos | Bytes físicos | Classe/evidência | Equivalência com sucessos | Custódia | Custo/risco | Decisão |
+| --- | --- | ---: | --- | --- | --- | --- | --- |
+| Releases históricas não qualificadas | 28 filhos literais remanescentes de `/opt/re7online/releases`; maior subconjunto são os três workers já preservados | **2.510.159.872** | `HISTORICAL_UNQUALIFIED`; inventário estrutural + custódia worker 3/3 | procedimento excepcional seria conhecido, mas o conjunto inteiro não alcança o piso | parcial; workers 3/3 preservados | abaixo de 5 GB e referências/contratos distintos | **não selecionar** |
+| Releases produtivas e retornos | seis releases `ACTIVE`, `ROLLBACK_REQUIRED` ou `TRANSITIVE_RETURN` | **6.325.665.792** | grafo atual e seleção produtiva | nenhuma: exclusão viola produção/rollback | não aplicável | risco produtivo inaceitável | **PRESERVE** |
+| Releases com conteúdo privado | nove releases imutáveis classificadas `PRIVATE_DATA_DEPENDENCY` | **8.897.130.496** | `.data`/configuração privada medida e autoridades de retorno | não equivalem aos lotes sanitizados enquanto a dependência existe | não substitui persistência viva | dados únicos/tenant e recuperação | **PRESERVE** |
+| Outputs + fontes | `/opt/re7online/build-output` e `/opt/re7online/release-sources` | **5.558.226.944** | pacotes, manifests, índices, lifecycles e fontes históricas | não é lote homogêneo; classes e efeitos diferentes | autoridades ficam nesses próprios caminhos | exigiria nova classificação/adaptador, vedados pela regra econômica | **PRESERVE / NOT A BATCH** |
+| Preparações persistentes | `/opt/re7online/backups/converta-persistent/preparations` | **13.658.386.432** na medição da raiz | receipts, journals, provas, manifests e preparações históricas | não corresponde a runtime legado fechado | contém custódias/autoridades essenciais | varredura ou retirada ampla arriscaria evidência única | **EVIDENCE_REQUIRED / PRESERVE** |
+
+Resultado: **zero lotes elegíveis de pelo menos 5.000.000.000 B** e potencial
+físico qualificado igual a **0 B**. Não existe “melhor lote” executável. A menor
+próxima ação é nenhuma: encerrar a descoberta e só reabrir se um inventário
+futuro, produzido por necessidade operacional independente, revelar um lote
+homogêneo acima do piso. Não criar coleta, PR ou adaptação para fabricar esse
+resultado.
+
 A descoberta reutilizou a fotografia estrutural
 `/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256
 `8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`,

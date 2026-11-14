@@ -1,5 +1,22 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Seleção econômica P00 — nenhum lote elegível acima de 5 GB
+
+O owner suspendeu `p00-worker-package-audit-afbb7455-v1` em
+`ECONOMICALLY_SUSPENDED_BELOW_5GB`. O PR #396 foi encerrado sem merge; seu HEAD
+`fdc69b64…`, CI 4/4, regressões e predicado `HELPER_PROOF_IDENTITY` permanecem
+evidência histórica, não autorização nem lifecycle consumível. Não repetir audit
+v5, instalação do helper, `prepare` ou retirada.
+
+A recaptura estrutural dirigida de 14/11, SHA-256 `cc8fa595…2024`, eliminou os
+19 caminhos terminais e encontrou zero lote remanescente elegível com pelo menos
+5.000.000.000 B físicos. Grupos brutos acima desse piso estão classificados como
+`ACTIVE`, `ROLLBACK_REQUIRED`, `TRANSITIVE_RETURN`,
+`PRIVATE_DATA_DEPENDENCY` ou `EVIDENCE_REQUIRED`; portanto não nascem como nova
+geração de retirement. A decisão terminal desta seleção é
+`NO_ELIGIBLE_ECONOMIC_BATCH / NO_FURTHER_DISCOVERY`. Nenhum receipt existente,
+custódia ou autorização foi modificado.
+
 ## Fechamento excepcional da Campaign API histórica — terminal
 
 O lote `p00-campaign-api-exceptional-20261114-v1` terminou
