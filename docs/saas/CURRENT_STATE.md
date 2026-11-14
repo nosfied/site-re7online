@@ -8,6 +8,19 @@ Journal terminal da implantação SHA-256 `45579306a46dbd79a963b9176531673124147
 
 Builder descartável desta release terminou `SANITIZED/CLOSURE_RECORDED`: receipt `4b4f1a295e5c24acad2d03a8b816925ec46efb790db6ceddbece1c898f93ca7d`; lifecycle `b28caeaf78e0ce006736f8721a8a6ed2a855de8330f7b0934d5654c0b77d69e0`; raiz ausente, worktree ausente no Git; ganho físico atribuído `2.508.197.888 B` e 75.640 inodes com a raiz. **Não repetir deploy, save, marker ou retirada desse builder.** Permanece separada a geração falha `211724Z`, ~78.295.040 B, e as retenções históricas a838 v1/v2 protegidas; não declarar recuperação nem autorização para elas.
 
+O lote excepcional fechado dos cinco runtimes pré-contrato terminou em
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`: receipt
+`3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`,
+journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`,
+5/5 comandos concluídos e ausência física verificada. O saldo passou de
+`7.087.513.600 B` e `8.743.902` inodes livres para `12.142.841.856 B` e
+`8.924.606`; recuperação medida de **5.055.328.256 B e 180.704 inodes**.
+Produção, retornos, worker e `.data` externo foram preservados. A custódia
+integral no ThinkPad, archive `e806a178…a739`, índice `43e84827…cd5` e receipt
+de preservação `f9151e22…31c2` permanecem evidência recuperável e não entram em
+limpeza. A autorização foi específica para os cinco caminhos e não constitui
+política genérica para releases legadas.
+
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
 ---

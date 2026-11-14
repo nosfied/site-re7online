@@ -1591,3 +1591,26 @@ negativas por modo/caminho/hash/chave e segregação dos demais controles.
 O audit produtivo que negou é terminal e não deve ser repetido; a futura qualificação
 deve usar nova custódia e preservar as autoridades e provas imutáveis existentes.
 **Nenhum prepare, autorização ou efeito de retirada está implícito.**
+
+#### Fechamento excepcional terminal dos cinco runtimes — 14/11/2026
+
+As negativas de qualificação histórica acima foram superadas, para este lote e
+somente ele, por preservação integral autenticada fora da VPS, restauração isolada
+e autorização excepcional do owner. Não foram convertidas em `PASS` nem reescritas.
+Os cinco caminhos terminaram `TERMINAL_SANITIZED / DO_NOT_REPEAT`, com receipt
+`3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06` e
+journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`.
+Foram cinco comandos concluídos, cada um com `ATTEMPT → RESULT(0) → VERIFIED`.
+
+A recuperação medida foi **5.055.328.256 B e 180.704 inodes**; o saldo passou
+de 7.087.513.600 B/8.743.902 inodes livres para
+12.142.841.856 B/8.924.606. A custódia
+`p00-five-runtimes-exceptional-20261113-v1`, archive `e806a178…a739`, índice
+`43e84827…cd5`, receipt `f9151e22…31c2` e restauração permanecem preservados no
+ThinkPad. `.data` externo não foi seguido nem retirado. Produção, retornos,
+worker, banco e tenants ficaram intactos.
+
+O helper instalado `aedc012b…57a` e o consumidor excepcional `a0cf7090…ec4c9`
+tinham allowlists fechadas nos cinco caminhos/identidades. A autorização
+`a20c6df5…e298` não se estende a outros runtimes. Não repetir qualificação,
+preservação, transferência ou retirada deste lote.

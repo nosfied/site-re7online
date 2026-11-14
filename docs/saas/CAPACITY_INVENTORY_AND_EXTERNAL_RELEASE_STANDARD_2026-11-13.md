@@ -42,6 +42,53 @@ Fontes já existentes, com época e fronteira explícitas:
 
 **Localização documental:** este arquivo está rastreado no branch canônico `review/campaign-recovery-20260926`, merge `2a55c80e840f593e8da73a18da8575445856cea9` (blob `560806d3e4e2d54f4fb843bd96e74a7edc764722`). Se ausente no checkout local do operador, verificar primeiro `git rev-parse HEAD`, branch e remote/ref, sem reemitir inventário, alterar receipts ou presumir que o arquivo não foi integrado.
 
+## 2-B. Cinco runtimes pré-contrato — JÁ SANITIZADOS
+
+**14/11/2026, fechamento terminal informado e reaberto pelos arquivos privados.**
+Os cinco caminhos do lote `p00-five-runtimes-exceptional-20261113-v1` estão
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. Receipt
+`3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`,
+journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`
+e autorização `a20c6df524b5bdf1ce54a0065e7a3689c4a0cb55b6b87c2ebfe738e9ce9ae298`
+registram 5/5 efeitos verificados. Recuperação física: **5.055.328.256 B e
+180.704 inodes**. Saldo terminal: **12.142.841.856 B e 8.924.606 inodes
+livres**.
+
+A custódia integral externa permanece no ThinkPad com archive
+`e806a178239525e093466b6bf962f7c1025f38a8245da26ee9f2c3584e26a739`,
+índice `43e84827b27d9dcf68cac9a2eecfee0cace4d5099b63c0c952b55dc316f33cd5`
+e receipt `f9151e22c0ce044d10e79fe736f62730d66e605e553c3110d96e535a6fb031c2`.
+Ela não deve ser retirada nem retransmitida. O procedimento excepcional foi
+restrito às identidades literais, exigiu restauração, observação privilegiada
+completa, locks, autorização, journal e readback; não cria allowlist genérica.
+
+### Próximo lote dirigido — decisão documental
+
+| Identidade / classe | Situação | Capacidade documentada | Proteção e autoridade | Mecanismo / decisão |
+| --- | --- | ---: | --- | --- |
+| `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit` — `CLOSED_PREPARATION_MANIFEST_DISPOSITION` | presente; audit v5 terminal DENY | 365.674.496 B | autoridade `/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified`, manifesto schema 2, `PACKAGE_FILES.sha256` e 11 links | consumidor existente; **lote priorizado, bloqueado por `DISPOSITION_TREE_DIRECTORY_IDENTITY`** |
+| `/opt/re7online/deploy-control/ef7db111-prep/node_modules` + `/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist` — `CLOSED_DEPLOY_CONTROL_DERIVED_TREE` | 602.820.608 B foram qualificados no plano DENY; não autorizados | 602.820.608 B | manifesto e digests preservados; raiz/worktree/fontes protegidos | perfil exige quatro candidatos e mínimo 949.141.504 B; **preservar, não formar lote parcial** |
+| `/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules` + `/opt/re7online/deploy-control/ef7db111-prep/.next` | presentes na fotografia terminal; não qualificados | 346.320.896 B | 1.123 folhas historicamente graváveis por grupo/outros | impedimento `DEPLOY_CONTROL_TREE_IDENTITY`; **preservar** |
+| `/opt/re7online/deploy-control/*` — worktrees históricos enumerados em 06/11 | nenhum receipt de elegibilidade | 1.601.449.984 B históricos para a raiz | controles/evidências e conteúdo não reconciliado | consumidor moderno não retroqualifica estoque; **preservar** |
+| geração falha `immutable-fa10f4f5-external-20261112T211724Z` no builder | dívida fora da VPS | ~78.295.040 B | lifecycle/evidências próprias | não aumenta capacidade da VPS; tratar separadamente |
+
+O próximo lote fechado é, portanto, somente `worker-package-audit`. A leitura
+dirigida de 14/11 confirmou device/inode, UID/GID, modo e nlink exatos da raiz,
+dos três ancestrais e da autoridade, mas enumerou **1.023 diretórios internos
+`deploy:deploy 0775`**. Isso reproduz materialmente
+`DISPOSITION_TREE_DIRECTORY_IDENTITY`; não existe delta que autorize repetir o
+audit v5. O plano fechado para execução permanece: primeiro obter uma decisão
+contratual específica sobre esses modos sem mutar o acervo; depois regressão do
+mesmo consumidor; somente então novo `audit` contido, `prepare` revisável e
+`AUTHORIZE_ONCE` separada. Nesta revisão foram executados zero comandos
+destrutivos, e nenhuma dessas etapas posteriores está autorizada.
+
+O PR #394 permanece draft no HEAD `992001005c6eba20b85e80f0b8cf62194a725784`.
+Sua finalidade específica — completar autoridade AF26 para os mesmos cinco
+runtimes — foi superada pelo fechamento excepcional terminal. Ele não deve ser
+integrado automaticamente; qualquer utilidade genérica remanescente exige revisão
+independente e não reabre o lote 5/5.
+
 ## 3. Classes e decisões de limpeza
 
 | Classe operacional | Exemplos | Tratamento |

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 8,
-  "updatedAtUtc": "2026-11-13T15:19:00Z",
+  "updatedAtUtc": "2026-11-14T10:47:04Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
@@ -1765,8 +1765,66 @@
     "repeatPermitted": false,
     "nextGate": "NONE_TERMINAL_IRREPEATABLE"
   },
-  "updatedAtDate": "2026-11-08",
-  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_NOV03_RECONCILED_GLOBAL_CAMPAIGN_GUARD_GENERATION_47",
+  "p00ExceptionalFiveRuntimeRetirement": {
+    "state": "TERMINAL_SANITIZED_DO_NOT_REPEAT",
+    "reportedDate": "2026-11-14",
+    "batchId": "p00-five-runtimes-exceptional-20261113-v1",
+    "candidateCount": 5,
+    "paths": [
+      "/opt/re7online/releases/879cb1faa88493cd78dd789b71f85043d6c8ff9c-api",
+      "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api",
+      "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front",
+      "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api",
+      "/opt/re7online/releases/b9b58177880e729854580def1180f3edb2fb83e8-api"
+    ],
+    "intentSha256": "bce9ab1886cf1bef564f1639210d37f7f307173807208c9fd42f038548e54100",
+    "commandsSha256": "0ff917dde3115e40f56d2db9630c0435ed72c2e862abf9f0c19d6c0253376e21",
+    "authorizationSha256": "a20c6df524b5bdf1ce54a0065e7a3689c4a0cb55b6b87c2ebfe738e9ce9ae298",
+    "journalSha256": "1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94",
+    "receiptSha256": "3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06",
+    "commandsAttempted": 5,
+    "commandsCompleted": 5,
+    "pathsAbsent": true,
+    "recoveredPhysicalBytes": 5055328256,
+    "recoveredInodes": 180704,
+    "filesystemBefore": {
+      "freeBytes": 7087513600,
+      "freeInodes": 8743902
+    },
+    "filesystemAfter": {
+      "freeBytes": 12142841856,
+      "freeInodes": 8924606
+    },
+    "preservation": {
+      "location": "PRIVATE_THINKPAD_CUSTODY",
+      "archiveSha256": "e806a178239525e093466b6bf962f7c1025f38a8245da26ee9f2c3584e26a739",
+      "indexSha256": "43e84827b27d9dcf68cac9a2eecfee0cace4d5099b63c0c952b55dc316f33cd5",
+      "receiptSha256": "f9151e22c0ce044d10e79fe736f62730d66e605e553c3110d96e535a6fb031c2",
+      "isolatedRestorePassed": true,
+      "externalDataSymlinksFollowed": false,
+      "retain": true
+    },
+    "productionPreserved": true,
+    "authorizationReusable": false,
+    "repeatPermitted": false,
+    "nextCapacityBatch": {
+      "candidate": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
+      "class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
+      "documentedPhysicalBytes": 365674496,
+      "state": "PRIORITIZED_BLOCKED_BY_CONFIRMED_DIRECTORY_MODES",
+      "lastPredicate": "DISPOSITION_TREE_DIRECTORY_IDENTITY",
+      "directedReadOnlyCheck": {
+        "candidateRootAndAncestorsMatchManifest": true,
+        "authorityRootMatchesManifest": true,
+        "groupWritableDirectoryCount": 1023,
+        "observedDirectoryMode": "0775",
+        "auditRepeatJustified": false
+      },
+      "destructiveAuthorizationGranted": false
+    }
+  },
+  "updatedAtDate": "2026-11-14",
+  "updatedAtUtcScope": "P00_FIVE_RUNTIME_TERMINAL_SANITIZED_DOCUMENTATION_ONLY",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",

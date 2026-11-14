@@ -1,5 +1,25 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Fechamento excepcional dos cinco runtimes pré-contrato — terminal
+
+O lote fechado de `879cb1…-api`, `af26…-api`, `af26…-front`, `afbb…-api` e
+`b9b581…-api` terminou `TERMINAL_SANITIZED / DO_NOT_REPEAT`. A preservação
+integral externa foi autenticada antes do primeiro efeito, não seguiu o destino
+de `.data` e passou por restauração isolada. A intenção
+`bce9ab1886cf1bef564f1639210d37f7f307173807208c9fd42f038548e54100`, a
+autorização `a20c6df524b5bdf1ce54a0065e7a3689c4a0cb55b6b87c2ebfe738e9ce9ae298`,
+o journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`
+e o receipt `3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`
+comprovam cinco sequências `ATTEMPT → RESULT(0) → VERIFIED`.
+
+A variação medida foi **5.055.328.256 B e 180.704 inodes**, de
+`7.087.513.600 B`/`8.743.902` livres para
+`12.142.841.856 B`/`8.924.606`. O potencial histórico de 5.055.369.216 B não
+substitui essa medição terminal. Archive, índice, receipt de preservação e
+restauração continuam em custódia privada no ThinkPad. O perfil, o helper e a
+autorização foram literais para este lote; este precedente não admite novo
+caminho, não dispensa custódia/restauração e não autoriza retirada futura.
+
 ## Recuperação mínima de capacidade fora da geração
 
 `scripts/capacity-recovery.py` é o control plane versionado para manutenção do
