@@ -1660,8 +1660,8 @@ produzida.
 | Lote | Caminhos | Bytes físicos | Inodes | Classe | Precedente | Risco | Custódia | Decisão |
 | --- | --- | ---: | ---: | --- | --- | --- | --- | --- |
 | frontend histórico | `9f4cbe0f…-front`; `fa60f0f6…-front`; `fa60f0f6…-front-css-17bd5fb8` | **1.917.022.208** | 76.720 | `LEGACY_RUNTIME_EQUIVALENT` | procedimento excepcional 5/5 e 10/10 | ausência de pacote integral para 9f4/CSS; não há `.data` nas árvores | pacote fa60 plain presente; custódia integral local ausente | **prioridade 1**, preservar/restore antes de preparar retirada |
-| worker histórico | `worker-bf5f1d76…-b66bb89a`; `worker-minimal-hybrid-b9b58177-verified-v3`; `worker-minimal-reactive-afbb7455-verified` | **1.065.451.520** | 24.544 | `LEGACY_RUNTIME_EQUIVALENT` | procedimento excepcional 5/5 e 10/10 | autoridade integral do afbb ausente; três `.data` externos | archives/pacotes de b66 e b9; sem custódia integral do lote | prioridade 2; preservar symlinks/destinos externos |
-| campaign API | `campaign-eligibility-recovery-final-reviewed-20261008` | **363.339.776** | 9.842 | `LEGACY_RUNTIME_EQUIVALENT` | procedimento excepcional 5/5 | `.data` compartilhado e ausência de custódia integral | manifesto privado integral, sem archive restaurável confirmado | prioridade 3, lote independente |
+| worker histórico | `worker-bf5f1d76…-b66bb89a`; `worker-minimal-hybrid-b9b58177-verified-v3`; `worker-minimal-reactive-afbb7455-verified` | **1.065.451.520** | 24.544 | `PRESERVATION_VERIFIED / OPERATIONAL_REFERENCE_PENDING` | procedimento excepcional 5/5 e 10/10 | `b66`/`b9` independentes, mas consumidor não admite 2/3; `afbb` ainda consta como `PWD` herdado no PM2 vivo/salvo | custódia integral 3/3, índice `a8127b31…7148`, receipt `1a1314ce…9ec` | preparar manutenção PM2 separada; nenhum prepare de retirada |
+| campaign API | `campaign-eligibility-recovery-final-reviewed-20261008` | **363.339.776** | 9.842 | `PRESERVATION_VERIFIED / RETIREMENT_PREPARATION_BLOCKED_BY_CLOSED_BINDING` | procedimento excepcional 5/5 | zero referência em current/PM2/dump; somente inventário no grafo; `/proc` não privilegiado incompleto; helper/consumidor sem o caminho literal | archive `167bd932…786b`, manifesto `4fe74088…5263`, suplemento `2c6b80dd…19bf`, restore PASS, receipt `0c8f6d00…da6a`; `.data` não seguido | qualificar perfil literal e observação privilegiada antes de qualquer intenção |
 
 O próximo lote fechado para **preservação e preparação**, não para retirada, é o
 frontend histórico de três caminhos. A sequência reaproveita o procedimento
@@ -1698,3 +1698,30 @@ Os três fechamentos excepcionais totalizam **18 caminhos**,
 independentes, consumidas e não reutilizáveis. A próxima seleção deve excluir
 esses dezoito caminhos antes de considerar os quatro candidatos remanescentes da
 fotografia dirigida.
+
+#### Continuidade dirigida — workers e Campaign API — 14/11/2026
+
+A custódia dos workers foi concluída sem retirada. `b66` e `b9` têm ausência de
+referência operacional na fotografia disponível, mas não avançam isoladamente:
+o único consumidor local que se apresentava como `three-workers` ainda continha
+os caminhos, identidades e hashes do lote de frontends 3/3 já encerrado, e o
+consumidor integrado não contém os caminhos atuais dos workers. Usá-lo produziria
+autoridade falsa. `afbb` permanece bloqueado pela referência `PWD` histórica no
+PM2 vivo e salvo, embora cwd, entrypoint, FDs e mapas do PID produtivo apontem à
+release ativa `e2e7f17a`.
+
+O contrato de manutenção PM2 está fechado conceitualmente: fonte privada
+autenticada, request allowlisted de worker sem `PWD`, `build`, `validate`, prova
+isolada, troca somente do worker, aceite de sessões/filas/health, rollback e um
+único `pm2 save` posterior ao aceite. A fonte privada limpa ainda não foi
+localizada; não é legítimo fabricá-la a partir de `/proc` ou do dump contaminado.
+Estado: `PM2_DEFINITION_CONTRACT_READY / AUTHENTICATED_SOURCE_REQUIRED`.
+
+Para a Campaign API, a busca dirigida evitou retransmitir backups sem a árvore da
+release. Como nenhuma cópia externa restaurável existia, somente a raiz candidata
+foi transmitida uma vez para custódia privada. A restauração local confrontou o
+manifesto histórico integral e negou inicialmente uma folha extra; a retomada
+preservou `.env.example` como suplemento autenticado e concluiu sem ocultar a
+divergência. O lote permanece não destrutivo: helper e consumidor fechados para o
+caminho literal, observação privilegiada completa e nova autorização específica
+continuam obrigatórios.
