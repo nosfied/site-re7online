@@ -1908,20 +1908,74 @@
     "authorizationReusable": false,
     "repeatPermitted": false
   },
+  "p00ExceptionalThreeFrontendRetirement": {
+    "state": "TERMINAL_SANITIZED_DO_NOT_REPEAT",
+    "reportedDate": "2026-11-14",
+    "batchId": "p00-three-frontends-exceptional-20261114-v1",
+    "candidateCount": 3,
+    "paths": [
+      "/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front",
+      "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front",
+      "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8"
+    ],
+    "intentSha256": "d84d6e4d15d0fa40dcd4f2704e2897c162c32360199e8a4582df779fd8f0921c",
+    "commandsSha256": "dedc42f6ddddda0f1360a96c8060bdb68085847974aad30437d3ab286b7de26f",
+    "authorizationSha256": "2e805fb27ed7d6aef94d0d5dcbebda13b212db608928459b3abe0075efb193f6",
+    "journalSha256": "0e2e21d8761390395ceb5c7ae7a6298976019d51517d4ca5573e9c5c90bc14c9",
+    "receiptSha256": "ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7",
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "pathsAbsent": true,
+    "recoveredPhysicalBytes": 1917009920,
+    "recoveredInodes": 76717,
+    "filesystemBefore": {
+      "freeBytes": 20628643840,
+      "freeInodes": 9203667
+    },
+    "filesystemAfterReceipt": {
+      "freeBytes": 22545653760,
+      "freeInodes": 9280384
+    },
+    "preservation": {
+      "location": "PRIVATE_THINKPAD_CUSTODY",
+      "indexSha256": "617ded0ac44757c25064f1d905461b481b4df8866aa81d8f424c1e705318027a",
+      "receiptSha256": "86654281c6ed1d6f4fe0c6b45b59b89a4088b91421c6f63ecef86d1a122618be",
+      "supplementSha256": "72291aba550ffa89197956fba668101ca650681ff8fb787b91531d435792fc8b",
+      "isolatedRestorePassed": true,
+      "restoredCandidates": 3,
+      "supplementalLeaves": 21,
+      "externalDataSymlinksFollowed": false,
+      "retain": true
+    },
+    "executionObservation": {
+      "complete": true,
+      "references": 0,
+      "writers": 0,
+      "failures": 0,
+      "attestationSha256": "e4d810651a77b225e7639ef7d0e439db8d98625e29a71b975b6a7ffc0b988b40"
+    },
+    "helperSha256": "e47ae66c9855e989e6f0c97a7b82c21714797ce4823842bec5ab9b5d431c04aa",
+    "helperInstallationReceiptSha256": "8930fe6d264b6e6ab3df96c301fda5a78a1e3f27e85b69c83e4f0f6b27d44575",
+    "consumerSha256": "f92cfe530a9b523676a5d51681a61ff15131a7d2747523f692c3d9ee75abfa5f",
+    "productionPreserved": true,
+    "locksReleased": true,
+    "authorizationReusable": false,
+    "repeatPermitted": false
+  },
   "p00ExceptionalRetirementSummary": {
     "state": "TERMINAL_SANITIZED_DO_NOT_REPEAT",
-    "batchCount": 2,
-    "pathCount": 15,
-    "recoveredPhysicalBytes": 13579313152,
-    "recoveredInodes": 459834,
-    "custodiesPreserved": 2,
-    "receiptsPreserved": 2,
-    "journalsPreserved": 2,
+    "batchCount": 3,
+    "pathCount": 18,
+    "recoveredPhysicalBytes": 15496323072,
+    "recoveredInodes": 536551,
+    "custodiesPreserved": 3,
+    "receiptsPreserved": 3,
+    "journalsPreserved": 3,
     "newAuthorizationGranted": false,
     "repeatPermitted": false
   },
   "updatedAtDate": "2026-11-14",
-  "updatedAtUtcScope": "P00_TEN_RELEASE_TERMINAL_SANITIZED_DOCUMENTATION_ONLY",
+  "updatedAtUtcScope": "P00_THREE_FRONTEND_TERMINAL_SANITIZED_DOCUMENTATION_ONLY",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",

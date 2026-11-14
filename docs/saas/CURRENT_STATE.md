@@ -49,9 +49,29 @@ e receipt `cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`.
 A restauração isolada passou e seis symlinks `.data` foram preservados sem seguir
 seus destinos. Não repetir preservação, autorização ou retirada deste lote.
 
-Os dois lotes excepcionais somam **15 caminhos terminalmente ausentes**, com
-recuperação acumulada de **13.579.313.152 B e 459.834 inodes**. Esse total é a
-soma dos dois receipts terminais, não uma nova medição nem nova autorização.
+O lote fechado dos três frontends históricos também terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção
+`d84d6e4d15d0fa40dcd4f2704e2897c162c32360199e8a4582df779fd8f0921c`, a
+autorização `2e805fb27ed7d6aef94d0d5dcbebda13b212db608928459b3abe0075efb193f6`,
+o journal `0e2e21d8761390395ceb5c7ae7a6298976019d51517d4ca5573e9c5c90bc14c9`
+e o receipt `ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7`
+comprovam 3/3 efeitos `ATTEMPT → RESULT(0) → VERIFIED` e ausência física. A
+variação medida foi **1.917.009.920 B e 76.717 inodes**, de
+`20.628.643.840 B`/`9.203.667` livres para
+`22.545.653.760 B`/`9.280.384`. API/frontend `fa10f4f5`, worker `e2e7f17a`,
+PostgreSQL por health, tenants e persistências externas permaneceram saudáveis;
+os locks foram liberados.
+
+A custódia `p00-three-frontends-exceptional-20261114-v1` permanece no ThinkPad:
+índice `617ded0ac44757c25064f1d905461b481b4df8866aa81d8f424c1e705318027a`,
+receipt `86654281c6ed1d6f4fe0c6b45b59b89a4088b91421c6f63ecef86d1a122618be`
+e complemento `72291aba550ffa89197956fba668101ca650681ff8fb787b91531d435792fc8b`.
+A restauração isolada passou 3/3; nenhum `.data` estava nas árvores e nenhum
+destino externo foi seguido. Não repetir preservação, autorização ou retirada.
+
+Os três lotes excepcionais somam **18 caminhos terminalmente ausentes**, com
+recuperação acumulada de **15.496.323.072 B e 536.551 inodes**. Esse total é a
+soma dos três receipts terminais, não uma nova medição nem nova autorização.
 
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 

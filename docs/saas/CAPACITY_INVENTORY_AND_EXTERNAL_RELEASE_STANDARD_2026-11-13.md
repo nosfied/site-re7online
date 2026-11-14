@@ -21,11 +21,18 @@ receipt mediu `20.638.085.120 B`/`9.203.695` livres; o readback posterior mediu
 `054989cb…ccdf` e receipt `cb1926e7…f361` permanecem protegidos. Não somar de
 novo esse ganho, não retransmitir a custódia e não reutilizar a autorização.
 
-**Consolidação excepcional:** os lotes 5/5 e 10/10 encerraram 15 caminhos e
-recuperaram, pelos respectivos receipts, **13.579.313.152 B e 459.834 inodes**.
-As duas custódias, restaurações, journals e receipts permanecem protegidos. O
-total não é estimativa de novo lote, não deve ser somado novamente e não cria
-autorização reutilizável.
+**Lote frontend 3/3: encerrado `TERMINAL_SANITIZED / DO_NOT_REPEAT`.** Os três
+frontends históricos foram preservados com reaproveitamento dos pacotes locais,
+restaurados de forma isolada e retirados com três resultados verificados. Receipt
+`ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7`;
+recuperação física **1.917.009.920 B e 76.717 inodes**. A custódia externa,
+índice `617ded0a…027a` e receipt `86654281…18be` permanecem protegidos.
+
+**Consolidação excepcional:** os lotes 5/5, 10/10 e frontend 3/3 encerraram
+18 caminhos e recuperaram, pelos respectivos receipts,
+**15.496.323.072 B e 536.551 inodes**. As três custódias, restaurações, journals
+e receipts permanecem protegidos. O total não é estimativa de novo lote, não deve
+ser somado novamente e não cria autorização reutilizável.
 
 ## 2. Inventário existente é a base; não reiniciar auditoria global
 
@@ -118,7 +125,9 @@ passagem, seguida de readback de `current`, grafo, PM2 vivo/salvo e listeners.
 Não houve nova auditoria global, hashing integral, transferência, `prepare` ou
 efeito destrutivo. O saldo observado foi **20.631.146.496 B livres**.
 
-Os sete candidatos abaixo continuam fisicamente presentes. A medição conjunta,
+Esta seção é a fotografia anterior ao fechamento frontend 3/3. Os três primeiros
+caminhos estão agora `TERMINAL_SANITIZED / DO_NOT_REPEAT`; somente os quatro
+restantes continuam pendentes. A medição conjunta histórica,
 em uma única passagem e sem somar filhos, registrou **3.345.813.504 B e 111.106
 inodes**. Nenhum aparece em `current`, no grafo vigente, nos `cwd` do PM2 ou nos
 listeners ativos; essa ausência operacional é condição necessária, mas não
@@ -126,9 +135,9 @@ autoridade de retirada.
 
 | Caminho literal / classe | Device:inode | Bytes / inodes atuais | Autoridade já disponível | Proteção ou impedimento | Decisão |
 | --- | ---: | ---: | --- | --- | --- |
-| `/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5778416` | 637.677.568 / 25.519 | registros e manifests da preparação frontend 9f4 | pacote histórico principal não está mais no caminho registrado; nenhuma custódia integral local encontrada | incluir no próximo lote somente após preservação externa autenticada |
-| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5803927` | 639.291.392 / 25.587 | pacote `frontend-fa60f0f6.tar.gz` ainda presente, com SHA histórico registrado | pacote reduz transferência apenas se sua cobertura de restauração for comprovada; não substitui custódia integral por presunção | candidato prioritário |
-| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5829522` | 640.053.248 / 25.614 | registros e manifests da correção CSS | pacote corrigido não está mais no caminho histórico registrado; nenhuma custódia integral local encontrada | incluir no próximo lote somente após preservação externa autenticada |
+| `/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5778416` | 637.677.568 / 25.519 históricos | custódia/restauração `86654281…18be` | receipt terminal `ece95abe…65c7` | `TERMINAL_SANITIZED / DO_NOT_REPEAT` |
+| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5803927` | 639.291.392 / 25.587 históricos | custódia/restauração `86654281…18be` | receipt terminal `ece95abe…65c7` | `TERMINAL_SANITIZED / DO_NOT_REPEAT` |
+| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5829522` | 640.053.248 / 25.614 históricos | custódia/restauração `86654281…18be` | receipt terminal `ece95abe…65c7` | `TERMINAL_SANITIZED / DO_NOT_REPEAT` |
 | `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:2966832` | 334.172.160 / 8.393 | archive privado de retorno do worker ainda presente | `.data` é symlink externo e deve permanecer fora de qualquer archive/efeito | segundo lote dirigido |
 | `/opt/re7online/releases/worker-minimal-hybrid-b9b58177-verified-v3` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5557758` | 365.600.768 / 8.070 | pacote `worker-minimal-b9-v3.tar.gz` ainda presente | cobertura integral e restauração ainda não vinculadas ao runtime; `.data` externo protegido | segundo lote dirigido |
 | `/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5770335` | 365.678.592 / 8.081 | manifests e cadeia histórica preservados | pacote principal não foi localizado na custódia registrada; `.data` externo protegido | segundo lote dirigido |

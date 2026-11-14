@@ -1672,3 +1672,29 @@ então recapturar gates operacionais e produzir intenção literal. Qualquer efe
 destrutivo exige nova autorização específica. Os outputs (~3,55 GB), fontes
 históricas (~2,01 GB) e controles de deploy não entram nessa seleção, pois ainda
 contêm autoridades/evidências ou negativas não reconciliadas.
+
+#### Fechamento excepcional terminal dos três frontends — 14/11/2026
+
+A priorização imediatamente acima foi consumida e está superada. Os três caminhos
+`9f4cbe0f…-front`, `fa60f0f6…-front` e
+`fa60f0f6…-front-css-17bd5fb8` terminaram
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção
+`d84d6e4d15d0fa40dcd4f2704e2897c162c32360199e8a4582df779fd8f0921c`, a
+autorização `2e805fb27ed7d6aef94d0d5dcbebda13b212db608928459b3abe0075efb193f6`,
+o journal `0e2e21d8761390395ceb5c7ae7a6298976019d51517d4ca5573e9c5c90bc14c9`
+e o receipt `ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7`
+comprovam 3/3 comandos, ausência física e **1.917.009.920 B / 76.717 inodes**
+recuperados.
+
+A custódia `p00-three-frontends-exceptional-20261114-v1` preserva os pacotes
+reutilizados, 21 folhas complementares, índice `617ded0a…027a`, complemento
+`72291aba…fc8b`, receipt `86654281…18be` e restauração 3/3 PASS. Não havia
+`.data` nas árvores; API/frontend ativos, worker, banco, tenants e persistências
+externas permaneceram intactos. A observação privilegiada de execução terminou
+com zero referências, writers e falhas, e os locks foram liberados.
+
+Os três fechamentos excepcionais totalizam **18 caminhos**,
+**15.496.323.072 B** e **536.551 inodes** recuperados. As autorizações são
+independentes, consumidas e não reutilizáveis. A próxima seleção deve excluir
+esses dezoito caminhos antes de considerar os quatro candidatos remanescentes da
+fotografia dirigida.

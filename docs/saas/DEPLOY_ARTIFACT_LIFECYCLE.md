@@ -1,5 +1,30 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Fechamento excepcional dos três frontends históricos — terminal
+
+O lote `p00-three-frontends-exceptional-20261114-v1` terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção
+`d84d6e4d15d0fa40dcd4f2704e2897c162c32360199e8a4582df779fd8f0921c`, os
+comandos `dedc42f6ddddda0f1360a96c8060bdb68085847974aad30437d3ab286b7de26f`,
+a autorização `2e805fb27ed7d6aef94d0d5dcbebda13b212db608928459b3abe0075efb193f6`,
+o journal `0e2e21d8761390395ceb5c7ae7a6298976019d51517d4ca5573e9c5c90bc14c9`
+e o receipt `ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7`
+comprovam três sequências `ATTEMPT → RESULT(0) → VERIFIED`.
+
+A recuperação terminal foi **1.917.009.920 B e 76.717 inodes**. Os pacotes já
+existentes no ThinkPad foram reutilizados; somente 21 folhas complementares
+foram preservadas, e a restauração isolada passou 3/3. Índice
+`617ded0a…027a`, receipt de custódia `86654281…18be` e complemento
+`72291aba…fc8b` permanecem protegidos. A observação privilegiada foi completa,
+sem referências, writers ou falhas; current, grafo, PM2, dump e mounts negaram
+dependências. Não havia `.data` nos candidatos, e persistências externas de API,
+worker, banco e tenants ficaram fora do efeito. O helper, o consumidor e a
+autorização eram literais para estes três caminhos.
+
+Somados aos lotes 5/5 e 10/10 abaixo, são **18 caminhos** terminais e
+**15.496.323.072 B / 536.551 inodes** recuperados. Não repetir nem combinar
+autorizações desses lotes.
+
 ## Fechamento excepcional das dez releases legadas — terminal
 
 O lote fechado `p00-ten-releases-exceptional-20261114-v1` terminou
@@ -22,9 +47,10 @@ referências, writers ou falhas, e os locks ficaram liberados após o receipt.
 Este perfil e esta autorização eram literais para os dez caminhos e não admitem
 reuso para outro lote.
 
-Somados ao lote 5/5 abaixo, são **15 caminhos** em estado terminal e
-**13.579.313.152 B / 459.834 inodes** recuperados. A soma referencia receipts
-distintos e não autoriza repetir nenhum deles.
+Somados ao lote 5/5 abaixo, estes dois fechamentos históricos representam
+**15 caminhos** e **13.579.313.152 B / 459.834 inodes**; o total vigente com o
+lote frontend 3/3 está registrado acima. Cada soma referencia receipts distintos
+e não autoriza repetir nenhum deles.
 
 ## Fechamento excepcional dos cinco runtimes pré-contrato — terminal
 
