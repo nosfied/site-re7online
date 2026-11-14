@@ -83,6 +83,8 @@ Esta revisão confronta o relatório terminal 9/9 com os documentos do branch op
 
 ## 6. Continuidade do backlog
 
-**P00 extraordinário:** fechado no conjunto terminal acima, mantendo dívidas históricas não destrutivas documentadas. **Próxima prioridade:** trabalhar a partir de `WORKING_PRINCIPLES.md`, `CURRENT_STATE.md/json`, `DEPLOY_RUNBOOK.md`, `DEPLOY_ARTIFACT_LIFECYCLE.md` e backlog funcional vigente. Não assumir que CI de docs ou recibo de limpeza substitui aceitação funcional de CRA-PR/SECULT-PE.
+**P00 extraordinário:** fechado no conjunto terminal acima, mantendo dívidas históricas não destrutivas documentadas. **Auditoria integral e prontidão do backlog:** [matriz única de verificação de projeto](CONVERTA_PROJECT_AUDIT_AND_BACKLOG_READINESS_2026-11-14.md). Esta matriz diferencia documentos reconciliados de fatos ainda não atestados no runtime; somente a inspeção dirigida do Codex pode fechar o status `PROJECT_AUDIT_COMPLETE`.
+
+**Próxima prioridade:** trabalhar a partir de `WORKING_PRINCIPLES.md`, `CURRENT_STATE.md/json`, `DEPLOY_RUNBOOK.md`, `DEPLOY_ARTIFACT_LIFECYCLE.md` e backlog funcional vigente. Não assumir que CI de docs ou recibo de limpeza substitui aceitação funcional de CRA-PR/SECULT-PE.
 
 Referências: [política de capacidade](../saas/CAPACITY_RECOVERY_POLICY.md), [lifecycle](../saas/DEPLOY_ARTIFACT_LIFECYCLE.md), [inventário](../saas/CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md), [backlog P00](../saas/backlog/PROJECT_SANITATION_AND_RETENTION_P00_2026-10-30.md), [estado canônico](../saas/CURRENT_STATE.md), [princípios](../saas/WORKING_PRINCIPLES.md).
