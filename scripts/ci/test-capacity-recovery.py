@@ -557,7 +557,12 @@ class CapacityRecoveryTests(unittest.TestCase):
                                  if item.is_dir() and not item.is_symlink())):
             directory.chmod(0o775)
         if extra_directory:
-            (root / "unexpected-empty").mkdir(mode=0o775)
+            extra = root / "unexpected-empty"
+            extra.mkdir()
+            # mkdir(mode=...) is filtered by the runner umask.  Keep this
+            # fixture deterministic so the negative reaches the closed-set
+            # relation gate rather than the earlier identity gate.
+            extra.chmod(0o775)
         root_info = root.lstat()
         entry["identity"] = {
             "device": root_info.st_dev, "inode": root_info.st_ino,
