@@ -22,6 +22,10 @@ referências, writers ou falhas, e os locks ficaram liberados após o receipt.
 Este perfil e esta autorização eram literais para os dez caminhos e não admitem
 reuso para outro lote.
 
+Somados ao lote 5/5 abaixo, são **15 caminhos** em estado terminal e
+**13.579.313.152 B / 459.834 inodes** recuperados. A soma referencia receipts
+distintos e não autoriza repetir nenhum deles.
+
 ## Fechamento excepcional dos cinco runtimes pré-contrato — terminal
 
 O lote fechado de `879cb1…-api`, `af26…-api`, `af26…-front`, `afbb…-api` e

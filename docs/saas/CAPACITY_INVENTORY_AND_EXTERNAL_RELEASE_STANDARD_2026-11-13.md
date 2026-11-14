@@ -21,6 +21,12 @@ receipt mediu `20.638.085.120 B`/`9.203.695` livres; o readback posterior mediu
 `054989cb…ccdf` e receipt `cb1926e7…f361` permanecem protegidos. Não somar de
 novo esse ganho, não retransmitir a custódia e não reutilizar a autorização.
 
+**Consolidação excepcional:** os lotes 5/5 e 10/10 encerraram 15 caminhos e
+recuperaram, pelos respectivos receipts, **13.579.313.152 B e 459.834 inodes**.
+As duas custódias, restaurações, journals e receipts permanecem protegidos. O
+total não é estimativa de novo lote, não deve ser somado novamente e não cria
+autorização reutilizável.
+
 ## 2. Inventário existente é a base; não reiniciar auditoria global
 
 Fontes já existentes, com época e fronteira explícitas:

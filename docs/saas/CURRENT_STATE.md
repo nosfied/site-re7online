@@ -49,6 +49,10 @@ e receipt `cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`.
 A restauração isolada passou e seis symlinks `.data` foram preservados sem seguir
 seus destinos. Não repetir preservação, autorização ou retirada deste lote.
 
+Os dois lotes excepcionais somam **15 caminhos terminalmente ausentes**, com
+recuperação acumulada de **13.579.313.152 B e 459.834 inodes**. Esse total é a
+soma dos dois receipts terminais, não uma nova medição nem nova autorização.
+
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
 ---

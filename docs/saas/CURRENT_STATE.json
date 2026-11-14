@@ -1908,6 +1908,18 @@
     "authorizationReusable": false,
     "repeatPermitted": false
   },
+  "p00ExceptionalRetirementSummary": {
+    "state": "TERMINAL_SANITIZED_DO_NOT_REPEAT",
+    "batchCount": 2,
+    "pathCount": 15,
+    "recoveredPhysicalBytes": 13579313152,
+    "recoveredInodes": 459834,
+    "custodiesPreserved": 2,
+    "receiptsPreserved": 2,
+    "journalsPreserved": 2,
+    "newAuthorizationGranted": false,
+    "repeatPermitted": false
+  },
   "updatedAtDate": "2026-11-14",
   "updatedAtUtcScope": "P00_TEN_RELEASE_TERMINAL_SANITIZED_DOCUMENTATION_ONLY",
   "lastOperationalChange": {

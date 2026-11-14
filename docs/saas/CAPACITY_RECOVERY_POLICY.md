@@ -71,7 +71,36 @@ da custódia simultânea foi aproximadamente 9,92 GB. Tempo total, pico de memó
 e CPU não foram medidos de forma comparável e permanecem indisponíveis — não
 devem ser inferidos pelos timestamps dos arquivos.
 
-### Regra de reaproveitamento
+## Precedente excepcional fechado — dez releases legadas
+
+O lote `p00-ten-releases-exceptional-20261114-v1` repetiu a metodologia, não a
+autorização nem o perfil do lote 5/5. O helper SHA-256
+`dca521d99779c2ad78f6f5af4ecded018bb76f96772de7ffa38e43d64734f9f3` e o
+consumidor SHA-256
+`3b212477ae7e2b358f56e1f8dc620ea4701d1815257804d9348f5c82b61e4b0e`
+tinham allowlists e identidades fechadas nos dez caminhos. A custódia externa foi
+autenticada pelo receipt
+`cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`,
+archive `464c60ef94ba7fd9c46e6f85a08772b2e611a24ffc250fa8350bfd436ab110c8`
+e índice `054989cbc839c0358ae1431f90a88112586f78e153b38b0915fcc5c2d9f8ccdf`.
+A restauração isolada passou e seis symlinks `.data` não foram seguidos.
+
+A única intenção autorizada foi
+`c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f`,
+com comandos `85ddaab1cb39756b277ef68f35902feba7e73f7021e4947080fcc8655bec12aa`.
+A intenção anterior `ca3502ca…7e29` ficou descartada. A autorização
+`988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802`,
+o journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`
+e o receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`
+comprovam 10/10 efeitos, ausência física, locks liberados e recuperação de
+8.523.984.896 bytes/279.130 inodes.
+
+Os dois precedentes excepcionais encerram **15 caminhos** e somam
+**13.579.313.152 bytes/459.834 inodes** recuperados. Cada lote conserva sua
+custódia, restauração, autorização, journal e receipt próprios; o total não é
+uma autoridade composta nem licença para outro caminho.
+
+### Regra de reaproveitamento dos precedentes excepcionais
 
 A metodologia pode ser reaplicada; o perfil não. Um novo lote precisa demonstrar
 separadamente: caminhos e identidades fechados, ausência de papel ativo/rollback,

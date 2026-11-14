@@ -1642,3 +1642,7 @@ health da API, tenants e produção permaneceram saudáveis. O helper
 `dca521d9…f9f3`, o consumidor `3b212477…4b0e`, o perfil e a autorização eram
 fechados para estes dez caminhos; não constituem permissão para qualquer lote
 novo.
+
+Os fechamentos 5/5 e 10/10 totalizam **15 caminhos**, **13.579.313.152 B** e
+**459.834 inodes** recuperados. Preservam-se duas custódias e dois conjuntos
+independentes de receipts/journals; não repetir nem combinar autorizações.
