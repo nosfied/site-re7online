@@ -68,6 +68,13 @@ CRM_INACTIVE_STAGING_PATHS = {
     "/opt/re7online/releases/crm-csv-front-ea3d2788-20261016",
     "/opt/re7online/releases/crm-csv-front-return-d41ddd64-20261016",
 }
+LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS = {
+    "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api",
+    "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front",
+    "/opt/re7online/releases/879cb1faa88493cd78dd789b71f85043d6c8ff9c-api",
+    "/opt/re7online/releases/b9b58177880e729854580def1180f3edb2fb83e8-api",
+    "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api",
+}
 PF_KTHREAD = 0x00200000
 
 
@@ -158,6 +165,8 @@ def canonical_candidate(value: Any) -> str:
     if candidate in DEPLOY_CONTROL_DERIVED_PATHS:
         return candidate
     if candidate in CRM_INACTIVE_STAGING_PATHS:
+        return candidate
+    if candidate in LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS:
         return candidate
     path = Path(candidate)
     try:

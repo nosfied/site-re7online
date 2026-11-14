@@ -248,6 +248,8 @@ class ProcObserverTests(unittest.TestCase):
         accepted.extend(sorted(OBSERVER.MANIFEST_DISPOSITION_PATHS))
         accepted.extend(sorted(OBSERVER.DEPLOY_CONTROL_DERIVED_PATHS))
         self.assertEqual(OBSERVER.validate_request(request(accepted))["candidatePaths"], sorted(accepted))
+        exceptional = sorted(OBSERVER.LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS)
+        self.assertEqual(OBSERVER.validate_request(request(exceptional))["candidatePaths"], exceptional)
         preserve = json.loads(request([OBSERVER.LEGACY_EMPTY_TRANSACTION]))
         preserve["phase"] = "preserve"
         preserve["preservationRequestSha256"] = "1" * 64
@@ -278,6 +280,9 @@ class ProcObserverTests(unittest.TestCase):
             OBSERVER.validate_request(request([
                 deploy_control_root + "/apps/whatsapp-agent/dist-extra"]))
         for path in OBSERVER.CRM_INACTIVE_STAGING_PATHS:
+            with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path + "-other"]))
+        for path in OBSERVER.LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS:
             with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
                 OBSERVER.validate_request(request([path + "-other"]))
 
