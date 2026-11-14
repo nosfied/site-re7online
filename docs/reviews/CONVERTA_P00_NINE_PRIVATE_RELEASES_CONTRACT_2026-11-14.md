@@ -42,9 +42,10 @@ passando. Nenhum comando usa glob, prefixo aberto ou alcança destino externo.
 
 - 38 testes dirigidos passaram para observador, instalador, perfil 9/9 e regressão
   Campaign API.
-- A suíte afetada de retirement foi executada; as negativas dependentes de checkout
-  integrado ocorrem antes do commit porque o materializador rejeita, por contrato,
-  bytes ainda não pertencentes ao HEAD. A CI deve ser executada no HEAD publicado.
+- A suíte ampliada executou 151 testes: 147 passaram. Quatro testes antigos de
+  `worktree residue` negaram por `residue_identity`; o mesmo caso foi reproduzido
+  isoladamente e sem alterações no HEAD anterior `774532b6`, portanto não decorre
+  deste perfil. A CI deve ser executada no checkout limpo do HEAD publicado.
 - O receipt real da custódia foi reaberto pelo novo validador e passou sem alteração.
 
 ## Próxima fronteira
