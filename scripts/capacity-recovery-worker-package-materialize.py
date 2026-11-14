@@ -27,7 +27,7 @@ MANIFEST = ROOT / "config/capacity-recovery/worker-package-audit-disposition.v1.
 EF7_MANIFEST = ROOT / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json"
 HELPER = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 WORKER_HELPER_SHA256 = "a7f1a0680d19561086923b77162ab3710fbd2c890ccf823aa517d42ccea9a1c2"
-WORKER_INSTALLER_SHA256 = "7b92d8b9b34a091a771be97c62cb72387e6bab289cc3ab099247395276ad04db"
+WORKER_INSTALLER_SHA256 = "d06232c0a374da5975883656d71321f0c35e6f8875ce4c0a95642cd92325bb02"
 EF7_HELPER_SHA256 = "89650e6207cb4524f69ba6d0bdeea8d682b336cdb5424d4bcc7831cb58b57387"
 EF7_INSTALLER_SHA256 = "757dc2f20e649a985d36fa5a82b32e2273efeb9ffea9cd62f45757dcf8073785"
 CRM_HELPER_SHA256 = "fb83ba7c15fbac564a4bbe0d7d1bfd0d0a8ba2e79231d8b133e67b12a8c86d6f"
@@ -78,6 +78,11 @@ def profile_contract(profile: str) -> dict[str, Any]:
         return {"manifest": MANIFEST, "minimumRecoveryBytes": MINIMUM_RECOVERY_BYTES,
                 "installerSha256": WORKER_INSTALLER_SHA256,
                 "helperSha256": WORKER_HELPER_SHA256,
+                "installationPredecessor": {
+                    "path": str(HELPER),
+                    "sha256": "1d808c3955d5d7db4902200b8669e02ec4ae7718e65bd62cd6b20b697c5e306e",
+                    "device": 64769, "inode": 786791,
+                    "uid": 0, "gid": 0, "mode": "0500"},
                 "candidates": [{"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
                                 "path": str(CANDIDATE)}]}
     if profile == EF7_PROFILE:
@@ -234,7 +239,7 @@ def _installation_record(line: str, label: str, path: Path, sha256: str,
 
 
 def capture_helper_proof(profile: str) -> dict[str, str]:
-    if profile not in {CRM_PROFILE, EMPTY_TRANSACTION_PROFILE}:
+    if profile not in {WORKER_PROFILE, CRM_PROFILE, EMPTY_TRANSACTION_PROFILE}:
         raise RuntimeError("HELPER_PROOF_CAPTURE_PROFILE")
     contract = profile_contract(profile)
     report_raw, report_info = read_stable(HELPER_INSTALLATION_REPORT, modes={0o600})
@@ -439,7 +444,7 @@ def main(argv: list[str]) -> int:
         action = "materialize"
     elif len(argv) == 3 and argv[0] == "--capture-helper-proof" and \
             argv[1] == "--profile" and \
-            argv[2] in {CRM_PROFILE, EMPTY_TRANSACTION_PROFILE}:
+            argv[2] in {WORKER_PROFILE, CRM_PROFILE, EMPTY_TRANSACTION_PROFILE}:
         selected_profile = argv[2]
         action = "capture-helper-proof"
     else:

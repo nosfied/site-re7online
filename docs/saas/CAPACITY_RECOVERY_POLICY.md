@@ -838,6 +838,19 @@ fechado de `worker-package-audit`: um candidato `ENUMERATED_TREE`, seu manifesto
 específico e o helper cuja allowlist contém apenas esse caminho adicional. Não há
 fallback para checkout, caminho livre ou reaproveitamento de fotografia/request.
 
+A sucessão do helper worker é igualmente fechada. O instalador
+`install-capacity-proc-observer-worker-package-successor.py` aceita como
+predecessor somente `/usr/local/libexec/re7online/capacity-proc-observer.py`
+com SHA-256 `1d808c39…306e`, identidade `64769:786791`, `root:root 0500`, e
+publica somente o helper worker SHA-256 `a7f1a068…a1c2`. O alvo é revalidado
+depois da escrita e sincronização do temporário e antes da publicação atômica.
+O sudoers `a1928823…26f` é autenticado antes, imediatamente antes e depois da
+publicação; qualquer troca de predecessor ou de sudoers nega. A retomada aceita
+somente o sucessor exato já instalado e conserva seu inode. O relatório privado
+resultante, e não a prova histórica ligada ao inode `800988`, fornece a identidade
+física que o materializador reabre antes de construir o request. Isso não amplia
+a allowlist do observador nem autoriza o audit.
+
 O materializador versionado
 `scripts/capacity-recovery-worker-package-materialize.py` deriva `ROOT` de sua
 própria custódia, autentica por SHA o consumidor copiado e reutiliza dele

@@ -2133,6 +2133,11 @@ class CapacityRecoveryTests(unittest.TestCase):
             "minimumRecoveryBytes": materializer.MINIMUM_RECOVERY_BYTES,
             "installerSha256": materializer.INSTALLER_SHA256,
             "helperSha256": materializer.HELPER_SHA256,
+            "installationPredecessor": {
+                "path": str(materializer.HELPER),
+                "sha256": "1d808c3955d5d7db4902200b8669e02ec4ae7718e65bd62cd6b20b697c5e306e",
+                "device": 64769, "inode": 786791,
+                "uid": 0, "gid": 0, "mode": "0500"},
             "candidates": [{"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
                             "path": str(materializer.CANDIDATE)}],
         })
@@ -2280,6 +2285,51 @@ class CapacityRecoveryTests(unittest.TestCase):
                 materializer.helper_binding(materializer.EF7_INSTALLER_SHA256,
                                             materializer.EF7_HELPER_SHA256)
 
+    def test_worker_successor_report_becomes_current_private_proof(self):
+        source = Path(__file__).resolve().parents[1]
+        materializer_path = source / "capacity-recovery-worker-package-materialize.py"
+        installer_path = source / (
+            "install-capacity-proc-observer-worker-package-successor.py")
+        spec = importlib.util.spec_from_file_location(
+            "worker_successor_report_materializer", materializer_path)
+        materializer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(materializer)
+        self.assertEqual(sha(installer_path), materializer.WORKER_INSTALLER_SHA256)
+        custody = self.base / "worker-successor-proof"
+        custody.mkdir(mode=0o700)
+        helper = custody / "capacity-proc-observer.py"
+        helper.write_bytes(b"authenticated worker helper"); helper.chmod(0o500)
+        info = helper.lstat()
+        report = custody / "helper-installation-report.private.txt"
+        predecessor = materializer.profile_contract(
+            materializer.WORKER_PROFILE)["installationPredecessor"]
+        predecessor = {**predecessor, "path": str(helper)}
+        report.write_text(
+            "BEFORE|{path}|{sha256}|{uid}:{gid}|{mode}|{device}:{inode}\n".format(
+                **predecessor) +
+            f"INSTALLED|{helper}|{sha(helper)}|{info.st_uid}:{info.st_gid}|0500|"
+            f"{info.st_dev}:{info.st_ino}\n" +
+            f"PRESERVED|{materializer.SUDOERS}|{materializer.SUDOERS_SHA256}|0:0|0440\n")
+        report.chmod(0o600)
+        proof = custody / "helper-installation-proof.private.json"
+        with mock.patch.multiple(materializer, CUSTODY=custody, HELPER=helper,
+                HELPER_PROOF=proof, HELPER_INSTALLATION_REPORT=report,
+                HELPER_UID=info.st_uid, HELPER_GID=info.st_gid,
+                WORKER_HELPER_SHA256=sha(helper),
+                authenticated_consumer=lambda: MODULE):
+            captured = materializer.capture_helper_proof(materializer.WORKER_PROFILE)
+            binding, proof_sha = materializer.helper_binding(
+                materializer.WORKER_INSTALLER_SHA256, sha(helper))
+        self.assertEqual(captured["helperProofSha256"], sha(proof))
+        self.assertEqual(proof_sha, sha(proof))
+        self.assertEqual(binding, {"path": str(helper), "sha256": sha(helper)})
+        value = json.loads(proof.read_text())
+        self.assertEqual(value["installerSha256"], sha(installer_path))
+        self.assertEqual(value["helper"]["identity"], {
+            "device": info.st_dev, "inode": info.st_ino,
+            "uid": info.st_uid, "gid": info.st_gid, "mode": "0500"})
+
     def test_crm_materializer_emits_exact_schema3_request_without_manifest(self):
         source = Path(__file__).resolve().parents[1]
         materializer_path = source / "capacity-recovery-worker-package-materialize.py"
@@ -2389,6 +2439,95 @@ class CapacityRecoveryTests(unittest.TestCase):
         assert spec.loader is not None; spec.loader.exec_module(installer)
         root_info = SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o600,
             st_uid=0, st_gid=0, st_size=1, st_mtime_ns=1, st_ctime_ns=1, st_nlink=1)
+        sudoers_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 3,
+            "st_mode": stat.S_IFREG | 0o440})
+        unknown_info = SimpleNamespace(**{**root_info.__dict__, "st_dev": 64769,
+            "st_ino": 999999, "st_mode": stat.S_IFREG | 0o500})
+        with mock.patch.object(installer.os, "geteuid", return_value=0), \
+                mock.patch.object(installer.os, "getegid", return_value=0), \
+                mock.patch.object(installer, "stable_regular", side_effect=[
+                    (b"source", root_info), (b"sudoers", sudoers_info),
+                    (b"unknown helper", unknown_info)]), \
+                mock.patch.object(installer.os, "open") as opened, \
+                self.assertRaisesRegex(RuntimeError, "PREVIOUS_HELPER_NOT_ALLOWED"):
+            installer.install()
+        opened.assert_not_called()
+
+    def test_worker_successor_installer_is_closed_atomic_and_recoverable(self):
+        source = Path(__file__).resolve().parents[1]
+        installer_path = source / (
+            "install-capacity-proc-observer-worker-package-successor.py")
+        helper_source = source / "capacity-proc-observer-worker-package.py"
+        spec = importlib.util.spec_from_file_location(
+            "worker_successor_installer", installer_path)
+        installer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(installer)
+        self.assertEqual(sha(helper_source), installer.SOURCE_SHA256)
+        self.assertEqual(installer.PREDECESSOR, {
+            "path": str(installer.TARGET),
+            "sha256": "1d808c3955d5d7db4902200b8669e02ec4ae7718e65bd62cd6b20b697c5e306e",
+            "device": 64769, "inode": 786791,
+            "uid": 0, "gid": 0, "mode": "0500",
+        })
+
+        fixture = self.base / "worker-successor-installer"
+        fixture.mkdir(mode=0o755)
+        source_path = fixture / helper_source.name
+        shutil.copy2(helper_source, source_path); source_path.chmod(0o600)
+        target = fixture / "capacity-proc-observer.py"
+        predecessor_raw = b"approved campaign observer predecessor"
+        target.write_bytes(predecessor_raw); target.chmod(0o500)
+        sudoers = fixture / "sudoers"
+        sudoers_raw = b"closed sudoers bytes\n"
+        sudoers.write_bytes(sudoers_raw); sudoers.chmod(0o440)
+        uid, gid = os.geteuid(), os.getegid()
+        before = target.lstat()
+        predecessor = {"path": str(target), "sha256": sha(target),
+            "device": before.st_dev, "inode": before.st_ino,
+            "uid": uid, "gid": gid, "mode": "0500"}
+        with mock.patch.multiple(installer, SOURCE=source_path, TARGET=target,
+                SUDOERS=sudoers, SUDOERS_SHA256=sha(sudoers),
+                ROOT_UID=uid, ROOT_GID=gid, SOURCE_UID=uid, SOURCE_GID=gid,
+                PREDECESSOR=predecessor):
+            result = installer.install()
+            lines = installer.result_lines(result)
+        self.assertEqual(result["installationState"], "INSTALLED")
+        self.assertEqual(target.read_bytes(), source_path.read_bytes())
+        self.assertEqual(sha(target), installer.SOURCE_SHA256)
+        self.assertNotEqual(result["installed"]["inode"], before.st_ino)
+        self.assertEqual(sudoers.read_bytes(), sudoers_raw)
+        self.assertEqual(lines[0],
+            "BEFORE|{path}|{sha256}|{uid}:{gid}|{mode}|{device}:{inode}".format(
+                **predecessor))
+        self.assertTrue(lines[1].startswith("INSTALLED|"))
+        self.assertTrue(lines[2].startswith("PRESERVED|"))
+
+        installed_inode = target.lstat().st_ino
+        with mock.patch.multiple(installer, SOURCE=source_path, TARGET=target,
+                SUDOERS=sudoers, SUDOERS_SHA256=sha(sudoers),
+                ROOT_UID=uid, ROOT_GID=gid, SOURCE_UID=uid, SOURCE_GID=gid,
+                PREDECESSOR=predecessor):
+            recovered = installer.install()
+            recovered_lines = installer.result_lines(recovered)
+        self.assertEqual(recovered["installationState"],
+                         "RECOVERED_ALREADY_INSTALLED")
+        self.assertEqual(target.lstat().st_ino, installed_inode)
+        self.assertTrue(recovered_lines[0].startswith("RECOVERED|"))
+        self.assertFalse(any(line.startswith(("BEFORE|", "INSTALLED|"))
+                             for line in recovered_lines))
+
+    def test_worker_successor_installer_denies_other_predecessor(self):
+        installer_path = Path(__file__).resolve().parents[1] / (
+            "install-capacity-proc-observer-worker-package-successor.py")
+        spec = importlib.util.spec_from_file_location(
+            "worker_successor_negative_installer", installer_path)
+        installer = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(installer)
+        root_info = SimpleNamespace(st_dev=1, st_ino=2,
+            st_mode=stat.S_IFREG | 0o600, st_uid=0, st_gid=0, st_size=1,
+            st_mtime_ns=1, st_ctime_ns=1, st_nlink=1)
         sudoers_info = SimpleNamespace(**{**root_info.__dict__, "st_ino": 3,
             "st_mode": stat.S_IFREG | 0o440})
         unknown_info = SimpleNamespace(**{**root_info.__dict__, "st_dev": 64769,

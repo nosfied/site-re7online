@@ -1061,8 +1061,12 @@ que permita distinguir esse conjunto literal de uma árvore genericamente
 gravável por grupo. O estado anterior era
 `CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT`; o delta fechado foi implementado e
 foi revisado no HEAD `d65a8f0a…`, árvore `954217f2…`, com CI
-`43614190415` 4/4. O estado é `CONTRACT_DELTA_REVIEWED_MERGE_READY`, ainda sem
-qualificação produtiva ou autorização destrutiva.
+`43614190415` 4/4, e integrado em `368f1a7a…`. A tentativa produtiva seguinte
+foi negada antes do supervisor por `HELPER_PROOF_IDENTITY`: a prova worker
+histórica está ligada ao inode `800988`, mas o helper instalado é o sucessor
+Campaign API `1d808c39…306e`, identidade `64769:786791`. O estado passou a
+`HELPER_SUCCESSION_IMPLEMENTED_PENDING_REVIEW`, ainda sem qualificação produtiva
+ou autorização destrutiva.
 
 A menor alteração admissível fica restrita à disposição
 `p00-worker-package-audit-afbb7455-v1`: relação canônica dos diretórios derivada
@@ -1078,6 +1082,14 @@ folhas. A próxima ação é integrar esse único delta no consumidor existente.
 Somente após autenticar o merge cabe um novo audit contido e somente leitura.
 Nesta decisão ocorreram zero efeitos produtivos ou destrutivos, e a manutenção
 PM2 do worker segue em frente separada.
+
+A correção de sucessão aceita exclusivamente esse predecessor físico, instala
+exclusivamente o helper worker `a7f1a068…a1c2`, preserva o sudoers autenticado e
+emite um receipt privado com readback da nova identidade. O materializador passa
+a consumir essa nova prova e rejeita o SHA do instalador anterior e o inode
+histórico. A instalação continua condicionada à autorização administrativa e à
+autenticação legítima do operador; o audit continua uma operação posterior,
+única e somente leitura.
 
 As seis gerações com análise aberta na seção de 03/11 são escopo de
 reconciliação documental. Reaproveitar inventários, contratos e receipts para
