@@ -1646,3 +1646,29 @@ novo.
 Os fechamentos 5/5 e 10/10 totalizam **15 caminhos**, **13.579.313.152 B** e
 **459.834 inodes** recuperados. Preservam-se duas custódias e dois conjuntos
 independentes de receipts/journals; não repetir nem combinar autorizações.
+
+#### Próxima rodada dirigida após os lotes terminais — 14/11/2026
+
+A fotografia estrutural reaproveitada tem SHA-256
+`8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`.
+Após excluir os 15 caminhos terminais, uma atualização somente nos candidatos
+literais confirmou sete releases históricas presentes, totalizando
+**3.345.813.504 B e 111.106 inodes**, sem referência em `current`, grafo, PM2
+vivo/salvo ou listeners ativos. Nenhuma retirada, intenção ou autorização foi
+produzida.
+
+| Lote | Caminhos | Bytes físicos | Inodes | Classe | Precedente | Risco | Custódia | Decisão |
+| --- | --- | ---: | ---: | --- | --- | --- | --- | --- |
+| frontend histórico | `9f4cbe0f…-front`; `fa60f0f6…-front`; `fa60f0f6…-front-css-17bd5fb8` | **1.917.022.208** | 76.720 | `LEGACY_RUNTIME_EQUIVALENT` | procedimento excepcional 5/5 e 10/10 | ausência de pacote integral para 9f4/CSS; não há `.data` nas árvores | pacote fa60 plain presente; custódia integral local ausente | **prioridade 1**, preservar/restore antes de preparar retirada |
+| worker histórico | `worker-bf5f1d76…-b66bb89a`; `worker-minimal-hybrid-b9b58177-verified-v3`; `worker-minimal-reactive-afbb7455-verified` | **1.065.451.520** | 24.544 | `LEGACY_RUNTIME_EQUIVALENT` | procedimento excepcional 5/5 e 10/10 | autoridade integral do afbb ausente; três `.data` externos | archives/pacotes de b66 e b9; sem custódia integral do lote | prioridade 2; preservar symlinks/destinos externos |
+| campaign API | `campaign-eligibility-recovery-final-reviewed-20261008` | **363.339.776** | 9.842 | `LEGACY_RUNTIME_EQUIVALENT` | procedimento excepcional 5/5 | `.data` compartilhado e ausência de custódia integral | manifesto privado integral, sem archive restaurável confirmado | prioridade 3, lote independente |
+
+O próximo lote fechado para **preservação e preparação**, não para retirada, é o
+frontend histórico de três caminhos. A sequência reaproveita o procedimento
+comprovado nos lotes excepcionais: comparar primeiro o que já é restaurável pelo
+pacote fa60, preservar externamente apenas o complemento necessário ou a árvore
+integral quando a cobertura não puder ser provada, executar restore isolado e só
+então recapturar gates operacionais e produzir intenção literal. Qualquer efeito
+destrutivo exige nova autorização específica. Os outputs (~3,55 GB), fontes
+históricas (~2,01 GB) e controles de deploy não entram nessa seleção, pois ainda
+contêm autoridades/evidências ou negativas não reconciliadas.

@@ -106,6 +106,55 @@ runtimes — foi superada pelo fechamento excepcional terminal. Ele não deve se
 integrado automaticamente; qualquer utilidade genérica remanescente exige revisão
 independente e não reabre o lote 5/5.
 
+## 2-C. Descoberta dirigida posterior aos lotes 5/5 e 10/10 — 14/11/2026
+
+A descoberta reutilizou a fotografia estrutural
+`/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256
+`8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`,
+e eliminou primeiro os 15 caminhos `TERMINAL_SANITIZED / DO_NOT_REPEAT`. A
+atualização foi estritamente dirigida: `du -x -B1 -s` nos filhos literais
+selecionados, sob `ionice -c3`, `nice -n10` e timeout de 240 segundos por
+passagem, seguida de readback de `current`, grafo, PM2 vivo/salvo e listeners.
+Não houve nova auditoria global, hashing integral, transferência, `prepare` ou
+efeito destrutivo. O saldo observado foi **20.631.146.496 B livres**.
+
+Os sete candidatos abaixo continuam fisicamente presentes. A medição conjunta,
+em uma única passagem e sem somar filhos, registrou **3.345.813.504 B e 111.106
+inodes**. Nenhum aparece em `current`, no grafo vigente, nos `cwd` do PM2 ou nos
+listeners ativos; essa ausência operacional é condição necessária, mas não
+autoridade de retirada.
+
+| Caminho literal / classe | Device:inode | Bytes / inodes atuais | Autoridade já disponível | Proteção ou impedimento | Decisão |
+| --- | ---: | ---: | --- | --- | --- |
+| `/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5778416` | 637.677.568 / 25.519 | registros e manifests da preparação frontend 9f4 | pacote histórico principal não está mais no caminho registrado; nenhuma custódia integral local encontrada | incluir no próximo lote somente após preservação externa autenticada |
+| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5803927` | 639.291.392 / 25.587 | pacote `frontend-fa60f0f6.tar.gz` ainda presente, com SHA histórico registrado | pacote reduz transferência apenas se sua cobertura de restauração for comprovada; não substitui custódia integral por presunção | candidato prioritário |
+| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5829522` | 640.053.248 / 25.614 | registros e manifests da correção CSS | pacote corrigido não está mais no caminho histórico registrado; nenhuma custódia integral local encontrada | incluir no próximo lote somente após preservação externa autenticada |
+| `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:2966832` | 334.172.160 / 8.393 | archive privado de retorno do worker ainda presente | `.data` é symlink externo e deve permanecer fora de qualquer archive/efeito | segundo lote dirigido |
+| `/opt/re7online/releases/worker-minimal-hybrid-b9b58177-verified-v3` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5557758` | 365.600.768 / 8.070 | pacote `worker-minimal-b9-v3.tar.gz` ainda presente | cobertura integral e restauração ainda não vinculadas ao runtime; `.data` externo protegido | segundo lote dirigido |
+| `/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5770335` | 365.678.592 / 8.081 | manifests e cadeia histórica preservados | pacote principal não foi localizado na custódia registrada; `.data` externo protegido | segundo lote dirigido |
+| `/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:6029469` | 363.339.776 / 9.842 | manifesto privado integral registrado | não há custódia integral externa confirmada; `.data` aponta para o destino compartilhado produtivo | lote separado, depois das linhagens maiores |
+
+### Priorização fechada
+
+1. **Frontend 9f4/fa60/fa60-css:** **1.917.022.208 B e 76.720 inodes**;
+   próximo lote escolhido. Não há `.data` nessas três árvores. Antes de copiar,
+   confrontar o pacote fa60 existente com a matriz de restauração; transferir
+   somente bytes ainda sem autoridade recuperável. A retirada exige custódia
+   externa, restore, perfil literal, gates voláteis, intenção e autorização
+   próprias.
+2. **Workers b66/b9/afbb:** **1.065.451.520 B e 24.544 inodes**; segundo lote,
+   com os três destinos externos `.data` explicitamente preservados.
+3. **Campaign API:** **363.339.776 B e 9.842 inodes**; lote médio independente,
+   também com `.data` externo preservado.
+
+Existem, portanto, **dois lotes grandes acima de 1 GB e um lote médio**, total
+potencial atualmente medido de **3.345.813.504 B**. O potencial não é espaço
+autorizado nem recuperado. Os `build-output` remanescentes somam cerca de 3,55 GB,
+mas misturam pacotes, contratos e evidências de releases terminais ou protegidas;
+`release-sources` mantém autoridades históricas e `deploy-control` mantém
+controles/evidências com negativas próprias. Esses grupos permanecem
+`PRESERVE/UNCLASSIFIED`, fora do lote escolhido.
+
 ### Comparação com `worker-package-audit`
 
 | Controle | Lote terminal 5/5 | `worker-package-audit` | Decisão |
