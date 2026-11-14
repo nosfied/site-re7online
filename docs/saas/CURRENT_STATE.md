@@ -116,6 +116,18 @@ zero referências, writers e falhas. API/frontend `fa10f4f5`, worker `e2e7f17a`,
 PM2, dump, banco reportado pelo health e persistências dos tenants permaneceram
 fora do efeito. Não repetir preservação, autorização ou retirada deste caminho.
 
+O próximo lote permanece exclusivamente `worker-package-audit`, com
+365.674.496 B documentados, mas está
+`CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT`. O audit v5 negou por
+`DISPOSITION_TREE_DIRECTORY_IDENTITY`; a evidência dirigida já existente conta
+1.023 diretórios internos `deploy:deploy 0775`, e não deve ser recapturada por
+novo audit sem mudança material. A decisão mínima é vincular, somente à
+disposição literal existente, a relação exata de diretórios derivada das folhas
+e links selados e exigir principal/grupo fechados, locks, zero referências e
+writers e revalidação em cada fase. Não há `chmod`, relaxamento global,
+`prepare`, autorização ou retirada nesta atualização. A correção da definição
+PM2 do worker produtivo continua independente e sem restart, save ou mutação.
+
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
 ---

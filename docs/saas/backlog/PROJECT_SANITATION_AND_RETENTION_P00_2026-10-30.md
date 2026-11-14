@@ -1051,6 +1051,29 @@ Nenhum request, plano ou intenção novos foi produzido.
 | Worktrees históricos de `deploy-control` | 0 B qualificados; #352 cobre somente novos worktrees. |
 | `build-output` | Os runtimes d7 são efeitos terminais autenticados; os demais runtimes derivados já encerrados permanecem irrepetíveis. Pacotes, manifestos, índices e evidências residuais continuam preservados. |
 
+#### Decisão contratual sucessora de `worker-package-audit` — 14/11/2026
+
+O audit v5 e seu plano terminal permanecem imutáveis e não serão repetidos sem
+delta material. A leitura dirigida já existente confirmou raiz, ancestrais e
+autoridade e enumerou 1.023 diretórios internos `deploy:deploy 0775`. O contrato
+atual autentica as folhas e os 11 links, mas não sela uma política de diretórios
+que permita distinguir esse conjunto literal de uma árvore genericamente
+gravável por grupo. O estado é
+`CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT`, não elegibilidade e não autorização.
+
+A menor alteração admissível fica restrita à disposição
+`p00-worker-package-audit-afbb7455-v1`: relação canônica dos diretórios derivada
+dos caminhos já selados; modo `0775` permitido apenas para `deploy:deploy` com o
+grupo contendo exclusivamente `deploy`; readback e revalidação em `audit`,
+`prepare` e `execute`; locks e observação privilegiada com zero referências e
+writers. Relação extra/ausente, owner/grupo/modo divergente, principal adicional
+no grupo ou drift entre fases deve negar. Os efeitos continuam sendo somente
+`unlink` e `rmdir` literais; não se admite `chmod`, prefixo livre, `rm -r` ou
+exceção global. A próxima ação é revisar e testar esse único delta no consumidor
+existente. Somente após CI cabe um novo audit contido. Nesta decisão ocorreram
+zero efeitos produtivos ou destrutivos, e a manutenção PM2 do worker segue em
+frente separada.
+
 As seis gerações com análise aberta na seção de 03/11 são escopo de
 reconciliação documental. Reaproveitar inventários, contratos e receipts para
 identificar um artefato literal ainda presente, sua autoridade preservada,

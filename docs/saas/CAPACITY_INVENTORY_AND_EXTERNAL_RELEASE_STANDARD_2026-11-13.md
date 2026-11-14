@@ -101,11 +101,30 @@ dirigida de 14/11 confirmou device/inode, UID/GID, modo e nlink exatos da raiz,
 dos três ancestrais e da autoridade, mas enumerou **1.023 diretórios internos
 `deploy:deploy 0775`**. Isso reproduz materialmente
 `DISPOSITION_TREE_DIRECTORY_IDENTITY`; não existe delta que autorize repetir o
-audit v5. O plano fechado para execução permanece: primeiro obter uma decisão
-contratual específica sobre esses modos sem mutar o acervo; depois regressão do
-mesmo consumidor; somente então novo `audit` contido, `prepare` revisável e
-`AUTHORIZE_ONCE` separada. Nesta revisão foram executados zero comandos
-destrutivos, e nenhuma dessas etapas posteriores está autorizada.
+audit v5.
+
+**Decisão contratual de 14/11:** `CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT`. O
+manifesto fecha todas as folhas regulares e os 11 links, mas o schema vigente não
+vincula uma política autenticada para a relação completa de diretórios internos;
+o consumidor apenas rejeita qualquer bit `0022`. Por isso, nem a contagem de
+1.023 diretórios nem o plano terminal negado autorizam converter `0775` em PASS.
+A menor ação segura é estender somente a disposição literal
+`p00-worker-package-audit-afbb7455-v1`: derivar o conjunto exato de diretórios
+dos caminhos de folhas e links já selados, vincular sua relação canônica ao
+manifesto e admitir `0775` exclusivamente para `deploy:deploy` quando o grupo
+`deploy` tiver somente o principal `deploy`. `audit`, `prepare` e `execute`
+devem reabrir esse binding, recapturar identidades sob os locks e exigir zero
+referências e writers pelo observador privilegiado. Diretório extra/ausente,
+modo diferente, outro owner/grupo, grupo ampliado, relação divergente ou drift
+entre fases continua sendo negativa material.
+
+Não haverá `chmod`, exceção por prefixo, allowlist genérica nem alteração dos
+efeitos: permanecem `unlink` literal por folha e `rmdir` literal em pós-ordem.
+A regressão fechada precisa cobrir as negativas acima e preservar os perfis já
+integrados. Somente depois de revisão e CI desse delta caberá **um** novo `audit`
+produtivo contido; `prepare` e autorização destrutiva continuam fronteiras
+posteriores e separadas. Nesta reconciliação foram executados zero comandos
+destrutivos e a manutenção PM2 do worker permanece fora deste lote.
 
 O PR #394 permanece draft no HEAD `992001005c6eba20b85e80f0b8cf62194a725784`.
 Sua finalidade específica — completar autoridade AF26 para os mesmos cinco
@@ -179,11 +198,9 @@ O modo `0775` não prova, isoladamente, writer ativo; na fotografia ele represen
 incompatibilidade com a regra que proíbe árvore candidata gravável por grupo ou
 outros. Ainda assim é risco concreto de mutabilidade entre relação autenticada e
 efeito, e o audit anterior não pode ser convertido em PASS. A menor ação segura é
-uma admissão fechada **somente se** o grupo autenticado não ampliar os principais,
-os modos `0775` coincidirem com a autoridade enumerada, as relações forem
-revalidadas antes de `prepare` e `execute` e writers/referências continuarem zero.
-Essa decisão requer correção e regressão específicas no consumidor existente;
-`chmod`, exceção global ou reutilização direta do perfil 5/5 são proibidos.
+o delta fechado descrito acima, no consumidor existente. Ele não altera a
+autoridade de folhas, não reutiliza o perfil 5/5 e não mistura a correção futura
+da definição PM2 do worker com recuperação de capacidade.
 
 ## 3. Classes e decisões de limpeza
 

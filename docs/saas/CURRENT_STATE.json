@@ -1828,7 +1828,7 @@
       "candidate": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit",
       "class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
       "documentedPhysicalBytes": 365674496,
-      "state": "PRIORITIZED_BLOCKED_BY_CONFIRMED_DIRECTORY_MODES",
+      "state": "CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT",
       "lastPredicate": "DISPOSITION_TREE_DIRECTORY_IDENTITY",
       "directedReadOnlyCheck": {
         "candidateRootAndAncestorsMatchManifest": true,
@@ -1836,6 +1836,19 @@
         "groupWritableDirectoryCount": 1023,
         "observedDirectoryMode": "0775",
         "auditRepeatJustified": false
+      },
+      "contractDecision": {
+        "scope": "p00-worker-package-audit-afbb7455-v1",
+        "requiresDirectorySetDerivedFromSealedLeavesAndLinks": true,
+        "requiresCanonicalDirectoryRelationBinding": true,
+        "proposedAllowedOwnerGroup": "deploy:deploy",
+        "proposedAllowedMode": "0775",
+        "requiresExclusiveDeployGroupPrincipal": true,
+        "requiresZeroReferencesAndWritersAtEveryPhase": true,
+        "globalRelaxationAllowed": false,
+        "chmodAllowed": false,
+        "nextAuditBeforeReviewedDelta": false,
+        "pm2WorkerMaintenanceSeparate": true
       },
       "destructiveAuthorizationGranted": false
     }
