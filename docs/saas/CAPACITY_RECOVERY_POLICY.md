@@ -1,5 +1,12 @@
 # Política canônica de recuperação mínima de capacidade
 
+## Fechamento extraordinário P00 — recibo terminal 9/9 e método reutilizável (14/11/2026)
+
+O lote `p00-nine-private-releases-exceptional-20261114-v1` passou por custódia e restauração 9/9, autorização específica, observação `EXECUTE` completa sem referências/writers/falhas e **retirada terminal 9/9**, receipt `4c834211cf16c0b4b7418e18641bbc090c04280d8e30b7f2b2c4661969f8dc2a`, journal `f5839ac5161d4138ea42e58eac7574e1a4490c472a0fa28db828fa24f5b677a9`. Recuperação **8.897.097.728 B / 309.433 inodes**, sem efeitos extraescopo ou impacto produtivo reportado. Somado aos lotes excepcionais 5/5, 10/10, frontend 3/3 e Campaign API 1/1, o total **não duplicado desses cinco lotes** é 28 caminhos, **24.756.744.192 B / 855.823 inodes**. `TERMINAL_SANITIZED / DO_NOT_REPEAT` para todos. A classificação anterior `NO_ELIGIBLE_ECONOMIC_BATCH` foi fotografia anterior à custódia 9/9, não fundamento para reinvestigação.
+
+A **metodologia reutilizável**, seus detalhes de `.data` físico versus symlink externo, readback, restauração, helper/consumidor, ordenação de `candidatePaths`, atestação, efeitos literais, journal, medições e falhas evitáveis estão documentados no [fechamento P00](../reviews/CONVERTA_P00_TERMINAL_CLOSURE_AND_REUSABLE_RETIREMENT_METHOD_2026-11-14.md). Reutilizar metodologia e verificações, **nunca** a autorização, allowlist, prova inode ou intenção de lote anterior. O escopo excepcional está encerrado; a rotina de capacidade volta ao lifecycle de gerações. Nenhum efeito destrutivo decorre desta documentação.
+
+
 Esta política define o único fluxo normal para qualificar e retirar resíduos de
 capacidade fora do encerramento obrigatório de uma geração. A implementação é
 `scripts/capacity-recovery.py`; executores privados, comandos improvisados e
