@@ -549,8 +549,22 @@ class CapacityRecoveryTests(unittest.TestCase):
         }
         return root, authority, entry, links
 
-    def worker_package_audit_disposition_fixture(self, suffix="worker-binding"):
-        root, authority, entry, links = self.worker_tree_fixture(suffix)
+    def worker_package_audit_disposition_fixture(self, suffix="worker-binding", *,
+                                                 extra_directory=False):
+        root, authority, entry, links = self.worker_tree_fixture(
+            suffix)
+        for directory in sorted((item for item in root.rglob("*")
+                                 if item.is_dir() and not item.is_symlink())):
+            directory.chmod(0o775)
+        if extra_directory:
+            (root / "unexpected-empty").mkdir(mode=0o775)
+        root_info = root.lstat()
+        entry["identity"] = {
+            "device": root_info.st_dev, "inode": root_info.st_ino,
+            "nlink": root_info.st_nlink, "uid": root_info.st_uid,
+            "gid": root_info.st_gid,
+            "mode": f"0{stat.S_IMODE(root_info.st_mode):03o}",
+        }
         control = self.base / f"worker-control-{suffix}" / "control"
         env = control / "apps/whatsapp-agent/.env.example"
         env.parent.mkdir(parents=True)
@@ -589,12 +603,21 @@ class CapacityRecoveryTests(unittest.TestCase):
         binding = {"path": str(manifest), "sha256": sha(manifest)}
         candidate = {"class": "CLOSED_PREPARATION_MANIFEST_DISPOSITION",
                      "path": str(root), "dispositionManifest": binding}
+        sealed_paths = {
+            line.split("  ", 1)[1]
+            for line in (root / "PACKAGE_FILES.sha256").read_text().splitlines()
+        } | {"PACKAGE_FILES.sha256"} | {relative for relative, _target in links}
+        internal_directory_count = len(MODULE._sealed_parent_directories(sealed_paths))
         patches = mock.patch.multiple(
             MODULE, ROOT=control, PREPARATIONS_ROOT=self.preparations,
             RELEASES_ROOT=self.releases,
             WORKER_PACKAGE_AUDIT_MANIFEST_PATH=manifest,
             WORKER_PACKAGE_AUDIT_MANIFEST_SHA256=sha(manifest),
-            WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1")
+            WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1",
+            WORKER_PACKAGE_AUDIT_CANDIDATE=root,
+            WORKER_PACKAGE_AUDIT_INTERNAL_DIRECTORY_COUNT=internal_directory_count,
+            deploy_identity=lambda: (os.geteuid(), os.getegid()),
+            deploy_group_principals=lambda: ["deploy"])
         return {"root": root, "authority": authority, "entry": entry,
                 "links": links, "control": control, "manifest": manifest,
                 "binding": binding, "candidate": candidate, "patches": patches,
@@ -1472,7 +1495,11 @@ class CapacityRecoveryTests(unittest.TestCase):
         common = dict(
             PREPARATIONS_ROOT=self.preparations, RELEASES_ROOT=self.releases,
             WORKER_PACKAGE_AUDIT_MANIFEST_SHA256=sha(audit_manifest),
-            WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1")
+            WORKER_PACKAGE_AUDIT_DISPOSITION_ID="fixture-worker-package-audit-v1",
+            WORKER_PACKAGE_AUDIT_CANDIDATE=fixture["root"],
+            WORKER_PACKAGE_AUDIT_INTERNAL_DIRECTORY_COUNT=4,
+            deploy_identity=lambda: (os.geteuid(), os.getegid()),
+            deploy_group_principals=lambda: ["deploy"])
         with mock.patch.multiple(audit_module, **common), \
                 mock.patch.object(audit_module, "_proc_targets", return_value=scan()):
             audited = audit_module.audit_request(self.request, sha(self.request), plan)
@@ -1595,6 +1622,167 @@ class CapacityRecoveryTests(unittest.TestCase):
                                        "DISPOSITION_TREE_DIRECTORY_IDENTITY"):
             MODULE.authenticate_manifest_disposition(
                 fixture["candidates"][1], json.loads(self.operational.read_text()), scan())
+
+    def test_worker_package_historical_directories_require_closed_relation(self):
+        fixture = self.worker_package_audit_disposition_fixture("worker-historical-layout")
+        with fixture["patches"]:
+            observed = MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+        self.assertEqual(observed["detail"]["directoryCount"], 5)
+        policy = observed["detail"]["historicalDirectoryPolicy"]
+        self.assertEqual(policy["kind"], "SEALED_LEAF_PARENT_RELATION")
+        self.assertEqual(policy["internalDirectoryCount"], 4)
+        self.assertEqual(policy["mode"], "0775")
+        self.assertEqual(policy["groupPrincipals"], ["deploy"])
+        self.assertTrue(MODULE.valid_sha(policy["relativePathsSha256"]))
+
+        fixture = self.worker_package_audit_disposition_fixture(
+            "worker-extra-directory", extra_directory=True)
+        with fixture["patches"], self.assertRaisesRegex(
+                MODULE.Denied, "DISPOSITION_TREE_DIRECTORY_RELATION"):
+            MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+
+    def test_worker_package_historical_directory_identity_and_group_are_closed(self):
+        fixture = self.worker_package_audit_disposition_fixture("worker-directory-mode")
+        (fixture["root"] / "payload").chmod(0o755)
+        with fixture["patches"], self.assertRaisesRegex(
+                MODULE.Denied, "DISPOSITION_TREE_DIRECTORY_IDENTITY"):
+            MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+
+        fixture = self.worker_package_audit_disposition_fixture("worker-directory-owner")
+        target = fixture["root"] / "payload"
+        original = target.lstat()
+        values = list(original)
+        values[4] = original.st_uid + 1
+        wrong_owner = os.stat_result(values)
+        physical = MODULE.physical_directory
+
+        def altered_owner(path, predicate):
+            return wrong_owner if path == target else physical(path, predicate)
+
+        with fixture["patches"], mock.patch.object(
+                MODULE, "physical_directory", side_effect=altered_owner), \
+                self.assertRaisesRegex(
+                    MODULE.Denied, "DISPOSITION_TREE_DIRECTORY_IDENTITY"):
+            MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+
+        fixture = self.worker_package_audit_disposition_fixture("worker-directory-group")
+        with fixture["patches"], mock.patch.object(
+                MODULE, "deploy_group_principals", return_value=["deploy", "other"]), \
+                self.assertRaisesRegex(
+                    MODULE.Denied, "DISPOSITION_TREE_GROUP_PRINCIPAL_UNEXPECTED"):
+            MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+
+        fixture = self.worker_package_audit_disposition_fixture("worker-group-race")
+        with fixture["patches"], mock.patch.object(
+                MODULE, "deploy_group_principals",
+                side_effect=[["deploy"], ["deploy", "other"]]), \
+                self.assertRaisesRegex(
+                    MODULE.Denied, "DISPOSITION_TREE_GROUP_PRINCIPAL_CHANGED"):
+            MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+
+    def test_worker_package_historical_concurrent_directory_change_denies(self):
+        fixture = self.worker_package_audit_disposition_fixture("worker-directory-race")
+        target = fixture["root"] / "payload"
+        original = MODULE.stable_regular_digest
+        changed = False
+
+        def mutate_after_digest(path, *args, **kwargs):
+            nonlocal changed
+            result = original(path, *args, **kwargs)
+            if not changed and path.name == "file-00000.bin":
+                target.chmod(0o755)
+                changed = True
+            return result
+
+        with fixture["patches"], mock.patch.object(
+                MODULE, "stable_regular_digest", side_effect=mutate_after_digest), \
+                self.assertRaisesRegex(
+                    MODULE.Denied, "DISPOSITION_TREE_DIRECTORY_CHANGED"):
+            MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+        self.assertTrue(changed)
+
+    def test_worker_package_historical_concurrent_leaf_change_denies(self):
+        fixture = self.worker_package_audit_disposition_fixture("worker-leaf-race")
+        candidate_leaf = fixture["root"] / "payload/file-00000.bin"
+        authority_leaf = fixture["authority"] / "payload/file-00000.bin"
+        original = MODULE.stable_regular_digest
+        changed = False
+
+        def mutate_after_authority_digest(path, *args, **kwargs):
+            nonlocal changed
+            result = original(path, *args, **kwargs)
+            if not changed and path == authority_leaf:
+                candidate_leaf.write_bytes(b"payload-X")
+                candidate_leaf.chmod(0o644)
+                changed = True
+            return result
+
+        with fixture["patches"], mock.patch.object(
+                MODULE, "stable_regular_digest", side_effect=mutate_after_authority_digest), \
+                self.assertRaisesRegex(MODULE.Denied, "DISPOSITION_TREE_LEAF_CHANGED"):
+            MODULE.authenticate_manifest_disposition(
+                fixture["candidate"], json.loads(self.operational.read_text()), scan())
+        self.assertTrue(changed)
+
+    def test_worker_package_historical_mode_drift_denies_prepare_and_execute(self):
+        prepare_fixture = self.worker_package_audit_disposition_fixture(
+            "worker-prepare-mode-drift")
+        private_json(self.request, self.request_value([prepare_fixture["candidate"]]))
+        prepare_plan = prepare_fixture["control"].parent / "plan.private.json"
+        with prepare_fixture["patches"], self.process_patch():
+            audited = MODULE.audit_request(self.request, sha(self.request), prepare_plan)
+        self.assertEqual(audited["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+        (prepare_fixture["root"] / "payload").chmod(0o755)
+        output = io.StringIO()
+        with prepare_fixture["patches"], self.process_patch(), \
+                mock.patch.object(sys, "stdout", output), self.assertRaises(SystemExit):
+            MODULE.prepare_plan(
+                prepare_plan, sha(prepare_plan), self.intent, self.commands,
+                self.seal_manifest)
+        self.assertIn("DISPOSITION_TREE_DIRECTORY_IDENTITY", output.getvalue())
+        self.assertFalse(self.intent.exists())
+
+        execute_fixture = self.worker_package_audit_disposition_fixture(
+            "worker-execute-mode-drift")
+        private_json(self.request, self.request_value([execute_fixture["candidate"]]))
+        execute_plan = execute_fixture["control"].parent / "plan.private.json"
+        execute_intent = self.base / "execute-drift-intent.private.json"
+        execute_commands = self.base / "execute-drift-commands.private.txt"
+        execute_seal = self.base / "execute-drift-seal.private.json"
+        with execute_fixture["patches"], self.process_patch():
+            audited = MODULE.audit_request(self.request, sha(self.request), execute_plan)
+            self.assertEqual(audited["state"], "P00_CAPACITY_RECOVERY_AUDIT_PASS")
+            MODULE.prepare_plan(
+                execute_plan, sha(execute_plan), execute_intent, execute_commands,
+                execute_seal)
+        sealed = json.loads(execute_intent.read_text())
+        authorization = self.base / "execute-drift-authorization.private.json"
+        private_json(authorization, {
+            "schemaVersion": 1, "kind": "CAPACITY_RECOVERY_AUTHORIZATION",
+            "authorization": "AUTHORIZE_ONCE", "intentSha256": sha(execute_intent),
+            "commandsSha256": sealed["commandsSha256"],
+            "paths": [item["path"] for item in sealed["candidates"]],
+        })
+        (execute_fixture["root"] / "payload").chmod(0o755)
+        receipts = self.base / "execute-drift-receipts"
+        receipts.mkdir(mode=0o700)
+        receipt_root = receipts / "receipt"
+        with execute_fixture["patches"], self.process_patch(), self.assertRaises(SystemExit):
+            MODULE.execute_intent(
+                execute_intent, sha(execute_intent), authorization, sha(authorization),
+                receipt_root)
+        receipt = json.loads((receipt_root / "execution-receipt.private.json").read_text())
+        self.assertEqual(receipt["attemptedCommands"], 0)
+        self.assertIn("EXECUTE_RECAPTURE_DENY:DISPOSITION_TREE_DIRECTORY_IDENTITY",
+                      receipt["failurePredicate"])
+        self.assertTrue(execute_fixture["root"].exists())
 
     def test_manifest_absent_authority_is_a_closed_material_denial(self):
         fixture = self.manifest_disposition_fixture("authority-absent-state")
@@ -1773,6 +1961,10 @@ class CapacityRecoveryTests(unittest.TestCase):
             module.WORKER_PACKAGE_AUDIT_MANIFEST_PATH = manifest
             module.WORKER_PACKAGE_AUDIT_MANIFEST_SHA256 = sha(manifest)
             module.WORKER_PACKAGE_AUDIT_DISPOSITION_ID = "fixture-worker-package-audit-v1"
+            module.WORKER_PACKAGE_AUDIT_CANDIDATE = fixture["root"]
+            module.WORKER_PACKAGE_AUDIT_INTERNAL_DIRECTORY_COUNT = 4
+            module.deploy_identity = lambda: (os.geteuid(), os.getegid())
+            module.deploy_group_principals = lambda: ["deploy"]
             module.PROC_OBSERVER_PATH = helper
             return module
 

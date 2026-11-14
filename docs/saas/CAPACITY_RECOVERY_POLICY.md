@@ -802,6 +802,25 @@ equivalência folha a folha, referências vivas, capacidade e locks serão recap
 nessa fase. Nenhum `prepare`, autorização ou efeito é criado por esta habilitação.
 O manifesto terminal 3/3 permanece byte-exato.
 
+O layout histórico dessa disposição contém exatamente 1.023 diretórios internos
+`deploy:deploy 0775`. A admissão versionada é exclusiva de
+`p00-worker-package-audit-afbb7455-v1` e do caminho literal fixado no consumidor;
+os demais `ENUMERATED_TREE` continuam negando qualquer escrita por grupo ou
+outros. O conjunto admissível de diretórios é derivado exclusivamente dos pais
+das folhas de `PACKAGE_FILES.sha256`, `PACKAGE_SYMLINKS.txt` e dos 11 links
+selados. A contagem, os caminhos relativos, tipo, device/inode, owner, grupo,
+modo, nlink e tempos de identidade entram na relação autenticada. Diretório
+extra ou ausente, modo diferente de `0775`, owner/grupo diferente de
+`deploy:deploy` ou grupo `deploy` com outro principal negam.
+
+O consumidor reabre essa relação em `audit`, `prepare` e `execute`. Cada
+varredura autentica arquivos e links por FD e readback, conserva as identidades
+dos diretórios e folhas e as compara novamente ao final; mudança concorrente de
+conteúdo, identidade, permissão, destino de link ou composição do grupo nega. O
+`execute` mantém ainda os locks canônicos durante a recaptura e os efeitos. Isso
+não cria permissão por prefixo, não executa `chmod` e não muda os comandos
+literais já existentes.
+
 A montagem operacional dessa qualificação reutiliza o procedimento comprovado em
 `p00-capacity-three-archives-916f8d6b-v2` e na retirada sucessora concluída:
 finaliza a fotografia, autentica seus bytes, constrói um request novo, reabre cada

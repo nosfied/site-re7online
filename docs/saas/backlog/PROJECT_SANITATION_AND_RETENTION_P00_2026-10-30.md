@@ -1058,8 +1058,10 @@ delta material. A leitura dirigida já existente confirmou raiz, ancestrais e
 autoridade e enumerou 1.023 diretórios internos `deploy:deploy 0775`. O contrato
 atual autentica as folhas e os 11 links, mas não sela uma política de diretórios
 que permita distinguir esse conjunto literal de uma árvore genericamente
-gravável por grupo. O estado é
-`CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT`, não elegibilidade e não autorização.
+gravável por grupo. O estado anterior era
+`CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT`; o delta fechado foi implementado e
+está `CONTRACT_DELTA_IMPLEMENTED_PENDING_REVIEW`, ainda sem elegibilidade
+produtiva ou autorização.
 
 A menor alteração admissível fica restrita à disposição
 `p00-worker-package-audit-afbb7455-v1`: relação canônica dos diretórios derivada
@@ -1069,7 +1071,9 @@ grupo contendo exclusivamente `deploy`; readback e revalidação em `audit`,
 writers. Relação extra/ausente, owner/grupo/modo divergente, principal adicional
 no grupo ou drift entre fases deve negar. Os efeitos continuam sendo somente
 `unlink` e `rmdir` literais; não se admite `chmod`, prefixo livre, `rm -r` ou
-exceção global. A próxima ação é revisar e testar esse único delta no consumidor
+exceção global. As regressões dirigidas e a suíte integral 154/154 passaram,
+incluindo drift em `prepare`/`execute` e mudanças concorrentes de diretórios e
+folhas. A próxima ação é revisar e integrar esse único delta no consumidor
 existente. Somente após CI cabe um novo audit contido. Nesta decisão ocorreram
 zero efeitos produtivos ou destrutivos, e a manutenção PM2 do worker segue em
 frente separada.

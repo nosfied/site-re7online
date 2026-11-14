@@ -103,12 +103,12 @@ dos três ancestrais e da autoridade, mas enumerou **1.023 diretórios internos
 `DISPOSITION_TREE_DIRECTORY_IDENTITY`; não existe delta que autorize repetir o
 audit v5.
 
-**Decisão contratual de 14/11:** `CONTRACT_DELTA_REQUIRED_BEFORE_REAUDIT`. O
+**Decisão contratual de 14/11:** `CONTRACT_DELTA_IMPLEMENTED_PENDING_REVIEW`. O
 manifesto fecha todas as folhas regulares e os 11 links, mas o schema vigente não
 vincula uma política autenticada para a relação completa de diretórios internos;
 o consumidor apenas rejeita qualquer bit `0022`. Por isso, nem a contagem de
 1.023 diretórios nem o plano terminal negado autorizam converter `0775` em PASS.
-A menor ação segura é estender somente a disposição literal
+A alteração implementada estende somente a disposição literal
 `p00-worker-package-audit-afbb7455-v1`: derivar o conjunto exato de diretórios
 dos caminhos de folhas e links já selados, vincular sua relação canônica ao
 manifesto e admitir `0775` exclusivamente para `deploy:deploy` quando o grupo
@@ -118,10 +118,14 @@ referências e writers pelo observador privilegiado. Diretório extra/ausente,
 modo diferente, outro owner/grupo, grupo ampliado, relação divergente ou drift
 entre fases continua sendo negativa material.
 
-Não haverá `chmod`, exceção por prefixo, allowlist genérica nem alteração dos
+Não há `chmod`, exceção por prefixo, allowlist genérica nem alteração dos
 efeitos: permanecem `unlink` literal por folha e `rmdir` literal em pós-ordem.
-A regressão fechada precisa cobrir as negativas acima e preservar os perfis já
-integrados. Somente depois de revisão e CI desse delta caberá **um** novo `audit`
+A regressão fechada cobre relação extra, modo/owner/grupo divergente, principal
+adicional, mudança concorrente de diretório ou folha e drift em `prepare` e
+`execute`; a suíte integral do consumidor passou 154/154 e preservou os perfis
+anteriores. O consumidor tem SHA-256 `24a42444c0db890616de3fb40b8e46812f66433b230547835f7010e30632ff09`
+e o materializador vinculado `903cb4f162a254a89dde52b47ff150079098da392bea83528f176a5905352d20`.
+Somente depois de revisão e CI desse delta caberá **um** novo `audit`
 produtivo contido; `prepare` e autorização destrutiva continuam fronteiras
 posteriores e separadas. Nesta reconciliação foram executados zero comandos
 destrutivos e a manutenção PM2 do worker permanece fora deste lote.
