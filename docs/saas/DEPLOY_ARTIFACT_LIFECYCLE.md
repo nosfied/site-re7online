@@ -1,5 +1,98 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Fechamento excepcional da Campaign API histórica — terminal
+
+O lote `p00-campaign-api-exceptional-20261114-v1` terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção `7fdbb80a…899d`, o manifesto
+de comandos `c63e3f2e…6f77`, a autorização `9933be4d…2e7e`, o journal
+`c899d701…a52c` e o receipt `8c6e5013…6082` comprovam a única sequência
+`ATTEMPT → RESULT(0) → VERIFIED` e a ausência física de
+`campaign-eligibility-recovery-final-reviewed-20261008`.
+
+A recuperação física medida foi **363.323.392 B e 9.839 inodes**. A observação
+privilegiada imediatamente anterior ao efeito terminou completa, sem referências,
+writers ou falhas. A custódia externa continua preservada no ThinkPad: archive
+`167bd932…786b`, manifesto `4fe74088…5263`, suplemento `2c6b80dd…19bf`, receipt
+`0c8f6d00…da6a` e restauração isolada PASS. `.data` permaneceu externo ao
+archive e ao efeito. API/frontend, worker, PM2, dump, banco, dados e persistências
+dos tenants ficaram fora do comando literal. A autorização foi específica e
+consumida; não reutilizar este perfil para outro caminho.
+
+Somado aos lotes 5/5, 10/10 e frontend 3/3, o fechamento excepcional acumula
+**19 caminhos**, **15.859.646.464 B** e **546.390 inodes** recuperados.
+
+## Fechamento excepcional dos três frontends históricos — terminal
+
+O lote `p00-three-frontends-exceptional-20261114-v1` terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção
+`d84d6e4d15d0fa40dcd4f2704e2897c162c32360199e8a4582df779fd8f0921c`, os
+comandos `dedc42f6ddddda0f1360a96c8060bdb68085847974aad30437d3ab286b7de26f`,
+a autorização `2e805fb27ed7d6aef94d0d5dcbebda13b212db608928459b3abe0075efb193f6`,
+o journal `0e2e21d8761390395ceb5c7ae7a6298976019d51517d4ca5573e9c5c90bc14c9`
+e o receipt `ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7`
+comprovam três sequências `ATTEMPT → RESULT(0) → VERIFIED`.
+
+A recuperação terminal foi **1.917.009.920 B e 76.717 inodes**. Os pacotes já
+existentes no ThinkPad foram reutilizados; somente 21 folhas complementares
+foram preservadas, e a restauração isolada passou 3/3. Índice
+`617ded0a…027a`, receipt de custódia `86654281…18be` e complemento
+`72291aba…fc8b` permanecem protegidos. A observação privilegiada foi completa,
+sem referências, writers ou falhas; current, grafo, PM2, dump e mounts negaram
+dependências. Não havia `.data` nos candidatos, e persistências externas de API,
+worker, banco e tenants ficaram fora do efeito. O helper, o consumidor e a
+autorização eram literais para estes três caminhos.
+
+Antes da Campaign API, os lotes 5/5, 10/10 e frontend 3/3 somavam **18 caminhos**
+e **15.496.323.072 B / 536.551 inodes** recuperados. O total vigente está na
+seção terminal acima. Não repetir nem combinar autorizações desses lotes.
+
+## Fechamento excepcional das dez releases legadas — terminal
+
+O lote fechado `p00-ten-releases-exceptional-20261114-v1` terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção
+`c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f`,
+os comandos `85ddaab1cb39756b277ef68f35902feba7e73f7021e4947080fcc8655bec12aa`,
+a autorização `988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802`,
+o journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`
+e o receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`
+comprovam dez sequências `ATTEMPT → RESULT(0) → VERIFIED` e ausência física.
+
+A retirada recuperou **8.523.984.896 B e 279.130 inodes** segundo a medição
+terminal do receipt. A custódia integral externa permanece preservada, com
+archive `464c60ef94ba7fd9c46e6f85a08772b2e611a24ffc250fa8350bfd436ab110c8`,
+índice `054989cbc839c0358ae1431f90a88112586f78e153b38b0915fcc5c2d9f8ccdf`
+e receipt `cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`.
+A restauração isolada passou; seis symlinks `.data` foram registrados sem seguir
+seus destinos. A observação privilegiada de execução foi completa, sem
+referências, writers ou falhas, e os locks ficaram liberados após o receipt.
+Este perfil e esta autorização eram literais para os dez caminhos e não admitem
+reuso para outro lote.
+
+Somados ao lote 5/5 abaixo, estes dois fechamentos históricos representam
+**15 caminhos** e **13.579.313.152 B / 459.834 inodes**; o total vigente com o
+lote frontend 3/3 está registrado acima. Cada soma referencia receipts distintos
+e não autoriza repetir nenhum deles.
+
+## Fechamento excepcional dos cinco runtimes pré-contrato — terminal
+
+O lote fechado de `879cb1…-api`, `af26…-api`, `af26…-front`, `afbb…-api` e
+`b9b581…-api` terminou `TERMINAL_SANITIZED / DO_NOT_REPEAT`. A preservação
+integral externa foi autenticada antes do primeiro efeito, não seguiu o destino
+de `.data` e passou por restauração isolada. A intenção
+`bce9ab1886cf1bef564f1639210d37f7f307173807208c9fd42f038548e54100`, a
+autorização `a20c6df524b5bdf1ce54a0065e7a3689c4a0cb55b6b87c2ebfe738e9ce9ae298`,
+o journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`
+e o receipt `3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`
+comprovam cinco sequências `ATTEMPT → RESULT(0) → VERIFIED`.
+
+A variação medida foi **5.055.328.256 B e 180.704 inodes**, de
+`7.087.513.600 B`/`8.743.902` livres para
+`12.142.841.856 B`/`8.924.606`. O potencial histórico de 5.055.369.216 B não
+substitui essa medição terminal. Archive, índice, receipt de preservação e
+restauração continuam em custódia privada no ThinkPad. O perfil, o helper e a
+autorização foram literais para este lote; este precedente não admite novo
+caminho, não dispensa custódia/restauração e não autoriza retirada futura.
+
 ## Recuperação mínima de capacidade fora da geração
 
 `scripts/capacity-recovery.py` é o control plane versionado para manutenção do

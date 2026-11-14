@@ -1,12 +1,135 @@
 # Estado canônico do Converta
 
-## Estado vigente — 13/11/2026: Inbox fa10f4f5 ativa, builder sucesso encerrado
+## Estado vigente — 14/11/2026: Inbox fa10f4f5 ativa, Campaign API histórica sanitizada
 
 **DEPLOYED_RETENTION_INCOMPLETE (fotografia terminal da transação produtiva) / BUILDER_FA10_SANITIZED / PRODUCTION HEALTHY, conforme último report.** API e frontend: `immutable-fa10f4f5-external-20261112T233820Z`, target `fa10f4f59c9a05328e536dd25a1668c3ba25939e`, BUILD_ID `4j3t9N75vsvYu9t3DoFq4`; worker `immutable-e2e7f17a-20261022T005110Z`. O record anterior `a838bd33` é **histórico e retorno da API**, não release viva. O frontend anterior `b8d284b6` é retorno imediato.
 
 Journal terminal da implantação SHA-256 `45579306a46dbd79a963b9176531673124147e8a7e667eaef72fec7591bf11e5`; `saveCount=1`; dump `3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a`; marker `ef3cb8edde127f4de841f49f5a329e74fde4a7d34b5fe787463b20d7228fcf5d`; receipt retirement VPS `f12d8260d27f1bc041afddfe8badc0b46cd9f9a8b0a9a732f71b2ebd6a8fa18b` com **zero comandos e zero remoções**. Lock canônico liberado; três PM2 online, health local/público e guarda aberta na geração 47 na última observação. VPS: `7.080.562.688 B` e `8.743.987` inodes livres no último checkpoint informado — não é medição atual.
 
 Builder descartável desta release terminou `SANITIZED/CLOSURE_RECORDED`: receipt `4b4f1a295e5c24acad2d03a8b816925ec46efb790db6ceddbece1c898f93ca7d`; lifecycle `b28caeaf78e0ce006736f8721a8a6ed2a855de8330f7b0934d5654c0b77d69e0`; raiz ausente, worktree ausente no Git; ganho físico atribuído `2.508.197.888 B` e 75.640 inodes com a raiz. **Não repetir deploy, save, marker ou retirada desse builder.** Permanece separada a geração falha `211724Z`, ~78.295.040 B, e as retenções históricas a838 v1/v2 protegidas; não declarar recuperação nem autorização para elas.
+
+O lote excepcional fechado dos cinco runtimes pré-contrato terminou em
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`: receipt
+`3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`,
+journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`,
+5/5 comandos concluídos e ausência física verificada. O saldo passou de
+`7.087.513.600 B` e `8.743.902` inodes livres para `12.142.841.856 B` e
+`8.924.606`; recuperação medida de **5.055.328.256 B e 180.704 inodes**.
+Produção, retornos, worker e `.data` externo foram preservados. A custódia
+integral no ThinkPad, archive `e806a178…a739`, índice `43e84827…cd5` e receipt
+de preservação `f9151e22…31c2` permanecem evidência recuperável e não entram em
+limpeza. A autorização foi específica para os cinco caminhos e não constitui
+política genérica para releases legadas.
+
+O controle excepcional efetivamente executado foi o commit isolado
+`fc58a1f3f320bfa1827af5cf4fdb6ce021d5346b`, árvore
+`a18513473953272fe5011faa29a1d43a211323fa`, consumidor SHA-256
+`a0cf7090…ec4c9`, helper `aedc012b…57a` e instalador `4d363aa0…f8f4`.
+Ele permanece evidência histórica fechada, não control plane geral. As condições
+de eventual reaproveitamento metodológico estão na política de capacidade.
+
+O lote excepcional seguinte de dez releases legadas terminou igualmente em
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`, sem ampliar a autorização do lote 5/5.
+A intenção válida `c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f`,
+a autorização `988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802`,
+o journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`
+e o receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`
+comprovam 10/10 efeitos concluídos e ausência física. A variação atribuída pelo
+receipt foi **8.523.984.896 B e 279.130 inodes**, de `12.114.100.224 B` e
+`8.924.565` inodes livres para `20.638.085.120 B` e `9.203.695`; o readback
+posterior observou `20.638.040.064 B` e `9.203.694`, diferença concorrente que
+não altera a medição terminal. API e frontend `fa10f4f5`, worker `e2e7f17a`,
+health público/local, PostgreSQL por health da API, tenants e `.data` externo
+permaneceram preservados; os locks foram liberados.
+
+A custódia integral `p00-ten-releases-exceptional-20261114-v1` permanece no
+ThinkPad: archive `464c60ef94ba7fd9c46e6f85a08772b2e611a24ffc250fa8350bfd436ab110c8`,
+índice `054989cbc839c0358ae1431f90a88112586f78e153b38b0915fcc5c2d9f8ccdf`
+e receipt `cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`.
+A restauração isolada passou e seis symlinks `.data` foram preservados sem seguir
+seus destinos. Não repetir preservação, autorização ou retirada deste lote.
+
+O lote fechado dos três frontends históricos também terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção
+`d84d6e4d15d0fa40dcd4f2704e2897c162c32360199e8a4582df779fd8f0921c`, a
+autorização `2e805fb27ed7d6aef94d0d5dcbebda13b212db608928459b3abe0075efb193f6`,
+o journal `0e2e21d8761390395ceb5c7ae7a6298976019d51517d4ca5573e9c5c90bc14c9`
+e o receipt `ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7`
+comprovam 3/3 efeitos `ATTEMPT → RESULT(0) → VERIFIED` e ausência física. A
+variação medida foi **1.917.009.920 B e 76.717 inodes**, de
+`20.628.643.840 B`/`9.203.667` livres para
+`22.545.653.760 B`/`9.280.384`. API/frontend `fa10f4f5`, worker `e2e7f17a`,
+PostgreSQL por health, tenants e persistências externas permaneceram saudáveis;
+os locks foram liberados.
+
+A custódia `p00-three-frontends-exceptional-20261114-v1` permanece no ThinkPad:
+índice `617ded0ac44757c25064f1d905461b481b4df8866aa81d8f424c1e705318027a`,
+receipt `86654281c6ed1d6f4fe0c6b45b59b89a4088b91421c6f63ecef86d1a122618be`
+e complemento `72291aba550ffa89197956fba668101ca650681ff8fb787b91531d435792fc8b`.
+A restauração isolada passou 3/3; nenhum `.data` estava nas árvores e nenhum
+destino externo foi seguido. Não repetir preservação, autorização ou retirada.
+
+Os quatro lotes excepcionais somam **19 caminhos terminalmente ausentes**, com
+recuperação acumulada de **15.859.646.464 B e 546.390 inodes**. Esse total é a
+soma dos quatro receipts terminais, não uma nova medição nem nova autorização.
+
+### Continuidade P00 — workers preservados e Campaign API terminal
+
+Os três workers históricos permanecem fisicamente presentes e a custódia
+`p00-three-workers-exceptional-20261114-v1` está
+`PRESERVATION_VERIFIED`, com restauração 3/3 PASS. O receipt de preservação é
+`1a1314ce4ebf5859dde26a82dd31f158cb231997c7247a21c75144a6867392ec`;
+o índice é `a8127b313e9c05c5bcb0acf46714430d6b9b98b83278e9be9868c75d9337148a`.
+`b66` e `b9` não aparecem em `current`, PM2 vivo/salvo ou papéis de
+produção/rollback e são operacionalmente independentes, mas o consumidor atual
+não admite um subconjunto 2/3 e não existe observação privilegiada fechada para
+esses caminhos. Nenhum `prepare` ou intenção foi materializado.
+
+O terceiro candidato, `worker-minimal-reactive-afbb7455-verified`, aparece apenas
+como `PWD` herdado no ambiente vivo e no dump do processo produtivo. O PID
+reautenticado executa efetivamente a release
+`immutable-e2e7f17a-20261022T005110Z`: cwd e entrypoint estão em
+`worker-runtime`, não existem FDs ou mapas nativos nos candidatos e o código
+consultado não lê explicitamente `process.env.PWD`. A origem é a contaminação de
+definição PM2 já documentada. A allowlist canônica do worker não contém `PWD`,
+mas a definição limpa ainda não pode ser construída sem uma fonte privada
+autenticada contendo somente as variáveis legítimas. Não derivar essa fonte do
+ambiente introspectado nem editar o dump. Qualquer correção futura exige janela
+própria, troca controlada somente do worker, rollback comprovado e no máximo um
+`pm2 save` depois do aceite; nenhum desses efeitos foi executado.
+
+A Campaign API histórica
+`/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008`
+terminou `TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção `7fdbb80a…899d`, a
+autorização `9933be4d…2e7e`, o journal `c899d701…a52c` e o receipt
+`8c6e5013…6082` comprovam `ATTEMPT → RESULT(0) → VERIFIED`, ausência física e
+recuperação medida de **363.323.392 B e 9.839 inodes**. O saldo passou de
+**22.550.335.488 B / 9.280.357 inodes** para **22.913.658.880 B / 9.290.196
+inodes**.
+
+A custódia externa `p00-campaign-api-exceptional-20261114-v1` permanece
+`PRESERVATION_VERIFIED`: archive `167bd932…786b`, manifesto `4fe74088…5263`,
+suplemento `2c6b80dd…19bf`, receipt `0c8f6d00…da6a` e restauração isolada de
+8.821 arquivos e 11 symlinks. `.data` não foi seguido e seu destino externo
+permaneceu disponível. A observação privilegiada de execução foi completa, com
+zero referências, writers e falhas. API/frontend `fa10f4f5`, worker `e2e7f17a`,
+PM2, dump, banco reportado pelo health e persistências dos tenants permaneceram
+fora do efeito. Não repetir preservação, autorização ou retirada deste caminho.
+
+O próximo lote permanece exclusivamente `worker-package-audit`, com
+365.674.496 B documentados, mas está
+`CONTRACT_DELTA_REVIEWED_MERGE_READY`. O audit v5 negou por
+`DISPOSITION_TREE_DIRECTORY_IDENTITY`; a evidência dirigida já existente conta
+1.023 diretórios internos `deploy:deploy 0775`, e não deve ser recapturada por
+novo audit sem mudança material. A decisão mínima é vincular, somente à
+disposição literal existente, a relação exata de diretórios derivada das folhas
+e links selados e exigir principal/grupo fechados, locks, zero referências e
+writers e revalidação em cada fase. O consumidor e o materializador vinculados
+passaram a suíte integral 154/154; a revisão final do HEAD `d65a8f0a…` e a CI
+`43614190415` passaram 4/4. A integração autenticada ainda precede o único novo
+audit produtivo somente leitura. Não há `chmod`, relaxamento global, `prepare`,
+autorização ou retirada nesta atualização. A correção da definição
+PM2 do worker produtivo continua independente e sem restart, save ou mutação.
 
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 

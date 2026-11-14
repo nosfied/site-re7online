@@ -61,6 +61,10 @@ WORKER_PACKAGE_AUDIT_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/worker-package-audit-disposition.v1.json")
 WORKER_PACKAGE_AUDIT_MANIFEST_SHA256 = "40727a3c5f6c685ffa0169366310b6f4d92a203ade522835da0c83fbb3868c76"
 WORKER_PACKAGE_AUDIT_DISPOSITION_ID = "p00-worker-package-audit-afbb7455-v1"
+WORKER_PACKAGE_AUDIT_CANDIDATE = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit")
+WORKER_PACKAGE_AUDIT_INTERNAL_DIRECTORY_COUNT = 1023
 DEPLOY_CONTROL_DISPOSITION_MANIFEST_PATH = (
     ROOT / "config/capacity-recovery/ef7db111-deploy-control-disposition.v1.json")
 DEPLOY_CONTROL_DISPOSITION_MANIFEST_SHA256 = "5d08f0a07e0c6eab2638772f0d6bd65f65fb0df2f965e644ae4d1374131143c0"
@@ -3523,7 +3527,24 @@ def _stable_symlink(path: Path, expected_target: str, root_device: int,
     return stat_identity(after, include_nlink=True)
 
 
-def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
+def _sealed_parent_directories(paths: Iterable[str]) -> set[str]:
+    directories: set[str] = set()
+    for value in paths:
+        parent = PurePosixPath(value).parent
+        while parent != PurePosixPath("."):
+            directories.add(parent.as_posix())
+            parent = parent.parent
+    return directories
+
+
+def _worker_package_historical_layout(path: Path, manifest: dict[str, Any]) -> bool:
+    return (manifest.get("dispositionId") == WORKER_PACKAGE_AUDIT_DISPOSITION_ID and
+            path == WORKER_PACKAGE_AUDIT_CANDIDATE)
+
+
+def _authenticate_disposition_tree(path: Path, entry: dict[str, Any],
+                                   manifest: dict[str, Any] | None = None) -> dict[str, Any]:
+    manifest = manifest or {}
     root = physical_directory(path, "DISPOSITION_TREE_ROOT")
     root_device = root.st_dev
     expected_identity = entry["identity"]
@@ -3543,12 +3564,32 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
         deny("DISPOSITION_PACKAGE_SYMLINKS_BINDING")
     if set(listed) & set(declared_links):
         deny("DISPOSITION_TREE_LEAF_SET")
+    expected_files = set(listed) | {"PACKAGE_FILES.sha256"}
+    historical_layout = _worker_package_historical_layout(path, manifest)
+    expected_directories = _sealed_parent_directories(expected_files | set(declared_links))
+    historical_principals: list[str] | None = None
+    if (historical_layout and
+            len(expected_directories) != WORKER_PACKAGE_AUDIT_INTERNAL_DIRECTORY_COUNT):
+        deny("DISPOSITION_TREE_DIRECTORY_RELATION")
+    if historical_layout:
+        historical_principals = deploy_group_principals()
+        if historical_principals != ["deploy"]:
+            deny("DISPOSITION_TREE_GROUP_PRINCIPAL_UNEXPECTED")
     authority = Path(entry["authority"])
     authority_root, authority_root_identity = _authority_root(
         authority, entry, require_not_group_writable=True)
     actual_files: set[str] = set()
     actual_links: set[str] = set()
     directories: list[str] = []
+    candidate_regular_identities: dict[str, dict[str, Any]] = {
+        "PACKAGE_FILES.sha256": package_identity,
+    }
+    authority_regular_identities: dict[str, dict[str, Any]] = {}
+    candidate_link_identities: dict[str, tuple[dict[str, Any], str]] = {}
+    authority_link_identities: dict[str, tuple[dict[str, Any], str]] = {}
+    directory_identities: dict[str, dict[str, Any]] = {
+        ".": stat_identity(root, include_nlink=True),
+    }
     relation = FramedRelationDigest()
     stack = [path]
     while stack:
@@ -3556,12 +3597,20 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
         current_info = physical_directory(current, "DISPOSITION_TREE_DIRECTORY")
         if current_info.st_dev != root_device:
             deny("DISPOSITION_TREE_CROSS_DEVICE")
-        if not _identity_owner_allowed(current_info) or stat.S_IMODE(current_info.st_mode) & 0o022:
+        relative_directory = "." if current == path else current.relative_to(path).as_posix()
+        if historical_layout and current != path:
+            if ((current_info.st_uid, current_info.st_gid) != deploy_identity() or
+                    stat.S_IMODE(current_info.st_mode) != 0o775):
+                deny("DISPOSITION_TREE_DIRECTORY_IDENTITY")
+        elif (not _identity_owner_allowed(current_info) or
+              stat.S_IMODE(current_info.st_mode) & 0o022):
             deny("DISPOSITION_TREE_DIRECTORY_IDENTITY")
+        directory_identities[relative_directory] = stat_identity(
+            current_info, include_nlink=True)
         relation.add({
             "type": "directory",
-            "path": "." if current == path else current.relative_to(path).as_posix(),
-            **stat_identity(current_info, include_nlink=True),
+            "path": relative_directory,
+            **directory_identities[relative_directory],
         })
         if current != path:
             directories.append(current.relative_to(path).as_posix())
@@ -3587,9 +3636,10 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
                 actual_links.add(relative)
             else:
                 deny("DISPOSITION_TREE_UNSAFE_LEAF")
-    expected_files = set(listed) | {"PACKAGE_FILES.sha256"}
     if actual_files != expected_files or actual_links != set(declared_links):
         deny("DISPOSITION_TREE_LEAF_SET")
+    if historical_layout and set(directories) != expected_directories:
+        deny("DISPOSITION_TREE_DIRECTORY_RELATION")
     for relative in sorted(listed):
         leaf = path / relative
         try:
@@ -3607,6 +3657,7 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
             deny("DISPOSITION_TREE_HARDLINK")
         if identity["device"] != root_device:
             deny("DISPOSITION_TREE_CROSS_DEVICE")
+        candidate_regular_identities[relative] = identity
         authority_leaf, authority_ancestors = _authority_leaf(
             authority, authority_root, relative, require_not_group_writable=True)
         authority_identity = stable_regular_digest(
@@ -3617,6 +3668,7 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
         if (identity["size"] != authority_identity["size"] or
                 authority_identity["device"] != authority_root.st_dev):
             deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
+        authority_regular_identities[relative] = authority_identity
         relation.add({"type": "file", "path": relative,
                       "sha256": listed[relative], "size": identity["size"],
                       "identity": identity, "authority": authority_identity,
@@ -3630,6 +3682,8 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
         authority_identity = _stable_symlink(
             authority_leaf, target, authority_root.st_dev,
             "DISPOSITION_TREE_AUTHORITY_DIVERGED")
+        candidate_link_identities[relative] = (candidate_identity, target)
+        authority_link_identities[relative] = (authority_identity, target)
         relation.add({"type": "symlink", "path": relative, "target": target,
                       "identity": candidate_identity,
                       "authority": authority_identity,
@@ -3645,26 +3699,76 @@ def _authenticate_disposition_tree(path: Path, entry: dict[str, Any]) -> dict[st
         allowed_owner_pairs={(0, 0), (os.geteuid(), os.getegid())})
     if authority_manifest_identity["device"] != authority_root.st_dev:
         deny("DISPOSITION_TREE_AUTHORITY_DIVERGED")
+    authority_regular_identities["PACKAGE_FILES.sha256"] = authority_manifest_identity
     relation.add({"type": "authority-manifest", "path": "PACKAGE_FILES.sha256",
                   "identity": authority_manifest_identity,
                   "authorityAncestors": authority_manifest_ancestors})
+    for relative, expected in sorted(candidate_regular_identities.items()):
+        try:
+            current = (path / relative).lstat()
+        except OSError:
+            deny("DISPOSITION_TREE_LEAF_CHANGED")
+        if not _same_open_identity(expected, current):
+            deny("DISPOSITION_TREE_LEAF_CHANGED")
+    for relative, expected in sorted(authority_regular_identities.items()):
+        try:
+            current = (authority / relative).lstat()
+        except OSError:
+            deny("DISPOSITION_TREE_AUTHORITY_CHANGED")
+        if not _same_open_identity(expected, current):
+            deny("DISPOSITION_TREE_AUTHORITY_CHANGED")
+    for relative, (expected, target) in sorted(candidate_link_identities.items()):
+        try:
+            current = (path / relative).lstat()
+            current_target = os.readlink(path / relative)
+        except OSError:
+            deny("DISPOSITION_TREE_LEAF_CHANGED")
+        if stat_identity(current, include_nlink=True) != expected or current_target != target:
+            deny("DISPOSITION_TREE_LEAF_CHANGED")
+    for relative, (expected, target) in sorted(authority_link_identities.items()):
+        try:
+            current = (authority / relative).lstat()
+            current_target = os.readlink(authority / relative)
+        except OSError:
+            deny("DISPOSITION_TREE_AUTHORITY_CHANGED")
+        if stat_identity(current, include_nlink=True) != expected or current_target != target:
+            deny("DISPOSITION_TREE_AUTHORITY_CHANGED")
+    for relative, expected in sorted(directory_identities.items()):
+        current_path = path if relative == "." else path / relative
+        current = physical_directory(current_path, "DISPOSITION_TREE_DIRECTORY_CHANGED")
+        if stat_identity(current, include_nlink=True) != expected:
+            deny("DISPOSITION_TREE_DIRECTORY_CHANGED")
+    if historical_layout and deploy_group_principals() != historical_principals:
+        deny("DISPOSITION_TREE_GROUP_PRINCIPAL_CHANGED")
     leaf_effects = [[*LITERAL_UNLINK, str(path / relative)]
                     for relative in sorted(expected_files | set(declared_links), reverse=True)]
     directory_effects = [[*LITERAL_RMDIR, str(path / relative)]
                          for relative in sorted(directories,
                                                 key=lambda value: (-len(PurePosixPath(value).parts), value))]
     directory_effects.append([*LITERAL_RMDIR, str(path)])
-    return {"leafCount": len(expected_files) + len(declared_links),
-            "regularLeafCount": len(expected_files), "symlinkCount": len(declared_links),
-            "directoryCount": len(directories) + 1,
-            "packageFiles": {"path": str(manifest_path), "sha256": entry["packageFilesSha256"],
-                             "identity": package_identity},
-            "packageSymlinks": {"path": str(links_manifest_path),
-                                "sha256": listed[links_manifest_name],
-                                "identity": links_manifest_identity},
-            "relationSha256": relation.hexdigest(), "authority": str(authority),
-            "authorityIdentity": authority_root_identity,
-            "effects": leaf_effects + directory_effects}
+    result = {"leafCount": len(expected_files) + len(declared_links),
+              "regularLeafCount": len(expected_files), "symlinkCount": len(declared_links),
+              "directoryCount": len(directories) + 1,
+              "packageFiles": {"path": str(manifest_path),
+                               "sha256": entry["packageFilesSha256"],
+                               "identity": package_identity},
+              "packageSymlinks": {"path": str(links_manifest_path),
+                                  "sha256": listed[links_manifest_name],
+                                  "identity": links_manifest_identity},
+              "relationSha256": relation.hexdigest(), "authority": str(authority),
+              "authorityIdentity": authority_root_identity,
+              "effects": leaf_effects + directory_effects}
+    if historical_layout:
+        result["historicalDirectoryPolicy"] = {
+            "kind": "SEALED_LEAF_PARENT_RELATION",
+            "candidate": str(path),
+            "internalDirectoryCount": len(expected_directories),
+            "relativePathsSha256": digest_bytes(canonical(sorted(expected_directories))),
+            "owner": "deploy", "group": "deploy", "mode": "0775",
+            "groupPrincipals": historical_principals,
+            "phaseRevalidationRequired": True,
+        }
+    return result
 
 
 def authenticate_manifest_disposition(candidate: dict[str, Any], operational: dict[str, Any],
@@ -3686,7 +3790,7 @@ def authenticate_manifest_disposition(candidate: dict[str, Any], operational: di
         detail = _authenticate_disposition_archive(path, entry, manifest)
         identity = stat_identity(path.lstat(), include_nlink=True)
     else:
-        detail = _authenticate_disposition_tree(path, entry)
+        detail = _authenticate_disposition_tree(path, entry, manifest)
         identity = stat_identity(path.lstat(), include_nlink=True)
     usage = physical_usage([path])[str(path)]
     if usage["allocatedBytes"] != entry["physicalBytes"]:

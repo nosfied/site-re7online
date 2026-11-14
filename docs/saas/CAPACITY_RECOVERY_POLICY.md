@@ -17,6 +17,102 @@ executor. No `execute`, o supervisor contém o executor sem assumir autoridade
 sobre locks, journal ou efeitos: esses contratos continuam pertencendo
 exclusivamente a `capacity-recovery.py`.
 
+## Precedente excepcional fechado — cinco runtimes pré-contrato
+
+O lote `p00-five-runtimes-exceptional-20261113-v1` foi uma exceção do owner,
+implementada no consumidor existente `generation-retirement.py`, não uma nova
+classe normal de `capacity-recovery.py`. O executor efetivo foi o commit isolado
+`fc58a1f3f320bfa1827af5cf4fdb6ce021d5346b`, árvore
+`a18513473953272fe5011faa29a1d43a211323fa`; SHA-256 do consumidor
+`a0cf7090b4e9a4d22166a32f7094573db7244e032977de4eb357d231586ec4c9`.
+O helper privilegiado instalado tinha SHA-256
+`aedc012bda4cda9aeccaff709465b1783cd57e15fc1d8066346cd785d4b5e57a`,
+`root:root 0500`, e o instalador atômico SHA-256
+`4d363aa00cdf222968c6c2fbc6423465ebc6b2da5a6a7a6fd2a724158399f8f4`.
+O sudoers permaneceu byte-intacto.
+
+### Mecanismos comprovados e escopo específico
+
+Foram reutilizados: leitura privada estável por SHA, criação exclusiva e `fsync`,
+os dois locks canônicos, current/PM2/dump, grafo de releases, observador root
+somente leitura de `/proc`, intenção selada, autorização por SHA, journal
+`ATTEMPT → RESULT → VERIFIED`, receipt terminal e reconciliação de interrupção.
+Foram específicos desta exceção: batch id, cinco caminhos e device/inode
+literais, raiz de receipts, grafo final, hashes da custódia, fingerprint SSH,
+helper/instalador e os cinco comandos `/usr/bin/rm -r --one-file-system --
+<caminho-literal>`. Nenhum desses bindings admite sexto caminho ou substituição
+por nome/prefixo.
+
+Antes do primeiro efeito, o consumidor exigiu receipt de preservação
+`f9151e22c0ce044d10e79fe736f62730d66e605e553c3110d96e535a6fb031c2`,
+archive `e806a178239525e093466b6bf962f7c1025f38a8245da26ee9f2c3584e26a739`
+de 4.843.970.560 bytes, índice
+`43e84827b27d9dcf68cac9a2eecfee0cace4d5099b63c0c952b55dc316f33cd5`
+com 180.707 entradas e restauração isolada PASS com 180.708 entradas incluindo a
+raiz. Os quatro symlinks `.data` não foram seguidos e mantiveram o destino externo
+literal. A atestação cross-host foi distinta em `prepare` e `execute`, com nonce,
+prazo de 300/60 segundos, direção builder→VPS, principal e fingerprints SSH
+fechados e `StrictHostKeyChecking=true`.
+
+Sob os locks, cada fase recapturou identidades, mounts aninhados, current, três
+processos PM2 online, dump, grafo e `/proc`. `execute` exigiu cobertura completa,
+zero referências, zero writers e zero falhas. Ausência sem `ATTEMPT` negava;
+`ATTEMPT` com caminho ainda presente era ambíguo e negava; ausência após
+`ATTEMPT` podia ser reconciliada sem repetir o comando. Receipt existente tornava
+a autorização consumida.
+
+O fechamento terminal é receipt
+`3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`,
+journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`,
+5/5 efeitos e recuperação medida de 5.055.328.256 bytes/180.704 inodes.
+Archive e restauração ocuparam respectivamente 4.844.023.808 e
+5.056.057.344 bytes físicos no ThinkPad; somados ao índice, o piso documentado
+da custódia simultânea foi aproximadamente 9,92 GB. Tempo total, pico de memória
+e CPU não foram medidos de forma comparável e permanecem indisponíveis — não
+devem ser inferidos pelos timestamps dos arquivos.
+
+## Precedente excepcional fechado — dez releases legadas
+
+O lote `p00-ten-releases-exceptional-20261114-v1` repetiu a metodologia, não a
+autorização nem o perfil do lote 5/5. O helper SHA-256
+`dca521d99779c2ad78f6f5af4ecded018bb76f96772de7ffa38e43d64734f9f3` e o
+consumidor SHA-256
+`3b212477ae7e2b358f56e1f8dc620ea4701d1815257804d9348f5c82b61e4b0e`
+tinham allowlists e identidades fechadas nos dez caminhos. A custódia externa foi
+autenticada pelo receipt
+`cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`,
+archive `464c60ef94ba7fd9c46e6f85a08772b2e611a24ffc250fa8350bfd436ab110c8`
+e índice `054989cbc839c0358ae1431f90a88112586f78e153b38b0915fcc5c2d9f8ccdf`.
+A restauração isolada passou e seis symlinks `.data` não foram seguidos.
+
+A única intenção autorizada foi
+`c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f`,
+com comandos `85ddaab1cb39756b277ef68f35902feba7e73f7021e4947080fcc8655bec12aa`.
+A intenção anterior `ca3502ca…7e29` ficou descartada. A autorização
+`988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802`,
+o journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`
+e o receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`
+comprovam 10/10 efeitos, ausência física, locks liberados e recuperação de
+8.523.984.896 bytes/279.130 inodes.
+
+Os dois precedentes excepcionais encerram **15 caminhos** e somam
+**13.579.313.152 bytes/459.834 inodes** recuperados. Cada lote conserva sua
+custódia, restauração, autorização, journal e receipt próprios; o total não é
+uma autoridade composta nem licença para outro caminho.
+
+### Regra de reaproveitamento dos precedentes excepcionais
+
+A metodologia pode ser reaplicada; o perfil não. Um novo lote precisa demonstrar
+separadamente: caminhos e identidades fechados, ausência de papel ativo/rollback,
+conteúdo único preservado integralmente fora da VPS, restauração comprovada,
+`.data` e outros destinos externos não seguidos, atestação cross-host fresca,
+helper com allowlist própria, observação `/proc` completa, locks, intenção e
+autorização específicas, efeitos literais, retomada testada e receipt com ausência
+e medição física. Custódia já existente deve ser autenticada antes de nova cópia.
+Sem qualquer um desses controles, o resultado é PRESERVE. O precedente não
+autoriza relaxar o consumidor normal, ampliar o helper ou retirar por idade,
+prefixo, modo ou semelhança.
+
 ## Estados e separação de autoridade
 
 O fluxo possui três fases independentes:
@@ -705,6 +801,25 @@ qualificação única pelo `audit` canônico contido, mas não a substitui: iden
 equivalência folha a folha, referências vivas, capacidade e locks serão recapturados
 nessa fase. Nenhum `prepare`, autorização ou efeito é criado por esta habilitação.
 O manifesto terminal 3/3 permanece byte-exato.
+
+O layout histórico dessa disposição contém exatamente 1.023 diretórios internos
+`deploy:deploy 0775`. A admissão versionada é exclusiva de
+`p00-worker-package-audit-afbb7455-v1` e do caminho literal fixado no consumidor;
+os demais `ENUMERATED_TREE` continuam negando qualquer escrita por grupo ou
+outros. O conjunto admissível de diretórios é derivado exclusivamente dos pais
+das folhas de `PACKAGE_FILES.sha256`, `PACKAGE_SYMLINKS.txt` e dos 11 links
+selados. A contagem, os caminhos relativos, tipo, device/inode, owner, grupo,
+modo, nlink e tempos de identidade entram na relação autenticada. Diretório
+extra ou ausente, modo diferente de `0775`, owner/grupo diferente de
+`deploy:deploy` ou grupo `deploy` com outro principal negam.
+
+O consumidor reabre essa relação em `audit`, `prepare` e `execute`. Cada
+varredura autentica arquivos e links por FD e readback, conserva as identidades
+dos diretórios e folhas e as compara novamente ao final; mudança concorrente de
+conteúdo, identidade, permissão, destino de link ou composição do grupo nega. O
+`execute` mantém ainda os locks canônicos durante a recaptura e os efeitos. Isso
+não cria permissão por prefixo, não executa `chmod` e não muda os comandos
+literais já existentes.
 
 A montagem operacional dessa qualificação reutiliza o procedimento comprovado em
 `p00-capacity-three-archives-916f8d6b-v2` e na retirada sucessora concluída:

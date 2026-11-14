@@ -10,6 +10,30 @@
 
 **Última fotografia VPS pós-deploy:** `7.080.562.688 B` e `8.743.987` inodes livres; nenhuma nova medição VPS foi feita na retirada do builder (host distinto). Antes do preflight `7.247.413.248 B` livres, delta de disponibilidade `-166.850.560 B`, **não equivale a custo líquido de deploy**. Runtime instalado ~`989.159.424 B`, pacote retido ~`148.213.760 B`; não somar como “recuperável” e nem retirar sem grafo/custódia. O gate histórico de build na VPS foi `9.663.676.416 B`, enquanto recepção/verificação/instalação externa exigia `5.700.927.488 B`; redução ~41% **do gate**, não do consumo permanente.
 
+**Lote excepcional 10/10: encerrado `TERMINAL_SANITIZED / DO_NOT_REPEAT`.**
+Dez releases legadas, em allowlist literal, foram preservadas integralmente fora
+da VPS, restauradas de forma isolada e retiradas com 10/10 resultados verificados.
+Journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`;
+receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`.
+A recuperação física atribuída foi **8.523.984.896 B e 279.130 inodes**. O
+receipt mediu `20.638.085.120 B`/`9.203.695` livres; o readback posterior mediu
+`20.638.040.064 B`/`9.203.694`. A custódia, archive `464c60ef…10c8`, índice
+`054989cb…ccdf` e receipt `cb1926e7…f361` permanecem protegidos. Não somar de
+novo esse ganho, não retransmitir a custódia e não reutilizar a autorização.
+
+**Lote frontend 3/3: encerrado `TERMINAL_SANITIZED / DO_NOT_REPEAT`.** Os três
+frontends históricos foram preservados com reaproveitamento dos pacotes locais,
+restaurados de forma isolada e retirados com três resultados verificados. Receipt
+`ece95abecc17a9b74a278f35cbfb9164cde109ecf9159e5cc7075fa37a9365c7`;
+recuperação física **1.917.009.920 B e 76.717 inodes**. A custódia externa,
+índice `617ded0a…027a` e receipt `86654281…18be` permanecem protegidos.
+
+**Consolidação excepcional:** os lotes 5/5, 10/10, frontend 3/3 e Campaign API
+1/1 encerraram 19 caminhos e recuperaram, pelos respectivos receipts,
+**15.859.646.464 B e 546.390 inodes**. As quatro custódias, restaurações,
+journals e receipts permanecem protegidos. O total não é estimativa de novo lote,
+não deve ser somado novamente e não cria autorização reutilizável.
+
 ## 2. Inventário existente é a base; não reiniciar auditoria global
 
 Fontes já existentes, com época e fronteira explícitas:
@@ -41,6 +65,148 @@ Fontes já existentes, com época e fronteira explícitas:
 **Autoridades coletivas informadas (prefixos, não substituem os originais):** qualificação `865d015b…497e`, materialização `bb1b1531…7a2e`, prepare terminal `cad7092a…e8f9`. Antes de usar qualquer uma como autoridade operacional, recuperar os SHA integrais dos arquivos privados; não fabricar hashes nem reproduzir o lote. Classificação: `TERMINAL_SANITIZED / NO_FURTHER_ACTION`.
 
 **Localização documental:** este arquivo está rastreado no branch canônico `review/campaign-recovery-20260926`, merge `2a55c80e840f593e8da73a18da8575445856cea9` (blob `560806d3e4e2d54f4fb843bd96e74a7edc764722`). Se ausente no checkout local do operador, verificar primeiro `git rev-parse HEAD`, branch e remote/ref, sem reemitir inventário, alterar receipts ou presumir que o arquivo não foi integrado.
+
+## 2-B. Cinco runtimes pré-contrato — JÁ SANITIZADOS
+
+**14/11/2026, fechamento terminal informado e reaberto pelos arquivos privados.**
+Os cinco caminhos do lote `p00-five-runtimes-exceptional-20261113-v1` estão
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. Receipt
+`3fcb72eaebb343c233d417102749f7bdd0fe1b93e1bd243384ba1e6c27c1fa06`,
+journal `1fb2c129e86e4f33cfa310ec4461ff0592287b50102067f63738fd116e805c94`
+e autorização `a20c6df524b5bdf1ce54a0065e7a3689c4a0cb55b6b87c2ebfe738e9ce9ae298`
+registram 5/5 efeitos verificados. Recuperação física: **5.055.328.256 B e
+180.704 inodes**. Saldo terminal: **12.142.841.856 B e 8.924.606 inodes
+livres**.
+
+A custódia integral externa permanece no ThinkPad com archive
+`e806a178239525e093466b6bf962f7c1025f38a8245da26ee9f2c3584e26a739`,
+índice `43e84827b27d9dcf68cac9a2eecfee0cace4d5099b63c0c952b55dc316f33cd5`
+e receipt `f9151e22c0ce044d10e79fe736f62730d66e605e553c3110d96e535a6fb031c2`.
+Ela não deve ser retirada nem retransmitida. O procedimento excepcional foi
+restrito às identidades literais, exigiu restauração, observação privilegiada
+completa, locks, autorização, journal e readback; não cria allowlist genérica.
+
+### Próximo lote dirigido — decisão documental
+
+| Identidade / classe | Situação | Capacidade documentada | Proteção e autoridade | Mecanismo / decisão |
+| --- | --- | ---: | --- | --- |
+| `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-package-audit` — `CLOSED_PREPARATION_MANIFEST_DISPOSITION` | presente; audit v5 terminal DENY | 365.674.496 B | autoridade `/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified`, manifesto schema 2, `PACKAGE_FILES.sha256` e 11 links | consumidor existente; **lote priorizado, bloqueado por `DISPOSITION_TREE_DIRECTORY_IDENTITY`** |
+| `/opt/re7online/deploy-control/ef7db111-prep/node_modules` + `/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/dist` — `CLOSED_DEPLOY_CONTROL_DERIVED_TREE` | 602.820.608 B foram qualificados no plano DENY; não autorizados | 602.820.608 B | manifesto e digests preservados; raiz/worktree/fontes protegidos | perfil exige quatro candidatos e mínimo 949.141.504 B; **preservar, não formar lote parcial** |
+| `/opt/re7online/deploy-control/ef7db111-prep/apps/whatsapp-agent/node_modules` + `/opt/re7online/deploy-control/ef7db111-prep/.next` | presentes na fotografia terminal; não qualificados | 346.320.896 B | 1.123 folhas historicamente graváveis por grupo/outros | impedimento `DEPLOY_CONTROL_TREE_IDENTITY`; **preservar** |
+| `/opt/re7online/deploy-control/*` — worktrees históricos enumerados em 06/11 | nenhum receipt de elegibilidade | 1.601.449.984 B históricos para a raiz | controles/evidências e conteúdo não reconciliado | consumidor moderno não retroqualifica estoque; **preservar** |
+| geração falha `immutable-fa10f4f5-external-20261112T211724Z` no builder | dívida fora da VPS | ~78.295.040 B | lifecycle/evidências próprias | não aumenta capacidade da VPS; tratar separadamente |
+
+O próximo lote fechado é, portanto, somente `worker-package-audit`. A leitura
+dirigida de 14/11 confirmou device/inode, UID/GID, modo e nlink exatos da raiz,
+dos três ancestrais e da autoridade, mas enumerou **1.023 diretórios internos
+`deploy:deploy 0775`**. Isso reproduz materialmente
+`DISPOSITION_TREE_DIRECTORY_IDENTITY`; não existe delta que autorize repetir o
+audit v5.
+
+**Decisão contratual de 14/11:** `CONTRACT_DELTA_REVIEWED_MERGE_READY`. O
+manifesto fecha todas as folhas regulares e os 11 links, mas o schema vigente não
+vincula uma política autenticada para a relação completa de diretórios internos;
+o consumidor apenas rejeita qualquer bit `0022`. Por isso, nem a contagem de
+1.023 diretórios nem o plano terminal negado autorizam converter `0775` em PASS.
+A alteração implementada estende somente a disposição literal
+`p00-worker-package-audit-afbb7455-v1`: derivar o conjunto exato de diretórios
+dos caminhos de folhas e links já selados, vincular sua relação canônica ao
+manifesto e admitir `0775` exclusivamente para `deploy:deploy` quando o grupo
+`deploy` tiver somente o principal `deploy`. `audit`, `prepare` e `execute`
+devem reabrir esse binding, recapturar identidades sob os locks e exigir zero
+referências e writers pelo observador privilegiado. Diretório extra/ausente,
+modo diferente, outro owner/grupo, grupo ampliado, relação divergente ou drift
+entre fases continua sendo negativa material.
+
+Não há `chmod`, exceção por prefixo, allowlist genérica nem alteração dos
+efeitos: permanecem `unlink` literal por folha e `rmdir` literal em pós-ordem.
+A regressão fechada cobre relação extra, modo/owner/grupo divergente, principal
+adicional, mudança concorrente de diretório ou folha e drift em `prepare` e
+`execute`; a suíte integral do consumidor passou 154/154 e preservou os perfis
+anteriores. O consumidor tem SHA-256 `24a42444c0db890616de3fb40b8e46812f66433b230547835f7010e30632ff09`
+e o materializador vinculado `903cb4f162a254a89dde52b47ff150079098da392bea83528f176a5905352d20`.
+A revisão final do HEAD `d65a8f0a…`, árvore `954217f2…`, não encontrou
+relaxamento dos perfis anteriores; a CI `43614190415` passou 4/4. Depois da
+integração autenticada caberá **um** novo `audit` produtivo contido e somente
+leitura; `prepare` e autorização destrutiva continuam fronteiras posteriores e
+separadas. Nesta reconciliação foram executados zero comandos destrutivos e a
+manutenção PM2 do worker permanece fora deste lote.
+
+O PR #394 permanece draft no HEAD `992001005c6eba20b85e80f0b8cf62194a725784`.
+Sua finalidade específica — completar autoridade AF26 para os mesmos cinco
+runtimes — foi superada pelo fechamento excepcional terminal. Ele não deve ser
+integrado automaticamente; qualquer utilidade genérica remanescente exige revisão
+independente e não reabre o lote 5/5.
+
+## 2-C. Descoberta dirigida posterior aos lotes 5/5 e 10/10 — 14/11/2026
+
+A descoberta reutilizou a fotografia estrutural
+`/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256
+`8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`,
+e eliminou primeiro os 15 caminhos `TERMINAL_SANITIZED / DO_NOT_REPEAT`. A
+atualização foi estritamente dirigida: `du -x -B1 -s` nos filhos literais
+selecionados, sob `ionice -c3`, `nice -n10` e timeout de 240 segundos por
+passagem, seguida de readback de `current`, grafo, PM2 vivo/salvo e listeners.
+Não houve nova auditoria global, hashing integral, transferência, `prepare` ou
+efeito destrutivo. O saldo observado foi **20.631.146.496 B livres**.
+
+Esta seção é a fotografia anterior ao fechamento frontend 3/3. Os três primeiros
+caminhos estão agora `TERMINAL_SANITIZED / DO_NOT_REPEAT`; somente os quatro
+restantes continuam pendentes. A medição conjunta histórica,
+em uma única passagem e sem somar filhos, registrou **3.345.813.504 B e 111.106
+inodes**. Nenhum aparece em `current`, no grafo vigente, nos `cwd` do PM2 ou nos
+listeners ativos; essa ausência operacional é condição necessária, mas não
+autoridade de retirada.
+
+| Caminho literal / classe | Device:inode | Bytes / inodes atuais | Autoridade já disponível | Proteção ou impedimento | Decisão |
+| --- | ---: | ---: | --- | --- | --- |
+| `/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5778416` | 637.677.568 / 25.519 históricos | custódia/restauração `86654281…18be` | receipt terminal `ece95abe…65c7` | `TERMINAL_SANITIZED / DO_NOT_REPEAT` |
+| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5803927` | 639.291.392 / 25.587 históricos | custódia/restauração `86654281…18be` | receipt terminal `ece95abe…65c7` | `TERMINAL_SANITIZED / DO_NOT_REPEAT` |
+| `/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5829522` | 640.053.248 / 25.614 históricos | custódia/restauração `86654281…18be` | receipt terminal `ece95abe…65c7` | `TERMINAL_SANITIZED / DO_NOT_REPEAT` |
+| `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:2966832` | 334.172.160 / 8.393 | archive privado de retorno do worker ainda presente | `.data` é symlink externo e deve permanecer fora de qualquer archive/efeito | segundo lote dirigido |
+| `/opt/re7online/releases/worker-minimal-hybrid-b9b58177-verified-v3` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5557758` | 365.600.768 / 8.070 | pacote `worker-minimal-b9-v3.tar.gz` ainda presente | cobertura integral e restauração ainda não vinculadas ao runtime; `.data` externo protegido | segundo lote dirigido |
+| `/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5770335` | 365.678.592 / 8.081 | manifests e cadeia histórica preservados | pacote principal não foi localizado na custódia registrada; `.data` externo protegido | segundo lote dirigido |
+| `/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:6029469` histórica | 363.339.776 / 9.842 históricos | custódia `0c8f6d00…da6a`, restauração PASS e receipt terminal `8c6e5013…6082` | caminho ausente; `.data` externo preservado | `TERMINAL_SANITIZED / DO_NOT_REPEAT`; 363.323.392 B / 9.839 inodes recuperados |
+
+### Priorização fechada
+
+1. **Frontend 9f4/fa60/fa60-css:** **1.917.022.208 B e 76.720 inodes**;
+   próximo lote escolhido. Não há `.data` nessas três árvores. Antes de copiar,
+   confrontar o pacote fa60 existente com a matriz de restauração; transferir
+   somente bytes ainda sem autoridade recuperável. A retirada exige custódia
+   externa, restore, perfil literal, gates voláteis, intenção e autorização
+   próprias.
+2. **Workers b66/b9/afbb:** **1.065.451.520 B e 24.544 inodes**; segundo lote,
+   com os três destinos externos `.data` explicitamente preservados.
+3. **Campaign API:** lote concluído; **363.323.392 B e 9.839 inodes** recuperados,
+   com `.data` externo preservado. Excluir de toda seleção futura.
+
+Restam, portanto, **dois lotes grandes acima de 1 GB** nessa fotografia. O lote
+médio Campaign API já é capacidade efetivamente recuperada. Os `build-output`
+remanescentes somam cerca de 3,55 GB,
+mas misturam pacotes, contratos e evidências de releases terminais ou protegidas;
+`release-sources` mantém autoridades históricas e `deploy-control` mantém
+controles/evidências com negativas próprias. Esses grupos permanecem
+`PRESERVE/UNCLASSIFIED`, fora do lote escolhido.
+
+### Comparação com `worker-package-audit`
+
+| Controle | Lote terminal 5/5 | `worker-package-audit` | Decisão |
+| --- | --- | --- | --- |
+| Natureza | cinco releases runtime pré-contrato | árvore derivada enumerada de preparação | usar primeiro o consumidor normal, que já conhece a classe |
+| Autoridade de conteúdo | custódia integral externa + restore | autoridade física `worker-minimal-reactive-afbb7455-verified`, relações de arquivos e 11 links | não copiar novamente enquanto a autoridade continuar íntegra |
+| Dados únicos/privados | archive integral; `.data` externo não seguido | manifesto fecha exatamente a árvore; autoridade/overlay ficam fora dos efeitos | qualquer extra ou relação divergente preserva |
+| Produção/rollback | grafo, current, PM2, dump e `/proc` recapturados | mesmos controles já fazem parte de `capacity-recovery.py` | reutilizar, sem perfil paralelo |
+| Permissões | cinco raízes literais `0700` | raiz/ancestrais corretos, mas 1.023 diretórios internos `0775` | negativa atual é legítima pelo contrato |
+| Efeito | cinco `rm -r --one-file-system` fechados | `unlink` por folha e `rmdir` pós-ordem, sem `rm -r` | efeito normal é mais restrito e deve ser preservado |
+
+O modo `0775` não prova, isoladamente, writer ativo; na fotografia ele representa
+incompatibilidade com a regra que proíbe árvore candidata gravável por grupo ou
+outros. Ainda assim é risco concreto de mutabilidade entre relação autenticada e
+efeito, e o audit anterior não pode ser convertido em PASS. A menor ação segura é
+o delta fechado descrito acima, no consumidor existente. Ele não altera a
+autoridade de folhas, não reutiliza o perfil 5/5 e não mistura a correção futura
+da definição PM2 do worker com recuperação de capacidade.
 
 ## 3. Classes e decisões de limpeza
 
