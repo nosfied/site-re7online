@@ -8,7 +8,7 @@ from pathlib import Path
 import stat
 
 SOURCE = Path(__file__).resolve().with_name("capacity-proc-observer.py")
-SOURCE_SHA256 = "7522ceb4e8ab0594b6b5b57a2b74ea8fe38251d34d726c4ae0ef040da225718a"
+SOURCE_SHA256 = "84d5909b6cfb53b1fe38ca0c1d699d4297dfc3b4d7c1b61fdf027078ba82975c"
 TARGET = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 SUDOERS = Path("/etc/sudoers.d/re7online-capacity-proc-observer")
 SUDOERS_SHA256 = "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"
