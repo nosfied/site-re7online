@@ -141,6 +141,8 @@ class ExceptionalCampaignApiRetirementTest(unittest.TestCase):
             with mock.patch.object(MODULE, "EXCEPTIONAL_CAMPAIGN_API_IDENTITIES",
                                    {str(root): [info.st_dev, info.st_ino]}), \
                     mock.patch.object(MODULE, "EXCEPTIONAL_CAMPAIGN_API_MODES", {str(root): 0o700}), \
+                    mock.patch.object(MODULE, "EXCEPTIONAL_ROOT_UID", info.st_uid), \
+                    mock.patch.object(MODULE, "EXCEPTIONAL_ROOT_GID", info.st_gid), \
                     mock.patch.object(MODULE, "EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS",
                                       {str(root): {"apps/whatsapp-agent/.data":
                                                    str(data_target)}}):
@@ -158,6 +160,8 @@ class ExceptionalCampaignApiRetirementTest(unittest.TestCase):
                                    {str(root): [info.st_dev, info.st_ino]}), \
                     mock.patch.object(MODULE, "EXCEPTIONAL_CAMPAIGN_API_MODES",
                                       {str(root): 0o700}), \
+                    mock.patch.object(MODULE, "EXCEPTIONAL_ROOT_UID", info.st_uid), \
+                    mock.patch.object(MODULE, "EXCEPTIONAL_ROOT_GID", info.st_gid), \
                     mock.patch.object(MODULE, "EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS",
                                       {str(root): {"apps/whatsapp-agent/.data": str(expected)}}):
                 with self.assertRaisesRegex(MODULE.Denied, "exceptional_data_link"):

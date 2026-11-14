@@ -17,7 +17,7 @@ Esta revisão não instalou o helper, não materializou intenção produtiva, n�
   identidade `64769:786791`, `root:root 0500`.
 - Helper sucessor: `84d5909b6cfb53b1fe38ca0c1d699d4297dfc3b4d7c1b61fdf027078ba82975c`.
 - Instalador sucessor: `f22b417e9306abe88893693adc14ef47c1e0e6ee0ba014360013d66bcc7a64c4`.
-- Consumidor: `65f43e88244cf989a11f09a5936a827c47c72070fb2cc3d24ba255575d9562c9`.
+- Consumidor: `5fc88cf5e8745b260b28a49b1ea32a89098c2b1d8172dbcc0b3baae3dc1d4dad`.
 
 ## Fronteira fechada
 

@@ -137,6 +137,8 @@ EXCEPTIONAL_INSTALLATION_PREDECESSOR_IDENTITY = {
     "device": 64769, "inode": 786605, "uid": 0, "gid": 0, "mode": "0500",
 }
 EXCEPTIONAL_PHYSICAL_DATA_IDENTITIES: dict[str, list[int]] = {}
+EXCEPTIONAL_ROOT_UID = 1000
+EXCEPTIONAL_ROOT_GID = 1000
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
@@ -6068,7 +6070,7 @@ def _exceptional_roots(expected_present: set[str]) -> None:
             deny("exceptional_root_missing")
         if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or
                 (info.st_dev, info.st_ino) != tuple(expected) or
-                (info.st_uid, info.st_gid) != (1000, 1000) or
+                (info.st_uid, info.st_gid) != (EXCEPTIONAL_ROOT_UID, EXCEPTIONAL_ROOT_GID) or
                 stat.S_IMODE(info.st_mode) != EXCEPTIONAL_CAMPAIGN_API_MODES[raw_path]):
             deny("exceptional_root_identity")
         for relative, target in EXCEPTIONAL_CAMPAIGN_API_DATA_LINKS.get(raw_path, {}).items():
@@ -6084,7 +6086,8 @@ def _exceptional_roots(expected_present: set[str]) -> None:
                 deny("exceptional_private_data_missing")
             if (data.is_symlink() or not stat.S_ISDIR(data_info.st_mode) or
                     (data_info.st_dev, data_info.st_ino) != tuple(physical[:2]) or
-                    (data_info.st_uid, data_info.st_gid) != (1000, 1000) or
+                    (data_info.st_uid, data_info.st_gid) !=
+                    (EXCEPTIONAL_ROOT_UID, EXCEPTIONAL_ROOT_GID) or
                     stat.S_IMODE(data_info.st_mode) != physical[2]):
                 deny("exceptional_private_data_identity")
 
