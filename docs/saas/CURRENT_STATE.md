@@ -160,6 +160,16 @@ nega persistência tenant dentro da raiz imutável e exige orçamento de bytes/i
 e destino terminal antes da alocação. Nenhuma migração, custódia ou exclusão foi
 executada nesta frente.
 
+A reconciliação local seguinte confirmou que **0/9** releases estão hoje
+integralmente restauráveis das custódias do ThinkPad. Os nove pacotes originais
+permanecem autenticados na VPS e totalizam 1.351.254.084 B lógicos; somados aos
+1.167.360 B dos nove `.data`, o complemento bruto mínimo é **1.352.421.444 B**.
+Os `.data` não receberam escrita depois de 07/11, enquanto a persistência da API
+ativa recebeu escrita em 13/11; a classificação de planejamento é
+`HISTORICAL_PRIVATE_DATA`, sujeita à observação privilegiada terminal. Nenhuma
+transferência ou restauração foi feita. Após custódia/readback/restauração 9/9, o
+potencial do lote será 8.897.130.496 B; hoje, 0 B estão autorizados para retirada.
+
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
 ---

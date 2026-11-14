@@ -1092,6 +1092,17 @@ derivado de 8.895.963.136 B pode chegar a `prepare`. A varredura de processos
 dirigida teve 52 falhas transitórias; observação privilegiada completa continua
 gate obrigatório na fronteira do efeito.
 
+A comparação com as custódias existentes do ThinkPad encontrou 0/9 releases
+integralmente preservadas. Os nove pacotes originais, entretanto, continuam
+autenticados na VPS, com package/index bindings coincidentes, e somam
+1.351.254.084 B lógicos. Não é necessário retransmitir 8,90 GB expandidos: o
+complemento bruto mínimo é **1.352.421.444 B**, composto pelos pacotes e pelos
+1.167.360 B de `.data`; controles e overhead do archive serão selados no receipt.
+Os nove `.data` são `HISTORICAL_PRIVATE_DATA` para custódia, pois a última escrita
+é anterior à persistência ativa e não há vínculo operacional encontrado. O lote
+continua com 0 B autorizados até archive, readback, restauração isolada 9/9 e
+observação privilegiada completa. Nenhuma nova implementação é necessária.
+
 As preparações não são integralmente vitais, mas misturam 176 escopos e
 autoridades únicas com payloads possivelmente duplicados; não há partição física
 autenticada de 5 GB. `build-output` está isoladamente abaixo do piso e conserva

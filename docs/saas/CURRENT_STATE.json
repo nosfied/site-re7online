@@ -2180,6 +2180,21 @@
       },
       "decision": "MIGRATION_OR_CUSTODY_REQUIRED_BEFORE_RETIREMENT"
     },
+    "privateReleaseLocalReuseAssessment": {
+      "evidenceSha256": "d80144956c52f425d589b2bb195d867a044f2eed4e622e4e69e601c4054343d1",
+      "integrallyRestorableFromThinkPadCount": 0,
+      "historicalPrivateDataCount": 9,
+      "additionalPreservationRequiredCount": 9,
+      "packageLogicalBytesOnVps": 1351254084,
+      "packagePhysicalBytesOnVps": 1351290880,
+      "embeddedDataPhysicalBytes": 1167360,
+      "minimumRawCustodyComplementBytes": 1352421444,
+      "currentlyAuthorizedRetirementBytes": 0,
+      "potentialBytesAfterCustodyAndRestore": 8897130496,
+      "latestHistoricalDataWriteLocal": "2026-11-07T09:59:06-03:00",
+      "activeDataWriteObservedLocal": "2026-11-13T17:09:08-03:00",
+      "decision": "SINGLE_CLOSED_CUSTODY_OF_EXISTING_PACKAGES_PLUS_PRIVATE_DATA_SUPPLEMENTS"
+    },
     "permanentStoragePolicy": {
       "localReleaseLimitPerComponent": "ACTIVE_PLUS_ONE_IMMEDIATE_RETURN",
       "transitiveReturnRequires": ["binding", "owner", "retainUntil"],

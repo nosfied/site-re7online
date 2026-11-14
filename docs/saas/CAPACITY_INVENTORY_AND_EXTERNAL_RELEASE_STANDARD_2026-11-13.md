@@ -261,6 +261,61 @@ instalação não incorpora persistência; e cada geração já nasce com destin
 terminal e orçamento verificáveis. Ela não autoriza migração ou retirada nesta
 frente.
 
+### Reaproveitamento local das nove releases privadas — 14/11/2026
+
+A reconciliação seguinte reutilizou a evidência `d164399b2a…3354`, os registros
+de deploy, as custódias existentes no ThinkPad e somente metadados dirigidos das
+autoridades que permanecem na VPS. O relatório complementar tem SHA-256
+`d80144956c52f425d589b2bb195d867a044f2eed4e622e4e69e601c4054343d1`.
+Não houve hashing integral, leitura de conteúdo privado, transferência, build ou
+efeito produtivo.
+
+Os nove pacotes originais continuam presentes: sete em seus `build-output`
+canônicos, um no output `a62da468` e um como `.incoming-5c339b2e.tar.xz`. Os
+bindings imutáveis de pacote/índice coincidem com os registros versionados. O
+total lógico dos pacotes é **1.351.254.084 B** (**1.351.290.880 B físicos**).
+Nenhuma das custódias autenticadas já existentes no ThinkPad cobre integralmente
+essas nove identidades; a custódia `a62da468` contém evidências de preparações
+falhas, não a release instalada nem seu pacote autenticado. Logo, hash documentado
+não deve ser confundido com bytes restauráveis locais.
+
+Os `.data` não mostraram escrita depois de **07/11/2026 09:59:06 -03:00**; o
+`.data` da API ativa mostrou escrita em **13/11/2026 17:09:08 -03:00**. Combinado
+com zero vínculo em `current`, PM2 vivo/salvo e papéis operacionais do grafo, isso
+classifica os nove como `HISTORICAL_PRIVATE_DATA` para preservação — não como
+conteúdo descartável. A observação de processos anterior teve cobertura
+incompleta, portanto o perfil privilegiado ainda é gate obrigatório antes de um
+futuro `prepare/execute`.
+
+| CAMINHO | BYTES FÍSICOS | `.DATA` | REFERÊNCIAS PRODUTIVAS | CUSTÓDIA LOCAL | COMPLEMENTO BRUTO MÍNIMO | RESTAURAÇÃO | DECISÃO |
+| --- | ---: | ---: | --- | --- | ---: | --- | --- |
+| `immutable-17cc77a8-vps-20261104T141039Z` | 989.769.728 | 602.112 | nenhuma; catálogo apenas | não | 148.732.320 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-785bde80-vps-20261103T103429Z` | 989.036.544 | 90.112 | nenhuma; catálogo apenas | não | 148.216.180 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-911a9708-vps-20261102T221325Z` | 988.966.912 | 81.920 | nenhuma; catálogo apenas | não | 148.211.996 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-0fdec8b0-vps-20261028T224726Z` | 988.868.608 | 110.592 | nenhuma; catálogo apenas | não | 148.220.020 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-fa63994a-vps-20261030T153352Z` | 988.852.224 | 45.056 | nenhuma; catálogo apenas | não | 148.144.564 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-754281d3-vps-20261029T174145Z` | 988.798.976 | 32.768 | nenhuma; catálogo apenas | não | 148.180.076 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-708f018c-vps-20261027T152109Z` | 988.770.304 | 110.592 | nenhuma; catálogo apenas | não | 148.186.660 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-a62da468-vps-20261024T124726Z` | 988.495.872 | 12.288 | nenhuma; catálogo apenas | não | 148.004.244 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+| `immutable-5c339b2e-20261022T125717Z` | 985.571.328 | 81.920 | nenhuma; catálogo apenas | não | 166.525.384 | não executada | `CUSTODY_COMPLEMENT_REQUIRED` |
+
+Resultado: **0/9** integralmente restauráveis do ThinkPad agora; **9/9** com
+persistência histórica sem dependência operacional encontrada; **9/9** exigem
+preservação adicional. O payload bruto mínimo calculado é
+**1.352.421.444 B** (pacotes + `.data`), acrescido somente dos pequenos controles
+e do overhead do archive a serem selados. Depois de archive, readback e
+restauração 9/9, o potencial habilitável é **8.897.130.496 B**. Antes disso, o
+potencial destrutivo autorizado permanece **0 B**.
+
+A menor próxima operação é uma custódia única e fechada: reutilizar os nove
+pacotes autenticados na VPS, transferir cada pacote uma vez e anexar somente os
+nove `.data` como suplementos privados, sem copiar os runtimes expandidos. O
+receipt deve vincular package/manifests/índices, identidades dos `.data`, archive,
+readback e restauração isolada por release. Só então cabem observação privilegiada
+fresca, intenção literal e autorização destrutiva separada. Não há impedimento que
+justifique novo executor ou migração de produção; falta apenas executar e provar
+essa custódia já compatível com o precedente excepcional.
+
 A descoberta reutilizou a fotografia estrutural
 `/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256
 `8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`,
