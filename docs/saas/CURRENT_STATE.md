@@ -1,5 +1,21 @@
 # Estado canônico do Converta
 
+## Auditoria integral e retorno ao backlog — 14/11/2026
+
+**PROJECT_AUDIT_COMPLETE / BACKLOG_READY.** A auditoria única confrontou Git,
+código, CI, documentos e uma fotografia somente leitura da VPS. Produção:
+API/frontend `immutable-fa10f4f5-external-20261112T233820Z`, BUILD_ID
+`4j3t9N75vsvYu9t3DoFq4`, worker
+`immutable-e2e7f17a-20261022T005110Z`; três PM2 online, zero reinícios, API/DB
+saudável e frontend HTTP 200. Não houve mutação produtiva.
+
+O P00 extraordinário permanece encerrado e não será reaberto. Pendências reais,
+sem bloquear trabalho funcional independente: backup offsite/restore atual e
+configurações operacionais criptografadas; pacote contratual CRA-PR; auditoria de
+presença SECULT; `PWD` histórico do worker; migração dos ponteiros schema v8 deste
+JSON; dívida ESLint/tipagem do worker. A matriz, evidências e ordem do backlog estão
+em [auditoria integral e prontidão do backlog](../reviews/CONVERTA_PROJECT_AUDIT_AND_BACKLOG_READINESS_2026-11-14.md).
+
 ## Atualização terminal de capacidade — 14/11/2026 (PREVALECE sobre os snapshots P00 abaixo)
 
 **P00_EXTRAORDINARY_CLEANUP_CLOSED / RESUME_PRODUCT_BACKLOG.** O lote excepcional das **nove releases privadas** foi retirado com `RETIREMENT_TERMINAL_VERIFIED`: 9/9 caminhos ausentes, journal `f5839ac5161d4138ea42e58eac7574e1a4490c472a0fa28db828fa24f5b677a9` (9 ATTEMPT, 9 RESULT exitCode=0, 9 VERIFIED), receipt terminal `4c834211cf16c0b4b7418e18641bbc090c04280d8e30b7f2b2c4661969f8dc2a`; ganho medido **8.897.097.728 B / 309.433 inodes**. Espaço livre 22.889.132.032 → **31.786.229.760 B** e inodes livres 9.290.172 → **9.599.605**. A custódia/restauração 9/9 permanecem preservadas; nenhuma dependência ativa foi encontrada na observação EXECUTE completa. API/frontend fa10f4f5, worker e2e7f17a, PM2 e health permaneceram saudáveis no receipt, sem restart.

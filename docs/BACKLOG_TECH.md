@@ -1,5 +1,24 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Retorno ao backlog após auditoria integral — 14/11/2026
+
+Estado: `PROJECT_AUDIT_COMPLETE / BACKLOG_READY`. P00 está encerrado em
+`TERMINAL_SANITIZED / DO_NOT_REPEAT` para 28 caminhos; não criar nova rodada de
+capacidade. Ordem vigente, sem apagar o histórico abaixo:
+
+1. P1 operações/DBA: offsite real, restore drill atual e proteção recuperável de
+   `.env`, Nginx, PM2 e certificados.
+2. P1 contrato/produto: pacote de aceite CRA-PR (Utility, opt-out, relatórios,
+   SLA, treinamento, LGPD, backup e canais adiados).
+3. P1 SECULT-PE: auditoria de presença/sessão; a entrega aceita não é reaberta.
+4. P2 produto: Campaign/CRM import, relação contato-campanha e exports/relatórios.
+5. P2 operação: correção dirigida do `PWD` PM2 herdado do worker, apenas em janela
+   própria com rollback e aceite.
+6. P3 engenharia: migrar ponteiros schema v8 de `CURRENT_STATE.json`, reduzir o
+   baseline ESLint e eliminar gradualmente `--noCheck` do worker.
+
+Fonte e evidências: [matriz final](reviews/CONVERTA_PROJECT_AUDIT_AND_BACKLOG_READINESS_2026-11-14.md).
+
 > [!IMPORTANT]
 > Sequência operacional revisada em 26/10: [mapa vigente](saas/PRODUCT_MAP_CURRENT_2026-10-19.md).
 > IMAGE/VIDEO homologados; campanhas abertas na geração 41 conforme relato.
