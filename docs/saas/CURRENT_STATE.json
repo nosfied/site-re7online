@@ -1840,8 +1840,76 @@
       "destructiveAuthorizationGranted": false
     }
   },
+  "p00ExceptionalTenReleaseRetirement": {
+    "state": "TERMINAL_SANITIZED_DO_NOT_REPEAT",
+    "reportedDate": "2026-11-14",
+    "batchId": "p00-ten-releases-exceptional-20261114-v1",
+    "candidateCount": 10,
+    "paths": [
+      "/opt/re7online/releases/3227b2d752110873f0eff4ee5253a6f06ca51549-front",
+      "/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api",
+      "/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6",
+      "/opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z",
+      "/opt/re7online/releases/immutable-a62da468-20261024T112857Z",
+      "/opt/re7online/releases/immutable-aa9527cc-vps-20261029T222733Z",
+      "/opt/re7online/releases/immutable-c085e53f-20261021T094952Z",
+      "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
+      "/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window",
+      "/opt/re7online/releases/worker-minimal-hybrid-b9b58177-20261004"
+    ],
+    "intentSha256": "c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f",
+    "commandsSha256": "85ddaab1cb39756b277ef68f35902feba7e73f7021e4947080fcc8655bec12aa",
+    "authorizationSha256": "988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802",
+    "journalSha256": "46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc",
+    "receiptSha256": "25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451",
+    "commandsAttempted": 10,
+    "commandsCompleted": 10,
+    "pathsAbsent": true,
+    "recoveredPhysicalBytes": 8523984896,
+    "recoveredInodes": 279130,
+    "filesystemBefore": {
+      "freeBytes": 12114100224,
+      "freeInodes": 8924565
+    },
+    "filesystemAfterReceipt": {
+      "freeBytes": 20638085120,
+      "freeInodes": 9203695
+    },
+    "filesystemTerminalReadback": {
+      "freeBytes": 20638040064,
+      "freeInodes": 9203694
+    },
+    "preservation": {
+      "location": "PRIVATE_THINKPAD_CUSTODY",
+      "archiveSha256": "464c60ef94ba7fd9c46e6f85a08772b2e611a24ffc250fa8350bfd436ab110c8",
+      "archiveBytes": 8193812480,
+      "archivePhysicalBytes": 8193904640,
+      "indexSha256": "054989cbc839c0358ae1431f90a88112586f78e153b38b0915fcc5c2d9f8ccdf",
+      "indexEntries": 279133,
+      "receiptSha256": "cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361",
+      "isolatedRestorePassed": true,
+      "isolatedRestorePhysicalBytes": 8526045184,
+      "externalDataSymlinkCount": 6,
+      "externalDataSymlinksFollowed": false,
+      "retain": true
+    },
+    "executionObservation": {
+      "complete": true,
+      "references": 0,
+      "writers": 0,
+      "failures": 0,
+      "attestationSha256": "8b9832b4add705795e1c23a55352efbe538477913dab473c1f2b740fca08dd1e"
+    },
+    "helperSha256": "dca521d99779c2ad78f6f5af4ecded018bb76f96772de7ffa38e43d64734f9f3",
+    "helperInstallationReceiptSha256": "9cb6fcef72d46c7c3f793454dd8bb9908dc973059fe4a9b92776c2d3e2c3735a",
+    "consumerSha256": "3b212477ae7e2b358f56e1f8dc620ea4701d1815257804d9348f5c82b61e4b0e",
+    "productionPreserved": true,
+    "locksReleased": true,
+    "authorizationReusable": false,
+    "repeatPermitted": false
+  },
   "updatedAtDate": "2026-11-14",
-  "updatedAtUtcScope": "P00_FIVE_RUNTIME_TERMINAL_SANITIZED_DOCUMENTATION_ONLY",
+  "updatedAtUtcScope": "P00_TEN_RELEASE_TERMINAL_SANITIZED_DOCUMENTATION_ONLY",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",

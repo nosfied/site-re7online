@@ -28,6 +28,27 @@ O controle excepcional efetivamente executado foi o commit isolado
 Ele permanece evidência histórica fechada, não control plane geral. As condições
 de eventual reaproveitamento metodológico estão na política de capacidade.
 
+O lote excepcional seguinte de dez releases legadas terminou igualmente em
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`, sem ampliar a autorização do lote 5/5.
+A intenção válida `c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f`,
+a autorização `988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802`,
+o journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`
+e o receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`
+comprovam 10/10 efeitos concluídos e ausência física. A variação atribuída pelo
+receipt foi **8.523.984.896 B e 279.130 inodes**, de `12.114.100.224 B` e
+`8.924.565` inodes livres para `20.638.085.120 B` e `9.203.695`; o readback
+posterior observou `20.638.040.064 B` e `9.203.694`, diferença concorrente que
+não altera a medição terminal. API e frontend `fa10f4f5`, worker `e2e7f17a`,
+health público/local, PostgreSQL por health da API, tenants e `.data` externo
+permaneceram preservados; os locks foram liberados.
+
+A custódia integral `p00-ten-releases-exceptional-20261114-v1` permanece no
+ThinkPad: archive `464c60ef94ba7fd9c46e6f85a08772b2e611a24ffc250fa8350bfd436ab110c8`,
+índice `054989cbc839c0358ae1431f90a88112586f78e153b38b0915fcc5c2d9f8ccdf`
+e receipt `cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`.
+A restauração isolada passou e seis symlinks `.data` foram preservados sem seguir
+seus destinos. Não repetir preservação, autorização ou retirada deste lote.
+
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
 ---

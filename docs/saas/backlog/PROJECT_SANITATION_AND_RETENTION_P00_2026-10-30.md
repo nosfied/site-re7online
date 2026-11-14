@@ -1614,3 +1614,31 @@ O helper instalado `aedc012b…57a` e o consumidor excepcional `a0cf7090…ec4c9
 tinham allowlists fechadas nos cinco caminhos/identidades. A autorização
 `a20c6df5…e298` não se estende a outros runtimes. Não repetir qualificação,
 preservação, transferência ou retirada deste lote.
+
+#### Fechamento excepcional terminal das dez releases — 14/11/2026
+
+O lote `p00-ten-releases-exceptional-20261114-v1` encerrou em
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção attempt-02
+`c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f` foi a
+única autorizada; a intenção anterior `ca3502ca…7e29` permanece descartada e não
+pode ser reutilizada. A autorização
+`988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802`, o journal
+`46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc` e o receipt
+`25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451` registram
+10/10 comandos com `ATTEMPT → RESULT(0) → VERIFIED` e ausência dos dez caminhos.
+
+O receipt atribui recuperação de **8.523.984.896 B e 279.130 inodes**. O saldo
+passou de `12.114.100.224 B`/`8.924.565` inodes livres para
+`20.638.085.120 B`/`9.203.695`; o readback subsequente de
+`20.638.040.064 B`/`9.203.694` registra atividade concorrente mínima, não uma
+segunda retirada. A observação privilegiada de execução foi completa, com zero
+referências, writers e falhas, e os dois locks foram comprovadamente liberados.
+
+A custódia `p00-ten-releases-exceptional-20261114-v1` permanece no ThinkPad com
+archive `464c60ef…10c8`, índice `054989cb…ccdf`, receipt `cb1926e7…f361` e
+restauração isolada PASS. Seis symlinks `.data` foram preservados sem seguir os
+destinos externos. API/frontend `fa10f4f5`, worker `e2e7f17a`, PostgreSQL por
+health da API, tenants e produção permaneceram saudáveis. O helper
+`dca521d9…f9f3`, o consumidor `3b212477…4b0e`, o perfil e a autorização eram
+fechados para estes dez caminhos; não constituem permissão para qualquer lote
+novo.

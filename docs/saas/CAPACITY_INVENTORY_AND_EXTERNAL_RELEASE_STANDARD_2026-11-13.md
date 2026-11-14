@@ -10,6 +10,17 @@
 
 **Última fotografia VPS pós-deploy:** `7.080.562.688 B` e `8.743.987` inodes livres; nenhuma nova medição VPS foi feita na retirada do builder (host distinto). Antes do preflight `7.247.413.248 B` livres, delta de disponibilidade `-166.850.560 B`, **não equivale a custo líquido de deploy**. Runtime instalado ~`989.159.424 B`, pacote retido ~`148.213.760 B`; não somar como “recuperável” e nem retirar sem grafo/custódia. O gate histórico de build na VPS foi `9.663.676.416 B`, enquanto recepção/verificação/instalação externa exigia `5.700.927.488 B`; redução ~41% **do gate**, não do consumo permanente.
 
+**Lote excepcional 10/10: encerrado `TERMINAL_SANITIZED / DO_NOT_REPEAT`.**
+Dez releases legadas, em allowlist literal, foram preservadas integralmente fora
+da VPS, restauradas de forma isolada e retiradas com 10/10 resultados verificados.
+Journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`;
+receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`.
+A recuperação física atribuída foi **8.523.984.896 B e 279.130 inodes**. O
+receipt mediu `20.638.085.120 B`/`9.203.695` livres; o readback posterior mediu
+`20.638.040.064 B`/`9.203.694`. A custódia, archive `464c60ef…10c8`, índice
+`054989cb…ccdf` e receipt `cb1926e7…f361` permanecem protegidos. Não somar de
+novo esse ganho, não retransmitir a custódia e não reutilizar a autorização.
+
 ## 2. Inventário existente é a base; não reiniciar auditoria global
 
 Fontes já existentes, com época e fronteira explícitas:

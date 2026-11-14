@@ -1,5 +1,27 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Fechamento excepcional das dez releases legadas — terminal
+
+O lote fechado `p00-ten-releases-exceptional-20261114-v1` terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção
+`c92549c1184998c2b1e0bcba2a98bbc1b2ac1cd40864d7d26380846990802e2f`,
+os comandos `85ddaab1cb39756b277ef68f35902feba7e73f7021e4947080fcc8655bec12aa`,
+a autorização `988bd303c66d0234638c07084b89f0ef499b856586873ad33384b2e97f998802`,
+o journal `46aa4366817c719eecedb2425a11006946402efde0d5db6568962a4bd646f8fc`
+e o receipt `25788ae257beb85d6c342cd2a06678617792e3a06b69de88c43b1997cf16c451`
+comprovam dez sequências `ATTEMPT → RESULT(0) → VERIFIED` e ausência física.
+
+A retirada recuperou **8.523.984.896 B e 279.130 inodes** segundo a medição
+terminal do receipt. A custódia integral externa permanece preservada, com
+archive `464c60ef94ba7fd9c46e6f85a08772b2e611a24ffc250fa8350bfd436ab110c8`,
+índice `054989cbc839c0358ae1431f90a88112586f78e153b38b0915fcc5c2d9f8ccdf`
+e receipt `cb1926e7b09e9a2e42984b15965c48fd139377924e4a9e3526436304006af361`.
+A restauração isolada passou; seis symlinks `.data` foram registrados sem seguir
+seus destinos. A observação privilegiada de execução foi completa, sem
+referências, writers ou falhas, e os locks ficaram liberados após o receipt.
+Este perfil e esta autorização eram literais para os dez caminhos e não admitem
+reuso para outro lote.
+
 ## Fechamento excepcional dos cinco runtimes pré-contrato — terminal
 
 O lote fechado de `879cb1…-api`, `af26…-api`, `af26…-front`, `afbb…-api` e
