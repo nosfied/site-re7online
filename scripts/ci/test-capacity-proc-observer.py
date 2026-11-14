@@ -267,6 +267,17 @@ class ProcObserverTests(unittest.TestCase):
             OBSERVER.validate_request(request(campaign + [OBSERVER.NPM_CACHE], "prepare"))
         with self.assertRaisesRegex(OBSERVER.Refused, "P00_CAMPAIGN_API_SCOPE"):
             OBSERVER.validate_request(request(campaign, "audit"))
+        nine = sorted(OBSERVER.P00_EXCEPTIONAL_NINE_PRIVATE_PATHS)
+        self.assertEqual(OBSERVER.validate_request(
+            request(nine, "prepare"))["candidatePaths"], nine)
+        self.assertEqual(OBSERVER.validate_request(
+            request(nine, "execute"))["candidatePaths"], nine)
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_NINE_PRIVATE_SCOPE"):
+            OBSERVER.validate_request(request(nine[:-1], "prepare"))
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_NINE_PRIVATE_SCOPE"):
+            OBSERVER.validate_request(request(nine + [OBSERVER.NPM_CACHE], "execute"))
+        with self.assertRaisesRegex(OBSERVER.Refused, "P00_NINE_PRIVATE_SCOPE"):
+            OBSERVER.validate_request(request(nine, "audit"))
         preserve = json.loads(request([OBSERVER.LEGACY_EMPTY_TRANSACTION]))
         preserve["phase"] = "preserve"
         preserve["preservationRequestSha256"] = "1" * 64
@@ -306,6 +317,9 @@ class ProcObserverTests(unittest.TestCase):
             with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
                 OBSERVER.validate_request(request([path + "-other"]))
         for path in OBSERVER.P00_EXCEPTIONAL_CAMPAIGN_API_PATHS:
+            with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
+                OBSERVER.validate_request(request([path + "-other"]))
+        for path in OBSERVER.P00_EXCEPTIONAL_NINE_PRIVATE_PATHS:
             with self.assertRaisesRegex(OBSERVER.Refused, "CANDIDATE_SCOPE"):
                 OBSERVER.validate_request(request([path + "-other"]))
 

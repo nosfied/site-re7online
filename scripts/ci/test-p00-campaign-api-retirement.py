@@ -227,8 +227,12 @@ class ExceptionalCampaignApiRetirementTest(unittest.TestCase):
                      "path": "/usr/local/libexec/re7online/capacity-proc-observer.py",
                      "sha256": MODULE.EXCEPTIONAL_CAMPAIGN_API_HELPER_SHA256, "device": 64769,
                      "inode": 786900, "uid": 0, "gid": 0, "mode": "0500"},
-                 "previous": {"sha256":
-                     "e47ae66c9855e989e6f0c97a7b82c21714797ce4823842bec5ab9b5d431c04aa"},
+                 "previous": {
+                     "path": "/usr/local/libexec/re7online/capacity-proc-observer.py",
+                     "sha256":
+                         "e47ae66c9855e989e6f0c97a7b82c21714797ce4823842bec5ab9b5d431c04aa",
+                     "device": 64769, "inode": 786605, "uid": 0, "gid": 0,
+                     "mode": "0500"},
                  "sudoersChanged": False, "sudoersSha256":
                  "a19288231bba38b704692c44fea08c710747fca3c28faacc76423cf5bea13e26"}
         raw = MODULE.canonical(value)

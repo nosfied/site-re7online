@@ -76,6 +76,12 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery-supervisor.py
       - name: Validate privileged capacity process observer protocol
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-proc-observer.py
+      - name: Validate closed exceptional retirement profiles
+        run: >-
+          PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v
+          scripts/ci/test-install-p00-nine-private-observer.py
+          scripts/ci/test-p00-nine-private-retirement.py
+          scripts/ci/test-p00-campaign-api-retirement.py
       - name: Validate a838bd33 external-builder process profile
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/tests/test_builder_proc_profile.py scripts/tests/test_install_builder_proc_observer.py
       - name: Validate retention evidence collection

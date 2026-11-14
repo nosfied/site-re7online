@@ -95,6 +95,17 @@ P00_EXCEPTIONAL_THREE_FRONTEND_PATHS = {
 P00_EXCEPTIONAL_CAMPAIGN_API_PATHS = {
     "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008",
 }
+P00_EXCEPTIONAL_NINE_PRIVATE_PATHS = {
+    "/opt/re7online/releases/immutable-17cc77a8-vps-20261104T141039Z",
+    "/opt/re7online/releases/immutable-785bde80-vps-20261103T103429Z",
+    "/opt/re7online/releases/immutable-911a9708-vps-20261102T221325Z",
+    "/opt/re7online/releases/immutable-0fdec8b0-vps-20261028T224726Z",
+    "/opt/re7online/releases/immutable-fa63994a-vps-20261030T153352Z",
+    "/opt/re7online/releases/immutable-754281d3-vps-20261029T174145Z",
+    "/opt/re7online/releases/immutable-708f018c-vps-20261027T152109Z",
+    "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z",
+    "/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z",
+}
 PF_KTHREAD = 0x00200000
 
 
@@ -188,7 +199,8 @@ def canonical_candidate(value: Any) -> str:
         return candidate
     if candidate in (LEGACY_PRECONTRACT_EXCEPTIONAL_PATHS | P00_EXCEPTIONAL_TEN_PATHS |
                      P00_EXCEPTIONAL_THREE_FRONTEND_PATHS |
-                     P00_EXCEPTIONAL_CAMPAIGN_API_PATHS):
+                     P00_EXCEPTIONAL_CAMPAIGN_API_PATHS |
+                     P00_EXCEPTIONAL_NINE_PRIVATE_PATHS):
         return candidate
     path = Path(candidate)
     try:
@@ -280,6 +292,10 @@ def validate_request(raw: bytes) -> dict[str, Any]:
     if any(item in P00_EXCEPTIONAL_CAMPAIGN_API_PATHS for item in normalized):
         if normalized != campaign_scope or value["phase"] not in {"prepare", "execute"}:
             refuse("P00_CAMPAIGN_API_SCOPE")
+    nine_private_scope = sorted(P00_EXCEPTIONAL_NINE_PRIVATE_PATHS)
+    if any(item in P00_EXCEPTIONAL_NINE_PRIVATE_PATHS for item in normalized):
+        if normalized != nine_private_scope or value["phase"] not in {"prepare", "execute"}:
+            refuse("P00_NINE_PRIVATE_SCOPE")
     consumer = value.get("consumer")
     if (not isinstance(consumer, dict) or set(consumer) != {"pid", "startTicks"} or
             not isinstance(consumer.get("pid"), int) or consumer["pid"] <= 1 or
