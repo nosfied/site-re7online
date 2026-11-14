@@ -1,5 +1,12 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Atualização terminal 14/11/2026 — nove releases privadas já RETIRADAS
+
+**Prevalece sobre as fotografias históricas de seleção abaixo.** A classificação anterior `NO_ELIGIBLE_ECONOMIC_BATCH` e a falta de custódia dos nove runtimes descrevem o período **anterior** ao fechamento. As nove releases físicas com `.data` interno foram preservadas e restauradas no ThinkPad (9/9 PASS), observadas sem referências/writers e retiradas com journal `f5839ac5161d4138ea42e58eac7574e1a4490c472a0fa28db828fa24f5b677a9`, receipt `4c834211cf16c0b4b7418e18641bbc090c04280d8e30b7f2b2c4661969f8dc2a` e recuperação física **8.897.097.728 B / 309.433 inodes**. Os nove caminhos são `TERMINAL_SANITIZED / DO_NOT_REPEAT`; suas custódias externas são preservadas. Total dos cinco lotes excepcionais: **28 caminhos / 24.756.744.192 B / 855.823 inodes**.
+
+**Regra para o futuro:** active + um rollback imediato por componente; retorno extra somente com owner/binding/retainUntil; persistência tenant fora de releases imutáveis; `.data` interno é negativa de admissão para **novas** gerações. A retirada futura reutiliza contrato e gates validados por identidade, custódia, restauração, observação privilegiada e autorização específica. Para o padrão operacional comprovado e erros de integração a evitar, consultar [fechamento P00](../reviews/CONVERTA_P00_TERMINAL_CLOSURE_AND_REUSABLE_RETIREMENT_METHOD_2026-11-14.md). Não iniciar novas rodadas extraordinárias só para satisfazer inventário histórico.
+
+
 ## Seleção econômica P00 — nenhum lote elegível acima de 5 GB
 
 O owner suspendeu `p00-worker-package-audit-afbb7455-v1` em
