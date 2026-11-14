@@ -118,15 +118,16 @@ fora do efeito. Não repetir preservação, autorização ou retirada deste cami
 
 O próximo lote permanece exclusivamente `worker-package-audit`, com
 365.674.496 B documentados, mas está
-`CONTRACT_DELTA_IMPLEMENTED_PENDING_REVIEW`. O audit v5 negou por
+`CONTRACT_DELTA_REVIEWED_MERGE_READY`. O audit v5 negou por
 `DISPOSITION_TREE_DIRECTORY_IDENTITY`; a evidência dirigida já existente conta
 1.023 diretórios internos `deploy:deploy 0775`, e não deve ser recapturada por
 novo audit sem mudança material. A decisão mínima é vincular, somente à
 disposição literal existente, a relação exata de diretórios derivada das folhas
 e links selados e exigir principal/grupo fechados, locks, zero referências e
 writers e revalidação em cada fase. O consumidor e o materializador vinculados
-passaram a suíte integral 154/154; a revisão e a CI do novo HEAD ainda precedem
-qualquer novo audit produtivo. Não há `chmod`, relaxamento global, `prepare`,
+passaram a suíte integral 154/154; a revisão final do HEAD `d65a8f0a…` e a CI
+`43614190415` passaram 4/4. A integração autenticada ainda precede o único novo
+audit produtivo somente leitura. Não há `chmod`, relaxamento global, `prepare`,
 autorização ou retirada nesta atualização. A correção da definição
 PM2 do worker produtivo continua independente e sem restart, save ou mutação.
 
