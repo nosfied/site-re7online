@@ -1103,6 +1103,19 @@ Os nove `.data` são `HISTORICAL_PRIVATE_DATA` para custódia, pois a última es
 continua com 0 B autorizados até archive, readback, restauração isolada 9/9 e
 observação privilegiada completa. Nenhuma nova implementação é necessária.
 
+Atualização terminal de preservação em 14/11: a custódia
+`p00-nine-private-releases-exceptional-20261114-v1` concluiu
+`PRESERVATION_VERIFIED / RESTORE_9_OF_9_PASS`. O receipt é
+`46d3049a71396c7f7fcef8cae511a79bc5eb28bbf21ba09b9d65c6afbfb3ad87` e o
+índice privado é `48eb52f4736fb0a3f9eebf00490df04a9424792dbc8f67b8534ec501a9d41699`.
+Foram transferidos **1.352.123.812 B úteis sem duplicação** (nove pacotes e nove
+complementos `.data`), e as árvores reconstruídas somaram 8.899.563.520 B no
+filesystem local. A diferença para os 8.897.130.496 B físicos da VPS é somente
+alocação de blocos; todas as folhas, tipos, modos, hashes e symlinks fecharam.
+Produção e tenants permaneceram intactos; os nove caminhos seguem presentes e
+nenhuma exclusão foi autorizada. Próximo gate: observação privilegiada completa
+e intenção literal fechada, sem repetir custódia ou restauração.
+
 As preparações não são integralmente vitais, mas misturam 176 escopos e
 autoridades únicas com payloads possivelmente duplicados; não há partição física
 autenticada de 5 GB. `build-output` está isoladamente abaixo do piso e conserva

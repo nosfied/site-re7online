@@ -316,6 +316,44 @@ fresca, intenção literal e autorização destrutiva separada. Não há impedim
 justifique novo executor ou migração de produção; falta apenas executar e provar
 essa custódia já compatível com o precedente excepcional.
 
+#### Custódia e restauração integral 9/9 — concluída em 14/11/2026
+
+A operação posterior executou exatamente a custódia fechada acima, sem copiar os
+runtimes expandidos e sem efeito destrutivo. O lote
+`p00-nine-private-releases-exceptional-20261114-v1` terminou em
+`PRESERVATION_VERIFIED / RESTORE_9_OF_9_PASS`:
+
+- inventário de origem: `d164399b2a…3354`;
+- manifesto privado dirigido dos 158 itens `.data`: `8c22c6d19a…17f4`;
+- receipt de transferência: `0eae77e095…eaa9`;
+- receipt de preservação: `46d3049a71…ad87`;
+- índice privado da custódia: `48eb52f473…1699`;
+- fotografia sanitizada pós-operação: `273911dd35…a5e8`.
+
+Os nove pacotes úteis somam **1.351.376.292 B** lógicos e **1.351.413.760 B**
+físicos na VPS. Os nove complementos `.data`,
+preservados separadamente e sem seguir symlinks, somam **747.520 B** como
+archives; o transporte útil sem duplicação foi **1.352.123.812 B**. A diferença
+contra a estimativa anterior decorre do pacote autoritativo `a62da468`: o caminho
+pré-correção continha `05f1452f…e252`, enquanto o deployment record vincula o
+repack `fdac4ef8…66e4` em `…-repacked-uploads-fix`. O parcial divergente não foi
+publicado e foi descartado; as sete publicações anteriores foram reaproveitadas.
+
+Cada restore validou cobertura exaustiva, hashes, tipos, modos e destinos de
+symlink. O pacote legado `5c339b2e` usa os nomes históricos
+`release-manifest.json`/`release-index.json`; seus hashes coincidem com as
+autoridades registradas, sem flexibilização do verificador. A alocação física
+reconstruída foi **8.899.563.520 B**, diferença de blocos do filesystem local em
+relação aos **8.897.130.496 B** medidos na VPS, sem diferença material de folhas.
+Os nove candidatos permaneceram presentes, a produção e os tenants não foram
+alterados e a quantidade de comandos destrutivos foi zero.
+
+Estado sucessor: **9/9 restauráveis**, potencial físico preparado
+**8.897.130.496 B**, retirada autorizada **0 B**. A próxima operação mínima é
+instalar/reutilizar perfil privilegiado fechado para as nove identidades,
+recapturar referências/writers sob locks e materializar a intenção 9/9. Nenhum
+`AUTHORIZE_ONCE` ou `execute` pertence a esta etapa.
+
 A descoberta reutilizou a fotografia estrutural
 `/tmp/re7-vps-capacity-structural-20261113.json`, SHA-256
 `8962e14ac599329dd883b70856aa99dd0727de4adc71c96868c008a88dfa8d92`,

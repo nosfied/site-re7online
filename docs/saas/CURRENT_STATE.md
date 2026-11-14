@@ -160,15 +160,20 @@ nega persistência tenant dentro da raiz imutável e exige orçamento de bytes/i
 e destino terminal antes da alocação. Nenhuma migração, custódia ou exclusão foi
 executada nesta frente.
 
-A reconciliação local seguinte confirmou que **0/9** releases estão hoje
-integralmente restauráveis das custódias do ThinkPad. Os nove pacotes originais
-permanecem autenticados na VPS e totalizam 1.351.254.084 B lógicos; somados aos
-1.167.360 B dos nove `.data`, o complemento bruto mínimo é **1.352.421.444 B**.
-Os `.data` não receberam escrita depois de 07/11, enquanto a persistência da API
-ativa recebeu escrita em 13/11; a classificação de planejamento é
-`HISTORICAL_PRIVATE_DATA`, sujeita à observação privilegiada terminal. Nenhuma
-transferência ou restauração foi feita. Após custódia/readback/restauração 9/9, o
-potencial do lote será 8.897.130.496 B; hoje, 0 B estão autorizados para retirada.
+A custódia sucessora `p00-nine-private-releases-exceptional-20261114-v1`
+encerrou em `PRESERVATION_VERIFIED / RESTORE_9_OF_9_PASS`. O receipt integral é
+`46d3049a71396c7f7fcef8cae511a79bc5eb28bbf21ba09b9d65c6afbfb3ad87` e o
+índice privado da custódia é
+`48eb52f4736fb0a3f9eebf00490df04a9424792dbc8f67b8534ec501a9d41699`.
+Foram preservados 1.351.376.292 B de pacotes autenticados e 747.520 B de
+complementos `.data` separados, total útil transferido de **1.352.123.812 B**.
+As nove restaurações isoladas cobriram integralmente índices, arquivos, modos e
+symlinks, sem seguir destinos externos e sem efeito destrutivo. A variação física
+do restore (8.899.563.520 B) decorre da alocação do filesystem local; o potencial
+físico do lote na VPS permanece **8.897.130.496 B**. API/frontend `fa10f4f5`,
+worker `e2e7f17a`, PM2 e health local/público permaneceram saudáveis; os nove
+candidatos continuam presentes. A próxima fronteira é observação privilegiada
+completa e intenção literal 9/9. A retirada continua sem autorização.
 
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 
