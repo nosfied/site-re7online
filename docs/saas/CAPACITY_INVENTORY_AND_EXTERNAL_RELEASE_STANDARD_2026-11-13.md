@@ -28,11 +28,11 @@ restaurados de forma isolada e retirados com três resultados verificados. Recei
 recuperação física **1.917.009.920 B e 76.717 inodes**. A custódia externa,
 índice `617ded0a…027a` e receipt `86654281…18be` permanecem protegidos.
 
-**Consolidação excepcional:** os lotes 5/5, 10/10 e frontend 3/3 encerraram
-18 caminhos e recuperaram, pelos respectivos receipts,
-**15.496.323.072 B e 536.551 inodes**. As três custódias, restaurações, journals
-e receipts permanecem protegidos. O total não é estimativa de novo lote, não deve
-ser somado novamente e não cria autorização reutilizável.
+**Consolidação excepcional:** os lotes 5/5, 10/10, frontend 3/3 e Campaign API
+1/1 encerraram 19 caminhos e recuperaram, pelos respectivos receipts,
+**15.859.646.464 B e 546.390 inodes**. As quatro custódias, restaurações,
+journals e receipts permanecem protegidos. O total não é estimativa de novo lote,
+não deve ser somado novamente e não cria autorização reutilizável.
 
 ## 2. Inventário existente é a base; não reiniciar auditoria global
 
@@ -141,7 +141,7 @@ autoridade de retirada.
 | `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:2966832` | 334.172.160 / 8.393 | archive privado de retorno do worker ainda presente | `.data` é symlink externo e deve permanecer fora de qualquer archive/efeito | segundo lote dirigido |
 | `/opt/re7online/releases/worker-minimal-hybrid-b9b58177-verified-v3` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5557758` | 365.600.768 / 8.070 | pacote `worker-minimal-b9-v3.tar.gz` ainda presente | cobertura integral e restauração ainda não vinculadas ao runtime; `.data` externo protegido | segundo lote dirigido |
 | `/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:5770335` | 365.678.592 / 8.081 | manifests e cadeia histórica preservados | pacote principal não foi localizado na custódia registrada; `.data` externo protegido | segundo lote dirigido |
-| `/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:6029469` | 363.339.776 / 9.842 | manifesto privado integral registrado | não há custódia integral externa confirmada; `.data` aponta para o destino compartilhado produtivo | lote separado, depois das linhagens maiores |
+| `/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008` — `LEGACY_RUNTIME_EQUIVALENT` | `64769:6029469` histórica | 363.339.776 / 9.842 históricos | custódia `0c8f6d00…da6a`, restauração PASS e receipt terminal `8c6e5013…6082` | caminho ausente; `.data` externo preservado | `TERMINAL_SANITIZED / DO_NOT_REPEAT`; 363.323.392 B / 9.839 inodes recuperados |
 
 ### Priorização fechada
 
@@ -153,12 +153,12 @@ autoridade de retirada.
    próprias.
 2. **Workers b66/b9/afbb:** **1.065.451.520 B e 24.544 inodes**; segundo lote,
    com os três destinos externos `.data` explicitamente preservados.
-3. **Campaign API:** **363.339.776 B e 9.842 inodes**; lote médio independente,
-   também com `.data` externo preservado.
+3. **Campaign API:** lote concluído; **363.323.392 B e 9.839 inodes** recuperados,
+   com `.data` externo preservado. Excluir de toda seleção futura.
 
-Existem, portanto, **dois lotes grandes acima de 1 GB e um lote médio**, total
-potencial atualmente medido de **3.345.813.504 B**. O potencial não é espaço
-autorizado nem recuperado. Os `build-output` remanescentes somam cerca de 3,55 GB,
+Restam, portanto, **dois lotes grandes acima de 1 GB** nessa fotografia. O lote
+médio Campaign API já é capacidade efetivamente recuperada. Os `build-output`
+remanescentes somam cerca de 3,55 GB,
 mas misturam pacotes, contratos e evidências de releases terminais ou protegidas;
 `release-sources` mantém autoridades históricas e `deploy-control` mantém
 controles/evidências com negativas próprias. Esses grupos permanecem

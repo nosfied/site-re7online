@@ -1,6 +1,6 @@
 # Estado canônico do Converta
 
-## Estado vigente — 14/11/2026: Inbox fa10f4f5 ativa, P00 com Campaign API preservada
+## Estado vigente — 14/11/2026: Inbox fa10f4f5 ativa, Campaign API histórica sanitizada
 
 **DEPLOYED_RETENTION_INCOMPLETE (fotografia terminal da transação produtiva) / BUILDER_FA10_SANITIZED / PRODUCTION HEALTHY, conforme último report.** API e frontend: `immutable-fa10f4f5-external-20261112T233820Z`, target `fa10f4f59c9a05328e536dd25a1668c3ba25939e`, BUILD_ID `4j3t9N75vsvYu9t3DoFq4`; worker `immutable-e2e7f17a-20261022T005110Z`. O record anterior `a838bd33` é **histórico e retorno da API**, não release viva. O frontend anterior `b8d284b6` é retorno imediato.
 
@@ -69,11 +69,11 @@ e complemento `72291aba550ffa89197956fba668101ca650681ff8fb787b91531d435792fc8b`
 A restauração isolada passou 3/3; nenhum `.data` estava nas árvores e nenhum
 destino externo foi seguido. Não repetir preservação, autorização ou retirada.
 
-Os três lotes excepcionais somam **18 caminhos terminalmente ausentes**, com
-recuperação acumulada de **15.496.323.072 B e 536.551 inodes**. Esse total é a
-soma dos três receipts terminais, não uma nova medição nem nova autorização.
+Os quatro lotes excepcionais somam **19 caminhos terminalmente ausentes**, com
+recuperação acumulada de **15.859.646.464 B e 546.390 inodes**. Esse total é a
+soma dos quatro receipts terminais, não uma nova medição nem nova autorização.
 
-### Continuidade P00 — workers preservados e Campaign API em custódia
+### Continuidade P00 — workers preservados e Campaign API terminal
 
 Os três workers históricos permanecem fisicamente presentes e a custódia
 `p00-three-workers-exceptional-20261114-v1` está
@@ -98,27 +98,23 @@ ambiente introspectado nem editar o dump. Qualquer correção futura exige janel
 própria, troca controlada somente do worker, rollback comprovado e no máximo um
 `pm2 save` depois do aceite; nenhum desses efeitos foi executado.
 
-A Campaign API
+A Campaign API histórica
 `/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008`
-permanece presente na identidade `64769:6029469`, modo `0700`, com ocupação
-histórica autenticada de **363.339.776 B e 9.842 inodes**. A leitura dirigida
-confirmou ausência em `current`, PM2 vivo, dump e papéis ativos/rollback; o grafo
-a mantém somente em `installedVerifiedReleases`. A varredura não privilegiada de
-`/proc` encontrou zero referências, porém foi incompleta e não qualifica retirada.
+terminou `TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção `7fdbb80a…899d`, a
+autorização `9933be4d…2e7e`, o journal `c899d701…a52c` e o receipt
+`8c6e5013…6082` comprovam `ATTEMPT → RESULT(0) → VERIFIED`, ausência física e
+recuperação medida de **363.323.392 B e 9.839 inodes**. O saldo passou de
+**22.550.335.488 B / 9.280.357 inodes** para **22.913.658.880 B / 9.290.196
+inodes**.
 
-Sua custódia externa `p00-campaign-api-exceptional-20261114-v1` terminou
-`PRESERVATION_VERIFIED`. Em vez de copiar backups históricos que não continham a
-árvore da release, uma única stream da raiz candidata produziu archive
-`167bd932b1e477925fa8d655878047b032b415311288334e0bd1a12699e0786b`.
-A restauração isolada confirmou os 8.820 arquivos do manifesto histórico
-`4fe74088465073e07269329a0c14267427c61173e04b65e85f7d847bd5b5263c`,
-preservou a folha adicional `.env.example` pelo suplemento
-`2c6b80ddfe38ea229102fb96400a4ff5e482dfae19b5550ecfb6fbe16a5c19bf`
-e confirmou 11 symlinks sem seguir `.data`. Receipt da custódia:
-`0c8f6d00c5895af2ffaebcc1e5dee54fdeeaa91eec0879e626801d544b45da6a`.
-O helper instalado e os consumidores integrados não admitem esse caminho literal;
-portanto o estado é `PRESERVATION_VERIFIED / RETIREMENT_PREPARATION_BLOCKED_BY_CLOSED_BINDING`.
-Não houve instalação de helper, intenção, autorização ou retirada.
+A custódia externa `p00-campaign-api-exceptional-20261114-v1` permanece
+`PRESERVATION_VERIFIED`: archive `167bd932…786b`, manifesto `4fe74088…5263`,
+suplemento `2c6b80dd…19bf`, receipt `0c8f6d00…da6a` e restauração isolada de
+8.821 arquivos e 11 symlinks. `.data` não foi seguido e seu destino externo
+permaneceu disponível. A observação privilegiada de execução foi completa, com
+zero referências, writers e falhas. API/frontend `fa10f4f5`, worker `e2e7f17a`,
+PM2, dump, banco reportado pelo health e persistências dos tenants permaneceram
+fora do efeito. Não repetir preservação, autorização ou retirada deste caminho.
 
 A autoridade consolidada de capacidade, classes, recibos terminais, pendências e futura preferência por build externo é [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md). O fluxo executável não mudou e continua sujeito ao runbook e aos princípios fundamentais. Os parágrafos a seguir são **fotografias históricas**, superadas por esta seção quando discutem API ativa, frontend ativo, dump e espaço atuais.
 

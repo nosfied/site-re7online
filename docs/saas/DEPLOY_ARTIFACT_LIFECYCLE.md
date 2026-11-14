@@ -1,5 +1,26 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Fechamento excepcional da Campaign API histórica — terminal
+
+O lote `p00-campaign-api-exceptional-20261114-v1` terminou
+`TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção `7fdbb80a…899d`, o manifesto
+de comandos `c63e3f2e…6f77`, a autorização `9933be4d…2e7e`, o journal
+`c899d701…a52c` e o receipt `8c6e5013…6082` comprovam a única sequência
+`ATTEMPT → RESULT(0) → VERIFIED` e a ausência física de
+`campaign-eligibility-recovery-final-reviewed-20261008`.
+
+A recuperação física medida foi **363.323.392 B e 9.839 inodes**. A observação
+privilegiada imediatamente anterior ao efeito terminou completa, sem referências,
+writers ou falhas. A custódia externa continua preservada no ThinkPad: archive
+`167bd932…786b`, manifesto `4fe74088…5263`, suplemento `2c6b80dd…19bf`, receipt
+`0c8f6d00…da6a` e restauração isolada PASS. `.data` permaneceu externo ao
+archive e ao efeito. API/frontend, worker, PM2, dump, banco, dados e persistências
+dos tenants ficaram fora do comando literal. A autorização foi específica e
+consumida; não reutilizar este perfil para outro caminho.
+
+Somado aos lotes 5/5, 10/10 e frontend 3/3, o fechamento excepcional acumula
+**19 caminhos**, **15.859.646.464 B** e **546.390 inodes** recuperados.
+
 ## Fechamento excepcional dos três frontends históricos — terminal
 
 O lote `p00-three-frontends-exceptional-20261114-v1` terminou
@@ -21,9 +42,9 @@ dependências. Não havia `.data` nos candidatos, e persistências externas de A
 worker, banco e tenants ficaram fora do efeito. O helper, o consumidor e a
 autorização eram literais para estes três caminhos.
 
-Somados aos lotes 5/5 e 10/10 abaixo, são **18 caminhos** terminais e
-**15.496.323.072 B / 536.551 inodes** recuperados. Não repetir nem combinar
-autorizações desses lotes.
+Antes da Campaign API, os lotes 5/5, 10/10 e frontend 3/3 somavam **18 caminhos**
+e **15.496.323.072 B / 536.551 inodes** recuperados. O total vigente está na
+seção terminal acima. Não repetir nem combinar autorizações desses lotes.
 
 ## Fechamento excepcional das dez releases legadas — terminal
 

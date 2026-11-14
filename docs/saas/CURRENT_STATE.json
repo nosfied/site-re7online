@@ -2011,7 +2011,7 @@
     "blockingPredicate": "authenticated_clean_private_source_artifact_missing"
   },
   "p00CampaignApiPreservation": {
-    "state": "PRESERVATION_VERIFIED_RETIREMENT_PREPARATION_BLOCKED_BY_CLOSED_BINDING",
+    "state": "TERMINAL_SANITIZED_DO_NOT_REPEAT",
     "reportedDate": "2026-11-14",
     "batchId": "p00-campaign-api-exceptional-20261114-v1",
     "candidate": "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008",
@@ -2025,9 +2025,10 @@
       "pm2Dump": 0,
       "protectedGraphRoles": 0,
       "installedVerifiedInventoryOnly": true,
-      "unprivilegedProcReferences": 0,
-      "unprivilegedProcComplete": false,
-      "unprivilegedProcReadFailures": 140,
+      "privilegedProcReferences": 0,
+      "privilegedProcWriters": 0,
+      "privilegedProcComplete": true,
+      "privilegedProcReadFailures": 0,
       "mountReferences": 0
     },
     "preservation": {
@@ -2045,18 +2046,28 @@
       "externalDataSymlinksFollowed": false,
       "retain": true
     },
-    "helperCompatible": false,
-    "consumerCompatible": false,
-    "prepareMaterialized": false,
-    "destructiveAuthorizationGranted": false,
-    "commandsExecuted": 0,
-    "filesystemReadOnlyObservation": {
-      "freeBytes": 22544367616,
-      "freeInodes": 9280383
+    "helperCompatible": true,
+    "consumerCompatible": true,
+    "prepareMaterialized": true,
+    "intentSha256": "7fdbb80a1bcc14b6fe887a2cb2cc1ca4fa8c4f42afa5f777ba0290887deb899d",
+    "commandsSha256": "c63e3f2ed4a372b680c1c72c1abe1faeb0c9ba4834a9718c4369c35b0a276f77",
+    "destructiveAuthorizationGranted": true,
+    "authorizationSha256": "9933be4d0d0ce01ebc17323c299b5cbef2f9a1041a1d162c6f15868a7f282e7e",
+    "commandsExecuted": 1,
+    "journalSha256": "c899d701d4ea346dd90ba5d0f89dcc9abe994d975f4b6d34de4903208995a52c",
+    "terminalReceiptSha256": "8c6e5013b62d8f9640136ad9c7965314001a313a7ecc6ae392bd2fc1eaee6082",
+    "physicalPathAbsent": true,
+    "filesystemTerminalMeasurement": {
+      "freeBytesBefore": 22550335488,
+      "freeBytesAfter": 22913658880,
+      "recoveredBytes": 363323392,
+      "freeInodesBefore": 9280357,
+      "freeInodesAfter": 9290196,
+      "recoveredInodes": 9839
     }
   },
   "updatedAtDate": "2026-11-14",
-  "updatedAtUtcScope": "P00_WORKERS_PM2_AND_CAMPAIGN_API_PRESERVATION_NO_PRODUCTIVE_MUTATION",
+  "updatedAtUtcScope": "P00_CAMPAIGN_API_TERMINAL_SANITIZED_WORKERS_PM2_PENDING",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",

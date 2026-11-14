@@ -1661,7 +1661,7 @@ produzida.
 | --- | --- | ---: | ---: | --- | --- | --- | --- | --- |
 | frontend histórico | `9f4cbe0f…-front`; `fa60f0f6…-front`; `fa60f0f6…-front-css-17bd5fb8` | **1.917.022.208** | 76.720 | `LEGACY_RUNTIME_EQUIVALENT` | procedimento excepcional 5/5 e 10/10 | ausência de pacote integral para 9f4/CSS; não há `.data` nas árvores | pacote fa60 plain presente; custódia integral local ausente | **prioridade 1**, preservar/restore antes de preparar retirada |
 | worker histórico | `worker-bf5f1d76…-b66bb89a`; `worker-minimal-hybrid-b9b58177-verified-v3`; `worker-minimal-reactive-afbb7455-verified` | **1.065.451.520** | 24.544 | `PRESERVATION_VERIFIED / OPERATIONAL_REFERENCE_PENDING` | procedimento excepcional 5/5 e 10/10 | `b66`/`b9` independentes, mas consumidor não admite 2/3; `afbb` ainda consta como `PWD` herdado no PM2 vivo/salvo | custódia integral 3/3, índice `a8127b31…7148`, receipt `1a1314ce…9ec` | preparar manutenção PM2 separada; nenhum prepare de retirada |
-| campaign API | `campaign-eligibility-recovery-final-reviewed-20261008` | **363.339.776** | 9.842 | `PRESERVATION_VERIFIED / RETIREMENT_PREPARATION_BLOCKED_BY_CLOSED_BINDING` | procedimento excepcional 5/5 | zero referência em current/PM2/dump; somente inventário no grafo; `/proc` não privilegiado incompleto; helper/consumidor sem o caminho literal | archive `167bd932…786b`, manifesto `4fe74088…5263`, suplemento `2c6b80dd…19bf`, restore PASS, receipt `0c8f6d00…da6a`; `.data` não seguido | qualificar perfil literal e observação privilegiada antes de qualquer intenção |
+| campaign API | `campaign-eligibility-recovery-final-reviewed-20261008` | **363.339.776** históricos; **363.323.392** recuperados | 9.842 históricos; **9.839** recuperados | `TERMINAL_SANITIZED / DO_NOT_REPEAT` | procedimento excepcional fechado 1/1 | zero referência em current/PM2/dump/grafo protegido e observação privilegiada completa | archive `167bd932…786b`, manifesto `4fe74088…5263`, suplemento `2c6b80dd…19bf`, restore PASS, receipt `0c8f6d00…da6a`; `.data` não seguido | receipt terminal `8c6e5013…6082`; não repetir |
 
 O próximo lote fechado para **preservação e preparação**, não para retirada, é o
 frontend histórico de três caminhos. A sequência reaproveita o procedimento
@@ -1693,11 +1693,11 @@ reutilizados, 21 folhas complementares, índice `617ded0a…027a`, complemento
 externas permaneceram intactos. A observação privilegiada de execução terminou
 com zero referências, writers e falhas, e os locks foram liberados.
 
-Os três fechamentos excepcionais totalizam **18 caminhos**,
-**15.496.323.072 B** e **536.551 inodes** recuperados. As autorizações são
-independentes, consumidas e não reutilizáveis. A próxima seleção deve excluir
-esses dezoito caminhos antes de considerar os quatro candidatos remanescentes da
-fotografia dirigida.
+Antes do lote Campaign API, os três fechamentos excepcionais totalizavam **18
+caminhos**, **15.496.323.072 B** e **536.551 inodes** recuperados. O total
+vigente, após o fechamento 1/1 abaixo, é **19 caminhos**, **15.859.646.464 B** e
+**546.390 inodes**. As autorizações são independentes, consumidas e não
+reutilizáveis.
 
 #### Continuidade dirigida — workers e Campaign API — 14/11/2026
 
@@ -1722,6 +1722,19 @@ release. Como nenhuma cópia externa restaurável existia, somente a raiz candid
 foi transmitida uma vez para custódia privada. A restauração local confrontou o
 manifesto histórico integral e negou inicialmente uma folha extra; a retomada
 preservou `.env.example` como suplemento autenticado e concluiu sem ocultar a
-divergência. O lote permanece não destrutivo: helper e consumidor fechados para o
-caminho literal, observação privilegiada completa e nova autorização específica
-continuam obrigatórios.
+divergência. Esse estado foi superado pelo fechamento terminal abaixo.
+
+#### Fechamento excepcional terminal da Campaign API — 14/11/2026
+
+O caminho literal
+`/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008`
+terminou `TERMINAL_SANITIZED / DO_NOT_REPEAT`. A intenção `7fdbb80a…899d`, os
+comandos `c63e3f2e…6f77`, a autorização `9933be4d…2e7e`, o journal
+`c899d701…a52c` e o receipt `8c6e5013…6082` comprovam um comando concluído e
+ausência física. A recuperação medida foi **363.323.392 B e 9.839 inodes**.
+
+A observação `EXECUTE` foi completa, com zero referências, writers ou falhas.
+API/frontend `fa10f4f5`, worker `e2e7f17a`, PM2, dump, health com banco `ok`,
+`.data` externo e persistências dos tenants permaneceram preservados. A custódia
+e a restauração continuam protegidas no ThinkPad. Não repetir transferência,
+prepare, autorização ou retirada deste caminho.
