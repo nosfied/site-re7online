@@ -28,8 +28,15 @@ from typing import Any, Iterable
 SHA40 = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 RELEASE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
-COMPONENTS = ("api", "frontend")
+BASE_COMPONENTS = ("api", "frontend")
+THREE_COMPONENTS = ("api", "frontend", "worker")
+SUPPORTED_COMPONENT_SETS = (BASE_COMPONENTS, THREE_COMPONENTS)
+# Compatibility authority for consumers that compare the canonical two-runtime
+# producer inventory.  The explicit three-component profile uses runtime_names().
 RUNTIMES = ("api-runtime", "frontend-runtime")
+RUNTIME_BY_COMPONENT = {
+    "api": "api-runtime", "frontend": "frontend-runtime", "worker": "worker-runtime",
+}
 A959_LEGACY_RELEASE_ID = "immutable-a959129e-vps-20261026T023100Z"
 A959_LEGACY_TARGET = "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff"
 PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
@@ -92,6 +99,17 @@ class Denied(RuntimeError):
 
 def deny(predicate: str) -> None:
     raise Denied(predicate)
+
+
+def requested_components(value: str) -> tuple[str, ...]:
+    components = tuple(value.split(","))
+    if components not in SUPPORTED_COMPONENT_SETS:
+        deny("components")
+    return components
+
+
+def runtime_names(components: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(RUNTIME_BY_COMPONENT[item] for item in components)
 
 
 def canonical_json(value: Any) -> bytes:
@@ -405,6 +423,7 @@ def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
     installed_release_root = args.installed_releases_root / args.release_id
     package = args.output / f"{args.release_id}.tar.xz"
     package_verified = verified is not None and package_sha is not None
+    components = requested_components(args.components)
     entries = [
         artifact_entry(package, args.release_id, args.target, "regular_file", "PACKAGE_PRESERVE",
                        "NEVER_AUTOMATIC", ["transport_identity"],
@@ -432,17 +451,15 @@ def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
                        "DERIVED_WORKTREE", "PACKAGE_VERIFIED_CONTROL_PLANE_COPIED_NO_WRITER",
                        ["package_verified", "control_plane_authenticated", "writer_lock_free"],
                        {"gitCommit": args.target}, "ACTIVE_DEPENDENCY"),
-        artifact_entry(release_root / "api-runtime", args.release_id, args.target, "directory",
-                       "DERIVED_OUTPUT_RUNTIME", "RELEASE_INSTALLED_VERIFIED_OR_CANDIDATE_SUPERSEDED",
-                       ["candidate_activation_or_supersession"],
-                       {"indexSha256": verified["indexSha256"]} if verified else None,
-                       "CANDIDATE_PENDING_ACTIVATION" if package_verified else "ACTIVE_DEPENDENCY"),
-        artifact_entry(release_root / "frontend-runtime", args.release_id, args.target, "directory",
-                       "DERIVED_OUTPUT_RUNTIME", "RELEASE_INSTALLED_VERIFIED_OR_CANDIDATE_SUPERSEDED",
-                       ["candidate_activation_or_supersession"],
-                       {"indexSha256": verified["indexSha256"]} if verified else None,
-                       "CANDIDATE_PENDING_ACTIVATION" if package_verified else "ACTIVE_DEPENDENCY"),
     ]
+    for runtime_name in runtime_names(components):
+        entries.append(artifact_entry(
+            release_root / runtime_name, args.release_id, args.target, "directory",
+            "DERIVED_OUTPUT_RUNTIME", "RELEASE_INSTALLED_VERIFIED_OR_CANDIDATE_SUPERSEDED",
+            ["candidate_activation_or_supersession"],
+            {"indexSha256": verified["indexSha256"]} if verified else None,
+            "CANDIDATE_PENDING_ACTIVATION" if package_verified else "ACTIVE_DEPENDENCY",
+        ))
     if getattr(args, "p00_static_floor_override", None) is not None:
         override_raw, override_info = stable_bytes(args.p00_static_floor_override)
         if (override_info.st_uid != os.geteuid() or
@@ -767,7 +784,7 @@ def toolchain(repo: Path, env: dict[str, str], failure_root: Path | None = None)
     return {"node": node, "npm": npm}
 
 
-def forbidden(relative: PurePosixPath) -> bool:
+def forbidden(relative: PurePosixPath, *, allow_worker_runtime: bool = False) -> bool:
     lowered = [part.casefold() for part in relative.parts]
     name = lowered[-1] if lowered else ""
     # Runtime dependencies are copied from a clean npm install. Package-internal
@@ -775,9 +792,11 @@ def forbidden(relative: PurePosixPath) -> bool:
     # content, not application uploads. Apply the operational-data denylist only
     # outside node_modules; the top-level runtime inventory remains allowlisted.
     application_parts = lowered if "node_modules" not in lowered else lowered[:lowered.index("node_modules")]
-    if any(part in {".git", ".cache", "cache", ".data", "coverage", "logs", "log", "evidence",
-                    "evidences", "uploads", "upload", "worker", "worker-runtime",
-                    "whatsapp-web-worker"} for part in application_parts):
+    denied = {".git", ".cache", "cache", ".data", "coverage", "logs", "log", "evidence",
+              "evidences", "uploads", "upload"}
+    if not allow_worker_runtime:
+        denied |= {"worker", "worker-runtime", "whatsapp-web-worker"}
+    if any(part in denied for part in application_parts):
         return True
     if name == ".env" or name.startswith(".env.") or name.endswith(".log"):
         return True
@@ -786,8 +805,9 @@ def forbidden(relative: PurePosixPath) -> bool:
     return False
 
 
-def copy_entry(source: Path, destination: Path, relative: PurePosixPath) -> None:
-    if forbidden(relative):
+def copy_entry(source: Path, destination: Path, relative: PurePosixPath, *,
+               allow_worker_runtime: bool = False) -> None:
+    if forbidden(relative, allow_worker_runtime=allow_worker_runtime):
         return
     info = source.lstat()
     if stat.S_ISLNK(info.st_mode):
@@ -796,7 +816,8 @@ def copy_entry(source: Path, destination: Path, relative: PurePosixPath) -> None
     elif stat.S_ISDIR(info.st_mode):
         destination.mkdir(parents=True, exist_ok=True)
         for child in sorted(source.iterdir(), key=lambda item: item.name):
-            copy_entry(child, destination / child.name, relative / child.name)
+            copy_entry(child, destination / child.name, relative / child.name,
+                       allow_worker_runtime=allow_worker_runtime)
     elif stat.S_ISREG(info.st_mode):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination, follow_symlinks=False)
@@ -805,7 +826,8 @@ def copy_entry(source: Path, destination: Path, relative: PurePosixPath) -> None
         deny(f"source_entry_type:{relative.as_posix()}")
 
 
-def copy_allowlist(source_root: Path, destination: Path, names: Iterable[str]) -> None:
+def copy_allowlist(source_root: Path, destination: Path, names: Iterable[str], *,
+                   allow_worker_runtime: bool = False) -> None:
     destination.mkdir(mode=0o755)
     for name in names:
         source = source_root / name
@@ -813,7 +835,8 @@ def copy_allowlist(source_root: Path, destination: Path, names: Iterable[str]) -
             if name in {"public", "next.config.js", "next.config.mjs", "next.config.ts"}:
                 continue
             deny(f"runtime_source_missing:{name}")
-        copy_entry(source, destination / name, PurePosixPath(name))
+        copy_entry(source, destination / name, PurePosixPath(name),
+                   allow_worker_runtime=allow_worker_runtime)
 
 
 def normalize_tree(root: Path, epoch: int) -> None:
@@ -959,7 +982,8 @@ def validate_f160_runtime_cache_overlay(release_root: Path) -> dict[str, Any]:
             "mode": stat.S_IMODE(after.st_mode), "observedEntries": entry_count}
 
 
-def scan_runtime(release_root: Path, *, allow_private_data_overlay: bool = False,
+def scan_runtime(release_root: Path, components: tuple[str, ...] = BASE_COMPONENTS, *,
+                 allow_private_data_overlay: bool = False,
                  allow_a959_private_data_overlay: bool = False,
                  allow_f160_runtime_cache_overlay: bool = False
                  ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
@@ -971,7 +995,8 @@ def scan_runtime(release_root: Path, *, allow_private_data_overlay: bool = False
                if allow_a959_private_data_overlay else
                validate_f160_runtime_cache_overlay(release_root)
                if allow_f160_runtime_cache_overlay else None)
-    for runtime_name in RUNTIMES:
+    runtimes = runtime_names(components)
+    for runtime_name in runtimes:
         root = release_root / runtime_name
         if not root.is_dir() or root.is_symlink():
             deny(f"release_runtime_missing:{runtime_name}")
@@ -983,7 +1008,9 @@ def scan_runtime(release_root: Path, *, allow_private_data_overlay: bool = False
             if allowed_overlay is not None and (relative == allowed_overlay or
                                                 allowed_overlay in relative.parents):
                 continue
-            if forbidden(PurePosixPath(relative.as_posix())):
+            if forbidden(PurePosixPath(relative.as_posix()),
+                         allow_worker_runtime=(relative.parts[0] == "worker-runtime" and
+                                               "worker" in components)):
                 deny(f"forbidden_release_entry:{relative.as_posix()}")
             info = path.lstat()
             item: dict[str, Any] = {"path": relative.as_posix(), "mode": stat.S_IMODE(info.st_mode)}
@@ -1022,14 +1049,16 @@ def scan_runtime(release_root: Path, *, allow_private_data_overlay: bool = False
     return entries, overlay
 
 
-def validate_index(release_root: Path, raw: bytes, *, allow_private_data_overlay: bool = False,
+def validate_index(release_root: Path, raw: bytes, components: tuple[str, ...] = BASE_COMPONENTS, *,
+                   allow_private_data_overlay: bool = False,
                    allow_a959_private_data_overlay: bool = False,
                    allow_f160_runtime_cache_overlay: bool = False
                    ) -> tuple[str, int, dict[str, Any] | None]:
     index = json_object(raw, "index.sha256")
     if set(index) != {"schemaVersion", "scope", "entries"}:
         deny("release_index_fields")
-    if index["schemaVersion"] != 1 or index["scope"] != list(RUNTIMES):
+    runtimes = runtime_names(components)
+    if index["schemaVersion"] != 1 or index["scope"] != list(runtimes):
         deny("release_index_schema")
     entries = index["entries"]
     if not isinstance(entries, list):
@@ -1041,7 +1070,7 @@ def validate_index(release_root: Path, raw: bytes, *, allow_private_data_overlay
         relative = PurePosixPath(entry["path"])
         if relative.is_absolute() or not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
             deny("release_index_path")
-        if relative.parts[0] not in RUNTIMES or entry["path"] in paths:
+        if relative.parts[0] not in runtimes or entry["path"] in paths:
             deny("release_index_scope")
         paths.add(entry["path"])
         kind = entry.get("type")
@@ -1059,7 +1088,7 @@ def validate_index(release_root: Path, raw: bytes, *, allow_private_data_overlay
         if set(entry) != allowed or not isinstance(entry.get("mode"), int):
             deny("release_index_entry_fields")
     observed, overlay = scan_runtime(
-        release_root, allow_private_data_overlay=allow_private_data_overlay,
+        release_root, components, allow_private_data_overlay=allow_private_data_overlay,
         allow_a959_private_data_overlay=allow_a959_private_data_overlay,
         allow_f160_runtime_cache_overlay=allow_f160_runtime_cache_overlay,
     )
@@ -1073,7 +1102,8 @@ def validate_index(release_root: Path, raw: bytes, *, allow_private_data_overlay
     return sha256_bytes(raw), len(entries), overlay
 
 
-def validate_manifest(release_root: Path, expected_target: str, expected_release: str, *,
+def validate_manifest(release_root: Path, expected_target: str, expected_release: str,
+                      components: tuple[str, ...] = BASE_COMPONENTS, *,
                       allow_private_data_overlay: bool = False,
                       allow_a959_private_data_overlay: bool = False,
                       allow_f160_runtime_cache_overlay: bool = False) -> dict[str, Any]:
@@ -1086,7 +1116,7 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
         deny("release_manifest_producer")
     if manifest.get("releaseId") != expected_release or manifest.get("targetCommit") != expected_target:
         deny("release_manifest_identity")
-    if manifest.get("components") != list(COMPONENTS):
+    if manifest.get("components") != list(components):
         deny("release_manifest_components")
     epoch = manifest.get("sourceDateEpoch")
     if not isinstance(epoch, int) or epoch < 0:
@@ -1101,7 +1131,7 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
     if reproducibility != {"deterministic": True, "nonReproducibleFields": []}:
         deny("release_manifest_reproducibility")
     index_sha, entry_count, overlay = validate_index(
-        release_root, index_raw,
+        release_root, index_raw, components,
         allow_private_data_overlay=allow_private_data_overlay,
         allow_a959_private_data_overlay=allow_a959_private_data_overlay,
         allow_f160_runtime_cache_overlay=allow_f160_runtime_cache_overlay,
@@ -1109,7 +1139,7 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
     if manifest.get("indexSha256") != index_sha:
         deny("release_manifest_index")
     runtimes = manifest.get("runtimes")
-    if not isinstance(runtimes, dict) or set(runtimes) != set(COMPONENTS):
+    if not isinstance(runtimes, dict) or set(runtimes) != set(components):
         deny("release_manifest_runtimes")
     api = runtimes["api"]
     frontend = runtimes["frontend"]
@@ -1125,9 +1155,23 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
     build_id = read_build_id(release_root / "frontend-runtime/.next/BUILD_ID")
     if not build_id or frontend.get("buildId") != build_id:
         deny("release_frontend_build_id")
+    worker_entry_sha = None
+    if "worker" in components:
+        worker = runtimes["worker"]
+        if not isinstance(worker, dict) or set(worker) != {"entrypoint", "entrySha256"}:
+            deny("release_manifest_worker")
+        if (worker.get("entrypoint") != "worker-runtime/dist/whatsapp-web-worker/src/index.js" or
+                not SHA256.fullmatch(str(worker.get("entrySha256", "")))):
+            deny("release_manifest_worker")
+        worker_raw, _ = stable_bytes(release_root / worker["entrypoint"])
+        if sha256_bytes(worker_raw) != worker["entrySha256"]:
+            deny("release_worker_entrypoint")
+        worker_entry_sha = worker["entrySha256"]
     result = {"manifestSha256": sha256_bytes(manifest_raw), "indexSha256": index_sha,
               "indexEntries": entry_count, "buildId": build_id,
               "apiEntrySha256": api["entrySha256"]}
+    if worker_entry_sha is not None:
+        result["workerEntrySha256"] = worker_entry_sha
     if overlay is not None:
         result["privateDataOverlay" if (allow_private_data_overlay or
                                          allow_a959_private_data_overlay) else
@@ -1338,6 +1382,7 @@ def authenticate_private_data_contract(path: Path, expected_sha256: str,
 
 def verify_root(root: Path, target: str, release_id: str,
                 deployed_marker_sha256: str | None = None, *,
+                components: tuple[str, ...] = BASE_COMPONENTS,
                 allow_private_data_overlay: bool = False,
                 allow_a959_private_data_overlay: bool = False,
                 allow_f160_runtime_cache_overlay: bool = False,
@@ -1351,7 +1396,7 @@ def verify_root(root: Path, target: str, release_id: str,
             stat.S_IMODE(root_info.st_mode) != expected_root_mode or
             expected_root_mode & 0o022):
         deny("release_directory_identity")
-    allowed = {"manifest.json", "index.sha256", *RUNTIMES}
+    allowed = {"manifest.json", "index.sha256", *runtime_names(components)}
     if deployed_marker_sha256 is not None:
         if not SHA256.fullmatch(deployed_marker_sha256):
             deny("deployed_marker_sha256")
@@ -1367,7 +1412,7 @@ def verify_root(root: Path, target: str, release_id: str,
         if marker_sha256 != deployed_marker_sha256:
             deny("deployed_marker_mismatch")
     result = validate_manifest(
-        root, target, release_id,
+        root, target, release_id, components,
         allow_private_data_overlay=allow_private_data_overlay,
         allow_a959_private_data_overlay=allow_a959_private_data_overlay,
         allow_f160_runtime_cache_overlay=allow_f160_runtime_cache_overlay,
@@ -1491,8 +1536,7 @@ def build_in_generation_window(args: argparse.Namespace,
             deny("repo_unsafe_ancestor")
         current = current.parent
     ensure_clean_repo(repo, args.target)
-    if args.components != ",".join(COMPONENTS):
-        deny("components")
+    components = requested_components(args.components)
     capacity = read_capacity_contract(
         args.capacity_contract, repo, args.output.parent, args.target, args.release_id,
         args.p00_static_floor_override, args.p00_static_floor_override_sha256,
@@ -1616,6 +1660,26 @@ def build_in_generation_window(args: argparse.Namespace,
                         failure_root=args.output, stage="frontend_build"),
             workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
         )
+        worker_source = repo / "apps/whatsapp-web-worker"
+        if "worker" in components:
+            monitored_phase(
+                "worker_npm_ci",
+                lambda: run(["npm", "ci", "--include=dev"], worker_source, env,
+                            failure_root=args.output, stage="worker_npm_ci"),
+                workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
+            )
+            monitored_phase(
+                "worker_prisma_client",
+                lambda: run(["node", "scripts/copy-prisma-client.mjs"], worker_source, env,
+                            failure_root=args.output, stage="worker_prisma_client"),
+                workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
+            )
+            monitored_phase(
+                "worker_build",
+                lambda: run(["npm", "run", "build"], worker_source, env,
+                            failure_root=args.output, stage="worker_build"),
+                workspace_and_payload, workspace_and_payload, "buildWorkspaceGrowthBytes",
+            )
 
         release_root = args.output / args.release_id
         def copy_runtime() -> None:
@@ -1625,6 +1689,10 @@ def build_in_generation_window(args: argparse.Namespace,
             copy_allowlist(repo, release_root / "frontend-runtime",
                            (".next", "node_modules", "public", "package.json", "package-lock.json",
                             "next.config.js", "next.config.mjs", "next.config.ts"))
+            if "worker" in components:
+                copy_allowlist(worker_source, release_root / "worker-runtime",
+                               ("dist", "node_modules", "package.json", "package-lock.json"),
+                               allow_worker_runtime=True)
         monitored_phase(
             "runtime_copy", copy_runtime,
             ("runtimePayloadBytes", "packageTemporaryBytes", "independentVerificationBytes"),
@@ -1633,8 +1701,8 @@ def build_in_generation_window(args: argparse.Namespace,
         )
         ensure_clean_repo(repo, args.target)
         normalize_tree(release_root, args.source_date_epoch)
-        entries, _ = scan_runtime(release_root)
-        index_raw = canonical_json({"schemaVersion": 1, "scope": list(RUNTIMES), "entries": entries})
+        entries, _ = scan_runtime(release_root, components)
+        index_raw = canonical_json({"schemaVersion": 1, "scope": list(runtime_names(components)), "entries": entries})
         (release_root / "index.sha256").write_bytes(index_raw)
         entry_raw, _ = stable_bytes(release_root / "api-runtime/dist/index.js")
         build_id = read_build_id(release_root / "frontend-runtime/.next/BUILD_ID")
@@ -1644,7 +1712,7 @@ def build_in_generation_window(args: argparse.Namespace,
             "producer": {"name": "converta-release.py", "formatVersion": 1},
             "releaseId": args.release_id,
             "targetCommit": args.target,
-            "components": list(COMPONENTS),
+            "components": list(components),
             "sourceDateEpoch": args.source_date_epoch,
             "builtAt": timestamp,
             "toolchain": tools,
@@ -1658,9 +1726,16 @@ def build_in_generation_window(args: argparse.Namespace,
             "indexSha256": sha256_bytes(index_raw),
             "reproducibility": {"deterministic": True, "nonReproducibleFields": []},
         }
+        if "worker" in components:
+            worker_raw, _ = stable_bytes(
+                release_root / "worker-runtime/dist/whatsapp-web-worker/src/index.js")
+            manifest["runtimes"]["worker"] = {
+                "entrypoint": "worker-runtime/dist/whatsapp-web-worker/src/index.js",
+                "entrySha256": sha256_bytes(worker_raw),
+            }
         (release_root / "manifest.json").write_bytes(canonical_json(manifest))
         normalize_tree(release_root, args.source_date_epoch)
-        verified = verify_root(release_root, args.target, args.release_id)
+        verified = verify_root(release_root, args.target, args.release_id, components=components)
         package = args.output / f"{args.release_id}.tar.xz"
         package_identity = monitored_phase(
             "package",
@@ -1675,10 +1750,11 @@ def build_in_generation_window(args: argparse.Namespace,
             ))
             try:
                 extracted = safe_extract(package, temporary, args.release_id)
-                extracted_verified = verify_root(extracted, args.target, args.release_id)
+                extracted_verified = verify_root(
+                    extracted, args.target, args.release_id, components=components)
                 if (extracted_verified != verified or
-                        canonical_json(scan_runtime(extracted)) !=
-                        canonical_json(scan_runtime(release_root))):
+                        canonical_json(scan_runtime(extracted, components)) !=
+                        canonical_json(scan_runtime(release_root, components))):
                     deny("independent_extraction_mismatch")
                 return artifact_entry(
                     temporary, args.release_id, args.target, "directory", "DERIVED_STAGING",
@@ -1727,8 +1803,7 @@ def build_in_generation_window(args: argparse.Namespace,
 
 
 def verify(args: argparse.Namespace) -> None:
-    if args.components != ",".join(COMPONENTS):
-        deny("components")
+    components = requested_components(args.components)
     if bool(args.release_root) == bool(args.package):
         deny("verify_source")
     if args.package and args.deployed_marker_sha256 is not None:
@@ -1765,7 +1840,7 @@ def verify(args: argparse.Namespace) -> None:
         result = verify_root(
             args.release_root.resolve(strict=True), args.target, args.release_id,
             args.deployed_marker_sha256,
-            allow_private_data_overlay=contract_bound,
+            components=components, allow_private_data_overlay=contract_bound,
             allow_a959_private_data_overlay=args.legacy_a959_private_data_overlay,
             allow_f160_runtime_cache_overlay=(args.legacy_f160_runtime_cache_overlay or
                                                args.legacy_p00_runtime_cache_overlay),
@@ -1773,14 +1848,13 @@ def verify(args: argparse.Namespace) -> None:
     else:
         with tempfile.TemporaryDirectory(prefix="converta-release-verify-") as temporary:
             root = safe_extract(args.package.resolve(strict=True), Path(temporary), args.release_id)
-            result = verify_root(root, args.target, args.release_id)
+            result = verify_root(root, args.target, args.release_id, components=components)
     print(canonical_json({"result": "RELEASE VERIFIED", "releaseId": args.release_id,
                           "targetCommit": args.target, **result}).decode().strip())
 
 
 def install(args: argparse.Namespace) -> None:
-    if args.components != ",".join(COMPONENTS):
-        deny("components")
+    components = requested_components(args.components)
     roots = authenticated_build_roots(args.root_policy, args.root_policy_sha256)
     releases_root = args.installed_releases_root
     if releases_root != roots["releases"]:
@@ -1806,7 +1880,7 @@ def install(args: argparse.Namespace) -> None:
             deny("install_recovery_manifest_binding")
         result = verify_root(
             staged, args.target, args.release_id,
-            physical_name=staged.name, expected_root_mode=0o700,
+            components=components, physical_name=staged.name, expected_root_mode=0o700,
         )
         before = staged.lstat()
         os.chmod(staged, package_root_mode)
@@ -1819,7 +1893,7 @@ def install(args: argparse.Namespace) -> None:
             deny("installed_release_exists")
         os.rename(staged, final)
         fsync_directory(releases_root)
-        final_result = verify_root(final, args.target, args.release_id)
+        final_result = verify_root(final, args.target, args.release_id, components=components)
         if final_result != result:
             deny("installed_release_postrename_mismatch")
         result = final_result
@@ -1832,13 +1906,13 @@ def install(args: argparse.Namespace) -> None:
         extracted: Path | None = None
         try:
             extracted = safe_extract(package, temporary, args.release_id)
-            result = verify_root(extracted, args.target, args.release_id)
+            result = verify_root(extracted, args.target, args.release_id, components=components)
             if final.exists() or final.is_symlink():
                 deny("installed_release_exists")
             os.rename(extracted, final)
             fsync_directory(releases_root)
             temporary.rmdir()
-            result = verify_root(final, args.target, args.release_id)
+            result = verify_root(final, args.target, args.release_id, components=components)
         except BaseException:
             if extracted is not None and extracted.exists():
                 shutil.rmtree(extracted)

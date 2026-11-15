@@ -8,14 +8,17 @@
 
 ## `converta-release.py` — produtor build-once
 
-Constrói e verifica uma release imutável de API e frontend no worktree isolado da
-VPS. Builder externo é alternativa mediante decisão específica. Expõe somente
+Constrói e verifica uma release imutável de API e frontend, opcionalmente com o
+worker quando a matriz de impacto o exigir, em worktree isolado. Builder externo
+é alternativa mediante decisão específica. Expõe somente
 `build` e `verify`, exige worktree limpo no target exato, Node `v20.20.0`,
-`SOURCE_DATE_EPOCH` explícito, saída nova e os componentes `api,frontend`.
+`SOURCE_DATE_EPOCH` explícito, saída nova e um dos payloads fechados
+`api,frontend` ou `api,frontend,worker`.
 
 O produtor executa `npm ci`, Prisma generate e cada build exatamente uma vez;
-preserva o BUILD_ID produzido e materializa `api-runtime`, `frontend-runtime`,
-`manifest.json` e `index.sha256`. Exige extração independente idêntica antes de
+preserva o BUILD_ID produzido e materializa `api-runtime`, `frontend-runtime` e,
+no perfil 3/3, `worker-runtime`, além de `manifest.json` e `index.sha256`. Exige
+extração independente idêntica antes de
 publicar o pacote. Builds independentes podem gerar outro BUILD_ID e constituem
 outra release. O empacotamento do mesmo payload congelado é reprodutível.
 
@@ -24,13 +27,15 @@ sob `node_modules`, como `openai/resources/uploads`. Falhas de subprocesso geram
 evidência privada, sem publicar conteúdo em stdout ou Git. O produtor não faz
 seleção de runtime, PM2, migration, SQL operacional, chamadas Meta ou envios.
 
-## `converta-deploy.py` — histórico, sem requalificação
+## `converta-deploy.py` — driver fixed-current
 
-As tentativas encerradas em 24/10/2026 ficam preservadas como evidência.
-Este driver não é a rota vigente de ativação e seus comandos não devem ser
-executados como continuação de uma janela nova. A ativação comprovada usa troca
-atômica dos symlinks e restart dos registros PM2 existentes sem `--update-env`,
-seguindo exclusivamente o [runbook](../docs/saas/DEPLOY_RUNBOOK.md).
+As tentativas encerradas ficam preservadas como evidência. O driver aceita os
+perfis fechados `api`, `api,frontend` e `api,frontend,worker`; o último exige
+manifesto runtime schema 2 e definições PM2 candidata/rollback do worker produzidas
+e validadas por `pm2-definition-control.py`. A ativação usa troca atômica dos
+symlinks e restart dirigido sem `--update-env`, seguindo exclusivamente o
+[runbook](../docs/saas/DEPLOY_RUNBOOK.md). O worker anterior é removido do PM2
+antes do sucessor ser iniciado, impedindo sobreposição e dupla captura de jobs.
 
 ## `deploy-impact-matrix.sh`
 

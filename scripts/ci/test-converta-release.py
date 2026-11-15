@@ -95,6 +95,11 @@ def fixture_repo(root: Path) -> tuple[Path, str, dict[str, str]]:
     write(api / "package.json", '{"scripts":{"build":"fixture","db:generate":"fixture"}}\n')
     write(api / "package-lock.json", '{"lockfileVersion":3}\n')
     write(api / "src/index.ts", "fixture\n")
+    worker = repo / "apps/whatsapp-web-worker"
+    write(worker / "package.json", '{"scripts":{"build":"fixture"}}\n')
+    write(worker / "package-lock.json", '{"lockfileVersion":3}\n')
+    write(worker / "scripts/copy-prisma-client.mjs", "// fixture\n")
+    write(worker / "src/index.ts", "fixture\n")
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.name", "Fixture"], cwd=repo, check=True)
@@ -106,11 +111,20 @@ def fixture_repo(root: Path) -> tuple[Path, str, dict[str, str]]:
 
     shims = root / "shims"
     shims.mkdir()
-    write(shims / "node", "#!/bin/sh\n[ \"$1\" = --version ] && { echo v20.20.0; exit 0; }\nexit 64\n", 0o755)
+    write(shims / "node", "#!/bin/sh\n[ \"$1\" = --version ] && { echo v20.20.0; exit 0; }\ncase \"${1:-}\" in *copy-prisma-client.mjs) mkdir -p node_modules/.prisma/client; printf 'generated\\n' > node_modules/.prisma/client/index.js; exit 0;; esac\nexit 64\n", 0o755)
     npm = r'''#!/bin/sh
 set -eu
 if [ "${1:-}" = --version ]; then echo 10.8.2; exit 0; fi
 case "$PWD:$*" in
+  */apps/whatsapp-web-worker:*ci*)
+    mkdir -p node_modules/runtime-package
+    printf 'worker-runtime\n' > node_modules/runtime-package/index.js
+    ;;
+  */apps/whatsapp-web-worker:*build*)
+    mkdir -p dist/whatsapp-web-worker/src dist/whatsapp-agent/src
+    printf 'console.log("worker fixture");\n' > dist/whatsapp-web-worker/src/index.js
+    printf 'shared\n' > dist/whatsapp-agent/src/shared.js
+    ;;
   */apps/whatsapp-agent:*db:generate*)
     mkdir -p node_modules/.prisma/client
     printf 'generated\n' > node_modules/.prisma/client/index.js
@@ -2092,6 +2106,100 @@ class ReleaseProducerTest(unittest.TestCase):
         index = json.loads((self.release / "index.sha256").read_text())
         self.assertEqual(set(index), {"schemaVersion", "scope", "entries"})
         self.assertEqual(index["scope"], ["api-runtime", "frontend-runtime"])
+
+    def test_three_component_manifest_index_and_worker_entry_are_integral(self) -> None:
+        root = self.copy_release("three-component")
+        worker_entry = root / "worker-runtime/dist/whatsapp-web-worker/src/index.js"
+        write(worker_entry, "worker-entry\n")
+        write(root / "worker-runtime/package.json", "{}\n")
+        components = MODULE.THREE_COMPONENTS
+        entries, _ = MODULE.scan_runtime(root, components)
+        index_raw = MODULE.canonical_json({
+            "schemaVersion": 1,
+            "scope": list(MODULE.runtime_names(components)),
+            "entries": entries,
+        })
+        (root / "index.sha256").chmod(0o644)
+        (root / "index.sha256").write_bytes(index_raw)
+        (root / "index.sha256").chmod(0o444)
+        manifest_path = root / "manifest.json"
+        manifest_path.chmod(0o644)
+        manifest = json.loads(manifest_path.read_text())
+        manifest["components"] = list(components)
+        manifest["runtimes"]["worker"] = {
+            "entrypoint": "worker-runtime/dist/whatsapp-web-worker/src/index.js",
+            "entrySha256": hashlib.sha256(worker_entry.read_bytes()).hexdigest(),
+        }
+        manifest["indexSha256"] = hashlib.sha256(index_raw).hexdigest()
+        manifest_path.write_bytes(MODULE.canonical_json(manifest)); manifest_path.chmod(0o444)
+        result = invoke(
+            "verify", "--target", self.target, "--release-id", self.release_id,
+            "--components", "api,frontend,worker", "--release-root", str(root),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        verified = json.loads(result.stdout)
+        self.assertEqual(verified["workerEntrySha256"], manifest["runtimes"]["worker"]["entrySha256"])
+        worker_entry.write_text("drift\n")
+        denied = invoke(
+            "verify", "--target", self.target, "--release-id", self.release_id,
+            "--components", "api,frontend,worker", "--release-root", str(root),
+        )
+        self.assertEqual(denied.returncode, 2)
+        self.assertIn("release_index_mismatch:", denied.stderr)
+
+    def test_three_component_build_install_contract_is_one_integral_payload(self) -> None:
+        release_id = f"immutable-{self.target[:8]}-three-component-fixture"
+        # Keep the generation-review gate isolated from fixtures that intentionally
+        # leave another generation pending in the shared output parent.
+        output_parent = self.outputs / "three-component-parent"
+        output_parent.mkdir()
+        output = output_parent / "output-three-component"
+        capacity = capacity_contract(
+            self.base / "capacity-three-component.private.json", self.base,
+            self.target, release_id, reserve_bytes=64 * 1024,
+        )
+        value = json.loads(capacity.read_text())
+        for field in ("buildWorkspaceGrowthBytes", "runtimePayloadBytes",
+                      "packageTemporaryBytes", "independentVerificationBytes",
+                      "failureEvidenceBytes"):
+            value[field] = 64 * 1024 * 1024
+        value["peakInodes"] = 10000; value["operationalReserveInodes"] = 10000
+        write(capacity, json.dumps(value, sort_keys=True) + "\n", 0o600)
+        arguments = [
+            "build", "--repo", str(self.repo), "--target", self.target,
+            "--release-id", release_id, "--components", "api,frontend,worker",
+            "--output", str(output), "--installed-releases-root", str(self.releases),
+            "--source-date-epoch", EPOCH, "--capacity-contract", str(capacity),
+            "--root-policy", str(self.root_policy), "--root-policy-sha256", self.root_policy_sha,
+            "--npm-cache-root", str(self.npm_cache), "--temporary-root", str(self.temporary_root),
+        ]
+        try:
+            args = MODULE.parser().parse_args(arguments)
+            with patch.dict(os.environ, self.env, clear=True):
+                args.handler(args)
+            root = output / release_id
+            manifest = json.loads((root / "manifest.json").read_text())
+            self.assertEqual(manifest["components"], ["api", "frontend", "worker"])
+            self.assertEqual(set(manifest["runtimes"]), {"api", "frontend", "worker"})
+            index = json.loads((root / "index.sha256").read_text())
+            self.assertEqual(index["scope"], ["api-runtime", "frontend-runtime", "worker-runtime"])
+            self.assertTrue((root / "worker-runtime/dist/whatsapp-web-worker/src/index.js").is_file())
+            self.assertEqual(json.loads((output / "generation-lifecycle.private.json").read_text())["state"],
+                             "COMPLETE")
+            install_args = MODULE.parser().parse_args([
+                "install", "--package", str(output / f"{release_id}.tar.xz"),
+                "--target", self.target, "--release-id", release_id,
+                "--components", "api,frontend,worker",
+                "--installed-releases-root", str(self.releases),
+                "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
+            ])
+            install_args.handler(install_args)
+            installed = self.releases / release_id
+            self.assertTrue((installed / "worker-runtime/dist/whatsapp-web-worker/src/index.js").is_file())
+            shutil.rmtree(installed)
+        finally:
+            shutil.rmtree(output, ignore_errors=True)
 
 
 if __name__ == "__main__":

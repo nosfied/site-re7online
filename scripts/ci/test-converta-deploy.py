@@ -67,7 +67,8 @@ def put(path: Path, value: Any, mode: int = 0o600) -> None:
 
 def release_index(root: Path) -> dict[str, Any]:
     entries: list[dict[str, Any]] = []
-    for runtime_name in deploy.RUNTIME_DIR.values():
+    runtime_names = tuple(name for name in deploy.RUNTIME_DIR.values() if (root / name).is_dir())
+    for runtime_name in runtime_names:
         runtime = root / runtime_name
         for path in (runtime, *sorted(runtime.rglob("*"))):
             info = path.lstat()
@@ -82,7 +83,7 @@ def release_index(root: Path) -> dict[str, Any]:
             else:
                 item.update(type="file", size=info.st_size, sha256=sha(path))
             entries.append(item)
-    return {"schemaVersion": 1, "scope": list(deploy.RUNTIME_DIR.values()), "entries": entries}
+    return {"schemaVersion": 1, "scope": list(runtime_names), "entries": entries}
 
 
 class FakeHost(deploy.Host):
@@ -122,6 +123,9 @@ class FakeHost(deploy.Host):
                 else (ROOT / "scripts/converta-deploy.py").read_text(), "")
         if command[-1:] == ["--version"]:
             return subprocess.CompletedProcess(command, 0, "6.0.14\n", "")
+        if (len(command) > 2 and Path(command[1]).name == "pm2-definition-control.py" and
+                command[2] == "validate-pair"):
+            return subprocess.run(command, check=False, capture_output=True, text=True, timeout=timeout)
         if len(command) > 3 and command[2] == "execute" and "--intent" in command:
             self.retirement_calls += 1
             self.retirement_pass_fds = pass_fds
@@ -179,6 +183,27 @@ class FakeHost(deploy.Host):
             put(self.dump, list(self.rows.values()))
             self.events.append("DUMP:SAVED")
             return
+        if len(args) == 2 and args[0] == "delete":
+            row = self.rows.pop(args[1])
+            self.process_cwds.pop(row["pid"], None)
+            return
+        if len(args) == 4 and args[0] == "start" and args[2] == "--only":
+            definition = json.loads(Path(args[1]).read_text())["apps"][0]
+            name = args[3]
+            self.next_pid += 1
+            env = {
+                "status": "online", "pm_cwd": definition["cwd"],
+                "pm_exec_path": definition["script"],
+                "exec_interpreter": definition["interpreter"], "args": definition["args"],
+                "node_args": definition["node_args"], "exec_mode": definition["exec_mode"],
+                "instances": definition["instances"], "namespace": definition["namespace"],
+                "out_file": definition.get("out_file"), "error_file": definition.get("error_file"),
+                "merge_logs": definition.get("merge_logs"), "restart_time": 0,
+                **definition["env"],
+            }
+            self.rows[name] = {"name": name, "pid": self.next_pid, "pm2_env": env}
+            self.process_cwds[self.next_pid] = Path(definition["cwd"]).resolve()
+            return
         if len(args) != 2 or args[0] != "restart" or "--update-env" in args:
             raise AssertionError(f"unexpected PM2 mutation: {args}")
         name = args[1]
@@ -212,9 +237,14 @@ class FakeHost(deploy.Host):
 
     def control_evidence(self, root: Path, args: list[str], *, report: Path,
                          stdout: Path, stderr: Path) -> dict[str, Any]:
-        assert args[0] == "wait-existing-readiness"
-        component = args[args.index("--component") + 1]
-        release_id = args[args.index("--release-id") + 1]
+        if args[0] == "wait-worker-readiness":
+            component = "worker"
+            source = json.loads(Path(args[args.index("--source-artifact") + 1]).read_text())
+            release_id = source["releaseIdentity"]["releaseId"]
+        else:
+            assert args[0] == "wait-existing-readiness"
+            component = args[args.index("--component") + 1]
+            release_id = args[args.index("--release-id") + 1]
         phase = report.name.removesuffix(".report.private.json")
         self.events.append(f"WAIT:{phase}:{component}:{release_id}")
         row = self.rows[deploy.PROCESS_NAMES[component]]
@@ -222,7 +252,8 @@ class FakeHost(deploy.Host):
                    for number in range(self.wait_samples)]
         if self.wait_fail == component and phase.startswith("activate-"):
             value = {"result": "READINESS_DENY", "component": component,
-                     "reason": f"READINESS_TIMEOUT:{component}:{deploy.PORT[component]}",
+                     "reason": (f"READINESS_TIMEOUT:{component}" if component == "worker" else
+                                f"READINESS_TIMEOUT:{component}:{deploy.PORT[component]}"),
                      "sampleCount": len(samples), "samples": samples}
             put(report, value)
             deploy.atomic_private_bytes(stdout, b"")
@@ -233,6 +264,8 @@ class FakeHost(deploy.Host):
                  "restartCount": row["pm2_env"]["restart_time"],
                  "stableSamples": 3, "sampleCount": len(samples), "samples": samples,
                  "socketOwnerRelation": "DIRECT", "releaseId": release_id}
+        if component == "worker":
+            value.update(processCardinality=1, duplicateWorkerPrevented=True)
         put(report, value)
         deploy.atomic_private_bytes(stdout, (json.dumps(value) + "\n").encode())
         deploy.atomic_private_bytes(stderr, b"")
@@ -498,6 +531,117 @@ class DeployFixture(unittest.TestCase):
 
     def api_only(self) -> FixtureDriver:
         self.inputs = dataclasses.replace(self.inputs, components=("api",))
+        self.driver = self._driver()
+        return self.driver
+
+    def three_component(self) -> FixtureDriver:
+        stable_worker = self.current / "worker"
+        self.stable["worker"] = stable_worker
+        for release, target in ((self.rollback, "c" * 40), (self.candidate, self.target)):
+            root = self.releases / release
+            worker = root / "worker-runtime/dist/whatsapp-web-worker/src"
+            worker.mkdir(parents=True)
+            (worker / "index.js").write_text(f"worker-{release}\n")
+            manifest = json.loads((root / "manifest.json").read_text())
+            manifest["components"] = list(deploy.THREE_COMPONENTS)
+            manifest["runtimes"]["worker"] = {
+                "entrySha256": sha(worker / "index.js"),
+            }
+            (root / "index.sha256").chmod(0o644)
+            (root / "manifest.json").chmod(0o644)
+            put(root / "index.sha256", release_index(root), 0o444)
+            manifest["indexSha256"] = sha(root / "index.sha256")
+            put(root / "manifest.json", manifest, 0o444)
+
+        rollback_runtime = self.releases / self.rollback / "worker-runtime"
+        old = self.host.rows[deploy.PROCESS_NAMES["worker"]]
+        old_pid = old["pid"]
+        old["pm2_env"]["pm_cwd"] = str(rollback_runtime)
+        old["pm2_env"]["pm_exec_path"] = str(
+            rollback_runtime / "dist/whatsapp-web-worker/src/index.js")
+        self.host.process_cwds[old_pid] = rollback_runtime.resolve()
+
+        pm2_bindings: dict[str, dict[str, Any]] = {}
+        for role, release, evidence in (
+            ("candidate", self.candidate, "1" * 64),
+            ("rollback", self.rollback, "2" * 64),
+        ):
+            release_root = self.releases / release
+            runtime = release_root / "worker-runtime"
+            definition = {
+                "apps": [{
+                    "name": deploy.PROCESS_NAMES["worker"],
+                    "script": str(stable_worker / "dist/whatsapp-web-worker/src/index.js"),
+                    "args": [], "cwd": str(stable_worker), "interpreter": str(self.node),
+                    "exec_mode": "fork_mode", "instances": 1, "namespace": "converta",
+                    "autorestart": True, "restart_delay": 1000, "kill_timeout": 10000,
+                    "listen_timeout": 10000, "wait_ready": False, "node_args": [],
+                    "out_file": str(self.base / "worker.out.log"),
+                    "error_file": str(self.base / "worker.err.log"), "merge_logs": True,
+                    "env": {"NODE_ENV": "production"},
+                }]
+            }
+            request = self.base / f"worker-{role}.request.private.json"
+            source = self.base / f"worker-{role}.source.private.json"
+            definition_path = self.base / f"worker-{role}.pm2.private.json"
+            put(request, {"schemaVersion": 2, "scope": "isolated-test", "role": role,
+                          "component": "worker",
+                          "sourceKind": ("canonical-private-config" if role == "candidate" else
+                                         "authenticated-proven-definition"),
+                          "environmentKeys": ["NODE_ENV"]})
+            put(source, {"schemaVersion": 1, "role": role, "component": "worker",
+                         "sourceKind": ("canonical-private-config" if role == "candidate" else
+                                        "authenticated-proven-definition"),
+                         "provenance": {"authority": ("new-release-config" if role == "candidate" else
+                                                       "proven-production-definition"),
+                                        "evidenceSha256": evidence},
+                         "releaseIdentity": {
+                             "releaseId": release,
+                             "releaseManifestSha256": sha(release_root / "manifest.json"),
+                             "componentTreeSha256": sha(release_root / "index.sha256"),
+                             "workerEntrySha256": sha(
+                                 runtime / "dist/whatsapp-web-worker/src/index.js"),
+                         }, "definition": definition})
+            put(definition_path, definition)
+            pm2_bindings[role] = {
+                "request": str(request), "sourceArtifact": str(source),
+                "sourceSha256": sha(source), "definition": str(definition_path),
+            }
+
+        rollback_root = self.releases / self.rollback
+        manifest = json.loads(self.runtime_manifest.read_text())
+        manifest["schemaVersion"] = 2
+        manifest["workerPm2"] = pm2_bindings
+        rollback_common = {
+            "releaseId": self.rollback,
+            "manifestSha256": sha(rollback_root / "manifest.json"),
+            "indexSha256": sha(rollback_root / "index.sha256"),
+        }
+        manifest["rollbackReleases"]["api"] = {
+            **rollback_common,
+            "entrySha256": sha(rollback_root / "api-runtime/dist/index.js"),
+        }
+        manifest["rollbackReleases"]["frontend"] = {
+            **rollback_common,
+            "entrySha256": sha(
+                rollback_root / "frontend-runtime/node_modules/next/dist/bin/next"),
+            "buildId": "rollback-build",
+        }
+        manifest["rollbackReleases"]["worker"] = {
+            **rollback_common,
+            "entrySha256": sha(
+                rollback_root / "worker-runtime/dist/whatsapp-web-worker/src/index.js"),
+        }
+        put(self.runtime_manifest, manifest)
+        operational = self.retirement.operational_state
+        state = json.loads(operational.read_text())
+        state["immediateRollbackReleases"]["worker"] = self.rollback
+        put(operational, state)
+        self.retirement = dataclasses.replace(
+            self.retirement, operational_state_sha256=sha(operational))
+        self.inputs = dataclasses.replace(
+            self.inputs, components=deploy.THREE_COMPONENTS,
+            runtime_manifest_sha256=sha(self.runtime_manifest), retirement=self.retirement)
         self.driver = self._driver()
         return self.driver
 
@@ -2183,11 +2327,12 @@ if config_path:
 
     def test_only_exact_supported_component_sets_are_accepted(self) -> None:
         for components in ((), ("frontend",), ("worker",), ("frontend", "api"),
-                           ("api", "worker"), ("api", "frontend", "worker")):
+                           ("api", "worker")):
             with self.subTest(components=components):
                 self.tearDown(); self.setUp()
                 self.inputs = dataclasses.replace(self.inputs, components=components)
-                with self.assertRaisesRegex(deploy.Denied, "components_must_be_api_or_api_frontend"):
+                with self.assertRaisesRegex(
+                        deploy.Denied, "components_must_be_api_api_frontend_or_three_component"):
                     self._driver().preflight()
 
     def test_preflight_without_bindings_passes_and_authenticates_existing_records(self) -> None:
@@ -2206,6 +2351,37 @@ if config_path:
         self.assertFalse(any(event.startswith(("PM2:delete ", "PM2:start "))
                              or "--update-env" in event for event in mutations))
         self.assertEqual(self.driver._journal_read()["state"], "AWAITING_ACCEPTANCE")
+
+    def test_three_component_activation_uses_one_worker_definition_without_overlap(self) -> None:
+        driver = self.three_component()
+        driver.preflight(); driver.activate()
+        mutations = [event for event in self.host.events if event.startswith("PM2:")]
+        self.assertEqual(mutations[:2], ["PM2:restart re7-whatsapp-agent",
+                                        "PM2:restart re7-admin-front"])
+        self.assertEqual(mutations[2].split(), ["PM2:delete", "re7-whatsapp-web-worker"])
+        self.assertEqual(mutations[3].split()[-2:], ["--only", "re7-whatsapp-web-worker"])
+        self.assertTrue(mutations[3].startswith("PM2:start "))
+        self.assertFalse(any("--update-env" in event for event in mutations))
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "AWAITING_ACCEPTANCE")
+        self.assertEqual(journal["components"], list(deploy.THREE_COMPONENTS))
+        self.assertEqual(journal["candidate"]["readiness"]["worker"]["processCardinality"], 1)
+        self.assertEqual(self.stable["worker"].resolve(),
+                         self.releases / self.candidate / "worker-runtime")
+
+    def test_three_component_worker_readiness_failure_rolls_back_all_in_reverse(self) -> None:
+        driver = self.three_component()
+        self.host.wait_fail = "worker"
+        driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "READINESS_TIMEOUT:worker"):
+            driver.activate()
+        self.assertEqual(driver._journal_read()["state"], "ROLLED_BACK")
+        self.assertEqual(self.stable["api"].resolve(), self.releases / self.rollback / "api-runtime")
+        self.assertEqual(self.stable["frontend"].resolve(),
+                         self.releases / self.rollback / "frontend-runtime")
+        self.assertEqual(self.stable["worker"].resolve(),
+                         self.releases / self.rollback / "worker-runtime")
+        self.assertEqual(self.host.save_calls, 0)
 
     def test_drift_of_args_environment_cwd_or_script_is_denied(self) -> None:
         for field in ("args", "env", "cwd", "script"):

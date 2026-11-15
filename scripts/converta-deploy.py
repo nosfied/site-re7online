@@ -122,12 +122,14 @@ STATES = {
     "ROLLING_BACK", "ROLLED_BACK", "FAILED",
 }
 COMPONENTS = ("api", "frontend")
-SUPPORTED_COMPONENT_SETS = (("api",), COMPONENTS)
+THREE_COMPONENTS = ("api", "frontend", "worker")
+SUPPORTED_COMPONENT_SETS = (("api",), COMPONENTS, THREE_COMPONENTS)
 STABLE = {
     "api": Path("/opt/re7online/current/api"),
     "frontend": Path("/opt/re7online/current/frontend"),
+    "worker": Path("/opt/re7online/current/worker"),
 }
-RUNTIME_DIR = {"api": "api-runtime", "frontend": "frontend-runtime"}
+RUNTIME_DIR = {"api": "api-runtime", "frontend": "frontend-runtime", "worker": "worker-runtime"}
 PORT = {"api": 3001, "frontend": 3000}
 LOCAL_HEALTH = {
     "api": "http://127.0.0.1:3001/health",
@@ -540,6 +542,12 @@ class Driver:
         self.acceptance = inputs.transaction_root / "acceptance.private.txt"
         self.release_root = releases / inputs.release
 
+    def _payload_components(self) -> tuple[str, ...]:
+        return THREE_COMPONENTS if "worker" in self.inputs.components else COMPONENTS
+
+    def _runtime_names(self) -> tuple[str, ...]:
+        return tuple(RUNTIME_DIR[component] for component in self._payload_components())
+
     @staticmethod
     def _stable_identity(info: os.stat_result) -> tuple[int, ...]:
         return (info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode,
@@ -555,7 +563,11 @@ class Driver:
         value = json_object(raw, path.name)
         expected_keys = {"schemaVersion", "mode", "controlPlaneSha", "pm2Version",
                          "environmentAllowlistSha256", "processes", "rollbackReleases"}
-        if set(value) != expected_keys or value.get("schemaVersion") != 1:
+        worker_selected = "worker" in self.inputs.components
+        if worker_selected:
+            expected_keys.add("workerPm2")
+        expected_schema = 2 if worker_selected else 1
+        if set(value) != expected_keys or value.get("schemaVersion") != expected_schema:
             deny("runtime_manifest_schema")
         if (value.get("mode") != "fixed-current-existing-pm2" or
                 value.get("controlPlaneSha") != self.inputs.control_plane or
@@ -567,9 +579,10 @@ class Driver:
         if value.get("processes") != PROCESS_NAMES:
             deny("runtime_manifest_processes")
         rollbacks = value.get("rollbackReleases")
-        if not isinstance(rollbacks, dict) or set(rollbacks) != set(COMPONENTS):
+        payload_components = self._payload_components()
+        if not isinstance(rollbacks, dict) or set(rollbacks) != set(payload_components):
             deny("runtime_manifest_rollbacks")
-        for component in COMPONENTS:
+        for component in payload_components:
             identity = rollbacks.get(component)
             common = {"releaseId", "manifestSha256", "indexSha256", "entrySha256"}
             expected = common | ({"buildId"} if component == "frontend" else set())
@@ -581,6 +594,8 @@ class Driver:
                     (component == "frontend" and
                      (not isinstance(identity.get("buildId"), str) or not identity["buildId"]))):
                 deny(f"runtime_manifest_rollback:{component}")
+        if worker_selected:
+            self._validate_worker_pm2_binding(value.get("workerPm2"))
         self._failpoint("runtime_manifest_read")
         try:
             current = path.stat()
@@ -589,6 +604,37 @@ class Driver:
         if self._stable_identity(current) != self._stable_identity(info):
             deny("runtime_manifest_changed")
         return value
+
+    def _validate_worker_pm2_binding(self, value: Any) -> None:
+        if not isinstance(value, dict) or set(value) != {"candidate", "rollback"}:
+            deny("runtime_manifest_worker_pm2")
+        arguments: list[str] = []
+        for role in ("candidate", "rollback"):
+            binding = value[role]
+            expected = {"request", "sourceArtifact", "sourceSha256", "definition"}
+            if not isinstance(binding, dict) or set(binding) != expected:
+                deny(f"runtime_manifest_worker_pm2:{role}")
+            for key in ("request", "sourceArtifact", "definition"):
+                path = Path(str(binding[key]))
+                if not path.is_absolute():
+                    deny(f"runtime_manifest_worker_pm2:{role}:{key}")
+                regular_private(path)
+            if not SHA256.fullmatch(str(binding["sourceSha256"])):
+                deny(f"runtime_manifest_worker_pm2:{role}:sourceSha256")
+            arguments.extend((
+                f"--{role}-request", str(binding["request"]),
+                f"--{role}-source-artifact", str(binding["sourceArtifact"]),
+                f"--{role}-source-sha256", binding["sourceSha256"],
+                f"--{role}-definition", str(binding["definition"]),
+            ))
+        result = self.host.run(
+            [sys.executable, str(self.repo / "scripts/pm2-definition-control.py"),
+             "validate-pair", *arguments], timeout=45)
+        if result.returncode:
+            deny("runtime_manifest_worker_pm2_pair")
+        report = json_object(result.stdout.encode(), "worker-pm2-pair")
+        if report.get("result") != "PM2_DEFINITION_PAIR_VALID" or report.get("component") != "worker":
+            deny("runtime_manifest_worker_pm2_pair")
 
     def _environment_keys(self, component: str) -> list[str]:
         value = read_json(self.repo / "scripts/pm2-definition-env-allowlist.v1.json")
@@ -980,7 +1026,8 @@ class Driver:
     def _release_index(self, index_path: Path, raw: bytes,
                        continuation_journal: dict[str, Any] | None = None) -> dict[str, Any]:
         index = json_object(raw, index_path.name)
-        if index.get("schemaVersion") != 1 or index.get("scope") != list(RUNTIME_DIR.values()):
+        runtime_names = self._runtime_names()
+        if index.get("schemaVersion") != 1 or index.get("scope") != list(runtime_names):
             deny("release_index_schema")
         entries = index.get("entries")
         if not isinstance(entries, list):
@@ -992,7 +1039,7 @@ class Driver:
             relative = PurePosixPath(entry["path"])
             if relative.is_absolute() or not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
                 deny("release_index_path")
-            if relative.parts[0] not in RUNTIME_DIR.values() or entry["path"] in expected:
+            if relative.parts[0] not in runtime_names or entry["path"] in expected:
                 deny("release_index_scope")
             kind = entry.get("type")
             allowed = {"path", "type", "mode"}
@@ -1011,7 +1058,7 @@ class Driver:
         overlay = self._private_data_overlay(continuation_journal)
         observed: dict[str, dict[str, Any]] = {}
         observed_identity: dict[str, tuple[int, ...]] = {}
-        for runtime_name in RUNTIME_DIR.values():
+        for runtime_name in runtime_names:
             root = self.release_root / runtime_name
             if not root.is_dir() or root.is_symlink():
                 deny(f"release_runtime_missing:{runtime_name}")
@@ -1094,7 +1141,8 @@ class Driver:
         if target != self.inputs.target:
             deny("release_target")
         declared_components = manifest.get("components") or manifest.get("payloadComponents")
-        if declared_components is not None and sorted(declared_components) != list(COMPONENTS):
+        payload_components = self._payload_components()
+        if declared_components is not None and declared_components != list(payload_components):
             deny("release_components")
         expected_index = manifest.get("indexSha256") or find_digest(manifest, index_path.name)
         if not isinstance(expected_index, str) or not SHA256.fullmatch(expected_index):
@@ -1102,7 +1150,7 @@ class Driver:
         if index_sha != expected_index:
             deny("release_index_identity")
         index = self._release_index(index_path, index_raw, continuation_journal)
-        for component in COMPONENTS:
+        for component in payload_components:
             runtime = self.release_root / RUNTIME_DIR[component]
             if not runtime.is_dir():
                 deny(f"release_runtime_missing:{component}")
@@ -1128,7 +1176,9 @@ class Driver:
         manifest = json_object(manifest_raw, manifest_path.name)
         if manifest.get("indexSha256") != identity["indexSha256"]:
             deny(f"rollback_manifest_index:{component}")
-        entry_relative = "dist/index.js" if component == "api" else "node_modules/next/dist/bin/next"
+        entry_relative = ("dist/index.js" if component == "api" else
+                          "node_modules/next/dist/bin/next" if component == "frontend" else
+                          "dist/whatsapp-web-worker/src/index.js")
         entry_raw, _ = stable_regular_bytes(runtime / entry_relative)
         if hashlib.sha256(entry_raw).hexdigest() != identity["entrySha256"]:
             deny(f"rollback_entry:{component}")
@@ -1137,11 +1187,15 @@ class Driver:
             declared = runtime_identity.get("entrySha256")
             if declared is not None and declared != identity["entrySha256"]:
                 deny("rollback_manifest_entry:api")
-        else:
+        elif component == "frontend":
             build_id = (runtime / ".next/BUILD_ID").read_text(encoding="utf-8").strip()
             if (build_id != identity["buildId"] or
                     runtime_identity.get("buildId") != identity["buildId"]):
                 deny("rollback_build_id:frontend")
+        else:
+            declared = runtime_identity.get("entrySha256")
+            if declared is not None and declared != identity["entrySha256"]:
+                deny("rollback_manifest_entry:worker")
         return runtime
 
     def _row(self, rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
@@ -1202,7 +1256,9 @@ class Driver:
         process_exe = self.host.process_exe(pid)
         if expected_runtime is not None:
             expected = expected_runtime.resolve(strict=True)
-            entry = "dist/index.js" if component == "api" else "node_modules/next/dist/bin/next"
+            entry = ("dist/index.js" if component == "api" else
+                     "node_modules/next/dist/bin/next" if component == "frontend" else
+                     "dist/whatsapp-web-worker/src/index.js")
             if (cwd_physical != expected or process_cwd != expected or
                     script_physical != (expected / entry).resolve(strict=True)):
                 deny(f"process_runtime:{component}")
@@ -1250,6 +1306,34 @@ class Driver:
 
     def _worker(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
         return self._process_snapshot(self._row(rows, PROCESS_NAMES["worker"]), "worker")
+
+    def _worker_pm2_binding(self, role: str) -> dict[str, Any]:
+        manifest = self._authenticated_runtime_manifest()
+        try:
+            binding = manifest["workerPm2"][role]
+        except (KeyError, TypeError):
+            deny(f"worker_pm2_binding:{role}")
+        return binding
+
+    def _worker_definition_projection(self, role: str) -> dict[str, Any]:
+        binding = self._worker_pm2_binding(role)
+        value = read_json(Path(binding["definition"]))
+        try:
+            app = value["apps"][0]
+        except (KeyError, IndexError, TypeError):
+            deny(f"worker_pm2_definition:{role}")
+        return {
+            "name": app.get("name"), "pmCwdLexical": app.get("cwd"),
+            "pmExecPathLexical": app.get("script"), "interpreter": app.get("interpreter"),
+            "args": app.get("args"), "nodeArgs": app.get("node_args"),
+            "execMode": app.get("exec_mode"), "instancesRaw": app.get("instances"),
+            "namespace": app.get("namespace"),
+            "logs": {"out": app.get("out_file"), "error": app.get("error_file"),
+                     "merge": app.get("merge_logs")},
+            "environmentSha256": hashlib.sha256(json.dumps(
+                {key: app.get("env", {}).get(key) for key in self._environment_keys("worker")},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest(),
+        }
 
     def _process_name(self, component: str) -> str:
         if component not in PROCESS_NAMES:
@@ -1350,12 +1434,13 @@ class Driver:
         raw, _ = stable_regular_bytes(binding.operational_state, required_mode=0o600)
         value = json_object(raw, binding.operational_state.name)
         immediate = value.get("immediateRollbackReleases")
+        payload_components = self._payload_components()
         if immediate is None:
-            if set(self.inputs.components) != set(COMPONENTS):
+            if set(self.inputs.components) != set(payload_components):
                 deny("rollback_role_legacy_transition_required")
             return  # A full activation can establish both bindings from authenticated selections.
         rollbacks = value.get("rollbackReleases")
-        if (not isinstance(immediate, dict) or set(immediate) != set(COMPONENTS) or
+        if (not isinstance(immediate, dict) or set(immediate) != set(payload_components) or
                 any(not isinstance(item, str) or not item for item in immediate.values()) or
                 not isinstance(rollbacks, list) or
                 set(rollbacks) != set(immediate.values())):
@@ -1534,7 +1619,7 @@ class Driver:
                     dump_paths.append(candidate)
         affected = journal.get("components", list(self.inputs.components))
         if (not isinstance(affected, list) or not affected or
-                any(component not in COMPONENTS for component in affected) or
+                any(component not in self._payload_components() for component in affected) or
                 len(affected) != len(set(affected))):
             deny("generation_retirement_components")
         previous_by_component = journal.get("previous", {}).get("releases", {})
@@ -1548,14 +1633,14 @@ class Driver:
             previous_releases.add(release_id)
         active = set(value.get("activeReleases", [])) - previous_releases
         active.add(self.inputs.release)
-        for component in set(COMPONENTS) - set(affected):
+        for component in set(self._payload_components()) - set(affected):
             preserved_release = previous_by_component.get(component)
             if not isinstance(preserved_release, str) or not preserved_release:
                 deny("generation_retirement_previous_release")
             active.add(preserved_release)
         immediate = value.get("immediateRollbackReleases")
         if immediate is not None and (not isinstance(immediate, dict) or
-                                      set(immediate) != set(COMPONENTS) or
+                                      set(immediate) != set(self._payload_components()) or
                                       any(not isinstance(item, str) or not item
                                           for item in immediate.values())):
             deny("generation_retirement_immediate_rollbacks")
@@ -1563,12 +1648,12 @@ class Driver:
             immediate = dict(immediate)
             for component in affected:
                 immediate[component] = previous_by_component[component]
-        elif set(affected) == set(COMPONENTS):
+        elif set(affected) == set(self._payload_components()):
             # A full activation can establish the per-component binding without
             # guessing anything from the legacy accumulated list.  Partial
             # activations remain fail-closed until such a binding exists.
             immediate = {component: previous_by_component[component]
-                         for component in COMPONENTS}
+                         for component in self._payload_components()}
         rollback = set(value.get("rollbackReleases", [])) | previous_releases
         candidates = set(value.get("candidateReleases", [])); candidates.discard(self.inputs.release)
         installed = set(value.get("installedVerifiedReleases", [])); installed.add(self.inputs.release)
@@ -1708,8 +1793,9 @@ class Driver:
         if not isinstance(rows, list):
             deny("final_dump_shape")
         live_snapshots = dict(journal.get("candidate", {}).get("processes", {}))
-        live_snapshots["worker"] = journal.get("previous", {}).get("worker", {})
-        for component in (*COMPONENTS, "worker"):
+        if "worker" not in self.inputs.components:
+            live_snapshots["worker"] = journal.get("previous", {}).get("worker", {})
+        for component in THREE_COMPONENTS:
             live = live_snapshots.get(component)
             if not isinstance(live, dict):
                 deny(f"final_dump_live:{component}")
@@ -1754,7 +1840,7 @@ class Driver:
 
     def preflight(self) -> None:
         if self.inputs.components not in SUPPORTED_COMPONENT_SETS:
-            deny("components_must_be_api_or_api_frontend")
+            deny("components_must_be_api_api_frontend_or_three_component")
         if self.inputs.retirement is None:
             deny("generation_retirement_binding_required")
         if self.inputs.retirement.deployment_lock != self.lock:
@@ -1792,6 +1878,21 @@ class Driver:
                 deny(f"preflight_rollback_release:{component}")
             readiness[component] = self._readiness(
                 component, release_id, expected, f"preflight-{component}")
+        if "worker" in self.inputs.components:
+            rollback_identity = runtime_manifest["rollbackReleases"]["worker"]
+            expected = self._rollback_release("worker", rollback_identity).resolve(strict=True)
+            worker = self._process_snapshot(
+                self._row(rows, self._process_name("worker")), "worker", expected)
+            selections["worker"] = {
+                "path": None, "target": None, "physicalRuntime": str(expected),
+                "releaseId": rollback_identity["releaseId"],
+            }
+            processes["worker"] = worker
+            readiness["worker"] = {
+                "result": "PREFLIGHT_WORKER_IDENTITY_PASS", "pid": worker["pid"],
+                "startTicks": worker["startTicks"], "restartCount": worker["restartCount"],
+                "releaseId": rollback_identity["releaseId"], "processCardinality": 1,
+            }
         regular_private(self.dump)
         if shutil.disk_usage(self.inputs.transaction_root).free < 64 * 1024 * 1024:
             deny("insufficient_space")
@@ -1807,8 +1908,8 @@ class Driver:
             "saveCount": 0, "deployedMarkerCreated": False,
             "createdAtUnix": int(self.clock()), "updatedAtUnix": int(self.clock()),
         }
-        if self.inputs.components == ("api",):
-            journal["components"] = ["api"]
+        if self.inputs.components != COMPONENTS:
+            journal["components"] = list(self.inputs.components)
         atomic_private(self.journal, journal, exclusive=True)
 
     def _acquire_lock(self, journal: dict[str, Any]) -> None:
@@ -2110,23 +2211,37 @@ class Driver:
         if digest(self.lock) != journal.get("lockDigest"): deny("global_lock_recovery_identity")
 
     def _readiness(self, component: str, release_id: str, runtime: Path,
-                   evidence_name: str) -> dict[str, Any]:
-        entry_relative = "dist/index.js" if component == "api" else "node_modules/next/dist/bin/next"
+                   evidence_name: str, *, worker_role: str = "candidate") -> dict[str, Any]:
+        entry_relative = ("dist/index.js" if component == "api" else
+                          "node_modules/next/dist/bin/next" if component == "frontend" else
+                          "dist/whatsapp-web-worker/src/index.js")
         entry = runtime / entry_relative
         raw, _ = stable_regular_bytes(entry)
-        args = [
-            "wait-existing-readiness", "--component", component,
-            "--process-name", self._process_name(component),
-            "--expected-cwd", str(self.stable[component]),
-            "--expected-script", str(self.stable[component] / entry_relative),
-            "--expected-interpreter", str(self.host.process_exe(
-                self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component))["pid"])),
-            "--release-id", release_id, "--entry-sha256", hashlib.sha256(raw).hexdigest(),
-            "--pm2", str(self._resolve_pm2()), "--stable-path", str(self.stable[component]),
-            "--release-root", str(runtime), "--port", str(PORT[component]),
-            "--local-health", LOCAL_HEALTH[component], "--public-health", PUBLIC_HEALTH[component],
-            "--deadline-seconds", "30", "--poll-seconds", "0.5",
-        ]
+        if component == "worker":
+            binding = self._worker_pm2_binding(worker_role)
+            args = [
+                "wait-worker-readiness", "--request", str(binding["request"]),
+                "--source-artifact", str(binding["sourceArtifact"]),
+                "--source-sha256", binding["sourceSha256"],
+                "--definition", str(binding["definition"]),
+                "--pm2", str(self._resolve_pm2()), "--stable-path", str(self.stable[component]),
+                "--release-root", str(runtime), "--deadline-seconds", "30",
+                "--poll-seconds", "0.5",
+            ]
+        else:
+            args = [
+                "wait-existing-readiness", "--component", component,
+                "--process-name", self._process_name(component),
+                "--expected-cwd", str(self.stable[component]),
+                "--expected-script", str(self.stable[component] / entry_relative),
+                "--expected-interpreter", str(self.host.process_exe(
+                    self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component))["pid"])),
+                "--release-id", release_id, "--entry-sha256", hashlib.sha256(raw).hexdigest(),
+                "--pm2", str(self._resolve_pm2()), "--stable-path", str(self.stable[component]),
+                "--release-root", str(runtime), "--port", str(PORT[component]),
+                "--local-health", LOCAL_HEALTH[component], "--public-health", PUBLIC_HEALTH[component],
+                "--deadline-seconds", "30", "--poll-seconds", "0.5",
+            ]
         if component == "frontend":
             build_id = (runtime / ".next/BUILD_ID").read_text(encoding="utf-8").strip()
             args.extend(("--build-id", build_id))
@@ -2148,17 +2263,28 @@ class Driver:
             report=report, stdout=stdout, stderr=stderr)
 
     def _restart_existing(self, component: str, before: dict[str, Any],
-                          release_id: str, runtime: Path, evidence_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
+                          release_id: str, runtime: Path, evidence_name: str,
+                          *, worker_role: str = "candidate") -> tuple[dict[str, Any], dict[str, Any]]:
         pm2 = self._resolve_pm2()
         name = self._process_name(component)
-        self.host.pm2_mutate(pm2, ["restart", name])
+        if component == "worker":
+            definition = self._worker_pm2_binding(worker_role)["definition"]
+            self.host.pm2_mutate(pm2, ["delete", name])
+            self.host.pm2_mutate(pm2, ["start", str(definition), "--only", name])
+        else:
+            self.host.pm2_mutate(pm2, ["restart", name])
         row = self._row(self.host.pm2_rows(pm2), name)
         after = self._process_snapshot(row, component, runtime)
-        if self._configuration_projection(after) != self._configuration_projection(before):
+        expected_projection = (self._worker_definition_projection(worker_role)
+                               if component == "worker" else self._configuration_projection(before))
+        if self._configuration_projection(after) != expected_projection:
             deny(f"process_configuration_changed:{component}")
-        if after["restartCount"] != before["restartCount"] + 1:
+        if component != "worker" and after["restartCount"] != before["restartCount"] + 1:
             deny(f"restart_count:{component}")
-        readiness = self._readiness(component, release_id, runtime, evidence_name)
+        if component == "worker" and after["restartCount"] != 0:
+            deny("restart_count:worker")
+        readiness = self._readiness(
+            component, release_id, runtime, evidence_name, worker_role=worker_role)
         for key in ("pid", "startTicks", "restartCount"):
             if key in readiness and readiness[key] != after[key]:
                 deny(f"readiness_identity:{component}:{key}")
@@ -2214,10 +2340,13 @@ class Driver:
             previous = {
                 "symlinks": {component: os.readlink(self.stable[component]) for component in COMPONENTS},
                 "releases": {component: runtime_manifest["rollbackReleases"][component]["releaseId"]
-                             for component in COMPONENTS},
+                             for component in self._payload_components()},
                 "worker": worker, "processes": processes,
                 "dump": private_file_identity(self.dump),
             }
+            if "worker" in self.inputs.components:
+                previous["symlinks"]["worker"] = None
+                previous["processes"]["worker"] = worker
             rollback_dump = self.inputs.transaction_root / "rollback.dump.pm2"
             if rollback_dump.exists():
                 deny("rollback_dump_exists")
@@ -2254,8 +2383,10 @@ class Driver:
             candidate_processes.update(preserved_processes)
             readiness.update(preserved_readiness)
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
-            if worker != previous["worker"]:
+            if "worker" not in self.inputs.components and worker != previous["worker"]:
                 deny("worker_changed")
+            if "worker" in self.inputs.components and worker != candidate_processes.get("worker"):
+                deny("worker_candidate_changed")
             journal["candidate"] = {"readiness": readiness, "processes": candidate_processes,
                                     "worker": worker}
             self._journal_write(journal, "AWAITING_ACCEPTANCE")
@@ -2271,43 +2402,52 @@ class Driver:
         self._journal_write(journal, "ROLLING_BACK")
         try:
             attempted = journal.get("activationAttempted", [])
-            if not isinstance(attempted, list) or any(item not in COMPONENTS for item in attempted):
+            if not isinstance(attempted, list) or any(item not in THREE_COMPONENTS for item in attempted):
                 deny("rollback_activation_progress")
             for component in reversed(attempted):
                 target = previous.get("symlinks", {}).get(component)
-                if not isinstance(target, str): deny(f"rollback_symlink_missing:{component}")
+                if component != "worker" and not isinstance(target, str):
+                    deny(f"rollback_symlink_missing:{component}")
                 if component not in progress["restoredComponents"]:
                     current = self._process_snapshot(
                         self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
                         component, self.stable[component].resolve(strict=True))
-                    atomic_symlink(self.stable[component], Path(target))
                     release_id = previous.get("releases", {}).get(component)
                     if not isinstance(release_id, str):
                         deny(f"rollback_release_missing:{component}")
+                    rollback_runtime = self.releases / release_id / RUNTIME_DIR[component]
+                    if component == "worker":
+                        atomic_symlink(self.stable[component], rollback_runtime)
+                    else:
+                        atomic_symlink(self.stable[component], Path(target))
                     restored, readiness = self._restart_existing(
-                        component, current, release_id, Path(target).resolve(strict=True),
-                        f"rollback-{component}")
+                        component, current, release_id, rollback_runtime.resolve(strict=True),
+                        f"rollback-{component}", worker_role="rollback")
                     progress.setdefault("processes", {})[component] = restored
                     progress.setdefault("readiness", {})[component] = readiness
                     progress["restoredComponents"].append(component)
                     self._journal_write(journal, "ROLLING_BACK")
                     self._failpoint(f"rollback_after_{component}")
                 else:
-                    if self.stable[component].resolve(strict=True) != Path(target).resolve(strict=True):
+                    expected_target = (self.releases / previous["releases"][component] /
+                                       RUNTIME_DIR[component] if component == "worker" else Path(target))
+                    if self.stable[component].resolve(strict=True) != expected_target.resolve(strict=True):
                         deny(f"rollback_symlink_drift:{component}")
                     release_id = previous.get("releases", {}).get(component)
                     if not isinstance(release_id, str):
                         deny(f"rollback_release_missing:{component}")
                     current = self._process_snapshot(
                         self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
-                        component, Path(target).resolve(strict=True))
+                        component, expected_target.resolve(strict=True))
                     recorded = progress.get("processes", {}).get(component)
                     if current != recorded:
                         deny(f"rollback_process_drift:{component}")
             self._validate_preserved_components(journal, "rollback-preserved")
             self._health()
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
-            if worker != previous.get("worker"): deny("rollback_worker_changed")
+            expected_worker = (progress.get("processes", {}).get("worker")
+                               if "worker" in attempted else previous.get("worker"))
+            if worker != expected_worker: deny("rollback_worker_changed")
             progress["lockReleaseStarted"] = True
             self._journal_write(journal, "ROLLING_BACK")
             self._release_lock(journal, allow_absent=True)
@@ -2363,7 +2503,7 @@ class Driver:
             if journal["saveCount"] == 0 and self.inputs.retirement is not None:
                 self._check_external_retirement(self.inputs.retirement)
             final_readiness: dict[str, Any] = {}
-            for component in COMPONENTS:
+            for component in self._payload_components():
                 selected = component in self.inputs.components
                 expected_runtime = ((self.release_root / RUNTIME_DIR[component]) if selected else
                                     Path(journal.get("preflight", {}).get("selections", {})
@@ -2384,7 +2524,10 @@ class Driver:
                     f"finalize-{component}")
             self._health(candidate_asset=True)
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
-            if worker != journal.get("previous", {}).get("worker"): deny("finalize_worker_changed")
+            expected_worker = (journal.get("candidate", {}).get("processes", {}).get("worker")
+                               if "worker" in self.inputs.components else
+                               journal.get("previous", {}).get("worker"))
+            if worker != expected_worker: deny("finalize_worker_changed")
             if self.inputs.runtime_cache_reconciliation is not None:
                 recaptured_release = self._release(continuation_journal=journal)
                 if recaptured_release != release:
@@ -2428,8 +2571,8 @@ class Driver:
             payload = {"target": self.inputs.target, "controlPlane": self.inputs.control_plane,
                        "release": self.inputs.release, "dumpSha256": final_dump["sha256"],
                        "accepted": "ACEITE TÉCNICO PASS", "deployedAtUnix": finalize["preparedAtUnix"]}
-            if self.inputs.components == ("api",):
-                payload["components"] = ["api"]
+            if self.inputs.components != COMPONENTS:
+                payload["components"] = list(self.inputs.components)
             if finalize.get("markerPayload") not in (None, payload): deny("deployed_marker_payload_drift")
             finalize["markerPayload"] = payload
             self._journal_write(journal, "FINALIZING")

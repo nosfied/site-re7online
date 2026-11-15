@@ -137,8 +137,13 @@
         "TEMPLATE_MEDIA_ROOT",
         "TZ",
         "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_AGENT_INTERNAL_PORT",
+        "WHATSAPP_AGENT_INTERNAL_URL",
         "WHATSAPP_PHONE_NUMBER_ID",
-        "WHATSAPP_WABA_ID"
+        "WHATSAPP_WABA_ID",
+        "WHATSAPP_WEB_WORKER_CONTROL_HOST",
+        "WHATSAPP_WEB_WORKER_CONTROL_PORT",
+        "WHATSAPP_WEB_WORKER_CONTROL_TOKEN"
       ],
       "candidate": [],
       "rollbackCompatibility": []

@@ -58,11 +58,12 @@ no runtime ativo.
   históricos `P00_TENANT_ISOLATION_RECOVERY` permanecem evidência autenticável da
   geração, mas não dispensam o gate derivado, inodes, checkpoints, lifecycle ou
   retenção, nem autorizam build ou ativação.
-- API e frontend são artefatos completos, versionados e validados por índice,
-  manifesto, extração independente e SHA-256.
+- API, frontend e, quando selecionado pela matriz, worker são artefatos completos,
+  versionados e validados por índice, manifesto, extração independente e SHA-256.
 - Releases são imutáveis e residem em `/opt/re7online/releases/<release-id>`.
-- O PM2 aponta somente para `/opt/re7online/current/api` e
-  `/opt/re7online/current/frontend`.
+- O PM2 aponta somente para `/opt/re7online/current/api`,
+  `/opt/re7online/current/frontend` e, no perfil 3/3, para
+  `/opt/re7online/current/worker`.
 - Cada caminho estável é um symlink trocado atomicamente para a release aprovada.
   `/proc/<pid>/cwd` resolve o symlink e mostra o destino físico.
 - A API usa `/usr/bin/node` e o entrypoint integral da release.
@@ -96,11 +97,17 @@ legado somente pode ser liberado pelo mesmo wrapper, com journal e SHA externos
 vinculados; remoção manual é proibida. stdout/stderr/exit são criados diretamente com
 exclusividade. Wrappers inline ou improvisados são proibidos.
 
-O driver fixed-current aceita somente os escopos ordenados `api` e `api,frontend`.
-O pacote e o índice permanecem API+frontend em ambos. No escopo API-only, somente
+O driver fixed-current aceita somente os escopos ordenados `api`, `api,frontend`
+e `api,frontend,worker`. O pacote e o índice permanecem API+frontend nos dois
+primeiros; o terceiro sela os três runtimes no mesmo pacote. No escopo API-only, somente
 `current/api` é promovido e `re7-whatsapp-agent` reiniciado; frontend e worker são
 dependências preservadas, reautenticadas antes/depois, incluídas na validação do dump
-e nunca selecionadas ou reiniciadas. O marker registra os componentes selecionados.
+e nunca selecionadas ou reiniciadas. No perfil 3/3, a ordem autenticada é API,
+frontend e worker; antes do worker novo, o registro anterior é removido e uma única
+definição PM2 autenticada é iniciada, sem `--update-env`, seguida de três amostras
+estáveis de PID/start ticks, CWD físico, entrypoint e hash. Uma falha reverte em
+ordem inversa e reutiliza a definição de retorno autenticada. O marker registra os
+componentes selecionados.
 
 O produtor registra obrigatoriamente no contrato da geração o único overlay operacional admitido,
 `api-runtime/.data`, como `PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`. O preflight

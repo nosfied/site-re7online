@@ -111,6 +111,8 @@ run_case "api-ecosystem" "apps/whatsapp-agent/ecosystem.config.cjs" YES NO NO NO
 run_case "worker-only" "apps/whatsapp-web-worker/src/whatsappWebSessionWorker.ts" NO YES NO NO
 run_case "worker-package" "apps/whatsapp-web-worker/package.json" NO YES NO NO
 run_case "shared-backend-worker" "apps/whatsapp-agent/src/web-session/webSessionInbound.ts" YES YES NO NO
+run_case "worker-transitive-inbound-identity" "apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts" YES YES NO NO
+run_case "worker-transitive-campaign-correlation" "apps/whatsapp-agent/src/campaigns/campaignOutboundConversation.ts" YES YES NO NO
 run_case "frontend-only" "src/app/app/inbox/page.tsx" NO NO YES NO
 run_case "docs-only" "docs/saas/runbook-re7.md" NO NO NO NO
 run_case "deploy-root-policy" "config/deploy-artifact-roots.json" NO NO NO NO
