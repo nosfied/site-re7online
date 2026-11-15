@@ -1654,3 +1654,20 @@ O prazo do worktree v2 é custódia, não autorização de retirada. Novo efeito
 exige procedimento e autoridade próprios. A fotografia histórica mediu na VPS
 8.168.931.328 bytes e 8.778.841 inodes livres, e no builder 198.923.218.944
 bytes e 28.009.941 inodes livres; os valores não são capacidade reservada.
+## Sucessão autenticada do control plane para pacote 3/3 instalado
+
+Uma negativa PM2 anterior ao preflight não reabre o lifecycle de build. Para uma
+release 3/3 já instalada e autenticada, os contratos, pacote e receipts originais
+permanecem imutáveis. Requests PM2 incorretos também permanecem como evidência e
+não são editados. A continuação admitida usa requests novos, bindings em destinos
+novos e um manifesto privado `WORKER_PM2_CONTROL_PLANE_SUCCESSION`.
+
+O runtime manifest schema 3 vincula por SHA-256 o control plane original e o
+sucessor, release, target, pacote, receipts de exportação/transferência/instalação,
+requests originais, bindings sucessores e bytes do driver, materializador, controle
+PM2 e allowlist. O consumidor reabre todos os arquivos `0600`, executa
+`validate-pair` e só então admite o preflight. Essa sucessão não altera os estados
+do builder, exportação ou instalação, não incrementa contadores e não concede
+ativação. O retorno worker legado pode ser autenticado pelos nomes históricos
+`release-manifest.json`/`release-index.json` somente quando marker, índice e
+entrypoint enumerado concordarem; releases modernas continuam no contrato atual.

@@ -227,7 +227,9 @@ Toda definição nova usa o contrato versionado de
   explícita;
 - a request escolhe somente um subconjunto da allowlist por componente versionada
   no repositório; estrutura e valores vêm do artefato-fonte privado canônico e nunca
-  entram em relatório ou stdout;
+  entram em relatório ou stdout. O worker é a exceção mais restritiva: como sua
+  definição é substituída por `delete/start`, o request deve selecionar o conjunto
+  funcional completo de 17 nomes, sem omissão ou acréscimo;
 - a allowlist separa `common`, `candidate` e `rollbackCompatibility` por componente.
   Compatibilidade de retorno não autoriza uso no candidato nem em releases futuras;
   inventário sanitizado dos nomes presentes nas duas fontes é gate obrigatório antes
@@ -251,6 +253,14 @@ Toda definição nova usa o contrato versionado de
   identidade do interpretador;
 - somente definições privadas regulares `0600`, criadas em destinos novos, podem ser
   consumidas.
+
+Os precedentes são cumulativos: PR #199 separou estrutura/ambiente/proveniência;
+#200 fechou allowlists por papel; #207 autenticou manifesto privado e fontes; #231
+materializou bindings; #233 dispensou bindings quando não há substituição de
+definição; #401 acrescentou o worker e rollback. O gate sucessor cobre a dependência
+que #401 não exercitou: produtor real de fixture, projeção privada, materializador,
+`validate-pair` e preflight do consumidor no mesmo teste. Um perfil não pode ser
+admitido se qualquer produtor exigido pelo consumidor estiver ausente.
 
 Os logs possuem duas identidades: `out_file`/`error_file`/`merge_logs` pertencem à
 definição canônica; `pm_out_log_path`/`pm_err_log_path` pertencem à identidade

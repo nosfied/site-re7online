@@ -22,6 +22,17 @@ from typing import Any
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 ROLES = {"candidate", "rollback"}
+COMPONENTS = {"frontend", "worker"}
+WORKER_PROCESS = "re7-whatsapp-web-worker"
+WORKER_STABLE_ROOT = Path("/opt/re7online/current/worker")
+WORKER_LEGACY_APP_KEYS = {
+    "name", "script", "args", "cwd", "interpreter", "exec_mode", "instances",
+    "autorestart", "out_file", "error_file", "merge_logs", "watch", "env",
+}
+WORKER_LEGACY_ENV_METADATA = {
+    "HOME", "LANG", "PATH", "PM2_HOME", "PM2_JSON_PROCESSING", "PM2_USAGE",
+    "PWD", "USER", "re7-whatsapp-web-worker", "unique_id",
+}
 
 
 class Denied(RuntimeError):
@@ -103,21 +114,41 @@ def run_json(command: list[str], label: str) -> dict[str, Any]:
 def component_identity(release_root: Path, release_id: str, target: str,
                        producer: Path, component: str,
                        deployed_marker_sha256: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    command = [sys.executable, str(producer), "verify", "--release-root", str(release_root),
-               "--target", target, "--release-id", release_id, "--components", "api,frontend"]
-    if deployed_marker_sha256 is not None:
-        command.extend(("--deployed-marker-sha256", deployed_marker_sha256))
-    first = run_json(command, "release_verify_before")
-    if first.get("result") != "RELEASE VERIFIED":
-        deny("release_verify_result")
-
-    manifest_raw = stable_regular(release_root / "manifest.json", private=False)
-    index_raw = stable_regular(release_root / "index.sha256", private=False)
+    manifest_path = release_root / "manifest.json"
+    legacy_worker = component == "worker" and not manifest_path.exists()
+    if legacy_worker:
+        manifest_path = release_root / "release-manifest.json"
+    manifest_raw = stable_regular(manifest_path, private=False)
     manifest = json_object(manifest_raw, "manifest")
+    components = manifest.get("components")
+    if components not in (["api", "frontend"], ["api", "frontend", "worker"]):
+        deny("release_manifest_components")
+    if component not in components:
+        deny("release_component_missing")
+    command = None
+    if legacy_worker:
+        if deployed_marker_sha256 is None:
+            deny("legacy_worker_deployed_marker_required")
+        first = {"result": "LEGACY_RELEASE_AUTHORITY_VERIFIED", "releaseId": release_id,
+                 "targetCommit": target}
+        index_path = release_root / "release-index.json"
+    else:
+        command = [sys.executable, str(producer), "verify", "--release-root", str(release_root),
+                   "--target", target, "--release-id", release_id,
+                   "--components", ",".join(components)]
+        if deployed_marker_sha256 is not None:
+            command.extend(("--deployed-marker-sha256", deployed_marker_sha256))
+        first = run_json(command, "release_verify_before")
+        if first.get("result") != "RELEASE VERIFIED":
+            deny("release_verify_result")
+        index_path = release_root / "index.sha256"
+
+    index_raw = stable_regular(index_path, private=False)
     index = json_object(index_raw, "index")
     if manifest.get("releaseId") != release_id or manifest.get("targetCommit") != target:
         deny("release_manifest_identity")
-    if manifest.get("indexSha256") != digest(index_raw):
+    declared_index = manifest.get("runtimeIndexSha256") if legacy_worker else manifest.get("indexSha256")
+    if declared_index != digest(index_raw):
         deny("release_index_digest")
     entries = index.get("entries")
     prefix = f"{component}-runtime/"
@@ -130,19 +161,31 @@ def component_identity(release_root: Path, release_id: str, target: str,
         deny("component_index_empty")
     tree = {"schemaVersion": 1, "component": component, "entries": selected}
     runtime = release_root / f"{component}-runtime"
-    if component != "frontend":
-        deny("component_not_supported")
-    build_raw = stable_regular(runtime / ".next/BUILD_ID", private=False)
-    try:
-        build_id = build_raw.decode("ascii").rstrip("\n")
-    except UnicodeDecodeError:
-        deny("frontend_build_id_encoding")
-    if not build_id or any(character.isspace() for character in build_id):
-        deny("frontend_build_id")
+    build_id = None
+    if component == "frontend":
+        build_raw = stable_regular(runtime / ".next/BUILD_ID", private=False)
+        try:
+            build_id = build_raw.decode("ascii").rstrip("\n")
+        except UnicodeDecodeError:
+            deny("frontend_build_id_encoding")
+        if not build_id or any(character.isspace() for character in build_id):
+            deny("frontend_build_id")
 
-    second = run_json(command, "release_verify_after")
-    if first != second:
-        deny("release_verification_drift")
+    if legacy_worker:
+        relative = "worker-runtime/dist/whatsapp-web-worker/src/index.js"
+        matches = [item for item in selected if item.get("path") == relative]
+        entry = release_root / relative
+        if (len(matches) != 1 or matches[0].get("type") != "file" or
+                matches[0].get("sha256") != digest(stable_regular(entry, private=False)) or
+                manifest.get("workerEntrypoint") != relative or
+                manifest.get("workerEntrypointSha256") != matches[0].get("sha256")):
+            deny("legacy_worker_entry_identity")
+        second = first
+    else:
+        assert command is not None
+        second = run_json(command, "release_verify_after")
+        if first != second:
+            deny("release_verification_drift")
     evidence = {
         "schemaVersion": 1,
         "releaseId": release_id,
@@ -151,10 +194,86 @@ def component_identity(release_root: Path, release_id: str, target: str,
         "releaseManifestSha256": digest(manifest_raw),
         "releaseIndexSha256": digest(index_raw),
         "componentTreeSha256": digest(canonical(tree)),
-        "frontendBuildId": build_id,
         "producerVerification": first,
+        "releaseAuthorityKind": "legacy-enumerated-release" if legacy_worker else "immutable-release-v2",
+        "releaseManifestName": manifest_path.name,
+        "releaseIndexName": index_path.name,
     }
+    if build_id is not None:
+        evidence["frontendBuildId"] = build_id
     return evidence, {"runtime": runtime, "manifest": manifest}
+
+
+def physical_identity(path: Path) -> dict[str, int | str]:
+    info = path.lstat()
+    return {
+        "device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
+        "gid": info.st_gid, "mode": f"{stat.S_IMODE(info.st_mode):04o}",
+    }
+
+
+def physical_identity_literal(value: dict[str, int | str]) -> str:
+    return (f"{value['device']}:{value['inode']}:{value['uid']}:{value['gid']}:"
+            f"{value['mode']}")
+
+
+def project_legacy_worker(raw_source: dict[str, Any], request: dict[str, Any],
+                          runtime: Path) -> tuple[dict[str, Any], Path]:
+    if set(raw_source) != {"apps"} or not isinstance(raw_source["apps"], list) or len(raw_source["apps"]) != 1:
+        deny("legacy_worker_source_shape")
+    original = raw_source["apps"][0]
+    if not isinstance(original, dict) or set(original) != WORKER_LEGACY_APP_KEYS:
+        deny("legacy_worker_app_shape")
+    if original.get("name") != WORKER_PROCESS or original.get("args") != []:
+        deny("legacy_worker_process_identity")
+    if original.get("interpreter") != "/usr/bin/node" or original.get("exec_mode") != "fork_mode":
+        deny("legacy_worker_runtime_identity")
+    if original.get("instances") != 1 or original.get("autorestart") is not True:
+        deny("legacy_worker_cardinality")
+    if type(original.get("merge_logs")) is not bool or type(original.get("watch")) is not bool:
+        deny("legacy_worker_log_identity")
+    cwd = Path(str(original.get("cwd", "")))
+    script = Path(str(original.get("script", "")))
+    try:
+        relative_entry = script.relative_to(cwd)
+    except ValueError:
+        deny("worker_entry_outside_cwd")
+    if not relative_entry.parts or ".." in PurePosixPath(relative_entry.as_posix()).parts:
+        deny("worker_entry_relative")
+    stable_regular(runtime / relative_entry, private=False)
+    environment = original.get("env")
+    if not isinstance(environment, dict):
+        deny("legacy_worker_environment")
+    requested = request.get("environmentKeys")
+    if set(environment) != set(requested) | WORKER_LEGACY_ENV_METADATA:
+        deny("legacy_worker_environment_coverage")
+    if not all(isinstance(environment[key], str) for key in requested):
+        deny("legacy_worker_environment_value")
+    projected = {
+        "name": WORKER_PROCESS,
+        "script": str(WORKER_STABLE_ROOT / relative_entry),
+        "args": [],
+        "cwd": str(WORKER_STABLE_ROOT),
+        "interpreter": "/usr/bin/node",
+        "exec_mode": "fork_mode",
+        "instances": 1,
+        "namespace": "default",
+        "autorestart": True,
+        # These are the authenticated PM2 6.0.14 defaults used when the
+        # historical files omitted the fields. They are explicit in the
+        # successor definition so validation and rollback are deterministic.
+        "restart_delay": 0,
+        "kill_timeout": 1600,
+        "listen_timeout": 3000,
+        "wait_ready": False,
+        "node_args": [],
+        "out_file": original["out_file"],
+        "error_file": original["error_file"],
+        "merge_logs": original["merge_logs"],
+        "watch": original["watch"],
+        "env": {key: environment[key] for key in requested},
+    }
+    return {"apps": [projected]}, relative_entry
 
 
 def write_exclusive(path: Path, raw: bytes) -> None:
@@ -171,13 +290,16 @@ def write_exclusive(path: Path, raw: bytes) -> None:
 
 
 def materialize(args: argparse.Namespace) -> dict[str, Any]:
-    if args.role not in ROLES or not SHA40.fullmatch(args.target):
+    component = args.component
+    if args.role not in ROLES or component not in COMPONENTS or not SHA40.fullmatch(args.target):
         deny("argument_identity")
     marker = args.release_root / "DEPLOYED"
     if args.deployed_marker_sha256 is not None:
         expected_digest(args.deployed_marker_sha256, "deployed_marker_sha256")
         if args.role != "rollback":
             deny("candidate_operational_marker_forbidden")
+        if not marker.is_file() or marker.is_symlink() or digest(stable_regular(marker, private=False)) != args.deployed_marker_sha256:
+            deny("deployed_marker_sha256_mismatch")
     if (marker.exists() or marker.is_symlink()) and args.deployed_marker_sha256 is None:
         deny("deployed_marker_sha256_required")
     for label, path in (("release_root", args.release_root), ("producer", args.producer),
@@ -202,42 +324,61 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
         deny("template_request_sha256_mismatch")
     if digest(source_raw) != expected_digest(args.template_source_sha256, "template_source_sha256"):
         deny("template_source_sha256_mismatch")
+    source_identity = physical_identity(args.template_source)
+    if component == "worker":
+        if (not isinstance(args.template_source_identity, str) or
+                args.template_source_identity != physical_identity_literal(source_identity)):
+            deny("template_source_physical_identity")
+    elif args.template_source_identity is not None:
+        deny("template_source_identity_unexpected")
     request = json_object(request_raw, "template_request")
     source = json_object(source_raw, "template_source")
-    if request.get("role") != args.role or request.get("component") != "frontend":
+    if request.get("role") != args.role or request.get("component") != component:
         deny("template_request_identity")
-    if source.get("role") != args.role or source.get("component") != "frontend":
-        deny("template_source_identity")
 
-    with tempfile.TemporaryDirectory(prefix="pm2-binding-validate-") as temporary:
-        probe = Path(temporary) / "definition.json"
-        run_json([sys.executable, str(args.control), "build", "--request", str(args.template_request),
-                  "--source-artifact", str(args.template_source), "--source-sha256", args.template_source_sha256,
-                  "--output", str(probe)], "template_binding_validation")
+    legacy_worker = component == "worker" and set(source) == {"apps"}
+    if not legacy_worker:
+        if source.get("role") != args.role or source.get("component") != component:
+            deny("template_source_identity")
+        with tempfile.TemporaryDirectory(prefix="pm2-binding-validate-") as temporary:
+            probe = Path(temporary) / "definition.json"
+            run_json([sys.executable, str(args.control), "build", "--request", str(args.template_request),
+                      "--source-artifact", str(args.template_source), "--source-sha256", args.template_source_sha256,
+                      "--output", str(probe)], "template_binding_validation")
 
     release_evidence, release = component_identity(
         args.release_root.resolve(strict=True), args.release_id, args.target,
-        args.producer, "frontend", args.deployed_marker_sha256)
-    definition = source.get("definition")
+        args.producer, component, args.deployed_marker_sha256)
+    if legacy_worker:
+        definition, relative_entry = project_legacy_worker(source, request, release["runtime"])
+    else:
+        definition = source.get("definition")
+        relative_entry = None
     if not isinstance(definition, dict) or not isinstance(definition.get("apps"), list) or len(definition["apps"]) != 1:
         deny("template_definition")
     app = definition["apps"][0]
-    cwd = Path(str(app.get("cwd", "")))
-    script = Path(str(app.get("script", "")))
-    try:
-        relative_entry = script.relative_to(cwd)
-    except ValueError:
-        deny("frontend_entry_outside_cwd")
-    if not relative_entry.parts or ".." in PurePosixPath(relative_entry.as_posix()).parts:
-        deny("frontend_entry_relative")
+    if relative_entry is None:
+        cwd = Path(str(app.get("cwd", "")))
+        script = Path(str(app.get("script", "")))
+        try:
+            relative_entry = script.relative_to(cwd)
+        except ValueError:
+            deny(f"{component}_entry_outside_cwd")
+        if not relative_entry.parts or ".." in PurePosixPath(relative_entry.as_posix()).parts:
+            deny(f"{component}_entry_relative")
     entry_raw = stable_regular(release["runtime"] / relative_entry, private=False)
     release_identity = {
         "releaseId": args.release_id,
         "releaseManifestSha256": release_evidence["releaseManifestSha256"],
         "componentTreeSha256": release_evidence["componentTreeSha256"],
-        "frontendBuildId": release_evidence["frontendBuildId"],
-        "frontendEntrySha256": digest(entry_raw),
     }
+    if component == "frontend":
+        release_identity.update({
+            "frontendBuildId": release_evidence["frontendBuildId"],
+            "frontendEntrySha256": digest(entry_raw),
+        })
+    else:
+        release_identity["workerEntrySha256"] = digest(entry_raw)
     provenance = {
         **release_evidence,
         "role": args.role,
@@ -247,14 +388,16 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
         "controlSha256": digest(control_raw),
         "releaseIdentity": release_identity,
         "definitionSha256": digest(canonical(definition)),
-        "derivation": "authenticated-definition-rebound-to-verified-release",
+        "derivation": ("authenticated-legacy-worker-projection-rebound-to-verified-release"
+                       if legacy_worker else "authenticated-definition-rebound-to-verified-release"),
+        "templateSourceIdentity": source_identity,
         "pm2IntrospectionUsed": False,
     }
     evidence_raw = canonical(provenance)
     rebound = {
         "schemaVersion": 1,
         "role": args.role,
-        "component": "frontend",
+        "component": component,
         "sourceKind": request["sourceKind"],
         "provenance": {
             "authority": "new-release-config" if args.role == "candidate" else "proven-production-definition",
@@ -290,6 +433,7 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "result": "PM2_BINDING_MATERIALIZED",
         "role": args.role,
+        "component": component,
         "releaseId": args.release_id,
         "requestSha256": digest(request_raw),
         "sourceSha256": digest(canonical(rebound)),
@@ -302,6 +446,7 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(description=__doc__)
     value.add_argument("--role", required=True)
+    value.add_argument("--component", choices=sorted(COMPONENTS), default="frontend")
     value.add_argument("--target", required=True)
     value.add_argument("--release-id", required=True)
     value.add_argument("--release-root", type=Path, required=True)
@@ -314,6 +459,8 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--template-request-sha256", required=True)
     value.add_argument("--template-source", type=Path, required=True)
     value.add_argument("--template-source-sha256", required=True)
+    value.add_argument("--template-source-identity",
+                       help="closed worker source identity: device:inode:uid:gid:mode")
     value.add_argument("--output", type=Path, required=True)
     return value
 

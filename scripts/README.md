@@ -10,8 +10,8 @@
 ## `converta-release.py` — produtor build-once
 
 Constrói e verifica uma release imutável de API e frontend, opcionalmente com o
-worker quando a matriz de impacto o exigir, em worktree isolado. Builder externo
-é alternativa mediante decisão específica. Expõe somente
+worker quando a matriz de impacto o exigir, em worktree isolado no builder externo.
+Expõe somente
 `build` e `verify`, exige worktree limpo no target exato, Node `v20.20.0`,
 `SOURCE_DATE_EPOCH` explícito, saída nova e um dos payloads fechados
 `api,frontend` ou `api,frontend,worker`.
@@ -44,6 +44,19 @@ antes do sucessor ser iniciado, impedindo sobreposição e dupla captura de jobs
 Se o start negar após o `delete`, o journal autentica a ausência e restaura uma
 única definição rollback validada, sem `PWD`; retomada não repete API, frontend
 nem um worker já restaurado.
+Para pacote 3/3 já instalado, o schema 3 admite somente uma sucessão autenticada
+do control plane, vinculando receipts, requests antigos e bindings novos sem
+repetir build, transferência ou instalação.
+
+## `pm2-binding-materialize.py` — materializador de bindings privados
+
+O frontend mantém o fluxo schema 1 homologado. Para o worker, o materializador
+autentica SHA-256 e identidade física da fonte histórica, projeta exatamente os
+17 nomes funcionais da allowlist, remove metadados de shell/PM2 e vincula o
+entrypoint à release verificada. Candidato e rollback usam fontes, requests e
+proveniências distintas e devem passar juntos por `validate-pair`. O retorno
+legado `e2e7f17a` é a única fronteira que admite os nomes históricos
+`release-manifest.json`/`release-index.json`, marker e entrypoint enumerados.
 
 ## `deploy-impact-matrix.sh`
 

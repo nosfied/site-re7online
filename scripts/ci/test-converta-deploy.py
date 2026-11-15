@@ -28,6 +28,12 @@ deploy = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = deploy
 SPEC.loader.exec_module(deploy)
 
+MATERIALIZER_SPEC = importlib.util.spec_from_file_location(
+    "pm2_binding_materialize_integration", ROOT / "scripts/pm2-binding-materialize.py")
+assert MATERIALIZER_SPEC and MATERIALIZER_SPEC.loader
+materializer = importlib.util.module_from_spec(MATERIALIZER_SPEC)
+MATERIALIZER_SPEC.loader.exec_module(materializer)
+
 RETIREMENT_SPEC = importlib.util.spec_from_file_location(
     "generation_retirement_lock_consumer", ROOT / "scripts/generation-retirement.py")
 assert RETIREMENT_SPEC and RETIREMENT_SPEC.loader
@@ -543,7 +549,7 @@ class DeployFixture(unittest.TestCase):
         self.driver = self._driver()
         return self.driver
 
-    def three_component(self) -> FixtureDriver:
+    def three_component(self, worker_pm2_override: dict[str, dict[str, Any]] | None = None) -> FixtureDriver:
         stable_worker = self.current / "worker"
         self.stable["worker"] = stable_worker
         for release, target in ((self.rollback, "c" * 40), (self.candidate, self.target)):
@@ -571,6 +577,9 @@ class DeployFixture(unittest.TestCase):
         self.host.process_cwds[old_pid] = rollback_runtime.resolve()
 
         pm2_bindings: dict[str, dict[str, Any]] = {}
+        worker_environment_keys = sorted(json.loads(
+            (ROOT / "scripts/pm2-definition-env-allowlist.v1.json").read_text()
+        )["components"]["worker"]["common"])
         for role, release, evidence in (
             ("candidate", self.candidate, "1" * 64),
             ("rollback", self.rollback, "2" * 64),
@@ -587,7 +596,8 @@ class DeployFixture(unittest.TestCase):
                     "listen_timeout": 10000, "wait_ready": False, "node_args": [],
                     "out_file": str(self.base / "worker.out.log"),
                     "error_file": str(self.base / "worker.err.log"), "merge_logs": True,
-                    "env": {"NODE_ENV": "production"},
+                    "env": {key: ("production" if key == "NODE_ENV" else f"fixture-{key}")
+                            for key in worker_environment_keys},
                 }]
             }
             request = self.base / f"worker-{role}.request.private.json"
@@ -597,7 +607,7 @@ class DeployFixture(unittest.TestCase):
                           "component": "worker",
                           "sourceKind": ("canonical-private-config" if role == "candidate" else
                                          "authenticated-proven-definition"),
-                          "environmentKeys": ["NODE_ENV"]})
+                          "environmentKeys": worker_environment_keys})
             put(source, {"schemaVersion": 1, "role": role, "component": "worker",
                          "sourceKind": ("canonical-private-config" if role == "candidate" else
                                         "authenticated-proven-definition"),
@@ -620,7 +630,7 @@ class DeployFixture(unittest.TestCase):
         rollback_root = self.releases / self.rollback
         manifest = json.loads(self.runtime_manifest.read_text())
         manifest["schemaVersion"] = 2
-        manifest["workerPm2"] = pm2_bindings
+        manifest["workerPm2"] = worker_pm2_override or pm2_bindings
         rollback_common = {
             "releaseId": self.rollback,
             "manifestSha256": sha(rollback_root / "manifest.json"),
@@ -822,6 +832,166 @@ class DeployFixture(unittest.TestCase):
 
 
 class DriverTests(DeployFixture):
+    def test_worker_source_to_materializer_to_validate_pair_to_successor_preflight(self) -> None:
+        """Permanent gate for every producer needed by the 3/3 profile."""
+        self.three_component()
+        worker_keys = sorted(json.loads(
+            (ROOT / "scripts/pm2-definition-env-allowlist.v1.json").read_text()
+        )["components"]["worker"]["common"])
+        self.assertEqual(17, len(worker_keys))
+        producer = self.base / "synthetic-release-producer.py"
+        producer.write_text(
+            "import json,sys\n"
+            "release=sys.argv[sys.argv.index('--release-id')+1]\n"
+            "target=sys.argv[sys.argv.index('--target')+1]\n"
+            "print(json.dumps({'result':'RELEASE VERIFIED','releaseId':release,'targetCommit':target}))\n"
+        )
+        bindings: dict[str, dict[str, Any]] = {}
+        original_requests: dict[str, dict[str, str]] = {}
+        for role, release, target in (
+            ("candidate", self.candidate, self.target),
+            ("rollback", self.rollback, "c" * 40),
+        ):
+            root = self.releases / release
+            manifest = json.loads((root / "manifest.json").read_text())
+            manifest.update(releaseId=release, targetCommit=target)
+            (root / "manifest.json").chmod(0o644)
+            put(root / "manifest.json", manifest, 0o444)
+            request = self.base / f"successor-{role}.request.private.json"
+            put(request, {
+                "schemaVersion": 2, "scope": "isolated-test", "role": role,
+                "component": "worker", "sourceKind": (
+                    "canonical-private-config" if role == "candidate" else
+                    "authenticated-proven-definition"),
+                "environmentKeys": worker_keys,
+            })
+            environment = {key: f"fixture-{key}" for key in worker_keys}
+            environment.update({
+                "HOME": "/home/deploy", "LANG": "C.UTF-8", "PATH": "/usr/bin",
+                "PM2_HOME": "/home/deploy/.pm2", "PM2_JSON_PROCESSING": "true",
+                "PM2_USAGE": "CLI", "PWD": "/historical/worker", "USER": "deploy",
+                "re7-whatsapp-web-worker": "{}", "unique_id": f"{role}-fixture",
+            })
+            source = self.base / f"historical-{role}.private.json"
+            put(source, {"apps": [{
+                "name": deploy.PROCESS_NAMES["worker"],
+                "script": "/historical/worker/dist/whatsapp-web-worker/src/index.js",
+                "args": [], "cwd": "/historical/worker", "interpreter": "/usr/bin/node",
+                "exec_mode": "fork_mode", "instances": 1, "autorestart": True,
+                "out_file": str(self.base / "worker.out.log"),
+                "error_file": str(self.base / "worker.err.log"),
+                "merge_logs": False, "watch": False, "env": environment,
+            }]})
+            output = self.base / f"materialized-{role}"
+            result = materializer.materialize(materializer.argparse.Namespace(
+                role=role, component="worker", target=target, release_id=release,
+                release_root=root, deployed_marker_sha256=None,
+                producer=producer, producer_sha256=sha(producer),
+                control=ROOT / "scripts/pm2-definition-control.py",
+                control_sha256=sha(ROOT / "scripts/pm2-definition-control.py"),
+                template_request=request, template_request_sha256=sha(request),
+                template_source=source, template_source_sha256=sha(source),
+                template_source_identity=materializer.physical_identity_literal(
+                    materializer.physical_identity(source)), output=output,
+            ))
+            self.assertEqual("PM2_DEFINITION_BUILT", result["controlResult"])
+            projected = json.loads((output / "source.private.json").read_text())
+            self.assertEqual(set(worker_keys), set(projected["definition"]["apps"][0]["env"]))
+            self.assertNotIn("PWD", projected["definition"]["apps"][0]["env"])
+            bindings[role] = {
+                "request": str(output / "request.private.json"),
+                "sourceArtifact": str(output / "source.private.json"),
+                "sourceSha256": sha(output / "source.private.json"),
+                "definition": str(output / "definition.private.json"),
+            }
+            old = self.base / f"original-{role}.request.private.json"
+            put(old, {"preserved": True, "role": role})
+            original_requests[role] = {"path": str(old), "sha256": sha(old)}
+
+        runtime = json.loads(self.runtime_manifest.read_text())
+        runtime["workerPm2"] = bindings
+        rollback_manifest = self.releases / self.rollback / "manifest.json"
+        for identity in runtime["rollbackReleases"].values():
+            identity["manifestSha256"] = sha(rollback_manifest)
+
+        authorities: dict[str, dict[str, str]] = {}
+        for name in ("exportReceipt", "transferReceipt", "installationReceipt"):
+            path = self.base / f"{name}.private.json"
+            put(path, {"releaseId": self.candidate, "packageSha256": "9" * 64})
+            authorities[name] = {"path": str(path), "sha256": sha(path)}
+        succession = self.base / "control-plane-succession.private.json"
+        put(succession, {
+            "schemaVersion": 1, "kind": "WORKER_PM2_CONTROL_PLANE_SUCCESSION",
+            "originalControlPlane": "6" * 40, "successorControlPlane": self.control_plane,
+            "releaseId": self.candidate, "targetCommit": self.target,
+            "packageSha256": "9" * 64, "authorities": authorities,
+            "originalRequests": original_requests,
+            "successorBindings": {
+                role: {
+                    key: {"path": value, "sha256": sha(Path(value))}
+                    for key, value in {
+                        "request": binding["request"],
+                        "sourceArtifact": binding["sourceArtifact"],
+                        "definition": binding["definition"],
+                    }.items()
+                } for role, binding in bindings.items()
+            },
+            "scripts": {
+                "deploy": sha(ROOT / "scripts/converta-deploy.py"),
+                "materializer": sha(ROOT / "scripts/pm2-binding-materialize.py"),
+                "control": sha(ROOT / "scripts/pm2-definition-control.py"),
+                "allowlist": sha(ROOT / "scripts/pm2-definition-env-allowlist.v1.json"),
+            },
+        })
+        runtime["schemaVersion"] = 3
+        runtime["controlPlaneSuccessionSha256"] = sha(succession)
+        put(self.runtime_manifest, runtime)
+        self.inputs = dataclasses.replace(
+            self.inputs, runtime_manifest_sha256=sha(self.runtime_manifest),
+            control_plane_succession=deploy.ControlPlaneSuccessionBinding(
+                succession, sha(succession)))
+        self.driver = self._driver()
+        self.driver.preflight()
+        self.assertEqual("PREFLIGHT_PASS", self.driver._journal_read()["state"])
+
+        # The same chain must stop on any successor artifact drift.
+        candidate_request = Path(bindings["candidate"]["request"])
+        candidate_request.write_text(candidate_request.read_text() + " ")
+        with self.assertRaisesRegex(deploy.Denied, "control_plane_succession"):
+            self._driver()._authenticated_runtime_manifest()
+
+    def test_successor_accepts_only_closed_legacy_worker_rollback_authority(self) -> None:
+        self.three_component()
+        release = "immutable-legacy-worker-rollback"
+        root = self.releases / release
+        source = self.releases / self.rollback / "worker-runtime"
+        shutil.copytree(source, root / "worker-runtime")
+        entry_relative = "worker-runtime/dist/whatsapp-web-worker/src/index.js"
+        entry = root / entry_relative
+        index = root / "release-index.json"
+        put(index, {"schemaVersion": 1, "targetCommit": "d" * 40,
+                    "entries": [{"path": entry_relative, "type": "file", "mode": 0o644,
+                                 "size": entry.stat().st_size, "sha256": sha(entry)}],
+                    })
+        manifest = root / "release-manifest.json"
+        put(manifest, {
+            "schemaVersion": 1, "releaseId": release, "targetCommit": "d" * 40,
+            "components": ["api", "frontend", "worker"],
+            "runtimeIndexSha256": sha(index), "workerEntrypoint": entry_relative,
+            "workerEntrypointSha256": sha(entry),
+        })
+        identity = {
+            "releaseId": release, "manifestSha256": sha(manifest),
+            "indexSha256": sha(index), "entrySha256": sha(entry),
+            "authorityKind": "legacy-enumerated-release",
+            "manifestName": "release-manifest.json", "indexName": "release-index.json",
+        }
+        self.assertEqual((root / "worker-runtime").resolve(),
+                         self.driver._rollback_release("worker", identity).resolve())
+        identity["manifestName"] = "manifest.json"
+        with self.assertRaises(deploy.Denied):
+            self.driver._rollback_release("worker", identity)
+
     def test_existing_empty_free_lock_is_adopted_and_terminally_released(self) -> None:
         self.lock.write_bytes(b"")
         self.lock.chmod(0o600)
