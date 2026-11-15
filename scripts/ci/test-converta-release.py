@@ -2151,8 +2151,18 @@ class ReleaseProducerTest(unittest.TestCase):
         release_id = f"immutable-{self.target[:8]}-three-component-fixture"
         # Keep the generation-review gate isolated from fixtures that intentionally
         # leave another generation pending in the shared output parent.
-        output_parent = self.outputs / "three-component-parent"
-        output_parent.mkdir()
+        output_parent = self.base / "three-component-output-parent"
+        output_parent.mkdir(mode=0o755)
+        builder_policy_value = json.loads(self.root_policy.read_text())
+        output_info = output_parent.lstat()
+        builder_policy_value["canonicalRoots"]["outputs"] = {
+            "path": str(output_parent), "ownerUid": output_info.st_uid,
+            "groupGid": output_info.st_gid,
+            "allowedModes": [f"0{stat.S_IMODE(output_info.st_mode):03o}"],
+        }
+        builder_policy_source = self.base / "three-component-builder-policy.private.json"
+        write(builder_policy_source, json.dumps(builder_policy_value, sort_keys=True) + "\n", 0o600)
+        builder_policy_sha = hashlib.sha256(builder_policy_source.read_bytes()).hexdigest()
         output = output_parent / "output-three-component"
         capacity = capacity_contract(
             self.base / "capacity-three-component.private.json", self.base,
@@ -2170,7 +2180,7 @@ class ReleaseProducerTest(unittest.TestCase):
             "--release-id", release_id, "--components", "api,frontend,worker",
             "--output", str(output), "--installed-releases-root", str(self.releases),
             "--source-date-epoch", EPOCH, "--capacity-contract", str(capacity),
-            "--root-policy", str(self.root_policy), "--root-policy-sha256", self.root_policy_sha,
+            "--root-policy", str(builder_policy_source), "--root-policy-sha256", builder_policy_sha,
             "--npm-cache-root", str(self.npm_cache), "--temporary-root", str(self.temporary_root),
         ]
         try:
@@ -2186,18 +2196,131 @@ class ReleaseProducerTest(unittest.TestCase):
             self.assertTrue((root / "worker-runtime/dist/whatsapp-web-worker/src/index.js").is_file())
             self.assertEqual(json.loads((output / "generation-lifecycle.private.json").read_text())["state"],
                              "COMPLETE")
-            install_args = MODULE.parser().parse_args([
-                "install", "--package", str(output / f"{release_id}.tar.xz"),
-                "--target", self.target, "--release-id", release_id,
-                "--components", "api,frontend,worker",
-                "--installed-releases-root", str(self.releases),
-                "--root-policy", str(self.root_policy),
-                "--root-policy-sha256", self.root_policy_sha,
-            ])
-            install_args.handler(install_args)
-            installed = self.releases / release_id
+            receiver = self.base / "three-component-receiver"
+            receiver.mkdir(mode=0o700)
+            receiver_policy_value = json.loads(self.root_policy.read_text())
+            for key, definition in receiver_policy_value["canonicalRoots"].items():
+                entry = definition[0] if key == "evidence" else definition
+                path = receiver / key
+                path.mkdir(mode=0o700 if key == "evidence" else 0o755)
+                entry.update(path=str(path), allowedModes=["0700" if key == "evidence" else "0755"])
+            receiver_policy = receiver / "policy.private.json"
+            write(receiver_policy, json.dumps(receiver_policy_value), 0o600)
+            bind = lambda path: {"path": str(path), "sha256": MODULE.sha256_bytes(path.read_bytes())}
+            package = receiver / "evidence" / f"{release_id}.tar.xz"
+            shutil.copyfile(output / f"{release_id}.tar.xz", package); package.chmod(0o644)
+            installed_result = invoke(
+                "install", "--package", str(package), "--target", self.target,
+                "--release-id", release_id, "--components", "api,frontend,worker",
+                "--installed-releases-root", str(receiver / "releases"),
+                "--root-policy", str(receiver_policy),
+                "--root-policy-sha256", bind(receiver_policy)["sha256"],
+            )
+            self.assertEqual(installed_result.returncode, 0, installed_result.stderr)
+            installed = receiver / "releases" / release_id
             self.assertTrue((installed / "worker-runtime/dist/whatsapp-web-worker/src/index.js").is_file())
-            shutil.rmtree(installed)
+
+            # The real handoff consumer must propagate the authenticated 3/3
+            # scope to the real producer verifier.  It may not infer a scope
+            # from the installed directory or silently fall back to 2/2.
+            evidence = receiver / "evidence"
+            installation = evidence / "installation.private.json"
+            write(installation, installed_result.stdout, 0o600)
+            copied = {}
+            for name in ("generation-artifacts.private.json", "generation-lifecycle.private.json"):
+                source = output / name
+                destination = evidence / name
+                shutil.copyfile(source, destination); destination.chmod(0o600)
+                copied[name] = destination
+            builder_policy = evidence / "builder-policy.private.json"
+            shutil.copyfile(builder_policy_source, builder_policy); builder_policy.chmod(0o600)
+            disposable_root = self.base / "three-component-disposable-root"
+            custody_root = self.base / "three-component-custody"
+            disposable_root.mkdir(mode=0o700); custody_root.mkdir(mode=0o700)
+            root_info = disposable_root.lstat()
+            root_identity = {"path": str(disposable_root), "device": root_info.st_dev,
+                             "inode": root_info.st_ino, "ownerUid": root_info.st_uid,
+                             "groupGid": root_info.st_gid, "mode": "0700"}
+            disposable_contract = evidence / "disposable-builder.contract.private.json"
+            write(disposable_contract, json.dumps({
+                "schemaVersion": 1, "generationId": release_id, "targetCommit": self.target,
+                "disposableRoot": str(disposable_root), "custodyRoot": str(custody_root),
+            }), 0o600)
+            disposable_lifecycle = evidence / "disposable-builder.lifecycle.private.json"
+            export_receipt = evidence / "disposable-builder.export-receipt.private.json"
+            lifecycle_value = {
+                "schemaVersion": 1, "generationId": release_id, "targetCommit": self.target,
+                "contractSha256": bind(disposable_contract)["sha256"], "state": "EXPORTED",
+                "event": "AUTHORITY_EXPORTED", "rootIdentity": root_identity,
+            }
+            export_value = {
+                "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_EXPORT",
+                "generationId": release_id, "contractSha256": bind(disposable_contract)["sha256"],
+                "outcome": "SUCCESS", "artifacts": [
+                    {"name": "package", "path": str(output / f"{release_id}.tar.xz"),
+                     "sha256": bind(output / f"{release_id}.tar.xz")["sha256"]},
+                    {"name": "manifest", "path": str(root / "manifest.json"),
+                     "sha256": bind(root / "manifest.json")["sha256"]},
+                    {"name": "index", "path": str(root / "index.sha256"),
+                     "sha256": bind(root / "index.sha256")["sha256"]},
+                    {"name": "generation-contract", "path": str(copied["generation-artifacts.private.json"]),
+                     "sha256": bind(copied["generation-artifacts.private.json"])["sha256"]},
+                    {"name": "generation-lifecycle", "path": str(copied["generation-lifecycle.private.json"]),
+                     "sha256": bind(copied["generation-lifecycle.private.json"])["sha256"]},
+                ],
+            }
+            write(export_receipt, json.dumps(export_value), 0o600)
+            lifecycle_value["exportReceiptSha256"] = bind(export_receipt)["sha256"]
+            write(disposable_lifecycle, json.dumps(lifecycle_value), 0o600)
+            handoff = evidence / "handoff.schema3.private.json"
+            handoff_value = {
+                "schemaVersion": 3, "builderPolicy": bind(builder_policy),
+                "contract": bind(copied["generation-artifacts.private.json"]),
+                "lifecycle": bind(copied["generation-lifecycle.private.json"]),
+                "disposableContract": bind(disposable_contract),
+                "disposableLifecycle": bind(disposable_lifecycle),
+                "exportReceipt": bind(export_receipt), "installation": bind(installation),
+                "retentionDebt": {"state": "PENDING_RETENTION_DEBT", "generationId": release_id,
+                    "targetCommit": self.target, "disposableRoot": str(disposable_root),
+                    "rootIdentity": root_identity, "custodyRoot": str(custody_root),
+                    "retainedBytes": 0, "retainedInodes": 1,
+                    "preservedPaths": [str(disposable_root)]},
+                "packagePath": str(package), "canonicalVerifierSha256": bind(PRODUCER)["sha256"],
+            }
+            retirement = ROOT / "scripts/generation-retirement.py"
+            def verify_handoff() -> subprocess.CompletedProcess[str]:
+                write(handoff, json.dumps(handoff_value), 0o600)
+                return subprocess.run([
+                    sys.executable, str(retirement), "verify-external-handoff",
+                    "--handoff", str(handoff), "--handoff-sha256", bind(handoff)["sha256"],
+                    "--root-policy", str(receiver_policy),
+                    "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                ], text=True, capture_output=True)
+
+            verified_handoff = verify_handoff()
+            self.assertEqual(verified_handoff.returncode, 0, verified_handoff.stderr)
+            self.assertEqual(json.loads(verified_handoff.stdout)["result"],
+                             "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED")
+            wrong_scope = invoke(
+                "verify", "--target", self.target, "--release-id", release_id,
+                "--components", "api,frontend", "--release-root", str(installed),
+            )
+            self.assertEqual(wrong_scope.returncode, 2)
+            self.assertIn("release_root_inventory", wrong_scope.stderr)
+            worker = installed / "worker-runtime"
+            worker_absent = installed.parent / "worker-runtime.absent"
+            worker.rename(worker_absent)
+            absent = verify_handoff()
+            self.assertEqual(absent.returncode, 2)
+            self.assertIn("external_handoff_installation_verification", absent.stderr)
+            worker_absent.rename(worker)
+            worker_entry = worker / "dist/whatsapp-web-worker/src/index.js"
+            original_entry = worker_entry.read_bytes()
+            worker_entry.write_bytes(original_entry + b"drift\n")
+            drift = verify_handoff()
+            self.assertEqual(drift.returncode, 2)
+            self.assertIn("external_handoff_installation_verification", drift.stderr)
+            worker_entry.write_bytes(original_entry)
         finally:
             shutil.rmtree(output, ignore_errors=True)
 
