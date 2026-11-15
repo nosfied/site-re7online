@@ -17470,7 +17470,15 @@ test("accepted campaign return selects one human conversation before delayed Met
   const hybridIdentity = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: businessClientId });
   assert.equal(hybridIdentity.meta.canonicalNumber, publicNumber);
   assert.equal(hybridIdentity.web.canonicalNumber, publicNumber);
-  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: campaignWaId } }), 0);
+  await deliverCampaignOutbound(created.body.campaign.id);
+  const conversationBeforeWebInbound = await prisma.conversation.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId: campaignWaId } },
+  });
+  assert.equal(
+    await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: campaignWaId } }),
+    0,
+    "the Meta receipt may correlate the canonical conversation but must not enqueue human work"
+  );
   const inbound = await ingestBaileysWebSessionMessage({
     clientId: businessClientId, tenantKey: `${prefix}-business`,
     channelAccountDbId: "hybrid-web-account", channelAccountId: "hybrid-web-account",
@@ -17483,6 +17491,7 @@ test("accepted campaign return selects one human conversation before delayed Met
   assert.equal(inbound.action, "persisted", JSON.stringify(inbound));
   const conversation = await prisma.conversation.findUniqueOrThrow({ where: { clientId_waId: { clientId: businessClientId, waId: campaignWaId } } });
   const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { clientId_waId: { clientId: businessClientId, waId: campaignWaId } } });
+  assert.equal(conversation.id, conversationBeforeWebInbound.id);
   assert.equal(conversation.windowIsOpen, true);
   assert.ok(conversation.lastInboundAt);
   assert.equal(runtime.mode, "HUMAN");
@@ -17500,7 +17509,7 @@ test("accepted campaign return selects one human conversation before delayed Met
   await prisma.conversation.update({ where: { id: conversation.id }, data: { departmentId: businessReturnDepartmentId } });
   const beforeReceipt = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: runtime.id } });
   assert.equal(beforeReceipt.assignedUserId, returnAdmin.id);
-  await deliverCampaignOutbound(created.body.campaign.id);
+  await deliverCampaignOutbound(created.body.campaign.id, 1, "read");
   const afterReceipt = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: runtime.id } });
   assert.equal(afterReceipt.mode, "HUMAN");
   assert.equal(afterReceipt.status, beforeReceipt.status);

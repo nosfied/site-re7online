@@ -57,6 +57,12 @@ import {
   InboxConversationQueryRegistry,
 } from "@/lib/inboxConversationSearch";
 import {
+  conversationMatchesPrimaryFilter,
+  decideInboxFilterTransition,
+  hasUnsentInboxComposition,
+  shouldPublishInboxTimelineResponse,
+} from "@/lib/inboxFilterTransition";
+import {
   addAutoReadSuppressionKeys,
   clearAutoReadSuppressionKeys,
   hasAutoReadSuppressionKey,
@@ -4279,21 +4285,22 @@ export default function AppInboxPage() {
         selectedTimelineAbortRef.current = null;
       }
     }
-    if (requestSeq !== detailRequestSeqRef.current) return;
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
     const selectedIdentityCandidates =
       selectedConversationIdentityCandidatesRef.current.length > 0
         ? selectedConversationIdentityCandidatesRef.current
         : [selectedConversationKey, selectedConversationWaId, waId].filter(Boolean);
-    if (
-      selectedConversationKey &&
-      !conversationIdentityMatches(selectedIdentityCandidates, [
+    if (!shouldPublishInboxTimelineResponse({
+      requestSequence: requestSeq,
+      currentSequence: detailRequestSeqRef.current,
+      expectedConversationIdentities: selectedIdentityCandidates,
+      responseConversationIdentities: [
         responseConversationKey,
         response.waId,
         response.waIdCanonical,
         waId,
-      ])
-    ) {
+      ],
+    })) {
       return;
     }
     const authorizedResponseItems =
@@ -4555,16 +4562,19 @@ export default function AppInboxPage() {
         if (selectedTimelineAbortRef.current === controller) {
           selectedTimelineAbortRef.current = null;
         }
-        if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
+        if (cancelled) return;
         const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-        if (
-          !conversationIdentityMatches(selectedIdentityCandidates, [
+        if (!shouldPublishInboxTimelineResponse({
+          requestSequence: requestSeq,
+          currentSequence: detailRequestSeqRef.current,
+          expectedConversationIdentities: selectedIdentityCandidates,
+          responseConversationIdentities: [
             responseConversationKey,
             response.waId,
             response.waIdCanonical,
             selectedConversationWaId,
-          ])
-        ) {
+          ],
+        })) {
           if (process.env.NODE_ENV !== "production") {
             console.warn("[inbox] timeline response ignored by identity mismatch", {
               expected: selectedIdentityCandidates,
@@ -5095,7 +5105,6 @@ export default function AppInboxPage() {
       if (conversationChannelFilter !== "ALL" && getConversationChannel(item) !== conversationChannelFilter) {
         return false;
       }
-      const status = getConversationOperationalStatus(item);
       switch (conversationQuickFilter) {
         case "UNREAD":
           if (!isConversationUnreadForUser(item, readState, session?.user)) return false;
@@ -5109,22 +5118,7 @@ export default function AppInboxPage() {
         default:
           break;
       }
-      if (conversationFilter !== "AUTOMATION" && isAutomationQueueConversation(item)) return false;
-      switch (conversationFilter) {
-        case "AUTOMATION":
-          return isAutomationQueueConversation(item);
-        case "WAITING":
-        case "IN_PROGRESS":
-        case "WAITING_USER":
-        case "CLOSED":
-          return status === conversationFilter;
-        case "MINE":
-          return item.assignedUserId === session?.user.id;
-        case "UNASSIGNED":
-          return !item.assignedUserId;
-        default:
-          return true;
-      }
+      return conversationMatchesPrimaryFilter(item, conversationFilter, session?.user.id);
     });
   }, [
     conversationChannelFilter,
@@ -5182,8 +5176,36 @@ export default function AppInboxPage() {
   const hasMoreConversationFilter =
     Boolean(selectedMoreConversationFilter) ||
     conversationQuickFilter !== "ALL";
+  const hasUnsentComposition = hasUnsentInboxComposition({
+    draft: messageDraft,
+    hasReplyTarget: Boolean(replyTarget),
+    hasMedia: Boolean(selectedMediaFile),
+    audioState: audioRecordingState,
+  });
+  const selectedConversationOutsideCurrentFilter = Boolean(
+    selectedConversation &&
+    !conversationMatchesPrimaryFilter(
+      selectedConversation,
+      conversationFilter,
+      session?.user.id
+    )
+  );
   const applyConversationFilter = useCallback((filter: ConversationFilter) => {
-    if (filter !== conversationFilter) {
+    const decision = decideInboxFilterTransition({
+      filterChanged: filter !== conversationFilter,
+      hasSelection: Boolean(selectedConversation),
+      selectionMatchesNextFilter: Boolean(
+        selectedConversation &&
+        conversationMatchesPrimaryFilter(selectedConversation, filter, session?.user.id)
+      ),
+      composition: {
+        draft: messageDraft,
+        hasReplyTarget: Boolean(replyTarget),
+        hasMedia: Boolean(selectedMediaFile),
+        audioState: audioRecordingState,
+      },
+    });
+    if (decision === "clear") {
       clearSelectedConversation();
     }
     setConversationFilter(filter);
@@ -5192,7 +5214,25 @@ export default function AppInboxPage() {
       setConversationQuickFilter("ALL");
     }
     setShowMoreConversationFilters(false);
-  }, [clearSelectedConversation, conversationFilter]);
+  }, [
+    audioRecordingState,
+    clearSelectedConversation,
+    conversationFilter,
+    messageDraft,
+    replyTarget,
+    selectedConversation,
+    selectedMediaFile,
+    session?.user.id,
+  ]);
+
+  useEffect(() => {
+    if (!selectedConversationOutsideCurrentFilter || hasUnsentComposition) return;
+    clearSelectedConversation();
+  }, [
+    clearSelectedConversation,
+    hasUnsentComposition,
+    selectedConversationOutsideCurrentFilter,
+  ]);
 
   const canReply = useMemo(
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
@@ -8046,6 +8086,17 @@ export default function AppInboxPage() {
                     {selectedConversation.continuation.linkedAt
                       ? ` • vinculada em ${formatDateTime(selectedConversation.continuation.linkedAt)}`
                       : ""}
+                  </span>
+                </div>
+              ) : null}
+              {selectedConversationOutsideCurrentFilter ? (
+                <div
+                  className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-950 shadow-sm"
+                  role="status"
+                >
+                  <span aria-hidden="true">✎</span>
+                  <span className="min-w-0 truncate">
+                    Esta conversa está fora do filtro atual e foi mantida para preservar seu rascunho ou anexo.
                   </span>
                 </div>
               ) : null}
