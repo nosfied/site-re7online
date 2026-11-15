@@ -23,6 +23,14 @@ atribuídos à retirada. As dívidas externas históricas e a geração builder 
 continuam independentes; `DEPLOYED_RETENTION_INCOMPLETE` permanece o estado
 imutável da fotografia de conclusão produtiva.
 
+**Incidente 3/3 de 15/11/2026:** a tentativa de promover `ed74c483` terminou em
+rollback canônico verificado. API/frontend `fa10f4f5` e worker `e2e7f17a` foram
+restaurados, `saveCount=0` e a transação é terminal. A candidata permanece
+instalada e inativa, reutilizável apenas por nova transação. PRs #404/#405
+corrigiram respectivamente o escopo do handoff e a identidade real dos logs PM2;
+eles não convertem o journal terminal em autorização. A próxima janela depende de
+ensaio integrado do driver 3/3 com PM2 6.0.14 real e destinos exclusivos novos.
+
 **Posicionamento arquitetural vigente:** builder externo descartável é o caminho
 normal de produção de novas gerações, comprovado em API-only, API+frontend e no
 pacote API+frontend+worker `ed74c483`. A autorização continua sendo por fase:

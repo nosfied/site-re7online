@@ -1,5 +1,40 @@
 # Estado canônico do Converta
 
+## Incidente de implantação 3/3 e retorno terminal — 15/11/2026
+
+**ROLLED_BACK / PRODUCTION RESTORED / CANDIDATE INSTALLED INACTIVE.** A
+transação da release `immutable-ed74c483-external-20261115T162015Z` terminou em
+`ROLLED_BACK`; ela é terminal e não pode ser reaberta. O journal terminal tem
+SHA-256 `adb85d3d828c7a012ef7c00ef4695c31b3001d0d07ea9626d80cb2360072763f`,
+`saveCount=0`, o lock canônico está ausente e o dump PM2 permaneceu
+`3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a`.
+
+A produção voltou fisicamente para API e frontend
+`immutable-fa10f4f5-external-20261112T233820Z` e worker
+`immutable-e2e7f17a-20261022T005110Z`. Na fotografia forense somente leitura,
+os três processos estavam online, API local/pública e banco saudáveis e frontend
+HTTP 200. A candidata `ed74c483` permanece instalada e autenticada, mas não está
+selecionada: pacote
+`0570b8e86ed189d2383a445ebd11c5ef0654dcc387d252e7dfaaad194f536fcf`
+e BUILD_ID `DL7flKybPJUYQKtRLSuch`. Não reconstruir, reenviar ou reinstalar
+esses bytes.
+
+O incidente expôs duas fronteiras de integração já corrigidas no código: escopo
+3/3 do handoff (PR #404) e reconhecimento dos caminhos de log apresentados pelo
+PM2 6.0.14 durante rollback do worker (PR #405, control plane
+`23819c07d198631a8c8a1827a31bb3bd1e44f23f`). Os bindings/fontes PM2 e as
+correções dos PRs #403–#405 permanecem evidências reutilizáveis, mas não concedem
+autoridade para outra mutação.
+
+Uma próxima tentativa exige **transação independente**, destinos de journal,
+receipt e evidências fisicamente ausentes, fotografia nova de produção/retornos,
+lock livre, bindings reabertos por SHA, preflight novo e autorização faseada do
+owner. Antes disso, o percurso integrado precisa atravessar produtor → instalador
+→ materializador/`validate-pair` → handoff/preflight → activate/rollback com PM2
+6.0.14 real. A CI atual prova esses contratos em ensaios complementares, mas a
+ativação/retomada 3/3 do driver ainda usa `FakeHost`; portanto a requalificação
+integral permanece bloqueada, sem efeito produtivo nesta reconciliação.
+
 ## Auditoria integral e retorno ao backlog — 14/11/2026
 
 **PROJECT_AUDIT_COMPLETE / BACKLOG_READY.** A auditoria única confrontou Git,
