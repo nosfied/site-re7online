@@ -861,6 +861,7 @@ class Driver:
             deny("worker_rollback_continuation_schema")
         if (value.get("releaseId") != self.inputs.release or
                 value.get("targetCommit") != self.inputs.target or
+                self.inputs.components != THREE_COMPONENTS or
                 value.get("transactionRoot") != str(self.inputs.transaction_root) or
                 value.get("originalControlPlane") != self.inputs.control_plane or
                 not SHA40.fullmatch(str(value.get("continuationControlPlane", ""))) or
@@ -882,6 +883,8 @@ class Driver:
         transition = journal.get("workerActivationTransition")
         if (journal.get("state") != "FAILED" or journal.get("recoveryAction") != "rollback" or
                 journal.get("saveCount") != 0 or not isinstance(transition, dict) or
+                journal.get("components") != list(THREE_COMPONENTS) or
+                journal.get("activationAttempted") != list(THREE_COMPONENTS) or
                 transition.get("state") != "START_CONFIRMED"):
             deny("worker_rollback_continuation_state")
         definition = value.get("candidateDefinition")
@@ -921,6 +924,9 @@ class Driver:
         return value
 
     def _control_head(self, continuation_journal: dict[str, Any] | None = None) -> None:
+        if (self.inputs.runtime_cache_reconciliation is not None and
+                self.inputs.worker_rollback_continuation is not None):
+            deny("continuation_binding_conflict")
         result = self.host.run(["git", "-C", str(self.repo), "rev-parse", "HEAD"])
         if result.returncode:
             deny("control_plane_identity")
