@@ -34,3 +34,20 @@ test("the complete query key is scoped to authenticated tenant, user and token",
   assert.match(keyBlock, /token: session\.token/);
 });
 
+test("changing the conversation filter clears stale selection and aborts an out-of-order timeline", () => {
+  const clearStart = source.indexOf("const clearSelectedConversation = useCallback");
+  const clearEnd = source.indexOf("}, [abortSelectedTimelineRequest]", clearStart);
+  const clearBlock = source.slice(clearStart, clearEnd);
+  assert.match(clearBlock, /abortSelectedTimelineRequest\(\)/);
+  assert.match(clearBlock, /detailRequestSeqRef\.current \+= 1/);
+  assert.match(clearBlock, /setSelectedConversationKey\(null\)/);
+  assert.match(clearBlock, /setMessages\(\[\]\)/);
+
+  const filterStart = source.indexOf("const applyConversationFilter = useCallback");
+  const filterEnd = source.indexOf("const canReply = useMemo", filterStart);
+  const filterBlock = source.slice(filterStart, filterEnd);
+  assert.match(filterBlock, /if \(filter !== conversationFilter\)/);
+  assert.match(filterBlock, /clearSelectedConversation\(\)/);
+  assert.match(filterBlock, /\[clearSelectedConversation, conversationFilter\]/);
+});
+

@@ -5183,13 +5183,16 @@ export default function AppInboxPage() {
     Boolean(selectedMoreConversationFilter) ||
     conversationQuickFilter !== "ALL";
   const applyConversationFilter = useCallback((filter: ConversationFilter) => {
+    if (filter !== conversationFilter) {
+      clearSelectedConversation();
+    }
     setConversationFilter(filter);
     if (filter === "ALL") {
       setConversationChannelFilter("ALL");
       setConversationQuickFilter("ALL");
     }
     setShowMoreConversationFilters(false);
-  }, []);
+  }, [clearSelectedConversation, conversationFilter]);
 
   const canReply = useMemo(
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),

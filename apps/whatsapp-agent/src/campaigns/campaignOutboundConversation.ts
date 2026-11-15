@@ -14,6 +14,7 @@ function buildWhatsAppExternalUserHash(waIdCanonical: string) {
 }
 
 type CampaignDb = PrismaClient | Prisma.TransactionClient;
+type CampaignConversationMaterializationTrigger = "provider_receipt" | "inbound";
 
 function transactionClient(db: CampaignDb) {
   return "$transaction" in db ? undefined : db as Prisma.TransactionClient;
@@ -290,6 +291,7 @@ export async function ensureCampaignOutboundConversationUnlocked(
     source: "campaign" | "manual" | "bot";
     conversationId?: string | null;
     returnDestination?: OutboundReturnDestination | null;
+    materializationTrigger?: CampaignConversationMaterializationTrigger;
   },
   precomputedDefaults?: Awaited<ReturnType<typeof ensureDefaultOperationalDepartmentAndQueue>> | null
 ) {
@@ -321,6 +323,9 @@ export async function ensureCampaignOutboundConversationUnlocked(
           flow: null,
           chatbotNodeId: null,
         };
+  const materializationTrigger = params.materializationTrigger ?? "provider_receipt";
+  const shouldActivateReturnDestination =
+    materializationTrigger === "inbound" || params.returnDestination?.type !== "human_department";
   const existing = params.conversationId
     ? await prisma.conversation.findFirst({
         where: {
@@ -368,10 +373,72 @@ export async function ensureCampaignOutboundConversationUnlocked(
     let applied = false;
     try {
       await inCampaignTransaction(prisma, async (tx) => {
+        if (materializationTrigger === "inbound") {
+          const currentRuntime = await tx.conversationRuntimeState.findFirst({
+            where: {
+              clientId: params.clientId,
+              OR: [{ waId: params.waId }, { waIdCanonical }],
+            },
+            select: { id: true },
+          });
+          if (currentRuntime) return;
+          await tx.conversation.updateMany({
+            where: { id: existing.id, clientId: params.clientId },
+            data: {
+              departmentId: conversationDepartmentId,
+              deletedAt: null,
+              lastOutboundAt: params.sentAt,
+            },
+          });
+          await tx.conversationRuntimeState.create({
+            data: {
+              clientId: params.clientId,
+              waId: params.waId,
+              waIdCanonical,
+              conversationKey: makeConversationKey(params.clientKey, params.waId),
+              channel: "whatsapp",
+              provider: "meta",
+              firstSeenAt: params.sentAt,
+              windowIsOpen: false,
+              windowExpiresAt: null,
+              lastInboundAt: null,
+              lastOutboundAt: params.sentAt,
+              lastOutboundMessageId: params.messageId,
+              mode: runtimeDestination.mode,
+              status: runtimeDestination.status,
+              departmentId: runtimeDestination.departmentId,
+              queueId: runtimeDestination.queueId,
+              chatbotActive: runtimeDestination.chatbotActive,
+              flow: runtimeDestination.flow,
+              chatbotNodeId: runtimeDestination.chatbotNodeId,
+              answers: {},
+            },
+          });
+          return;
+        }
         // The outbound activity write after provider acceptance changes runtime.updatedAt.
         // Compare the pre-provider operational version instead; it is not changed by
         // that activity write, but human runtime transitions increment it.
         if (!params.submissionConversationUpdatedAt) throw new SupersededCampaignReceipt();
+        if (!shouldActivateReturnDestination) {
+          const currentRuntime = await tx.conversationRuntimeState.findFirst({
+            where: {
+              clientId: params.clientId,
+              OR: [{ waId: params.waId }, { waIdCanonical }],
+            },
+            select: { version: true },
+          });
+          if (currentRuntime) {
+            if (
+              params.submissionRuntimeVersion === undefined ||
+              params.submissionRuntimeVersion === null ||
+              currentRuntime.version !== params.submissionRuntimeVersion
+            ) {
+              throw new SupersededCampaignReceipt();
+            }
+            return;
+          }
+        }
         const conversationUpdate = await tx.conversation.updateMany({
           where: {
             id: existing.id,
@@ -385,6 +452,7 @@ export async function ensureCampaignOutboundConversationUnlocked(
           },
         });
         if (conversationUpdate.count === 0) throw new SupersededCampaignReceipt();
+        if (!shouldActivateReturnDestination) return;
         const runtimeUpdate = params.submissionRuntimeVersion === undefined || params.submissionRuntimeVersion === null
           ? { count: 0 }
           : await tx.conversationRuntimeState.updateMany({
@@ -500,7 +568,8 @@ export async function ensureCampaignOutboundConversationUnlocked(
     select: { id: true },
   });
 
-  await prisma.conversationRuntimeState.upsert({
+  if (shouldActivateReturnDestination) {
+    await prisma.conversationRuntimeState.upsert({
     where: {
       clientId_waId: {
         clientId: params.clientId,
@@ -533,7 +602,8 @@ export async function ensureCampaignOutboundConversationUnlocked(
       chatbotNodeId: runtimeDestination.chatbotNodeId,
       answers: {},
     },
-  });
+    });
+  }
 
   await persistEvent({
     clientId: params.clientId,
