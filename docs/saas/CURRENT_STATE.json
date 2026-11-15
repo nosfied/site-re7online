@@ -1,6 +1,6 @@
 {
   "schemaVersion": 8,
-  "updatedAtUtc": "2026-11-14T20:54:02Z",
+  "updatedAtUtc": "2026-11-15T21:39:46Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
@@ -2336,6 +2336,44 @@
     ],
     "p00ReopenPermitted": false,
     "functionalBacklogMayProceedIndependently": true
+  },
+  "externalThreeComponentIncident20261115": {
+    "state": "ROLLED_BACK_PRODUCTION_RESTORED_CANDIDATE_INSTALLED_INACTIVE",
+    "target": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+    "candidateRelease": "immutable-ed74c483-external-20261115T162015Z",
+    "candidateSelected": false,
+    "packageSha256": "0570b8e86ed189d2383a445ebd11c5ef0654dcc387d252e7dfaaad194f536fcf",
+    "frontendBuildId": "DL7flKybPJUYQKtRLSuch",
+    "correctiveControlPlane": "23819c07d198631a8c8a1827a31bb3bd1e44f23f",
+    "terminalJournalSha256": "adb85d3d828c7a012ef7c00ef4695c31b3001d0d07ea9626d80cb2360072763f",
+    "saveCount": 0,
+    "deploymentLockPresent": false,
+    "pm2DumpSha256": "3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a",
+    "restoredReleases": {
+      "api": "immutable-fa10f4f5-external-20261112T233820Z",
+      "frontend": "immutable-fa10f4f5-external-20261112T233820Z",
+      "worker": "immutable-e2e7f17a-20261022T005110Z"
+    },
+    "integratedCorrections": [
+      "PR403_WORKER_PM2_AUTHENTICATED_SUCCESSION",
+      "PR404_HANDOFF_AUTHENTICATED_COMPONENT_SCOPE",
+      "PR405_PM2_6_0_14_RUNTIME_LOG_IDENTITY"
+    ],
+    "transactionReusable": false,
+    "candidateArtifactsReusable": true,
+    "requalification": {
+      "state": "EXTERNAL_PIPELINE_REQUALIFICATION_BLOCKED",
+      "gap": "THREE_COMPONENT_DRIVER_ACTIVATE_ROLLBACK_NOT_EXECUTED_AGAINST_REAL_PM2_IN_ONE_INTEGRATED_REHEARSAL",
+      "existingRealPm2ProofsPreserved": true,
+      "productionMutationPerformed": false
+    },
+    "nextTransactionRequirements": [
+      "new transaction and exclusive absent evidence destinations",
+      "fresh production and rollback snapshot",
+      "authenticated PM2 bindings and sources reopened by SHA-256",
+      "new preflight journal",
+      "owner authorization by phase"
+    ]
   },
   "p00TerminalClosure20261114": {
     "state": "P00_EXTRAORDINARY_CLEANUP_CLOSED_TERMINAL_SANITIZED_DO_NOT_REPEAT",

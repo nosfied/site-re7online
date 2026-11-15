@@ -137,3 +137,60 @@ papel), #207 (manifesto privado), #231 (materialização), #233 (dispensa soment
 quando não há substituição) e #401 (pipeline/rollback 3/3). A release instalada e
 os efeitos anteriores permanecem intactos; a continuação usa control plane sucessor
 e manifesto privado schema 3, sem rebuild, reupload ou reinstalação.
+
+## Resultado produtivo e fronteira de retomada
+
+A primeira ativação 3/3 não concluiu: a identidade do worker após `start` foi
+negada porque o comparador esperava campos de configuração de log que o `jlist`
+real do PM2 6.0.14 não reproduz. O rollback canônico posterior restaurou API e
+frontend `fa10f4f5` e worker `e2e7f17a`. O journal terminal `ROLLED_BACK` tem
+SHA-256 `adb85d3d828c7a012ef7c00ef4695c31b3001d0d07ea9626d80cb2360072763f`,
+`saveCount=0`; essa transação não pode ser reaberta.
+
+O PR #405 passou a reutilizar
+`pm2-definition-control.py::validate_runtime_log_paths()` na identificação do
+worker e preservou estritos PID/start ticks, runtime, ambiente e cardinalidade.
+Pacote, release instalada, manifesto, índice, bindings e retornos continuam
+reutilizáveis em uma **nova** transação, sem rebuild/upload/install.
+
+### Matriz de reutilização
+
+| Evidência | Fonte | Decisão |
+| --- | --- | --- |
+| pacote/manifesto/índice 3/3 e installation receipt | geração `ed74c483` exportada e instalada | preservar e reabrir por hash |
+| fontes, requests e bindings PM2 | sucessão autenticada do PR #403 | preservar; novos destinos somente se o contrato exigir |
+| escopo do handoff | PR #404 | reutilizar consumidor corrigido |
+| normalização de logs PM2 real | PRs #199 e #405 | reutilizar a única função canônica |
+| journal terminal do incidente | receipt `ROLLED_BACK` | preservar; jamais reutilizar como transação |
+| retornos `fa10f4f5`/`e2e7f17a` | seleção física restaurada | preservar e recapturar identidade volátil |
+
+### Estado da requalificação isolada
+
+A CI existente executa produtor → pacote → instalação e um drill com PM2 6.0.14
+real em `verify-disposable-builder-lifecycle.py`; também prova definições
+candidata/retorno no PM2 real por `verify-pm2-definition-isolated.py`. O teste do
+driver cobre 3/3, falha entre delete/start, rollback inverso, interrupção/retomada,
+destinos exclusivos, continuidade de journal/control plane e `jlist` realista,
+mas usa `FakeHost`. Não há ainda um único ensaio que conecte o driver real ao PM2
+real. Essa é uma limitação crítica e mantém
+`EXTERNAL_PIPELINE_REQUALIFICATION_BLOCKED`; não se presume homologação somando
+ensaios separados.
+
+A menor correção é estender o verificador isolado existente — sem novo pipeline —
+para fornecer ao driver suas interfaces reais e executar os mesmos cenários contra
+um `PM2_HOME` temporário com PM2 6.0.14 pinado. O gate deve negar PID/start ticks,
+runtime, ambiente ou logs divergentes e comprovar ausência de daemon/processos ao
+terminar. Só então o owner poderá revisar uma nova transação com release
+`immutable-ed74c483-external-20261115T162015Z`, target `ed74c483…`, control plane
+corretivo autenticado, novos journal/receipt roots ausentes, retornos atuais e
+rollback worker → frontend → API. Esta reconciliação não executou efeito produtivo.
+
+Em 15/11, a repetição local das provas existentes usou PM2 6.0.14 pinado,
+`PM2_HOME` temporário e o `umask 0022` exigido pelas identidades canônicas:
+`verify-pm2-definition-isolated.py` terminou em
+`PM2_SOURCE_PROVENANCE_AND_ROLLBACK_PASS` e
+`verify-disposable-builder-lifecycle.py` em
+`DISPOSABLE_BUILDER_PM2_LIFECYCLE_PASS`; os 82 testes do driver também passaram.
+O host local executava Node v22.13.0, enquanto a CI fixa Node 20.20.0. Essa
+diferença não invalida a prova do formato PM2, mas impede tratá-la como substituta
+da CI e reforça que o ensaio integrado ausente deve rodar com a toolchain pinada.
