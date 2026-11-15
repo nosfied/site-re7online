@@ -271,7 +271,10 @@ como diretório `deploy:deploy 0700`, sem symlink, enquanto o receipt final não
 Permissão do checkout não substitui permissão da cópia privada consumida.
 
 Uma seleção fixed-current parcial não reduz o payload: pacote, manifesto e índice
-continuam API+frontend. O marker lista os componentes promovidos; release não selecionada,
+continuam API+frontend. Quando a matriz exige worker, o contrato fechado 3/3 acrescenta
+`worker-runtime` ao mesmo pacote, índice, verificação, instalação inerte e lifecycle;
+a raiz descartável e o staging continuam retirados pela mesma geração, sem criar
+uma segunda dívida. O marker lista os componentes promovidos; release não selecionada,
 frontend/worker vivos e seus symlinks permanecem dependências protegidas até nova janela.
 
 A execução da retirada preserva e sincroniza stdout, stderr e exit code integrais,

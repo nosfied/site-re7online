@@ -81,13 +81,15 @@ for marker in ("preflight", "activate", "finalize", "rollback", "status",
 for marker in ('choices=("preflight", "activate", "finalize", "rollback", "status")',
                "pm2-definition-control.py", '"wait-existing-readiness"',
                '"--runtime-manifest"', '["restart", name]', '"ACEITE TÉCNICO PASS"',
-               'SUPPORTED_COMPONENT_SETS = (("api",), COMPONENTS)',
-               'payload["components"] = ["api"]',
+               'SUPPORTED_COMPONENT_SETS = (("api",), COMPONENTS, THREE_COMPONENTS)',
+               'payload["components"] = list(self.inputs.components)',
+               'if component == "worker":',
+               '["delete", name]', '["start", str(definition), "--only", name]',
+               '"validate-pair", *arguments',
                '"--deployment-lock-fd", str(EXTERNAL_LOCK_FD)',
                'pass_fds=(EXTERNAL_LOCK_FD,), env=environment'):
     require(marker in driver, f"minimal deploy driver marker {marker}")
-for forbidden in ('pm2_mutate(pm2, ["delete"', 'pm2_mutate(pm2, ["start"',
-                  '"--update-env"', '"validate-pair"'):
+for forbidden in ('"--update-env"',):
     require(forbidden not in driver, f"fixed-current driver forbidden marker {forbidden}")
 for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH',
                '"schemaVersion": 1', 'RELEASE VERIFIED',
@@ -109,10 +111,11 @@ require("CAPACITY_RECOVERY_POLICY.md" in runbook,
         "runbook canonical capacity recovery policy")
 control = (ROOT / "scripts/pm2-definition-control.py").read_text()
 for marker in (
-    'READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0}',
+    'READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0, "worker": 30.0}',
     "READINESS_POLL_MAX_SECONDS = 0.5",
     "READINESS_STABLE_SAMPLES = 3",
     'commands.add_parser("wait-readiness")',
+    'commands.add_parser("wait-worker-readiness")',
     'READINESS_TIMEOUT:{component}:{port}',
 ):
     require(marker in control, f"versioned readiness marker {marker}")

@@ -58,7 +58,7 @@ SOURCE_AUTHORITIES = {
     "candidate": "new-release-config",
     "rollback": "proven-production-definition",
 }
-READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0}
+READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0, "worker": 30.0}
 READINESS_POLL_MAX_SECONDS = 0.5
 READINESS_STABLE_SAMPLES = 3
 
@@ -652,6 +652,61 @@ def validate_physical_release(component: str, app: dict[str, Any], release_ident
         build_id = (physical_root / ".next/BUILD_ID").read_text().strip()
         if build_id != release_identity["frontendBuildId"]:
             deny("readiness_frontend_build_id")
+    if component == "worker" and digest(resolved_script.read_bytes()) != release_identity["workerEntrySha256"]:
+        deny("readiness_worker_entry_sha256")
+
+
+def wait_for_worker_readiness(
+    *, app: dict[str, Any], release_identity: dict[str, Any], pm2: Path,
+    stable_path: Path, release_root: Path, deadline_seconds: float,
+    poll_seconds: float, monotonic: Callable[[], float] = time.monotonic,
+    sleeper: Callable[[float], None] = time.sleep,
+    process_reader: Callable[[], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Authenticate one stable worker without requiring an application data probe.
+
+    The worker has no public health endpoint.  Readiness therefore binds the sole
+    PM2 registration, PID/start ticks, lexical stable paths, physical release,
+    interpreter and entrypoint hash for three consecutive samples.  Activation
+    deletes the prior registration before starting this definition, so the PM2
+    cardinality check also prevents overlapping workers and duplicate job claims.
+    """
+    if deadline_seconds != READINESS_DEADLINES["worker"]:
+        deny("readiness_deadline_contract")
+    if poll_seconds <= 0 or poll_seconds > READINESS_POLL_MAX_SECONDS:
+        deny("readiness_poll_contract")
+    started = monotonic(); deadline = started + deadline_seconds
+    previous: tuple[Any, ...] | None = None; stable = total = resets = 0
+    while True:
+        now = monotonic()
+        if now >= deadline:
+            deny("READINESS_TIMEOUT:worker")
+        row = process_reader() if process_reader else pm2_process_row(pm2, app["name"])
+        loaded = row.get("pm2_env", {}); pid = int(row.get("pid") or 0)
+        if pid <= 0 or loaded.get("status") != "online":
+            stable = 0; previous = None; resets += 1
+            sleeper(min(poll_seconds, max(0.0, deadline - monotonic()))); continue
+        if loaded.get("pm_cwd") != app["cwd"] or loaded.get("pm_exec_path") != app["script"]:
+            deny("readiness_pm2_lexical_identity")
+        ticks = int(row["ticks"]) if process_reader else process_stat(pid)["ticks"]
+        link = symlink_identity(stable_path, release_root)
+        if process_reader is None:
+            validate_physical_release("worker", app, release_identity, release_root, pid)
+        sample = (pid, ticks, link["device"], link["inode"], link["textTarget"], link["resolvedTarget"])
+        total += 1
+        if sample == previous:
+            stable += 1
+        else:
+            if previous is not None: resets += 1
+            previous = sample; stable = 1
+        if stable >= READINESS_STABLE_SAMPLES:
+            finished = monotonic()
+            return {"result": "READINESS_PASS", "component": "worker", "pid": pid,
+                    "startTicks": ticks, "stableSamples": stable, "totalSamples": total,
+                    "stabilityResets": resets, "elapsedSeconds": finished - started,
+                    "deadlineSeconds": deadline_seconds, "pollSeconds": poll_seconds,
+                    "processCardinality": 1, "duplicateWorkerPrevented": True}
+        sleeper(min(poll_seconds, max(0.0, deadline - monotonic())))
 
 
 def wait_for_readiness(
@@ -796,6 +851,29 @@ def command_wait_readiness(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+def command_wait_worker_readiness(args: argparse.Namespace) -> dict[str, Any]:
+    binding = load_binding(args.request, args.source_artifact, args.source_sha256)
+    definition, raw, _ = read_private_json(args.definition)
+    if raw != binding["definitionRaw"]:
+        deny("definition_not_source_exact")
+    if binding["request"]["component"] != "worker":
+        deny("worker_readiness_component")
+    app = definition["apps"][0]
+    if Path(app["cwd"]) != args.stable_path:
+        deny("readiness_stable_path_contract")
+    result = wait_for_worker_readiness(
+        app=app, release_identity=binding["source"]["releaseIdentity"], pm2=args.pm2,
+        stable_path=args.stable_path, release_root=args.release_root,
+        deadline_seconds=args.deadline_seconds, poll_seconds=args.poll_seconds,
+    )
+    result.update({"releaseId": binding["source"]["releaseIdentity"]["releaseId"],
+                   "configurationSha256": binding["configurationSha256"],
+                   "sourceArtifactSha256": binding["sourceSha256"]})
+    if args.report is not None:
+        write_private_exclusive(args.report, canonical(result))
+    return result
+
+
 
 def command_wait_existing_readiness(args: argparse.Namespace) -> dict[str, Any]:
     """Observe an already-registered PM2 process without building executable configuration."""
@@ -900,6 +978,16 @@ def parser() -> argparse.ArgumentParser:
     readiness.add_argument("--poll-seconds", type=float, required=True)
     readiness.add_argument("--report", type=Path)
     readiness.set_defaults(function=command_wait_readiness)
+    worker_readiness = commands.add_parser("wait-worker-readiness")
+    add_binding_arguments(worker_readiness)
+    worker_readiness.add_argument("--definition", type=Path, required=True)
+    worker_readiness.add_argument("--pm2", type=Path, required=True)
+    worker_readiness.add_argument("--stable-path", type=Path, required=True)
+    worker_readiness.add_argument("--release-root", type=Path, required=True)
+    worker_readiness.add_argument("--deadline-seconds", type=float, required=True)
+    worker_readiness.add_argument("--poll-seconds", type=float, required=True)
+    worker_readiness.add_argument("--report", type=Path)
+    worker_readiness.set_defaults(function=command_wait_worker_readiness)
     existing = commands.add_parser("wait-existing-readiness")
     existing.add_argument("--component", choices=("api", "frontend"), required=True)
     existing.add_argument("--process-name", required=True)

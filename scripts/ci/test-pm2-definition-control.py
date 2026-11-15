@@ -568,13 +568,17 @@ class DefinitionControlTests(unittest.TestCase):
             self.assertEqual(result["result"], "PM2_DEFINITION_PAIR_VALID")
             self.assertFalse(result["configurationDigestsEqual"])
 
-    def test_worker_allowlist_contract_is_unchanged(self):
+    def test_worker_allowlist_contract_covers_runtime_without_inheriting_pwd(self):
         common = CONTROL.load_repository_allowlist()["worker"]["common"]
         self.assertEqual(common, {
             "DATABASE_URL", "META_APP_ID", "META_APP_SECRET", "META_GRAPH_API_VERSION",
             "NODE_ENV", "OPENAI_API_KEY", "TEMPLATE_MEDIA_ROOT", "TZ",
+            "WHATSAPP_AGENT_INTERNAL_PORT", "WHATSAPP_AGENT_INTERNAL_URL",
             "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_WABA_ID",
+            "WHATSAPP_WEB_WORKER_CONTROL_HOST", "WHATSAPP_WEB_WORKER_CONTROL_PORT",
+            "WHATSAPP_WEB_WORKER_CONTROL_TOKEN",
         })
+        self.assertNotIn("PWD", common)
         self.assertEqual(CONTROL.load_repository_allowlist()["worker"]["candidate"], set())
         self.assertEqual(CONTROL.load_repository_allowlist()["worker"]["rollbackCompatibility"], set())
 
@@ -870,6 +874,36 @@ class DefinitionControlTests(unittest.TestCase):
                 "releaseId": "immutable-candidate", "apiEntrySha256": "b" * 64,
             })
             self.assertNotIn("frontendBuildId", observed["release_identity"])
+
+    def test_worker_readiness_requires_one_stable_authenticated_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            release = root / "releases/immutable-worker/worker-runtime"
+            release.mkdir(parents=True)
+            stable = root / "current/worker"; stable.parent.mkdir()
+            stable.symlink_to(release)
+            app = {"name": "re7-whatsapp-web-worker", "cwd": str(stable),
+                   "script": str(stable / "dist/whatsapp-web-worker/src/index.js"),
+                   "interpreter": "/usr/bin/node"}
+            ticks = iter((100, 100, 100))
+            clock = {"value": 0.0}
+            def monotonic():
+                clock["value"] += 0.1
+                return clock["value"]
+            result = CONTROL.wait_for_worker_readiness(
+                app=app,
+                release_identity={"releaseId": "immutable-worker", "workerEntrySha256": "a" * 64},
+                pm2=root / "pm2", stable_path=stable, release_root=release,
+                deadline_seconds=30.0, poll_seconds=0.5,
+                monotonic=monotonic, sleeper=lambda _: None,
+                process_reader=lambda: {"name": app["name"], "pid": 77,
+                                        "ticks": next(ticks),
+                                        "pm2_env": {"status": "online", "pm_cwd": app["cwd"],
+                                                    "pm_exec_path": app["script"]}},
+            )
+            self.assertEqual(result["processCardinality"], 1)
+            self.assertTrue(result["duplicateWorkerPrevented"])
+            self.assertEqual(result["stableSamples"], 3)
 
 
     def test_sanitized_incident_fixture_contains_no_values(self):

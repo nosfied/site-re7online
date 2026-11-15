@@ -31,7 +31,7 @@ for path in "${changed_files[@]}"; do
       # complete for the break-glass lane and its historical contract tests.
       mark_backend "$path"; mark_worker "$path"
       migration_review=YES; review_required=YES; reasons+=("migration_review:$path") ;;
-    apps/whatsapp-agent/src/channels/channelAccountSecretCrypto.ts|apps/whatsapp-agent/src/db.ts|apps/whatsapp-agent/src/features/clientFeatures.ts|apps/whatsapp-agent/src/logger/logger.ts|apps/whatsapp-agent/src/web-session/*|apps/whatsapp-agent/src/web-session/**/*)
+    apps/whatsapp-agent/src/campaigns/campaignOutboundConversation.ts|apps/whatsapp-agent/src/channels/channelAccountSecretCrypto.ts|apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts|apps/whatsapp-agent/src/db.ts|apps/whatsapp-agent/src/features/clientFeatures.ts|apps/whatsapp-agent/src/logger/logger.ts|apps/whatsapp-agent/src/media/webSessionMedia.ts|apps/whatsapp-agent/src/realtime/events.ts|apps/whatsapp-agent/src/web-session/*|apps/whatsapp-agent/src/web-session/**/*)
       mark_backend "$path"; mark_worker "$path" ;;
     apps/whatsapp-agent/src/*|apps/whatsapp-agent/src/**/*)
       mark_backend "$path" ;;

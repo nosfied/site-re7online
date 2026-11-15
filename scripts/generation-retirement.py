@@ -210,7 +210,7 @@ LEGACY_123BA_BINDING = {
         "path": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/immutable-123ba7bd-vps-20261026T200100Z/index.sha256",
         "sha256": "a91323272cdcd3a91c207a18a953f11f93e346cf3bde1f976e3229829fa0e69b",
     },
-    "canonicalVerifierSha256": "3bc9a6ba5eec9e36090bcfc8bace1b3986bda5c45c5feb67483ff1defd1ae309",
+    "canonicalVerifierSha256": "e6a164bf2ead761ad2dea30c6bd4d5ed8bc2aa5f8892207449444d624a2682ad",
     "contractOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-artifacts.private.json",
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
@@ -276,7 +276,7 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
             "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
         },
     },
-    "canonicalVerifierSha256": "3bc9a6ba5eec9e36090bcfc8bace1b3986bda5c45c5feb67483ff1defd1ae309",
+    "canonicalVerifierSha256": "e6a164bf2ead761ad2dea30c6bd4d5ed8bc2aa5f8892207449444d624a2682ad",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
 }
@@ -336,7 +336,7 @@ LEGACY_D7_WORKTREE_BATCH = {
 LEGACY_P00_INSTALLED_BATCH = {
     "schemaVersion": 1,
     "batchId": "p00-legacy-installed-releases-20261107-v1",
-    "canonicalVerifierSha256": "3bc9a6ba5eec9e36090bcfc8bace1b3986bda5c45c5feb67483ff1defd1ae309",
+    "canonicalVerifierSha256": "e6a164bf2ead761ad2dea30c6bd4d5ed8bc2aa5f8892207449444d624a2682ad",
     "sourceGraph": {
         "path": "/opt/re7online/backups/converta-persistent/deploy-transactions/"
                 "immutable-17cc77a8-vps-20261104T141039Z-api-frontend-c206959c-v3-once/"
@@ -2795,9 +2795,14 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
     worktrees = [item for item in contract["artifacts"] if item["class"] == "DERIVED_WORKTREE"]
     runtimes = {Path(item["path"]) for item in contract["artifacts"]
                 if item["class"] == "DERIVED_OUTPUT_RUNTIME"}
+    supported_runtime_sets = {
+        frozenset({payload / "api-runtime", payload / "frontend-runtime"}),
+        frozenset({payload / "api-runtime", payload / "frontend-runtime",
+                   payload / "worker-runtime"}),
+    }
     staging = [item for item in contract["artifacts"] if item["class"] == "DERIVED_STAGING"]
     if (len(worktrees) != 1 or worktrees[0].get("digest") != {"gitCommit": target} or
-            runtimes != {payload / "api-runtime", payload / "frontend-runtime"} or
+            frozenset(runtimes) not in supported_runtime_sets or
             any(by_path[path].get("digest") != {"indexSha256": hashes["indexSha256"]} for path in runtimes) or
             len(staging) != 1 or staging[0].get("state") != "SANITIZED" or
             staging[0].get("removedAtProducerCompletion") is not True or
