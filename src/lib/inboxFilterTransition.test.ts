@@ -2,11 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { InboxConversationQueryRegistry } from "./inboxConversationSearch";
 import {
+  conversationMatchesInboxFilters,
   conversationMatchesPrimaryFilter,
   decideInboxFilterTransition,
   shouldPublishInboxTimelineResponse,
   type InboxCompositionActivity,
 } from "./inboxFilterTransition";
+
+const activeFilters = {
+  primaryFilter: "WAITING" as const,
+  userId: "agent-1",
+  activeDepartmentId: "department-support",
+  conversationDepartmentId: "department-support",
+  activeChannel: "whatsapp",
+  conversationChannel: "whatsapp",
+  quickFilter: "UNREAD" as const,
+  isUnread: true,
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -84,6 +96,64 @@ test("an out-of-filter selection is retained only to protect unsent work and is 
     selectionMatchesNextFilter: false,
     composition: { draft: "", hasReplyTarget: false, hasMedia: false, audioState: "idle" },
   }), "clear");
+});
+
+test("effective eligibility applies department, channel and quick filters through one predicate", () => {
+  const selected = {
+    status: "WAITING" as const,
+    mode: "HUMAN" as const,
+    assignedUserId: null,
+  };
+  assert.equal(conversationMatchesInboxFilters(selected, activeFilters), true);
+  assert.equal(conversationMatchesInboxFilters(selected, {
+    ...activeFilters,
+    conversationDepartmentId: "department-sales",
+  }), false);
+  assert.equal(conversationMatchesInboxFilters(selected, {
+    ...activeFilters,
+    conversationChannel: "instagram",
+  }), false);
+  assert.equal(conversationMatchesInboxFilters(selected, {
+    ...activeFilters,
+    isUnread: false,
+  }), false);
+  assert.equal(conversationMatchesInboxFilters(selected, {
+    ...activeFilters,
+    quickFilter: "HUMAN",
+  }), true);
+  assert.equal(conversationMatchesInboxFilters({ ...selected, mode: "BOT" }, {
+    ...activeFilters,
+    primaryFilter: "AUTOMATION",
+    quickFilter: "HUMAN",
+  }), false);
+  assert.equal(conversationMatchesInboxFilters(selected, {
+    ...activeFilters,
+    quickFilter: "ASSIGNED",
+  }), false);
+});
+
+test("secondary-filter exclusion preserves draft, attachment, reply and recording state", () => {
+  const selected = {
+    status: "WAITING" as const,
+    mode: "HUMAN" as const,
+    assignedUserId: null,
+  };
+  assert.equal(conversationMatchesInboxFilters(selected, activeFilters), true);
+  const secondaryChanges = [
+    { ...activeFilters, activeChannel: "instagram" },
+    { ...activeFilters, activeDepartmentId: "department-sales" },
+    { ...activeFilters, quickFilter: "UNREAD" as const, isUnread: false },
+  ];
+  for (const filters of secondaryChanges) {
+    const matches = conversationMatchesInboxFilters(selected, filters);
+    assert.equal(matches, false);
+    assert.equal(decideInboxFilterTransition({
+      filterChanged: true,
+      hasSelection: true,
+      selectionMatchesNextFilter: matches,
+      composition: { ...unsentComposition, audioState: "recording" },
+    }), "retain_outside_filter");
+  }
 });
 
 test("timeline publication rejects out-of-order and cross-conversation responses without erasing composition", () => {

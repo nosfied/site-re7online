@@ -20,6 +20,19 @@ export type InboxFilterTransitionDecision =
   | "retain_outside_filter"
   | "clear";
 
+export type InboxQuickFilter = "ALL" | "UNREAD" | "HUMAN" | "ASSIGNED";
+
+export type InboxFilterEligibility = {
+  primaryFilter: ConversationFilter;
+  userId: string | null | undefined;
+  activeDepartmentId: string | null;
+  conversationDepartmentId: string | null | undefined;
+  activeChannel: string | null;
+  conversationChannel: string | null | undefined;
+  quickFilter: InboxQuickFilter;
+  isUnread: boolean;
+};
+
 function getOperationalStatus(item: FilterableInboxConversation) {
   if (item.assignedUserId && item.status === "WAITING") return "IN_PROGRESS";
   if (item.status) return item.status;
@@ -62,6 +75,42 @@ export function conversationMatchesPrimaryFilter(
     default:
       return true;
   }
+}
+
+export function conversationMatchesInboxFilters(
+  item: FilterableInboxConversation,
+  eligibility: InboxFilterEligibility
+) {
+  if (
+    eligibility.activeDepartmentId &&
+    (eligibility.conversationDepartmentId ?? null) !== eligibility.activeDepartmentId
+  ) {
+    return false;
+  }
+  if (
+    eligibility.activeChannel &&
+    eligibility.conversationChannel !== eligibility.activeChannel
+  ) {
+    return false;
+  }
+  switch (eligibility.quickFilter) {
+    case "UNREAD":
+      if (!eligibility.isUnread) return false;
+      break;
+    case "HUMAN":
+      if (item.mode !== "HUMAN") return false;
+      break;
+    case "ASSIGNED":
+      if (!item.assignedUserId) return false;
+      break;
+    default:
+      break;
+  }
+  return conversationMatchesPrimaryFilter(
+    item,
+    eligibility.primaryFilter,
+    eligibility.userId
+  );
 }
 
 export function hasUnsentInboxComposition(activity: InboxCompositionActivity) {

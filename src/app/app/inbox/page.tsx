@@ -57,7 +57,7 @@ import {
   InboxConversationQueryRegistry,
 } from "@/lib/inboxConversationSearch";
 import {
-  conversationMatchesPrimaryFilter,
+  conversationMatchesInboxFilters,
   decideInboxFilterTransition,
   hasUnsentInboxComposition,
   shouldPublishInboxTimelineResponse,
@@ -5095,41 +5095,40 @@ export default function AppInboxPage() {
   ]);
   const loggedUserDepartmentLabel = loggedUserDepartmentName ?? "Sem setor definido";
 
-  const filteredConversations = useMemo(() => {
-    return conversations.filter((item) => {
-      if (isAdminUser && departmentFilter !== "ALL") {
-        if ((item.departmentId ?? null) !== departmentFilter) {
-          return false;
-        }
-      }
-      if (conversationChannelFilter !== "ALL" && getConversationChannel(item) !== conversationChannelFilter) {
-        return false;
-      }
-      switch (conversationQuickFilter) {
-        case "UNREAD":
-          if (!isConversationUnreadForUser(item, readState, session?.user)) return false;
-          break;
-        case "HUMAN":
-          if (item.mode !== "HUMAN") return false;
-          break;
-        case "ASSIGNED":
-          if (!item.assignedUserId) return false;
-          break;
-        default:
-          break;
-      }
-      return conversationMatchesPrimaryFilter(item, conversationFilter, session?.user.id);
+  const conversationMatchesEffectiveFilters = useCallback((
+    item: InboxConversationItem,
+    options?: { primaryFilter?: ConversationFilter; resetChannelAndQuick?: boolean }
+  ) => {
+    const resetChannelAndQuick = options?.resetChannelAndQuick ?? false;
+    return conversationMatchesInboxFilters(item, {
+      primaryFilter: options?.primaryFilter ?? conversationFilter,
+      userId: session?.user.id,
+      activeDepartmentId:
+        isAdminUser && departmentFilter !== "ALL" ? departmentFilter : null,
+      conversationDepartmentId: item.departmentId,
+      activeChannel:
+        !resetChannelAndQuick && conversationChannelFilter !== "ALL"
+          ? conversationChannelFilter
+          : null,
+      conversationChannel: getConversationChannel(item),
+      quickFilter: resetChannelAndQuick ? "ALL" : conversationQuickFilter,
+      isUnread: isConversationUnreadForUser(item, readState, session?.user),
     });
   }, [
     conversationChannelFilter,
     conversationFilter,
     conversationQuickFilter,
-    conversations,
     departmentFilter,
     isAdminUser,
     readState,
-    session?.user.id,
     session?.user,
+  ]);
+
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((item) => conversationMatchesEffectiveFilters(item));
+  }, [
+    conversationMatchesEffectiveFilters,
+    conversations,
   ]);
 
   useEffect(() => {
@@ -5184,11 +5183,7 @@ export default function AppInboxPage() {
   });
   const selectedConversationOutsideCurrentFilter = Boolean(
     selectedConversation &&
-    !conversationMatchesPrimaryFilter(
-      selectedConversation,
-      conversationFilter,
-      session?.user.id
-    )
+    !conversationMatchesEffectiveFilters(selectedConversation)
   );
   const applyConversationFilter = useCallback((filter: ConversationFilter) => {
     const decision = decideInboxFilterTransition({
@@ -5196,7 +5191,10 @@ export default function AppInboxPage() {
       hasSelection: Boolean(selectedConversation),
       selectionMatchesNextFilter: Boolean(
         selectedConversation &&
-        conversationMatchesPrimaryFilter(selectedConversation, filter, session?.user.id)
+        conversationMatchesEffectiveFilters(selectedConversation, {
+          primaryFilter: filter,
+          resetChannelAndQuick: filter === "ALL",
+        })
       ),
       composition: {
         draft: messageDraft,
@@ -5218,11 +5216,11 @@ export default function AppInboxPage() {
     audioRecordingState,
     clearSelectedConversation,
     conversationFilter,
+    conversationMatchesEffectiveFilters,
     messageDraft,
     replyTarget,
     selectedConversation,
     selectedMediaFile,
-    session?.user.id,
   ]);
 
   useEffect(() => {

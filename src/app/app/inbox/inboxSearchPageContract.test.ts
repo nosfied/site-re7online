@@ -49,6 +49,8 @@ test("filter transitions preserve eligible composition and use the behavioral ti
   assert.match(filterBlock, /decideInboxFilterTransition/);
   assert.match(filterBlock, /selectionMatchesNextFilter/);
   assert.match(filterBlock, /if \(decision === "clear"\)/);
+  assert.match(source, /conversations\.filter\(\(item\) => conversationMatchesEffectiveFilters\(item\)\)/);
+  assert.match(source, /!conversationMatchesEffectiveFilters\(selectedConversation\)/);
   assert.match(source, /shouldPublishInboxTimelineResponse/);
   assert.match(source, /Esta conversa está fora do filtro atual e foi mantida para preservar seu rascunho ou anexo/);
 });
