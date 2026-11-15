@@ -80,8 +80,18 @@ async function prepareAcceptedCampaignReturnConversationUnlocked(
   }
 ) {
   const existing = await resolveInboundConversationIdentity(prisma, input);
-  if (existing.reason !== "unchanged") return existing;
-  const waId = normalizeWaIdDigits(input.waId);
+  if (existing.reason === "ambiguous" || existing.reason === "unconfirmed_account") return existing;
+  if (existing.reason === "resolved") {
+    const runtime = await prisma.conversationRuntimeState.findFirst({
+      where: {
+        clientId: input.clientId,
+        OR: [{ waId: existing.waId }, { waIdCanonical: existing.waId }],
+      },
+      select: { id: true },
+    });
+    if (runtime) return existing;
+  }
+  const waId = existing.reason === "resolved" ? existing.waId : normalizeWaIdDigits(input.waId);
   const variant = getBrazilNinthDigitVariant(waId);
   const [hybrid, metaConfig, webAccounts] = await Promise.all([
     resolveHybridWhatsappIdentityStatus({ prisma: prisma as PrismaClient, clientId: input.clientId }),
@@ -141,7 +151,9 @@ async function prepareAcceptedCampaignReturnConversationUnlocked(
     templateName: outbound.templateName,
     sentAt: outbound.createdAt,
     source: "campaign",
+    conversationId: existing.reason === "resolved" ? existing.conversationId : null,
     returnDestination: parseOutboundReturnDestination(payload.returnDestination),
+    materializationTrigger: "inbound",
   });
   return resolveInboundConversationIdentity(prisma, input);
 }

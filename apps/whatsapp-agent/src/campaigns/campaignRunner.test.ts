@@ -637,6 +637,39 @@ test("delayed campaign delivery does not reset a newer human cycle", async (t) =
   assert.equal(rolledBackRuntime.assignedUserId, "current-human");
 });
 
+test("automated campaign return still activates its bot runtime on provider receipt", async (t) => {
+  const clientId = crypto.randomUUID();
+  const clientKey = `automated-return-${clientId}`;
+  const waId = "5541991100426";
+  await prisma.client.create({
+    data: { id: clientId, clientKey, name: "Automated return", profile: "business", features: { campaigns: true } },
+  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
+
+  const materialized = await ensureCampaignOutboundConversation(prisma, {
+    clientId,
+    clientKey,
+    waId,
+    waIdCanonical: waId,
+    messageId: `campaign.${clientId}.1`,
+    campaignId: clientId,
+    campaignRunId: clientId,
+    templateName: "synthetic_template",
+    sentAt: new Date(),
+    source: "campaign",
+    returnDestination: { type: "automated_flow", flowId: "synthetic-flow" },
+  });
+
+  assert.ok(materialized.conversationId);
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId, waId } },
+  });
+  assert.equal(runtime.mode, "BOT");
+  assert.equal(runtime.status, "WAITING_USER");
+  assert.equal(runtime.chatbotActive, true);
+  assert.equal(runtime.flow, "chatbot:synthetic-flow");
+});
+
 test("campaign runner materializes CRM identity for provider failure without creating conversation runtime", async (t) => {
   const clientId = crypto.randomUUID();
   const clientKey = `campaign-runner-provider-fail-${process.pid}-${Date.now()}`;

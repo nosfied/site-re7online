@@ -34,3 +34,24 @@ test("the complete query key is scoped to authenticated tenant, user and token",
   assert.match(keyBlock, /token: session\.token/);
 });
 
+test("filter transitions preserve eligible composition and use the behavioral timeline gate", () => {
+  const clearStart = source.indexOf("const clearSelectedConversation = useCallback");
+  const clearEnd = source.indexOf("}, [abortSelectedTimelineRequest]", clearStart);
+  const clearBlock = source.slice(clearStart, clearEnd);
+  assert.match(clearBlock, /abortSelectedTimelineRequest\(\)/);
+  assert.match(clearBlock, /detailRequestSeqRef\.current \+= 1/);
+  assert.match(clearBlock, /setSelectedConversationKey\(null\)/);
+  assert.match(clearBlock, /setMessages\(\[\]\)/);
+
+  const filterStart = source.indexOf("const applyConversationFilter = useCallback");
+  const filterEnd = source.indexOf("const canReply = useMemo", filterStart);
+  const filterBlock = source.slice(filterStart, filterEnd);
+  assert.match(filterBlock, /decideInboxFilterTransition/);
+  assert.match(filterBlock, /selectionMatchesNextFilter/);
+  assert.match(filterBlock, /if \(decision === "clear"\)/);
+  assert.match(source, /conversations\.filter\(\(item\) => conversationMatchesEffectiveFilters\(item\)\)/);
+  assert.match(source, /!conversationMatchesEffectiveFilters\(selectedConversation\)/);
+  assert.match(source, /shouldPublishInboxTimelineResponse/);
+  assert.match(source, /Esta conversa está fora do filtro atual e foi mantida para preservar seu rascunho ou anexo/);
+});
+

@@ -3305,6 +3305,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   source: "campaign",
                   conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
                   returnDestination,
+                  materializationTrigger: "provider_receipt",
                 })
               : null;
             materializedCampaignConversationId = materialized?.conversationId ?? null;
@@ -3838,7 +3839,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     }
 
-    if (tenantClientId && phoneNumberId && identity.reason !== "resolved") {
+    if (tenantClientId && phoneNumberId) {
       const prepared = await prepareAcceptedCampaignReturnConversation(prisma, {
         clientId: tenantClientId,
         clientKey: tenantClientKey,

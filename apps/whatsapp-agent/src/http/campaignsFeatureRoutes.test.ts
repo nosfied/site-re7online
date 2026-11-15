@@ -17470,7 +17470,15 @@ test("accepted campaign return selects one human conversation before delayed Met
   const hybridIdentity = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: businessClientId });
   assert.equal(hybridIdentity.meta.canonicalNumber, publicNumber);
   assert.equal(hybridIdentity.web.canonicalNumber, publicNumber);
-  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: campaignWaId } }), 0);
+  await deliverCampaignOutbound(created.body.campaign.id);
+  const conversationBeforeWebInbound = await prisma.conversation.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId: campaignWaId } },
+  });
+  assert.equal(
+    await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: campaignWaId } }),
+    0,
+    "the Meta receipt may correlate the canonical conversation but must not enqueue human work"
+  );
   const inbound = await ingestBaileysWebSessionMessage({
     clientId: businessClientId, tenantKey: `${prefix}-business`,
     channelAccountDbId: "hybrid-web-account", channelAccountId: "hybrid-web-account",
@@ -17483,6 +17491,7 @@ test("accepted campaign return selects one human conversation before delayed Met
   assert.equal(inbound.action, "persisted", JSON.stringify(inbound));
   const conversation = await prisma.conversation.findUniqueOrThrow({ where: { clientId_waId: { clientId: businessClientId, waId: campaignWaId } } });
   const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { clientId_waId: { clientId: businessClientId, waId: campaignWaId } } });
+  assert.equal(conversation.id, conversationBeforeWebInbound.id);
   assert.equal(conversation.windowIsOpen, true);
   assert.ok(conversation.lastInboundAt);
   assert.equal(runtime.mode, "HUMAN");
@@ -17500,7 +17509,7 @@ test("accepted campaign return selects one human conversation before delayed Met
   await prisma.conversation.update({ where: { id: conversation.id }, data: { departmentId: businessReturnDepartmentId } });
   const beforeReceipt = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: runtime.id } });
   assert.equal(beforeReceipt.assignedUserId, returnAdmin.id);
-  await deliverCampaignOutbound(created.body.campaign.id);
+  await deliverCampaignOutbound(created.body.campaign.id, 1, "read");
   const afterReceipt = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: runtime.id } });
   assert.equal(afterReceipt.mode, "HUMAN");
   assert.equal(afterReceipt.status, beforeReceipt.status);
@@ -17523,6 +17532,19 @@ test("accepted campaign return selects one human conversation before delayed Met
   await waitFor(async () => Boolean(await prisma.outboundMessage.findFirst({ where: {
     clientId: businessClientId, messageId: `campaign.${second.body.campaign.id}.1`, status: MessageStatus.SENT,
   } })));
+  await deliverCampaignOutbound(second.body.campaign.id);
+  const secondConversation = await prisma.conversation.findUniqueOrThrow({ where: {
+    clientId_waId: { clientId: businessClientId, waId: secondCampaignWaId },
+  } });
+  assert.equal(
+    await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: secondCampaignWaId } }),
+    0,
+    "a provider receipt for a human return destination must not create inbox work"
+  );
+  await prisma.campaign.update({
+    where: { id: second.body.campaign.id },
+    data: { status: "cancelled" },
+  });
   const metaInbound = await requestUnauth("POST", "/webhook", {
     object: "whatsapp_business_account",
     entry: [{ id: `${prefix}-waba`, changes: [{ field: "messages", value: {
@@ -17539,11 +17561,20 @@ test("accepted campaign return selects one human conversation before delayed Met
   const secondRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: {
     clientId_waId: { clientId: businessClientId, waId: secondCampaignWaId },
   } });
+  const secondConversationAfterInbound = await prisma.conversation.findUniqueOrThrow({ where: {
+    clientId_waId: { clientId: businessClientId, waId: secondCampaignWaId },
+  } });
   assert.equal(secondRuntime.mode, "HUMAN");
+  assert.equal(secondConversationAfterInbound.id, secondConversation.id);
   assert.equal(secondRuntime.departmentId, businessReturnDepartmentId);
   assert.equal(secondRuntime.queueId, businessReturnQueueId);
   assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: { in: [secondCampaignWaId, secondMetaInboundWaId] } } }), 1);
   assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: { in: [secondCampaignWaId, secondMetaInboundWaId] } } }), 1);
+  assert.equal(
+    (await prisma.campaign.findUniqueOrThrow({ where: { id: second.body.campaign.id } })).status,
+    "cancelled",
+    "a late first answer must route the canonical conversation without reopening its campaign"
+  );
   await waitFor(async () => (await prisma.event.count({ where: {
     clientId: businessClientId,
     eventName: "whatsapp.hybrid.inbound.logical_message.completed",
@@ -18068,7 +18099,7 @@ test("campaign send does not reactivate anonymized soft-deleted conversation", a
   assert.equal((outbound.rawPayload as { conversationId?: string | null }).conversationId, null);
 });
 
-test("campaign send creates inbox conversation and timeline for new recipient", async (t) => {
+test("campaign human receipt preserves canonical history without creating inbox work", async (t) => {
   const template = await prisma.template.create({
     data: {
       clientId: businessClientId,
@@ -18094,11 +18125,9 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   });
 
   const originalFetch = globalThis.fetch;
-  let providerCalls = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url.startsWith("https://graph.facebook.com/")) {
-      providerCalls += 1;
       const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
       assert.equal(payload.to, waId);
       return new Response(JSON.stringify({ messages: [{ id: `wamid.new.${safeTemplatePrefix}` }] }), {
@@ -18134,17 +18163,10 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   });
   await deliverCampaignOutbound(response.body.campaign.id);
 
-  await waitFor(async () => {
-    const event = await prisma.event.findFirst({
-      where: {
-        clientId: businessClientId,
-        eventName: "campaign.recipient.conversation_created",
-        conversationId: { not: null },
-      },
-      select: { id: true },
-    });
-    return Boolean(event);
-  });
+  await waitFor(async () => Boolean(await prisma.conversation.findUnique({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: { id: true },
+  })));
 
   const conversation = await prisma.conversation.findFirstOrThrow({
     where: { clientId: businessClientId, waId },
@@ -18201,36 +18223,17 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   assert.equal(preservedAnonymizedLead.name, "Usuario Anonimizado");
   assert.equal(preservedAnonymizedLead.phone, anonymizedWaId);
 
-  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
-    where: { clientId_waId: { clientId: businessClientId, waId } },
-    select: {
-      mode: true,
-      status: true,
-      queueId: true,
-      departmentId: true,
-      lastOutboundMessageId: true,
-      windowIsOpen: true,
-      windowExpiresAt: true,
-      lastInboundAt: true,
-      assignedUserId: true,
-    },
-  });
-  assert.equal(runtime.mode, "HUMAN");
-  assert.equal(runtime.status, "WAITING");
-  assert.equal(runtime.assignedUserId, null);
-  assert.ok(runtime.departmentId);
-  assert.ok(runtime.queueId);
-  assert.equal(runtime.lastOutboundMessageId, `campaign.${response.body.campaign.id}.1`);
-  assert.equal(runtime.windowIsOpen, false);
-  assert.equal(runtime.windowExpiresAt, null);
-  assert.equal(runtime.lastInboundAt, null);
+  assert.equal(
+    await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId } }),
+    0,
+    "DELIVERED alone must not create human work"
+  );
   await deliverCampaignOutbound(response.body.campaign.id, 1, "read");
-  const afterRead = await prisma.conversationRuntimeState.findUniqueOrThrow({
-    where: { clientId_waId: { clientId: businessClientId, waId } },
-  });
-  assert.equal(afterRead.windowIsOpen, false);
-  assert.equal(afterRead.windowExpiresAt, null);
-  assert.equal(afterRead.lastInboundAt, null);
+  assert.equal(
+    await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId } }),
+    0,
+    "READ alone must not create human work"
+  );
 
   const creationEvent = await prisma.event.findFirstOrThrow({
     where: {
@@ -18257,16 +18260,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   }>("GET", `/app/conversations?search=${encodeURIComponent(waId)}&limit=10`, businessAdmin);
   assert.equal(list.status, 200);
   const listItem = list.body.conversations.find((item) => item.waId === waId);
-  assert.ok(listItem);
-  assert.equal(listItem.leadId, lead.id);
-  assert.equal(listItem.leadName, null);
-  assert.equal(listItem.leadPhone, waId);
-  assert.equal(listItem.status, "WAITING");
-  assert.equal(listItem.mode, "HUMAN");
-  assert.equal(listItem.lastMessage?.direction, "OUTBOUND");
-  assert.equal(listItem.lastMessage?.type, "TEMPLATE");
-  assert.equal(listItem.lastMessage?.templateName, template.name);
-  assert.equal(listItem.lastMessage?.bodyText, "Ola Cliente Novo, aviso inicial");
+  assert.equal(listItem, undefined, "provider receipts must not enqueue the recipient for human service");
 
   const detail = await request<{
     ok: boolean;
@@ -18289,49 +18283,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
         item.messageId === `campaign.${response.body.campaign.id}.1`
     )
   );
-  const callsBeforeBlockedActions = providerCalls;
-  const closedClaim = await request<ErrorPayload>("POST", `/app/conversation/${waId}/claim`, businessAdmin, {});
-  assert.equal(closedClaim.status, 409, JSON.stringify(closedClaim.body));
-  assert.equal(getErrorCode(closedClaim.body), "window_closed");
-  const closedText = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, { text: "Texto sem inbound" });
-  assert.equal(closedText.status, 409, JSON.stringify(closedText.body));
-  assert.equal(getErrorCode(closedText.body), "window_closed");
-  assert.equal(providerCalls, callsBeforeBlockedActions);
   assert.equal(await prisma.event.count({ where: { clientId: businessClientId, waId, eventName: "conversation.protocol.notice.sent" } }), 0);
-
-  const inboundId = `wamid.after.closed.${safeTemplatePrefix}`;
-  const inboundPhone = (await prisma.outboundMessage.findFirstOrThrow({
-    where: { clientId: businessClientId, messageId: `campaign.${response.body.campaign.id}.1` },
-    select: { phoneNumberId: true },
-  })).phoneNumberId ?? process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const inbound = await requestUnauth("POST", "/webhook", {
-    object: "whatsapp_business_account", entry: [{ id: `${prefix}-waba`, changes: [{
-      field: "messages", value: {
-        messaging_product: "whatsapp", metadata: { phone_number_id: inboundPhone },
-        contacts: [{ wa_id: waId, profile: { name: "Cliente Sintetico" } }],
-        messages: [{ id: inboundId, from: waId, timestamp: String(Math.floor(Date.now() / 1000)),
-          type: "text", text: { body: "Resposta depois da campanha" } }],
-      },
-    }] }],
-  });
-  assert.equal(inbound.status, 200, JSON.stringify(inbound.body));
-  await waitFor(async () => {
-    const current = await prisma.conversationRuntimeState.findUnique({
-      where: { clientId_waId: { clientId: businessClientId, waId } },
-    });
-    return current?.lastInboundMessageId === inboundId && current.windowIsOpen;
-  });
-  const afterInbound = await prisma.conversationRuntimeState.findUniqueOrThrow({
-    where: { clientId_waId: { clientId: businessClientId, waId } },
-  });
-  assert.ok(afterInbound.windowExpiresAt && afterInbound.windowExpiresAt > new Date());
-  const eligibleAdmin = await createUser({ clientId: businessClientId, role: "ADMIN", suffix: "closed-campaign-inbound" });
-  await assignUserDepartments({ clientId: businessClientId, userId: eligibleAdmin.id,
-    departmentIds: [businessReturnDepartmentId] });
-  const openClaim = await request<{ assignedUserId: string }>("POST", `/app/conversation/${waId}/claim`, eligibleAdmin, {});
-  assert.equal(openClaim.status, 200, JSON.stringify(openClaim.body));
-  assert.equal(openClaim.body.assignedUserId, eligibleAdmin.id);
-
 });
 
 test("failed Meta protocol submission records failed, never sent or delivered", async (t) => {
