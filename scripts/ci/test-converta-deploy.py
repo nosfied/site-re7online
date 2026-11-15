@@ -28,6 +28,12 @@ deploy = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = deploy
 SPEC.loader.exec_module(deploy)
 
+PM2_CONTROL_SPEC = importlib.util.spec_from_file_location(
+    "pm2_definition_control_runtime_logs", ROOT / "scripts/pm2-definition-control.py")
+assert PM2_CONTROL_SPEC and PM2_CONTROL_SPEC.loader
+pm2_control = importlib.util.module_from_spec(PM2_CONTROL_SPEC)
+PM2_CONTROL_SPEC.loader.exec_module(pm2_control)
+
 MATERIALIZER_SPEC = importlib.util.spec_from_file_location(
     "pm2_binding_materialize_integration", ROOT / "scripts/pm2-binding-materialize.py")
 assert MATERIALIZER_SPEC and MATERIALIZER_SPEC.loader
@@ -209,8 +215,14 @@ class FakeHost(deploy.Host):
                 "exec_interpreter": definition["interpreter"], "args": definition["args"],
                 "node_args": definition["node_args"], "exec_mode": definition["exec_mode"],
                 "instances": definition["instances"], "namespace": definition["namespace"],
-                "out_file": definition.get("out_file"), "error_file": definition.get("error_file"),
-                "merge_logs": definition.get("merge_logs"), "restart_time": 0,
+                # PM2 6.0.14 jlist exposes the effective runtime paths and pm_id;
+                # it does not reproduce the canonical definition fields here.
+                "pm_id": 3,
+                "pm_out_log_path": pm2_control.expected_pm2_log_path(
+                    definition["out_file"], definition.get("merge_logs", False), 3),
+                "pm_err_log_path": pm2_control.expected_pm2_log_path(
+                    definition["error_file"], definition.get("merge_logs", False), 3),
+                "restart_time": 0,
                 **definition["env"],
             }
             self.rows[name] = {"name": name, "pid": self.next_pid, "pm2_env": env}
@@ -2654,6 +2666,165 @@ if config_path:
         self.assertEqual(len([row for row in self.host.rows.values()
                               if row["name"] == deploy.PROCESS_NAMES["worker"]]), 1)
         self.assertEqual(self.host.save_calls, 0)
+
+    def test_real_pm2_log_identity_allows_only_authenticated_failed_rollback_continuation(self) -> None:
+        self.three_component()
+        runtime = json.loads(self.runtime_manifest.read_text())
+        worker_pm2 = runtime["workerPm2"]
+        original_requests = {
+            role: {"path": binding["request"], "sha256": sha(Path(binding["request"]))}
+            for role, binding in worker_pm2.items()
+        }
+        authorities: dict[str, dict[str, str]] = {}
+        for name in ("exportReceipt", "transferReceipt", "installationReceipt"):
+            path = self.base / f"continuation-{name}.private.json"
+            put(path, {"releaseId": self.candidate, "packageSha256": "9" * 64})
+            authorities[name] = {"path": str(path), "sha256": sha(path)}
+        succession = self.base / "continuation-control-plane.private.json"
+        origin_control = "6" * 40
+        put(succession, {
+            "schemaVersion": 1, "kind": "WORKER_PM2_CONTROL_PLANE_SUCCESSION",
+            "originalControlPlane": origin_control,
+            "successorControlPlane": self.control_plane,
+            "releaseId": self.candidate, "targetCommit": self.target,
+            "packageSha256": "9" * 64, "authorities": authorities,
+            "originalRequests": original_requests,
+            "successorBindings": {
+                role: {
+                    key: {"path": value, "sha256": sha(Path(value))}
+                    for key, value in {
+                        "request": binding["request"],
+                        "sourceArtifact": binding["sourceArtifact"],
+                        "definition": binding["definition"],
+                    }.items()
+                } for role, binding in worker_pm2.items()
+            },
+            "scripts": {
+                "deploy": sha(ROOT / "scripts/converta-deploy.py"),
+                "materializer": sha(ROOT / "scripts/pm2-binding-materialize.py"),
+                "control": sha(ROOT / "scripts/pm2-definition-control.py"),
+                "allowlist": sha(ROOT / "scripts/pm2-definition-env-allowlist.v1.json"),
+            },
+        })
+        runtime["schemaVersion"] = 3
+        runtime["controlPlaneSuccessionSha256"] = sha(succession)
+        put(self.runtime_manifest, runtime)
+        self.inputs = replace(
+            self.inputs, runtime_manifest_sha256=sha(self.runtime_manifest),
+            control_plane_succession=deploy.ControlPlaneSuccessionBinding(
+                succession, sha(succession)))
+        fixture_origin = {
+            "releaseId": self.candidate, "targetCommit": self.target,
+            "controlPlane": origin_control,
+            "requests": {role: binding["sha256"]
+                         for role, binding in original_requests.items()},
+        }
+        driver = self._driver()
+        with patch.object(deploy, "WORKER_PM2_SUCCESSION_ORIGIN", fixture_origin):
+            driver.preflight(); driver.activate()
+            journal = driver._journal_read()
+            journal.update(state="FAILED", recoveryAction="rollback", saveCount=0,
+                           failure="rollback_worker_unrelated_process")
+            put(driver.journal, journal)
+            negative_sha = sha(driver.journal)
+            row = self.host.rows[deploy.PROCESS_NAMES["worker"]]
+            snapshot = driver._process_snapshot(
+                row, "worker", (self.releases / self.candidate / "worker-runtime").resolve())
+            continuation_control = "7" * 40
+            definition = Path(worker_pm2["candidate"]["definition"])
+            continuation = self.base / "worker-rollback-continuation.private.json"
+            put(continuation, {
+                "schemaVersion": 1,
+                "kind": deploy.WORKER_ROLLBACK_CONTINUATION_KIND,
+                "releaseId": self.candidate, "targetCommit": self.target,
+                "transactionRoot": str(self.transaction),
+                "originalControlPlane": self.control_plane,
+                "continuationControlPlane": continuation_control,
+                "originalDriverSha256": sha(ROOT / "scripts/converta-deploy.py"),
+                "continuationDriverSha256": sha(ROOT / "scripts/converta-deploy.py"),
+                "negativeJournal": {"path": str(driver.journal), "sha256": negative_sha},
+                "lockSha256": journal["lockDigest"],
+                "controlPlaneSuccessionSha256": sha(succession),
+                "candidateDefinition": {"path": str(definition), "sha256": sha(definition)},
+                "runtimeIdentity": {
+                    "pid": snapshot["pid"], "startTicks": snapshot["startTicks"],
+                    "pmId": row["pm2_env"]["pm_id"],
+                    "runtime": str((self.releases / self.candidate / "worker-runtime").resolve()),
+                    "entrypoint": snapshot["scriptPhysical"],
+                    "environmentSha256": snapshot["environmentSha256"],
+                    "outLog": row["pm2_env"]["pm_out_log_path"],
+                    "errorLog": row["pm2_env"]["pm_err_log_path"],
+                },
+            })
+            self.inputs = replace(
+                self.inputs,
+                worker_rollback_continuation=deploy.WorkerRollbackContinuationBinding(
+                    continuation, sha(continuation)))
+            self.host.control_plane = continuation_control
+
+            # The exact PM2 6.0.14 representation has no artificial canonical
+            # out_file/error_file/merge_logs fields and is still authenticated.
+            self.assertFalse(any(key in row["pm2_env"]
+                                 for key in ("out_file", "error_file", "merge_logs")))
+            continued = self._driver()
+            self.assertEqual(
+                continued._worker_rollback_continuation_manifest(continued._journal_read())
+                ["runtimeIdentity"]["pmId"], 3)
+
+            for key, replacement in (
+                ("pm_id", 4),
+                ("pm_out_log_path", str(self.base / "unrelated-out-3.log")),
+                ("NODE_ENV", "drift"),
+            ):
+                with self.subTest(runtime_drift=key):
+                    original = row["pm2_env"].get(key)
+                    row["pm2_env"][key] = replacement
+                    with self.assertRaisesRegex(deploy.Denied,
+                                                "worker_rollback_continuation_runtime"):
+                        self._driver()._worker_rollback_continuation_manifest(
+                            self._driver()._journal_read())
+                    row["pm2_env"][key] = original
+
+            base_inputs = self.inputs
+            base_payload = json.loads(continuation.read_text())
+            for field, replacement in (
+                ("pid", snapshot["pid"] + 1),
+                ("startTicks", snapshot["startTicks"] + 1),
+                ("runtime", str(self.base / "unrelated-runtime")),
+            ):
+                with self.subTest(sealed_runtime_drift=field):
+                    payload = json.loads(json.dumps(base_payload))
+                    payload["runtimeIdentity"][field] = replacement
+                    variant = self.base / f"continuation-{field}.private.json"
+                    put(variant, payload)
+                    self.inputs = replace(
+                        base_inputs,
+                        worker_rollback_continuation=deploy.WorkerRollbackContinuationBinding(
+                            variant, sha(variant)))
+                    with self.assertRaisesRegex(deploy.Denied,
+                                                "worker_rollback_continuation_runtime"):
+                        self._driver()._worker_rollback_continuation_manifest(
+                            self._driver()._journal_read())
+            payload = json.loads(json.dumps(base_payload))
+            payload["candidateDefinition"]["sha256"] = "0" * 64
+            variant = self.base / "continuation-definition.private.json"
+            put(variant, payload)
+            self.inputs = replace(
+                base_inputs,
+                worker_rollback_continuation=deploy.WorkerRollbackContinuationBinding(
+                    variant, sha(variant)))
+            with self.assertRaisesRegex(deploy.Denied,
+                                        "worker_rollback_continuation_definition"):
+                self._driver()._worker_rollback_continuation_manifest(
+                    self._driver()._journal_read())
+            self.inputs = base_inputs
+
+            continued.rollback()
+            terminal = continued._journal_read()
+            self.assertEqual(terminal["state"], "ROLLED_BACK")
+            self.assertEqual(terminal["rollback"]["restoredComponents"],
+                             ["worker", "frontend", "api"])
+            self.assertEqual(self.host.save_calls, 0)
 
     def test_worker_absence_without_authenticated_activation_frontier_is_denied(self) -> None:
         driver = self.three_component()

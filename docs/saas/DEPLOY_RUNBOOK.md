@@ -320,11 +320,11 @@ topo do registro ou em `pm2_env`; consultar ambos sem inventar outros defaults:
 
 - ambiente permitido: propriedade presente no topo prevalece inclusive para `false`, `0`, vazio ou `null`; usar `pm2_env` só quando ausente, sem ampliar chaves, e negar divergência real;
 - `instances` ausente/nulo no processo vivo e ausente/nulo no dump são equivalentes, sem normalização; esse é o caso comprovado do worker;
-- `instances=1` no processo vivo e ausente/nulo no dump pode equivaler ao default 1 somente em `fork_mode`, com exatamente um processo vivo e todos os demais campos equivalentes; esse é o caso comprovado de API/frontend.
+- `instances=1` no processo vivo e ausente/nulo no dump pode equivaler ao default 1 somente em `fork_mode`, com exatamente um processo vivo e todos os demais campos equivalentes; esse é o caso comprovado de API/frontend. O worker mantém os demais campos estritos e reutiliza `pm2-definition-control.py::validate_runtime_log_paths()` após `start`, no rollback e no dump: o `jlist` real fornece `pm_id`/`pm_out_log_path`/`pm_err_log_path` sem obrigação de repetir `out_file`/`error_file`/`merge_logs`; fixtures artificiais ou relaxamento de PID, start ticks, runtime, ambiente e cardinalidade são proibidos.
 
 Não confundir campo com processo ausente, editar o dump ou repetir o save. Campo
 ausente nas duas representações continua ausente; divergência real continua `DENY`.
-A prova PM2 6.0.14 é reutilizável e coberta por regressão.
+A prova PM2 6.0.14 é reutilizável e coberta por regressão; o PR #199 é a única implementação da transformação de logs e o rollback do worker não pode duplicá-la ou aproximá-la.
 
 Falha antes de qualquer seleção é `DENIED_BEFORE_MUTATION`, não `ROLLED_BACK`.
 Depois de mutação, só declarar retorno após verificá-lo. Falha de retorno ou de
