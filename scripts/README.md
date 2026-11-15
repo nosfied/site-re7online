@@ -173,6 +173,13 @@ python3 scripts/ci/verify-pm2-definition-isolated.py --pm2 /caminho/pinado/pm2
 
 Essa prova local não autoriza promoção e não substitui os gates produtivos.
 
+O consumidor fixed-current reutiliza diretamente `validate_runtime_log_paths()` e
+`expected_pm2_log_path()` ao reconhecer o worker vivo. Fixtures de rollback devem
+representar o `jlist` real do PM2 6.0.14 (`pm_id`, `pm_out_log_path` e
+`pm_err_log_path`) e omitir os campos canônicos que o runtime não publica. Somente
+os logs recebem essa normalização; definição, ambiente permitido, runtime, PID/start
+ticks, `pm_id` e cardinalidade continuam autenticados e fail-closed.
+
 ## `operational-retention-report.py`
 
 Rotina LOCAL PARA REVISÃO vinculada ao [runbook canônico](../docs/RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente). Não instalada na VPS/cron. Não tem apply, subprocess, SQL, provider, PM2 ou exclusão. Inventaria metadados de raízes locais explícitas, sem ler conteúdo nem seguir symlinks; conta blocos únicos por device/inode, registra hardlinks externos e limites. Tamanho igual sugere revisão, não igualdade de hash ou autorização de retirada. Reflinks e snapshots exigem medição própria.

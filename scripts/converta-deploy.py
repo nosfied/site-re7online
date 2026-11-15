@@ -28,6 +28,7 @@ PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
 PRIVATE_DATA_POLICY = "PRIVATE_DATA_NEVER_RETIRE"
 PRIVATE_DATA_RECONCILIATION_KIND = "LEGACY_PRIVATE_DATA_OVERLAY_FINALIZE_RECONCILIATION"
 RUNTIME_CACHE_RECONCILIATION_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
+WORKER_ROLLBACK_CONTINUATION_KIND = "WORKER_PM2_REAL_LOG_ROLLBACK_CONTINUATION_V1"
 LEGACY_0FDEC_RELEASE = "immutable-0fdec8b0-vps-20261028T224726Z"
 LEGACY_0FDEC_TARGET = "0fdec8b026b28acb42c2d95e1fe473b49b6b0a20"
 LEGACY_0FDEC_CONTRACT_SHA256 = "f3188049ea87c6f9e9ece01c4698d6e49994a13fe682cc828a0b0fc34e020c0a"
@@ -405,6 +406,12 @@ class ControlPlaneSuccessionBinding:
 
 
 @dataclass(frozen=True)
+class WorkerRollbackContinuationBinding:
+    manifest: Path
+    manifest_sha256: str
+
+
+@dataclass(frozen=True)
 class Inputs:
     release: str
     target: str
@@ -420,6 +427,7 @@ class Inputs:
     runtime_cache_reconciliation: Path | None = None
     runtime_cache_reconciliation_sha256: str | None = None
     control_plane_succession: ControlPlaneSuccessionBinding | None = None
+    worker_rollback_continuation: WorkerRollbackContinuationBinding | None = None
 
     def binding(self) -> dict[str, Any]:
         value = {
@@ -674,8 +682,12 @@ class Driver:
         }
         if not isinstance(scripts, dict) or set(scripts) != set(script_paths):
             deny("control_plane_succession_scripts")
+        rollback_continuation = (self._worker_rollback_continuation_manifest(self._journal_read())
+                                 if self.inputs.worker_rollback_continuation is not None else None)
         for name, path in script_paths.items():
-            if scripts.get(name) != digest(path):
+            expected = (rollback_continuation["originalDriverSha256"]
+                        if name == "deploy" and rollback_continuation is not None else digest(path))
+            if scripts.get(name) != expected:
                 deny(f"control_plane_succession_script:{name}")
         return value
 
@@ -825,14 +837,125 @@ class Driver:
             deny("runtime_cache_reconciliation_schema")
         return value
 
+    def _worker_rollback_continuation_manifest(self, journal: dict[str, Any]) -> dict[str, Any]:
+        cached = getattr(self, "_worker_rollback_continuation_cache", None)
+        if isinstance(cached, dict):
+            return cached
+        binding = self.inputs.worker_rollback_continuation
+        if (binding is None or not binding.manifest.is_absolute() or
+                not SHA256.fullmatch(binding.manifest_sha256)):
+            deny("worker_rollback_continuation_binding")
+        raw, info = stable_regular_bytes(binding.manifest, required_mode=0o600)
+        if ((info.st_uid, info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(raw).hexdigest() != binding.manifest_sha256):
+            deny("worker_rollback_continuation_identity")
+        value = json_object(raw, binding.manifest.name)
+        required = {
+            "schemaVersion", "kind", "releaseId", "targetCommit", "transactionRoot",
+            "originalControlPlane", "continuationControlPlane", "originalDriverSha256",
+            "continuationDriverSha256", "negativeJournal", "lockSha256",
+            "controlPlaneSuccessionSha256", "candidateDefinition", "runtimeIdentity",
+        }
+        if (set(value) != required or value.get("schemaVersion") != 1 or
+                value.get("kind") != WORKER_ROLLBACK_CONTINUATION_KIND):
+            deny("worker_rollback_continuation_schema")
+        if (value.get("releaseId") != self.inputs.release or
+                value.get("targetCommit") != self.inputs.target or
+                value.get("transactionRoot") != str(self.inputs.transaction_root) or
+                value.get("originalControlPlane") != self.inputs.control_plane or
+                not SHA40.fullmatch(str(value.get("continuationControlPlane", ""))) or
+                not all(SHA256.fullmatch(str(value.get(key, ""))) for key in (
+                    "originalDriverSha256", "continuationDriverSha256", "lockSha256",
+                    "controlPlaneSuccessionSha256"))):
+            deny("worker_rollback_continuation_scope")
+        if (self.inputs.control_plane_succession is None or
+                value["controlPlaneSuccessionSha256"] !=
+                self.inputs.control_plane_succession.manifest_sha256):
+            deny("worker_rollback_continuation_succession")
+        negative = value.get("negativeJournal")
+        if not isinstance(negative, dict) or set(negative) != {"path", "sha256"}:
+            deny("worker_rollback_continuation_journal")
+        journal_path = Path(str(negative.get("path", "")))
+        if (journal_path != self.journal or not SHA256.fullmatch(str(negative.get("sha256", ""))) or
+                digest(journal_path) != negative["sha256"] or read_json(journal_path) != journal):
+            deny("worker_rollback_continuation_journal")
+        transition = journal.get("workerActivationTransition")
+        if (journal.get("state") != "FAILED" or journal.get("recoveryAction") != "rollback" or
+                journal.get("saveCount") != 0 or not isinstance(transition, dict) or
+                transition.get("state") != "START_CONFIRMED"):
+            deny("worker_rollback_continuation_state")
+        definition = value.get("candidateDefinition")
+        runtime_manifest = read_json(self.inputs.runtime_manifest)
+        try:
+            expected_definition = runtime_manifest["workerPm2"]["candidate"]["definition"]
+        except (KeyError, TypeError):
+            deny("worker_rollback_continuation_definition")
+        if (not isinstance(definition, dict) or set(definition) != {"path", "sha256"} or
+                Path(str(definition.get("path", ""))) != Path(expected_definition) or
+                definition.get("sha256") != digest(Path(expected_definition)) or
+                transition.get("definitionSha256") != definition.get("sha256")):
+            deny("worker_rollback_continuation_definition")
+        if journal.get("lockDigest") != value.get("lockSha256"):
+            deny("worker_rollback_continuation_lock")
+        runtime = value.get("runtimeIdentity")
+        required_runtime = {"pid", "startTicks", "pmId", "runtime", "entrypoint",
+                            "environmentSha256", "outLog", "errorLog"}
+        if not isinstance(runtime, dict) or set(runtime) != required_runtime:
+            deny("worker_rollback_continuation_runtime")
+        row = self._row(self.host.pm2_rows(self._resolve_pm2()), PROCESS_NAMES["worker"])
+        candidate_runtime = (self.release_root / RUNTIME_DIR["worker"]).resolve(strict=True)
+        snapshot = self._process_snapshot(row, "worker", candidate_runtime)
+        loaded = row.get("pm2_env", {})
+        if (snapshot.get("pid") != runtime.get("pid") or
+                snapshot.get("startTicks") != runtime.get("startTicks") or
+                snapshot.get("environmentSha256") != runtime.get("environmentSha256") or
+                str(candidate_runtime) != runtime.get("runtime") or
+                snapshot.get("scriptPhysical") != runtime.get("entrypoint") or
+                loaded.get("pm_id") != runtime.get("pmId") or
+                loaded.get("pm_out_log_path") != runtime.get("outLog") or
+                loaded.get("pm_err_log_path") != runtime.get("errorLog") or
+                not self._worker_definition_app_matches(
+                    row, snapshot, read_json(Path(expected_definition))["apps"][0])):
+            deny("worker_rollback_continuation_runtime")
+        self._worker_rollback_continuation_cache = value
+        return value
+
     def _control_head(self, continuation_journal: dict[str, Any] | None = None) -> None:
         result = self.host.run(["git", "-C", str(self.repo), "rev-parse", "HEAD"])
         if result.returncode:
             deny("control_plane_identity")
         observed_head = result.stdout.strip()
-        if self.inputs.runtime_cache_reconciliation is None:
+        if (self.inputs.runtime_cache_reconciliation is None and
+                self.inputs.worker_rollback_continuation is None):
             if observed_head != self.inputs.control_plane:
                 deny("control_plane_identity")
+        elif self.inputs.worker_rollback_continuation is not None:
+            if continuation_journal is None:
+                deny("worker_rollback_continuation_command")
+            value = self._worker_rollback_continuation_manifest(continuation_journal)
+            driver_path = Path(__file__).resolve()
+            committed_driver = self.host.run([
+                "git", "-C", str(self.repo), "show",
+                f"{observed_head}:scripts/converta-deploy.py",
+            ])
+            original_driver = self.host.run([
+                "git", "-C", str(self.repo), "show",
+                f"{self.inputs.control_plane}:scripts/converta-deploy.py",
+            ])
+            committed_sha = (hashlib.sha256(committed_driver.stdout.encode()).hexdigest()
+                             if committed_driver.returncode == 0 else None)
+            original_sha = (hashlib.sha256(original_driver.stdout.encode()).hexdigest()
+                            if original_driver.returncode == 0 else None)
+            tracked = self.host.run([
+                "git", "-C", str(self.repo), "ls-files", "--error-unmatch", "--",
+                "scripts/converta-deploy.py",
+            ])
+            if (observed_head != value.get("continuationControlPlane") or
+                    digest(driver_path) != value.get("continuationDriverSha256") or
+                    committed_sha != value.get("continuationDriverSha256") or
+                    original_sha != value.get("originalDriverSha256") or
+                    tracked.returncode or tracked.stdout.strip() != "scripts/converta-deploy.py"):
+                deny("worker_rollback_continuation_control_plane")
         else:
             if continuation_journal is None:
                 deny("runtime_cache_continuation_command")
@@ -1470,12 +1593,7 @@ class Driver:
         return binding
 
     def _worker_definition_projection(self, role: str) -> dict[str, Any]:
-        binding = self._worker_pm2_binding(role)
-        value = read_json(Path(binding["definition"]))
-        try:
-            app = value["apps"][0]
-        except (KeyError, IndexError, TypeError):
-            deny(f"worker_pm2_definition:{role}")
+        app = self._worker_definition_app(role)
         return {
             "name": app.get("name"), "pmCwdLexical": app.get("cwd"),
             "pmExecPathLexical": app.get("script"), "interpreter": app.get("interpreter"),
@@ -1488,6 +1606,57 @@ class Driver:
                 {key: app.get("env", {}).get(key) for key in self._environment_keys("worker")},
                 sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest(),
         }
+
+    def _worker_definition_app(self, role: str) -> dict[str, Any]:
+        binding = self._worker_pm2_binding(role)
+        value = read_json(Path(binding["definition"]))
+        try:
+            app = value["apps"][0]
+        except (KeyError, IndexError, TypeError):
+            deny(f"worker_pm2_definition:{role}")
+        if not isinstance(app, dict):
+            deny(f"worker_pm2_definition:{role}")
+        return app
+
+    def _pm2_definition_control(self) -> Any:
+        path = self.repo / "scripts/pm2-definition-control.py"
+        spec = importlib.util.spec_from_file_location("converta_pm2_definition_control", path)
+        if spec is None or spec.loader is None:
+            deny("pm2_definition_control_import")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _worker_definition_matches(self, row: dict[str, Any], snapshot: dict[str, Any],
+                                   role: str) -> bool:
+        """Keep canonical fields strict; normalize only PM2 6.0.14 runtime log paths."""
+        return self._worker_definition_app_matches(
+            row, snapshot, self._worker_definition_app(role))
+
+    def _worker_definition_app_matches(self, row: dict[str, Any], snapshot: dict[str, Any],
+                                       app: dict[str, Any]) -> bool:
+        observed = self._configuration_projection(snapshot)
+        expected = {
+            "name": app.get("name"), "pmCwdLexical": app.get("cwd"),
+            "pmExecPathLexical": app.get("script"), "interpreter": app.get("interpreter"),
+            "args": app.get("args"), "nodeArgs": app.get("node_args"),
+            "execMode": app.get("exec_mode"), "instancesRaw": app.get("instances"),
+            "namespace": app.get("namespace"),
+            "environmentSha256": hashlib.sha256(json.dumps(
+                {key: app.get("env", {}).get(key) for key in self._environment_keys("worker")},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest(),
+        }
+        if any(observed.get(key) != value for key, value in expected.items() if key != "logs"):
+            return False
+        loaded = row.get("pm2_env")
+        if not isinstance(loaded, dict):
+            return False
+        control = self._pm2_definition_control()
+        try:
+            control.validate_runtime_log_paths(app, loaded)
+        except control.Denied:
+            return False
+        return True
 
     def _process_name(self, component: str) -> str:
         if component not in PROCESS_NAMES:
@@ -1932,6 +2101,14 @@ class Driver:
             fields["instancesRaw"] = raw_live
         else:
             deny(f"final_dump_field:{component}:instances")
+        if component == "worker" and "worker" in self.inputs.components:
+            live_projection = self._configuration_projection(live)
+            if any(fields.get(key) != value for key, value in live_projection.items()
+                   if key != "logs"):
+                deny("final_dump_field:worker:configuration")
+            if not self._worker_definition_matches(row, live, "candidate"):
+                deny("final_dump_field:worker:logs")
+            return
         if fields != self._configuration_projection(live):
             for key, value in fields.items():
                 if value != self._configuration_projection(live).get(key):
@@ -2455,9 +2632,11 @@ class Driver:
             self.host.pm2_mutate(pm2, ["restart", name])
         row = self._row(self.host.pm2_rows(pm2), name)
         after = self._process_snapshot(row, component, runtime)
-        expected_projection = (self._worker_definition_projection(worker_role)
-                               if component == "worker" else self._configuration_projection(before))
-        if self._configuration_projection(after) != expected_projection:
+        configuration_matches = (self._worker_definition_matches(row, after, worker_role)
+                                 if component == "worker" else
+                                 self._configuration_projection(after) ==
+                                 self._configuration_projection(before))
+        if not configuration_matches:
             deny(f"process_configuration_changed:{component}")
         if component != "worker" and after["restartCount"] != before["restartCount"] + 1:
             deny(f"restart_count:{component}")
@@ -2484,7 +2663,7 @@ class Driver:
                 authenticated = self._process_snapshot(row, "worker", runtime.resolve(strict=True))
             except (Denied, OSError):
                 continue
-            if self._configuration_projection(authenticated) == self._worker_definition_projection(role):
+            if self._worker_definition_matches(row, authenticated, role):
                 return authenticated, role
         deny("rollback_worker_unrelated_process")
 
@@ -2740,7 +2919,7 @@ class Driver:
         if (journal.get("previous") is None and
                 isinstance(journal.get("lockTransition"), dict) and
                 journal["lockTransition"].get("state") in {"PENDING", "BOUND"}):
-            self._control_head(); self._authenticated_runtime_manifest()
+            self._control_head(journal); self._authenticated_runtime_manifest()
             self._rollback_lock_transition(journal)
             return
         current_dump = private_file_identity(self.dump)
@@ -2751,7 +2930,7 @@ class Driver:
             except Denied:
                 deny("rollback_dump_drift")
             deny("rollback_after_candidate_dump")
-        self._control_head(); self._authenticated_runtime_manifest()
+        self._control_head(journal); self._authenticated_runtime_manifest()
         self._rollback_internal(journal)
 
     def finalize(self) -> None:
@@ -2897,6 +3076,8 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--runtime-manifest-sha256", required=True)
     parser.add_argument("--control-plane-succession", type=Path)
     parser.add_argument("--control-plane-succession-sha256")
+    parser.add_argument("--worker-rollback-continuation", type=Path)
+    parser.add_argument("--worker-rollback-continuation-sha256")
     parser.add_argument("--transaction-root", type=Path, required=True)
     parser.add_argument("--generation-retirement-tool", type=Path, required=True)
     parser.add_argument("--generation-retirement-tool-sha256", required=True)
@@ -2930,6 +3111,11 @@ def parse() -> tuple[str, Inputs]:
     if ((args.control_plane_succession is None) !=
             (args.control_plane_succession_sha256 is None)):
         deny("control_plane_succession_binding")
+    if ((args.worker_rollback_continuation is None) !=
+            (args.worker_rollback_continuation_sha256 is None)):
+        deny("worker_rollback_continuation_binding")
+    if args.worker_rollback_continuation is not None and args.command != "rollback":
+        deny("worker_rollback_continuation_command")
     components = tuple(args.components.split(","))
     retirement = RetirementBinding(
         args.generation_retirement_tool, args.generation_retirement_tool_sha256,
@@ -2945,6 +3131,9 @@ def parse() -> tuple[str, Inputs]:
     succession = (ControlPlaneSuccessionBinding(
         args.control_plane_succession, args.control_plane_succession_sha256)
         if args.control_plane_succession is not None else None)
+    rollback_continuation = (WorkerRollbackContinuationBinding(
+        args.worker_rollback_continuation, args.worker_rollback_continuation_sha256)
+        if args.worker_rollback_continuation is not None else None)
     return args.command, Inputs(
         release=args.release, target=args.target, control_plane=args.control_plane,
         components=components, runtime_manifest=args.runtime_manifest,
@@ -2955,7 +3144,8 @@ def parse() -> tuple[str, Inputs]:
         retirement_sentinel_closure=sentinel_closure,
         runtime_cache_reconciliation=args.runtime_cache_reconciliation,
         runtime_cache_reconciliation_sha256=args.runtime_cache_reconciliation_sha256,
-        control_plane_succession=succession)
+        control_plane_succession=succession,
+        worker_rollback_continuation=rollback_continuation)
 
 
 def main() -> int:
