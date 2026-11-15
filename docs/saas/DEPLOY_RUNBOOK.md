@@ -15,9 +15,9 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 ## Pré-requisitos
 
 - target e control plane aprovados em CI;
-- release imutável de API/frontend selada por `scripts/converta-release.py`;
-- build único na VPS em worktree Linux x86_64 isolado, Node v20.20.0, com capacidade conferida; esse local de build já está autorizado pelo owner;
-- builder externo somente como alternativa decidida separadamente. Para preservação, se o lock do builder estiver ausente, executar primeiro `materialize-builder-preservation-lock` com request/SHA e relatório exclusivos; não criar o lock manualmente. Antes do preflight, exigir a [qualificação entre hosts](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#build-externo-e-qualificação-entre-hosts); a instalação inerte não autoriza a janela de ativação;
+- release imutável dos componentes selecionados, selada por `scripts/converta-release.py`;
+- build único no builder externo descartável é o caminho normal comprovado; build isolado na VPS é fallback excepcional, com decisão, orçamento e autorização próprios, nunca instrução concorrente;
+- antes de `open`, no ambiente real que chamará o produtor, autenticar `PATH`, `command -v node/npm`, Node `v20.20.0`, npm `10.8.2` e a mesma resolução em subprocessos. Depois do export, exigir a [qualificação entre hosts](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#build-externo-e-qualificação-entre-hosts); instalação inerte não autoriza ativação;
 - pacote, manifesto, índice, BUILD_ID e entrypoint integralmente verificados;
 - release extraída em destino novo sob `/opt/re7online/releases`;
 - configuração privada e retorno autenticados, dump anterior e symlinks capturados;
@@ -29,11 +29,10 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 
 Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
 shell, derivar definição executável de introspecção, usar `--update-env`, executar
-`pm2 flush` ou repetir automaticamente uma tentativa negada.
-
-Antes de consumir uma tentativa, consultar exclusivamente o health público da API em
-`https://converta.re7online.com/agent-api/health`: exigir HTTP 200, JSON, `ok=true`
-e `db="ok"`. Host administrativo ou `/health` do frontend não comprova a API.
+`pm2 flush` ou repetir automaticamente uma tentativa negada. Merge administrativo,
+commit efetivo, árvore funcional e control plane são identidades distintas; registrar
+os quatro. O control plane não vira target.
+Antes de consumir uma tentativa, o health público `https://converta.re7online.com/agent-api/health` deve responder HTTP 200, JSON, `ok=true` e `db="ok"`; host administrativo ou `/health` do frontend não comprova a API.
 
 ## Preparação e retomada sem reiniciar a geração
 
@@ -50,9 +49,10 @@ A automação integral das fronteiras permanece aberta no [P00-D](backlog/DEPLOY
 
 `observations.pm2` exige exatamente `path`, `sha256` e `fingerprintSha256`. O SHA autentica o executável; o fingerprint vem de jlist pela projeção `_pm2_fingerprint()` do consumidor, nunca do hash do binário/dump/JSON bruto. Recapturar também current/dump/grafo e preservar a fotografia negada. Antes de retenção prepare, confrontar a fotografia inteira com `generation-retirement.py::validate_operational()`. A admissão deve ser corrigida/testada contra o consumidor real antes da próxima geração normal; fixtures sem blocos obrigatórios não qualificam a fronteira.
 
-Negativa de schema exige correção e regressão; fotografia vencida exige leitura dirigida; mudança real exige requalificação; capacidade exige separar orçamento/reserva de meta adicional; efeito parcial exige journal/receipt. Retomada após causa corrigida é registrada; retry cego, edição de prova para forçar PASS e repetição de efeitos concluídos são proibidos.
+Negativa de schema exige correção e regressão; fotografia vencida exige leitura dirigida; mudança real exige requalificação; capacidade exige separar orçamento/reserva de meta adicional; efeito parcial exige journal/receipt. `FAILED` preserva output/evidências/review; sucessora usa ID, raiz, custódia e output novos e protege a predecessora. Sanitização exige lifecycle e autorização. Retry cego, edição de prova e repetição de efeitos são proibidos.
 
 ## Build once
+Sequência vigente: contratos/custódia → toolchain no processo/subprocesso → `open` → worktree detached → um `build` → `verify` do mesmo pacote → destino `exported` privado `0700` → um `export`. `fa10f4f5` tem receipt `012103fd…a6bb`; `ed74c483` 3/3 tem `c7e97d09…6cbb`. Receipt não autoriza upload.
 
 ### Gate de dívida e encerramento da geração
 

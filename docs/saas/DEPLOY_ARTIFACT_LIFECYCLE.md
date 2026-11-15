@@ -211,6 +211,24 @@ qualquer substituição. Essa transição não muda candidatos, efeitos ou lifec
 
 ## Contrato obrigatório por geração (implementado)
 
+### Admissão da toolchain e sucessão de geração
+
+A toolchain é gate anterior ao `open`, não descoberta durante o build. O ambiente
+que invocará o produtor deve provar `command -v node`, `node --version`,
+`command -v npm`, `npm --version` e a resolução de ambos por subprocesso. O contrato
+vigente exige Node `v20.20.0` e npm `10.8.2`; alterar o requisito ou confiar no Node
+do shell interativo é negativa. Na geração 3/3 `ed74c483`, a primeira tentativa
+recebeu Node 22 e terminou `FAILED/PENDING/RETENTION_DEBT`; uma sucessora com ID,
+raiz, custódia e output independentes usou Node 20, fez um único build e exportou
+pacote, manifesto, índice, contrato e lifecycle. Seu export receipt é
+`c7e97d09e613e262a4c218d4fea0852cd3d7b815c613f5d225485b49ab936cbb`.
+
+`FAILED` nunca é apagado para simular retry. Lifecycle, contrato, failure evidence e
+review permanecem autenticados; a sucessora protege raiz/custódia predecessoras.
+Retirada posterior exige `prepare → AUTHORIZE_ONCE → execute` do lifecycle. Para
+export, o destino literal `exported` deve existir em `0700`; ausência nega antes de
+copiar, e a retomada exige prova de zero efeitos.
+
 Cada execução de `scripts/converta-release.py build` publica, desde `BUILDING` e
 até `COMPLETE` ou `FAILED`, `generation-artifacts.private.json`. Cada entrada
 contém caminho absoluto literal, release/target, tipo, device/inode inicial e
