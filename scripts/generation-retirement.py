@@ -2795,14 +2795,16 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
     worktrees = [item for item in contract["artifacts"] if item["class"] == "DERIVED_WORKTREE"]
     runtimes = {Path(item["path"]) for item in contract["artifacts"]
                 if item["class"] == "DERIVED_OUTPUT_RUNTIME"}
-    supported_runtime_sets = {
-        frozenset({payload / "api-runtime", payload / "frontend-runtime"}),
+    runtime_components = {
+        frozenset({payload / "api-runtime", payload / "frontend-runtime"}):
+            ("api", "frontend"),
         frozenset({payload / "api-runtime", payload / "frontend-runtime",
-                   payload / "worker-runtime"}),
+                   payload / "worker-runtime"}):
+            ("api", "frontend", "worker"),
     }
     staging = [item for item in contract["artifacts"] if item["class"] == "DERIVED_STAGING"]
     if (len(worktrees) != 1 or worktrees[0].get("digest") != {"gitCommit": target} or
-            frozenset(runtimes) not in supported_runtime_sets or
+            frozenset(runtimes) not in runtime_components or
             any(by_path[path].get("digest") != {"indexSha256": hashes["indexSha256"]} for path in runtimes) or
             len(staging) != 1 or staging[0].get("state") != "SANITIZED" or
             staging[0].get("removedAtProducerCompletion") is not True or
@@ -2891,13 +2893,17 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
     if _path_has_symlink(installed, local_releases):
         deny("external_handoff_installation_path")
     if verify_payload:
+        components = runtime_components[frozenset(runtimes)]
         verification = _run_legacy_verifier(
             {"targetCommit": target, "releaseId": release,
              "canonicalVerifierSha256": handoff["canonicalVerifierSha256"],
              "manifest": {"sha256": hashes["manifestSha256"]}, "index": {"sha256": hashes["indexSha256"]}},
-            ["--release-root", str(installed)], "external_handoff_installation_verification")
-        if any(verification.get(key) != installation.get(key)
-               for key in ("apiEntrySha256", "buildId", "indexEntries")):
+            ["--release-root", str(installed)], "external_handoff_installation_verification",
+            components=components)
+        verification_keys = ["apiEntrySha256", "buildId", "indexEntries"]
+        if components == ("api", "frontend", "worker"):
+            verification_keys.append("workerEntrySha256")
+        if any(verification.get(key) != installation.get(key) for key in verification_keys):
             deny("external_handoff_installed_payload")
     else:
         stable_regular_hash(installed / "manifest.json", hashes["manifestSha256"], "external_handoff_manifest")
@@ -3958,7 +3964,10 @@ def _run_legacy_installed_verifier(descriptor: dict[str, Any]) -> dict[str, Any]
     )
 
 
-def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicate: str) -> dict[str, Any]:
+def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicate: str, *,
+                         components: tuple[str, ...] = ("api", "frontend")) -> dict[str, Any]:
+    if components not in (("api", "frontend"), ("api", "frontend", "worker")):
+        deny(f"{predicate}:components")
     verifier = canonical_release_verifier()
     try:
         before = verifier.lstat()
@@ -3983,7 +3992,7 @@ def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicat
     command = [sys.executable, f"/proc/self/fd/{fd}", "verify", *source,
                "--target", descriptor["targetCommit"],
                "--release-id", descriptor["releaseId"],
-               "--components", "api,frontend"]
+               "--components", ",".join(components)]
     try:
         try:
             result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
@@ -4006,13 +4015,16 @@ def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicat
             verified.get("manifestSha256") != descriptor["manifest"]["sha256"] or
             verified.get("indexSha256") != descriptor["index"]["sha256"]):
         deny(f"{predicate}_identity")
-    return {"stdoutSha256": digest_bytes(result.stdout.encode()),
-            "stderrSha256": digest_bytes(result.stderr.encode()),
-            "apiEntrySha256": verified.get("apiEntrySha256"),
-            "buildId": verified.get("buildId"),
-            "indexEntries": verified.get("indexEntries"),
-            "privateDataOverlay": verified.get("privateDataOverlay"),
-            "runtimeCacheOverlay": verified.get("runtimeCacheOverlay")}
+    evidence = {"stdoutSha256": digest_bytes(result.stdout.encode()),
+                "stderrSha256": digest_bytes(result.stderr.encode()),
+                "apiEntrySha256": verified.get("apiEntrySha256"),
+                "buildId": verified.get("buildId"),
+                "indexEntries": verified.get("indexEntries"),
+                "privateDataOverlay": verified.get("privateDataOverlay"),
+                "runtimeCacheOverlay": verified.get("runtimeCacheOverlay")}
+    if components == ("api", "frontend", "worker"):
+        evidence["workerEntrySha256"] = verified.get("workerEntrySha256")
+    return evidence
 
 
 def _legacy_reference_absence(descriptor: dict[str, Any], operational: dict[str, Any]) -> None:
