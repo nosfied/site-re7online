@@ -832,6 +832,17 @@ class DeployFixture(unittest.TestCase):
 
 
 class DriverTests(DeployFixture):
+    def test_worker_successor_origin_is_pinned_outside_the_successor_manifest(self) -> None:
+        self.assertEqual(deploy.WORKER_PM2_SUCCESSION_ORIGIN, {
+            "releaseId": "immutable-ed74c483-external-20261115T162015Z",
+            "targetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+            "controlPlane": "623cb42d1c2da644c15ac2c3a11d32f046e671e0",
+            "requests": {
+                "candidate": "c1ea9e71652661cc4e25c46fb1355c922c113776b10d20d3be5b2132ed266317",
+                "rollback": "8ce314d98535ee6e10eec5879636ef34563e42747da43cdbbf26d7d9c2f1118a",
+            },
+        })
+
     def test_worker_source_to_materializer_to_validate_pair_to_successor_preflight(self) -> None:
         """Permanent gate for every producer needed by the 3/3 profile."""
         self.three_component()
@@ -951,14 +962,32 @@ class DriverTests(DeployFixture):
             control_plane_succession=deploy.ControlPlaneSuccessionBinding(
                 succession, sha(succession)))
         self.driver = self._driver()
-        self.driver.preflight()
-        self.assertEqual("PREFLIGHT_PASS", self.driver._journal_read()["state"])
+        fixture_origin = {
+            "releaseId": self.candidate, "targetCommit": self.target,
+            "controlPlane": "6" * 40,
+            "requests": {role: binding["sha256"] for role, binding in original_requests.items()},
+        }
+        # An unrelated origin is rejected by the real consumer before the
+        # synthetic authority is substituted for this isolated fixture.
+        with self.assertRaisesRegex(deploy.Denied, "control_plane_succession_identity"):
+            self.driver._authenticated_runtime_manifest()
+        with patch.object(deploy, "WORKER_PM2_SUCCESSION_ORIGIN", fixture_origin):
+            self.driver.preflight()
+            self.assertEqual("PREFLIGHT_PASS", self.driver._journal_read()["state"])
 
-        # The same chain must stop on any successor artifact drift.
-        candidate_request = Path(bindings["candidate"]["request"])
-        candidate_request.write_text(candidate_request.read_text() + " ")
-        with self.assertRaisesRegex(deploy.Denied, "control_plane_succession"):
-            self._driver()._authenticated_runtime_manifest()
+            # The manifest cannot replace an original sealed request while
+            # retaining its self-declared binding.
+            original_candidate = Path(original_requests["candidate"]["path"])
+            original_candidate.write_text(original_candidate.read_text() + " ")
+            with self.assertRaisesRegex(deploy.Denied, "original_request"):
+                self._driver()._authenticated_runtime_manifest()
+            original_candidate.write_text(original_candidate.read_text()[:-1])
+
+            # The same chain must stop on any successor artifact drift.
+            candidate_request = Path(bindings["candidate"]["request"])
+            candidate_request.write_text(candidate_request.read_text() + " ")
+            with self.assertRaisesRegex(deploy.Denied, "control_plane_succession"):
+                self._driver()._authenticated_runtime_manifest()
 
     def test_successor_accepts_only_closed_legacy_worker_rollback_authority(self) -> None:
         self.three_component()

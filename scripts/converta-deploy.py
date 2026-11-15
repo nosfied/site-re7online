@@ -145,6 +145,18 @@ PROCESS_NAMES = {
     "frontend": "re7-admin-front",
     "worker": "re7-whatsapp-web-worker",
 }
+# Immutable authority recovered from the already sealed 3/3 preparation.  A
+# successor manifest may point at these files, but it cannot choose their trust
+# anchors.  Changing this authority requires another versioned consumer review.
+WORKER_PM2_SUCCESSION_ORIGIN = {
+    "releaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "targetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+    "controlPlane": "623cb42d1c2da644c15ac2c3a11d32f046e671e0",
+    "requests": {
+        "candidate": "c1ea9e71652661cc4e25c46fb1355c922c113776b10d20d3be5b2132ed266317",
+        "rollback": "8ce314d98535ee6e10eec5879636ef34563e42747da43cdbbf26d7d9c2f1118a",
+    },
+}
 LOCK = Path("/opt/re7online/backups/converta-persistent/deploy.lock")
 FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
 EXTERNAL_LOCK_ENV = "RE7_DEPLOYMENT_LOCK_HELD"
@@ -608,9 +620,11 @@ class Driver:
         if (set(value) != required or value.get("schemaVersion") != 1 or
                 value.get("kind") != "WORKER_PM2_CONTROL_PLANE_SUCCESSION"):
             deny("control_plane_succession_schema")
+        origin = WORKER_PM2_SUCCESSION_ORIGIN
         original = value.get("originalControlPlane")
-        if (not isinstance(original, str) or not SHA40.fullmatch(original) or
-                original == self.inputs.control_plane or
+        if (original != origin["controlPlane"] or
+                self.inputs.release != origin["releaseId"] or
+                self.inputs.target != origin["targetCommit"] or
                 value.get("successorControlPlane") != self.inputs.control_plane or
                 value.get("releaseId") != self.inputs.release or
                 value.get("targetCommit") != self.inputs.target or
@@ -630,7 +644,10 @@ class Driver:
         if not isinstance(originals, dict) or set(originals) != {"candidate", "rollback"}:
             deny("control_plane_succession_original_requests")
         for role, request in originals.items():
-            self._succession_file_binding(request, f"original_request:{role}")
+            _, authenticated_sha256 = self._succession_file_binding(
+                request, f"original_request:{role}")
+            if authenticated_sha256 != origin["requests"][role]:
+                deny(f"control_plane_succession_original_request:{role}")
         successor = value.get("successorBindings")
         worker_pm2 = runtime_manifest.get("workerPm2")
         if (not isinstance(successor, dict) or set(successor) != {"candidate", "rollback"} or
