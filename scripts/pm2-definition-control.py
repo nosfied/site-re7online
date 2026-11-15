@@ -176,6 +176,12 @@ def validate_environment_keys(value: Any, component: str, role: str) -> list[str
             if role == "candidate" and key in component_allowlist["rollbackCompatibility"]:
                 deny(f"application_env_rollback_only:{key}")
             deny(f"environment_key_not_repository_allowed:{key}")
+    # The worker definition is replaced (delete/start), not merely restarted.
+    # Its request therefore has to cover the complete closed functional
+    # environment.  Accepting a subset here would silently produce a worker
+    # that starts without part of its authenticated configuration.
+    if component == "worker" and set(keys) != allowed:
+        deny("worker_environment_keys_incomplete")
     return keys
 
 

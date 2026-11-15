@@ -23,16 +23,12 @@ atribuídos à retirada. As dívidas externas históricas e a geração builder 
 continuam independentes; `DEPLOYED_RETENTION_INCOMPLETE` permanece o estado
 imutável da fotografia de conclusão produtiva.
 
-**Posicionamento arquitetural novo:** builder externo isolado é o **caminho
-preferencial para QUALIFICAR novas gerações**, pois já foi comprovado em release
-API-only e API+frontend, evitando o custo de workspace e build na VPS. A
-operação automatizada integral e a troca do default **ainda não foram
-implantadas**: o runbook vigente requer seleção e qualificação explícitas do
-builder e autorização dos efeitos produtivos. Não inferir autorização permanente
-nem habilitar build no host externo por simples atualização documental. O
-build na VPS é fallback condicionado ao orçamento derivado e à mesma segurança,
-não um motivo para repetir geração equivalente. Todo upgrade futuro deve usar
-evidências históricas da limpeza em vez de reabrir auditorias globais.
+**Posicionamento arquitetural vigente:** builder externo descartável é o caminho
+normal de produção de novas gerações, comprovado em API-only, API+frontend e no
+pacote API+frontend+worker `ed74c483`. A autorização continua sendo por fase:
+documentação não autoriza build, transferência ou ativação. Build isolado na VPS
+é fallback excepcional sujeito a decisão e orçamento próprios, não uma segunda
+rota normal nem motivo para reconstruir geração equivalente.
 
 **Princípio operacional:** build uma vez, transferir uma vez, instalar
 inertemente, validar fronteiras/retornos/cache, ativar só os componentes
@@ -45,14 +41,10 @@ no runtime ativo.
 
 ## Topologia canônica
 
-- O build ocorre uma única vez em worktree Linux `x86_64` isolado, com Node
-  `v20.20.0` e npm compatível com o lockfile. O caminho preferencial para novas qualificações é o builder externo isolado,
-  conforme o padrão-alvo acima; sua execução ainda exige a decisão e qualificação
-  específicas do runbook. O build na VPS permanece fallback sob gate próprio,
-  com saída fora do runtime ativo e sem parar serviços. A autorização de cada janela
-  de ativação permanece separada; não se pede novamente autorização para o local
-  de build já decidido. O produtor
-  canônico é `scripts/converta-release.py`; ativação nunca constrói artefatos.
+- O build ocorre uma única vez em worktree Linux `x86_64` isolado no builder
+  externo. Antes de `open`, o próprio ambiente chamador prova `PATH`, executáveis,
+  Node `v20.20.0`, npm `10.8.2` e herança por subprocessos. O produtor canônico é
+  `scripts/converta-release.py`; ativação nunca constrói artefatos.
 - A admissão é derivada do contrato: todos os custos, reserva e uma margem igual ao
   envelope de evidência de falha. Não há piso estático independente. Documentos
   históricos `P00_TENANT_ISOLATION_RECOVERY` permanecem evidência autenticável da
@@ -106,8 +98,10 @@ e nunca selecionadas ou reiniciadas. No perfil 3/3, a ordem autenticada é API,
 frontend e worker; antes do worker novo, o registro anterior é removido e uma única
 definição PM2 autenticada é iniciada, sem `--update-env`, seguida de três amostras
 estáveis de PID/start ticks, CWD físico, entrypoint e hash. Uma falha reverte em
-ordem inversa e reutiliza a definição de retorno autenticada. O marker registra os
-componentes selecionados.
+ordem inversa e reutiliza a definição de retorno autenticada. Entre `pm2 delete` e
+o `start` válido, ausência do worker é estado intermediário autenticado, não sucesso:
+o journal restaura uma única definição limpa, sem `PWD` herdado, e retoma sem
+duplicar worker ou repetir efeitos concluídos. O marker registra os componentes.
 
 O produtor registra obrigatoriamente no contrato da geração o único overlay operacional admitido,
 `api-runtime/.data`, como `PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`. O preflight
@@ -151,19 +145,27 @@ qualquer `PRIVATE_DATA_NEVER_RETIRE` são invariavelmente preservados.
 ### Fronteira entre produção e ativação
 
 `converta-release.py` oferece `build`, `verify` e `install`. O build exige worktree
-limpo no target, Node `v20.20.0`, saída exclusiva e `SOURCE_DATE_EPOCH`, executa Prisma antes
-do build da API, executa o frontend uma vez e sela API/frontend completos. Seu
+limpo no target, toolchain previamente autenticada, saída exclusiva e
+`SOURCE_DATE_EPOCH`; executa Prisma antes da API, frontend uma vez e, no perfil
+3/3, npm/Prisma/build do worker uma vez, selando os componentes completos. Seu
 `index.sha256` usa exatamente o schema v1 conferido por `converta-deploy.py`, e o pacote só é publicado após
 fechamento, teste xz/tar, extração independente e comparação integral.
 O repositório de build deve ser descendente estrito da raiz `build-worktrees` da
 política versionada autenticada; uma raiz redefinida no snapshot ou um checkout
 externo são negados antes do primeiro npm.
 
-O manifesto registra target, release, componentes, toolchain, BUILD_ID, hash do
-entrypoint da API, hash do índice e campos determinísticos. Caches, `.env`, Git,
-logs, evidências, uploads, worker e symlinks externos são negados. O produtor não
+O manifesto registra target, release, componentes, toolchain, BUILD_ID, hashes dos
+entrypoints API/worker, índice e campos determinísticos. Caches, `.env`, Git, logs,
+evidências, uploads e symlinks externos são negados. O produtor não
 possui rede produtiva, PM2, banco, Meta, configuração privada ou seleção de runtime;
 essas responsabilidades pertencem à operação de ativação após autorização.
+
+O precedente `fa10f4f5` autentica Node `v20.20.0`/npm `10.8.2` e export receipt
+`012103fd…a6bb`. Em `ed74c483`, a primeira geração falhou antes da toolchain porque
+o shell herdou Node 22; suas evidências foram preservadas e a sucessora independente
+repetiu a prova de ambiente antes de `open`, construiu/verificou 3/3 e chegou a
+`EXPORTED/AUTHORITY_EXPORTED`, receipt `c7e97d09…6cbb`. Nenhum desses fatos equivale
+a upload, instalação ou deploy.
 
 O modelo é **build once / promote the same artifact**. Builds Next independentes
 podem produzir BUILD_ID diferente sem invalidar o produtor; apenas um build é
@@ -225,7 +227,9 @@ Toda definição nova usa o contrato versionado de
   explícita;
 - a request escolhe somente um subconjunto da allowlist por componente versionada
   no repositório; estrutura e valores vêm do artefato-fonte privado canônico e nunca
-  entram em relatório ou stdout;
+  entram em relatório ou stdout. O worker é a exceção mais restritiva: como sua
+  definição é substituída por `delete/start`, o request deve selecionar o conjunto
+  funcional completo de 17 nomes, sem omissão ou acréscimo;
 - a allowlist separa `common`, `candidate` e `rollbackCompatibility` por componente.
   Compatibilidade de retorno não autoriza uso no candidato nem em releases futuras;
   inventário sanitizado dos nomes presentes nas duas fontes é gate obrigatório antes
@@ -249,6 +253,14 @@ Toda definição nova usa o contrato versionado de
   identidade do interpretador;
 - somente definições privadas regulares `0600`, criadas em destinos novos, podem ser
   consumidas.
+
+Os precedentes são cumulativos: PR #199 separou estrutura/ambiente/proveniência;
+#200 fechou allowlists por papel; #207 autenticou manifesto privado e fontes; #231
+materializou bindings; #233 dispensou bindings quando não há substituição de
+definição; #401 acrescentou o worker e rollback. O gate sucessor cobre a dependência
+que #401 não exercitou: produtor real de fixture, projeção privada, materializador,
+`validate-pair` e preflight do consumidor no mesmo teste. Um perfil não pode ser
+admitido se qualquer produtor exigido pelo consumidor estiver ausente.
 
 Os logs possuem duas identidades: `out_file`/`error_file`/`merge_logs` pertencem à
 definição canônica; `pm_out_log_path`/`pm_err_log_path` pertencem à identidade

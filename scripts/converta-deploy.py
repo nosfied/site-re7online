@@ -145,6 +145,18 @@ PROCESS_NAMES = {
     "frontend": "re7-admin-front",
     "worker": "re7-whatsapp-web-worker",
 }
+# Immutable authority recovered from the already sealed 3/3 preparation.  A
+# successor manifest may point at these files, but it cannot choose their trust
+# anchors.  Changing this authority requires another versioned consumer review.
+WORKER_PM2_SUCCESSION_ORIGIN = {
+    "releaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "targetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+    "controlPlane": "623cb42d1c2da644c15ac2c3a11d32f046e671e0",
+    "requests": {
+        "candidate": "c1ea9e71652661cc4e25c46fb1355c922c113776b10d20d3be5b2132ed266317",
+        "rollback": "8ce314d98535ee6e10eec5879636ef34563e42747da43cdbbf26d7d9c2f1118a",
+    },
+}
 LOCK = Path("/opt/re7online/backups/converta-persistent/deploy.lock")
 FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
 EXTERNAL_LOCK_ENV = "RE7_DEPLOYMENT_LOCK_HELD"
@@ -384,6 +396,15 @@ class RetirementSentinelClosureBinding:
 
 
 @dataclass(frozen=True)
+class ControlPlaneSuccessionBinding:
+    manifest: Path
+    manifest_sha256: str
+
+    def binding(self) -> dict[str, str]:
+        return {"manifest": str(self.manifest), "manifestSha256": self.manifest_sha256}
+
+
+@dataclass(frozen=True)
 class Inputs:
     release: str
     target: str
@@ -398,6 +419,7 @@ class Inputs:
     retirement_sentinel_closure: RetirementSentinelClosureBinding | None = None
     runtime_cache_reconciliation: Path | None = None
     runtime_cache_reconciliation_sha256: str | None = None
+    control_plane_succession: ControlPlaneSuccessionBinding | None = None
 
     def binding(self) -> dict[str, Any]:
         value = {
@@ -411,6 +433,8 @@ class Inputs:
             value["generationRetirement"] = self.retirement.binding()
         if self.retirement_sentinel_closure is not None:
             value["retirementSentinelClosure"] = self.retirement_sentinel_closure.binding()
+        if self.control_plane_succession is not None:
+            value["controlPlaneSuccession"] = self.control_plane_succession.binding()
         return value
 
 
@@ -553,6 +577,108 @@ class Driver:
         return (info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode,
                 info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
+    @staticmethod
+    def _succession_file_binding(value: Any, label: str) -> tuple[Path, str]:
+        if not isinstance(value, dict) or set(value) != {"path", "sha256"}:
+            deny(f"control_plane_succession:{label}")
+        path = Path(str(value.get("path", "")))
+        expected = str(value.get("sha256", ""))
+        if not path.is_absolute() or not SHA256.fullmatch(expected):
+            deny(f"control_plane_succession:{label}")
+        raw, _ = stable_regular_bytes(path, required_mode=0o600)
+        if hashlib.sha256(raw).hexdigest() != expected:
+            deny(f"control_plane_succession:{label}:sha256")
+        return path, expected
+
+    @staticmethod
+    def _contains_scalar(value: Any, expected: str) -> bool:
+        if value == expected:
+            return True
+        if isinstance(value, dict):
+            return any(Driver._contains_scalar(child, expected) for child in value.values())
+        if isinstance(value, list):
+            return any(Driver._contains_scalar(child, expected) for child in value)
+        return False
+
+    def _authenticated_control_plane_succession(
+        self, runtime_manifest: dict[str, Any]
+    ) -> dict[str, Any]:
+        binding = self.inputs.control_plane_succession
+        if binding is None:
+            deny("control_plane_succession_binding")
+        if not binding.manifest.is_absolute() or not SHA256.fullmatch(binding.manifest_sha256):
+            deny("control_plane_succession_binding")
+        raw, _ = stable_regular_bytes(binding.manifest, required_mode=0o600)
+        if hashlib.sha256(raw).hexdigest() != binding.manifest_sha256:
+            deny("control_plane_succession_sha256")
+        value = json_object(raw, binding.manifest.name)
+        required = {
+            "schemaVersion", "kind", "originalControlPlane", "successorControlPlane",
+            "releaseId", "targetCommit", "packageSha256", "authorities",
+            "originalRequests", "successorBindings", "scripts",
+        }
+        if (set(value) != required or value.get("schemaVersion") != 1 or
+                value.get("kind") != "WORKER_PM2_CONTROL_PLANE_SUCCESSION"):
+            deny("control_plane_succession_schema")
+        origin = WORKER_PM2_SUCCESSION_ORIGIN
+        original = value.get("originalControlPlane")
+        if (original != origin["controlPlane"] or
+                self.inputs.release != origin["releaseId"] or
+                self.inputs.target != origin["targetCommit"] or
+                value.get("successorControlPlane") != self.inputs.control_plane or
+                value.get("releaseId") != self.inputs.release or
+                value.get("targetCommit") != self.inputs.target or
+                not SHA256.fullmatch(str(value.get("packageSha256", "")))):
+            deny("control_plane_succession_identity")
+        authorities = value.get("authorities")
+        if not isinstance(authorities, dict) or set(authorities) != {
+                "exportReceipt", "transferReceipt", "installationReceipt"}:
+            deny("control_plane_succession_authorities")
+        for name, authority in authorities.items():
+            path, _ = self._succession_file_binding(authority, name)
+            receipt = read_json(path)
+            if (not self._contains_scalar(receipt, self.inputs.release) or
+                    not self._contains_scalar(receipt, value["packageSha256"])):
+                deny(f"control_plane_succession:{name}:release_package")
+        originals = value.get("originalRequests")
+        if not isinstance(originals, dict) or set(originals) != {"candidate", "rollback"}:
+            deny("control_plane_succession_original_requests")
+        for role, request in originals.items():
+            _, authenticated_sha256 = self._succession_file_binding(
+                request, f"original_request:{role}")
+            if authenticated_sha256 != origin["requests"][role]:
+                deny(f"control_plane_succession_original_request:{role}")
+        successor = value.get("successorBindings")
+        worker_pm2 = runtime_manifest.get("workerPm2")
+        if (not isinstance(successor, dict) or set(successor) != {"candidate", "rollback"} or
+                not isinstance(worker_pm2, dict)):
+            deny("control_plane_succession_bindings")
+        key_map = {"request": "request", "sourceArtifact": "sourceArtifact", "definition": "definition"}
+        for role in ("candidate", "rollback"):
+            declared = successor.get(role)
+            actual = worker_pm2.get(role)
+            if not isinstance(declared, dict) or set(declared) != set(key_map) or not isinstance(actual, dict):
+                deny(f"control_plane_succession_binding:{role}")
+            for declared_key, runtime_key in key_map.items():
+                path, expected = self._succession_file_binding(
+                    declared[declared_key], f"successor:{role}:{declared_key}")
+                if path != Path(str(actual.get(runtime_key, ""))) or (
+                        declared_key == "sourceArtifact" and expected != actual.get("sourceSha256")):
+                    deny(f"control_plane_succession_binding:{role}:{declared_key}")
+        scripts = value.get("scripts")
+        script_paths = {
+            "deploy": self.repo / "scripts/converta-deploy.py",
+            "materializer": self.repo / "scripts/pm2-binding-materialize.py",
+            "control": self.repo / "scripts/pm2-definition-control.py",
+            "allowlist": self.repo / "scripts/pm2-definition-env-allowlist.v1.json",
+        }
+        if not isinstance(scripts, dict) or set(scripts) != set(script_paths):
+            deny("control_plane_succession_scripts")
+        for name, path in script_paths.items():
+            if scripts.get(name) != digest(path):
+                deny(f"control_plane_succession_script:{name}")
+        return value
+
     def _authenticated_runtime_manifest(self) -> dict[str, Any]:
         path = self.inputs.runtime_manifest
         if not path.is_absolute() or not SHA256.fullmatch(self.inputs.runtime_manifest_sha256):
@@ -566,7 +692,10 @@ class Driver:
         worker_selected = "worker" in self.inputs.components
         if worker_selected:
             expected_keys.add("workerPm2")
-        expected_schema = 2 if worker_selected else 1
+        successor = self.inputs.control_plane_succession is not None
+        if successor:
+            expected_keys.add("controlPlaneSuccessionSha256")
+        expected_schema = 3 if successor else (2 if worker_selected else 1)
         if set(value) != expected_keys or value.get("schemaVersion") != expected_schema:
             deny("runtime_manifest_schema")
         if (value.get("mode") != "fixed-current-existing-pm2" or
@@ -586,7 +715,10 @@ class Driver:
             identity = rollbacks.get(component)
             common = {"releaseId", "manifestSha256", "indexSha256", "entrySha256"}
             expected = common | ({"buildId"} if component == "frontend" else set())
-            if (not isinstance(identity, dict) or set(identity) != expected or
+            legacy_expected = common | {"authorityKind", "manifestName", "indexName"}
+            allowed_expected = ({frozenset(expected), frozenset(legacy_expected)}
+                                if successor and component == "worker" else {frozenset(expected)})
+            if (not isinstance(identity, dict) or frozenset(identity) not in allowed_expected or
                     not isinstance(identity.get("releaseId"), str) or
                     not identity["releaseId"] or
                     not all(SHA256.fullmatch(str(identity.get(key, "")))
@@ -594,8 +726,17 @@ class Driver:
                     (component == "frontend" and
                      (not isinstance(identity.get("buildId"), str) or not identity["buildId"]))):
                 deny(f"runtime_manifest_rollback:{component}")
+            if (successor and component == "worker" and set(identity) == legacy_expected and (
+                    identity.get("authorityKind") != "legacy-enumerated-release" or
+                    identity.get("manifestName") != "release-manifest.json" or
+                    identity.get("indexName") != "release-index.json")):
+                deny("runtime_manifest_rollback:worker:legacy_authority")
         if worker_selected:
             self._validate_worker_pm2_binding(value.get("workerPm2"))
+        if successor:
+            if value.get("controlPlaneSuccessionSha256") != self.inputs.control_plane_succession.manifest_sha256:
+                deny("runtime_manifest_control_plane_succession")
+            self._authenticated_control_plane_succession(value)
         self._failpoint("runtime_manifest_read")
         try:
             current = path.stat()
@@ -1165,8 +1306,10 @@ class Driver:
     def _rollback_release(self, component: str, identity: dict[str, Any]) -> Path:
         root = self.releases / identity["releaseId"]
         runtime = root / RUNTIME_DIR[component]
-        manifest_path = root / "manifest.json"
-        index_path = root / "index.sha256"
+        legacy_worker = (component == "worker" and
+                         identity.get("authorityKind") == "legacy-enumerated-release")
+        manifest_path = root / (identity.get("manifestName") if legacy_worker else "manifest.json")
+        index_path = root / (identity.get("indexName") if legacy_worker else "index.sha256")
         manifest_raw, _ = stable_regular_bytes(manifest_path)
         index_raw, _ = stable_regular_bytes(index_path)
         if hashlib.sha256(manifest_raw).hexdigest() != identity["manifestSha256"]:
@@ -1174,7 +1317,8 @@ class Driver:
         if hashlib.sha256(index_raw).hexdigest() != identity["indexSha256"]:
             deny(f"rollback_index:{component}")
         manifest = json_object(manifest_raw, manifest_path.name)
-        if manifest.get("indexSha256") != identity["indexSha256"]:
+        declared_index = manifest.get("runtimeIndexSha256") if legacy_worker else manifest.get("indexSha256")
+        if declared_index != identity["indexSha256"]:
             deny(f"rollback_manifest_index:{component}")
         entry_relative = ("dist/index.js" if component == "api" else
                           "node_modules/next/dist/bin/next" if component == "frontend" else
@@ -1193,9 +1337,12 @@ class Driver:
                     runtime_identity.get("buildId") != identity["buildId"]):
                 deny("rollback_build_id:frontend")
         else:
-            declared = runtime_identity.get("entrySha256")
+            declared = (manifest.get("workerEntrypointSha256") if legacy_worker else
+                        runtime_identity.get("entrySha256"))
             if declared is not None and declared != identity["entrySha256"]:
                 deny("rollback_manifest_entry:worker")
+            if legacy_worker and manifest.get("workerEntrypoint") != f"worker-runtime/{entry_relative}":
+                deny("rollback_manifest_entry_path:worker")
         return runtime
 
     def _row(self, rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
@@ -2748,6 +2895,8 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--components", required=True)
     parser.add_argument("--runtime-manifest", type=Path, required=True)
     parser.add_argument("--runtime-manifest-sha256", required=True)
+    parser.add_argument("--control-plane-succession", type=Path)
+    parser.add_argument("--control-plane-succession-sha256")
     parser.add_argument("--transaction-root", type=Path, required=True)
     parser.add_argument("--generation-retirement-tool", type=Path, required=True)
     parser.add_argument("--generation-retirement-tool-sha256", required=True)
@@ -2778,6 +2927,9 @@ def parse() -> tuple[str, Inputs]:
     if ((args.retirement_sentinel_closure is None) !=
             (args.retirement_sentinel_closure_sha256 is None)):
         deny("retirement_sentinel_closure_binding")
+    if ((args.control_plane_succession is None) !=
+            (args.control_plane_succession_sha256 is None)):
+        deny("control_plane_succession_binding")
     components = tuple(args.components.split(","))
     retirement = RetirementBinding(
         args.generation_retirement_tool, args.generation_retirement_tool_sha256,
@@ -2790,14 +2942,20 @@ def parse() -> tuple[str, Inputs]:
     sentinel_closure = (RetirementSentinelClosureBinding(
         args.retirement_sentinel_closure, args.retirement_sentinel_closure_sha256)
         if args.retirement_sentinel_closure is not None else None)
-    return args.command, Inputs(args.release, args.target, args.control_plane,
-                                components, args.runtime_manifest, args.transaction_root,
-                                args.runtime_manifest_sha256, retirement,
-                                args.private_data_reconciliation,
-                                args.private_data_reconciliation_sha256,
-                                sentinel_closure,
-                                args.runtime_cache_reconciliation,
-                                args.runtime_cache_reconciliation_sha256)
+    succession = (ControlPlaneSuccessionBinding(
+        args.control_plane_succession, args.control_plane_succession_sha256)
+        if args.control_plane_succession is not None else None)
+    return args.command, Inputs(
+        release=args.release, target=args.target, control_plane=args.control_plane,
+        components=components, runtime_manifest=args.runtime_manifest,
+        transaction_root=args.transaction_root,
+        runtime_manifest_sha256=args.runtime_manifest_sha256, retirement=retirement,
+        private_data_reconciliation=args.private_data_reconciliation,
+        private_data_reconciliation_sha256=args.private_data_reconciliation_sha256,
+        retirement_sentinel_closure=sentinel_closure,
+        runtime_cache_reconciliation=args.runtime_cache_reconciliation,
+        runtime_cache_reconciliation_sha256=args.runtime_cache_reconciliation_sha256,
+        control_plane_succession=succession)
 
 
 def main() -> int:

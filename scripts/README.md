@@ -3,17 +3,22 @@
 > [!IMPORTANT]
 > O procedimento vigente está em [DEPLOY_RUNBOOK.md](../docs/saas/DEPLOY_RUNBOOK.md)
 > e o estado ativo em [CURRENT_STATE.md](../docs/saas/CURRENT_STATE.md).
-> O padrão autorizado é build na VPS, em worktree e saída isolados, seguido de
-> seleção pelos caminhos estáveis e restart dirigido dos registros PM2 existentes.
+> O caminho vigente é build único no builder externo descartável, export autenticado,
+> transferência única e instalação inerte. Build isolado na VPS é fallback excepcional,
+> não uma segunda instrução normal. Ativação continua separadamente autorizada.
 
 ## `converta-release.py` — produtor build-once
 
 Constrói e verifica uma release imutável de API e frontend, opcionalmente com o
-worker quando a matriz de impacto o exigir, em worktree isolado. Builder externo
-é alternativa mediante decisão específica. Expõe somente
+worker quando a matriz de impacto o exigir, em worktree isolado no builder externo.
+Expõe somente
 `build` e `verify`, exige worktree limpo no target exato, Node `v20.20.0`,
 `SOURCE_DATE_EPOCH` explícito, saída nova e um dos payloads fechados
 `api,frontend` ou `api,frontend,worker`.
+
+Antes de `disposable-builder-lifecycle.py open`, o chamador autentica `PATH`,
+`command -v node/npm`, Node `v20.20.0`, npm `10.8.2` e a mesma resolução em
+subprocessos. Descobrir Node divergente dentro do produtor consome a tentativa.
 
 O produtor executa `npm ci`, Prisma generate e cada build exatamente uma vez;
 preserva o BUILD_ID produzido e materializa `api-runtime`, `frontend-runtime` e,
@@ -36,6 +41,22 @@ e validadas por `pm2-definition-control.py`. A ativação usa troca atômica dos
 symlinks e restart dirigido sem `--update-env`, seguindo exclusivamente o
 [runbook](../docs/saas/DEPLOY_RUNBOOK.md). O worker anterior é removido do PM2
 antes do sucessor ser iniciado, impedindo sobreposição e dupla captura de jobs.
+Se o start negar após o `delete`, o journal autentica a ausência e restaura uma
+única definição rollback validada, sem `PWD`; retomada não repete API, frontend
+nem um worker já restaurado.
+Para pacote 3/3 já instalado, o schema 3 admite somente uma sucessão autenticada
+do control plane, vinculando receipts, requests antigos e bindings novos sem
+repetir build, transferência ou instalação.
+
+## `pm2-binding-materialize.py` — materializador de bindings privados
+
+O frontend mantém o fluxo schema 1 homologado. Para o worker, o materializador
+autentica SHA-256 e identidade física da fonte histórica, projeta exatamente os
+17 nomes funcionais da allowlist, remove metadados de shell/PM2 e vincula o
+entrypoint à release verificada. Candidato e rollback usam fontes, requests e
+proveniências distintas e devem passar juntos por `validate-pair`. O retorno
+legado `e2e7f17a` é a única fronteira que admite os nomes históricos
+`release-manifest.json`/`release-index.json`, marker e entrypoint enumerados.
 
 ## `deploy-impact-matrix.sh`
 
@@ -66,7 +87,8 @@ de prosseguir.
 ## `apps/whatsapp-agent/scripts/deploy-vps.sh` — histórico/obsoleto
 
 Este script antigo de checkout/build no runtime ativo não é utilizável para deploy
-normal. Isso não proíbe o build isolado na VPS definido no runbook vigente. Os comandos
+normal. Build isolado na VPS, quando excepcionalmente autorizado, usa o produtor e
+os mesmos gates do runbook, nunca este script. Os comandos
 abaixo permanecem apenas como registro histórico:
 
 ```bash

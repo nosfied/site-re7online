@@ -15,9 +15,9 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 ## Pré-requisitos
 
 - target e control plane aprovados em CI;
-- release imutável de API/frontend selada por `scripts/converta-release.py`;
-- build único na VPS em worktree Linux x86_64 isolado, Node v20.20.0, com capacidade conferida; esse local de build já está autorizado pelo owner;
-- builder externo somente como alternativa decidida separadamente. Para preservação, se o lock do builder estiver ausente, executar primeiro `materialize-builder-preservation-lock` com request/SHA e relatório exclusivos; não criar o lock manualmente. Antes do preflight, exigir a [qualificação entre hosts](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#build-externo-e-qualificação-entre-hosts); a instalação inerte não autoriza a janela de ativação;
+- release imutável dos componentes selecionados, selada por `scripts/converta-release.py`;
+- build único no builder externo descartável é o caminho normal comprovado; build isolado na VPS é fallback excepcional, com decisão, orçamento e autorização próprios, nunca instrução concorrente;
+- antes de `open`, no ambiente real que chamará o produtor, autenticar `PATH`, `command -v node/npm`, Node `v20.20.0`, npm `10.8.2` e a mesma resolução em subprocessos. Depois do export, exigir a [qualificação entre hosts](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md#build-externo-e-qualificação-entre-hosts); instalação inerte não autoriza ativação;
 - pacote, manifesto, índice, BUILD_ID e entrypoint integralmente verificados;
 - release extraída em destino novo sob `/opt/re7online/releases`;
 - configuração privada e retorno autenticados, dump anterior e symlinks capturados;
@@ -29,11 +29,10 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 
 Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
 shell, derivar definição executável de introspecção, usar `--update-env`, executar
-`pm2 flush` ou repetir automaticamente uma tentativa negada.
-
-Antes de consumir uma tentativa, consultar exclusivamente o health público da API em
-`https://converta.re7online.com/agent-api/health`: exigir HTTP 200, JSON, `ok=true`
-e `db="ok"`. Host administrativo ou `/health` do frontend não comprova a API.
+`pm2 flush` ou repetir automaticamente uma tentativa negada. Merge administrativo,
+commit efetivo, árvore funcional e control plane são identidades distintas; registrar
+os quatro. O control plane não vira target.
+Antes de consumir uma tentativa, o health público `https://converta.re7online.com/agent-api/health` deve responder HTTP 200, JSON, `ok=true` e `db="ok"`; host administrativo ou `/health` do frontend não comprova a API.
 
 ## Preparação e retomada sem reiniciar a geração
 
@@ -50,9 +49,10 @@ A automação integral das fronteiras permanece aberta no [P00-D](backlog/DEPLOY
 
 `observations.pm2` exige exatamente `path`, `sha256` e `fingerprintSha256`. O SHA autentica o executável; o fingerprint vem de jlist pela projeção `_pm2_fingerprint()` do consumidor, nunca do hash do binário/dump/JSON bruto. Recapturar também current/dump/grafo e preservar a fotografia negada. Antes de retenção prepare, confrontar a fotografia inteira com `generation-retirement.py::validate_operational()`. A admissão deve ser corrigida/testada contra o consumidor real antes da próxima geração normal; fixtures sem blocos obrigatórios não qualificam a fronteira.
 
-Negativa de schema exige correção e regressão; fotografia vencida exige leitura dirigida; mudança real exige requalificação; capacidade exige separar orçamento/reserva de meta adicional; efeito parcial exige journal/receipt. Retomada após causa corrigida é registrada; retry cego, edição de prova para forçar PASS e repetição de efeitos concluídos são proibidos.
+Negativa de schema exige correção e regressão; fotografia vencida exige leitura dirigida; mudança real exige requalificação; capacidade exige separar orçamento/reserva de meta adicional; efeito parcial exige journal/receipt. `FAILED` preserva output/evidências/review; sucessora usa ID, raiz, custódia e output novos e protege a predecessora. Sanitização exige lifecycle e autorização. Retry cego, edição de prova e repetição de efeitos são proibidos.
 
 ## Build once
+Sequência vigente: contratos/custódia → toolchain no processo/subprocesso → `open` → worktree detached → um `build` → `verify` do mesmo pacote → destino `exported` privado `0700` → um `export`. `fa10f4f5` tem receipt `012103fd…a6bb`; `ed74c483` 3/3 tem `c7e97d09…6cbb`. Receipt não autoriza upload.
 
 ### Gate de dívida e encerramento da geração
 
@@ -125,7 +125,7 @@ O contrato produzido por gerações atuais deve declarar byte-exatamente `privat
 
 A release `0fdec` foi produzida antes do campo explícito. Sua única continuação admitida exige manifesto privado autenticado, fechado à release/target, SHA do contrato original, intenção de retenção e transação já aberta, além da identidade física do overlay e do estado `FAILED/recoveryAction=finalize`, aceite existente e `saveCount=0`. O manifesto é aceito somente por `finalize`: não autoriza preflight, ativação, outra transação ou outra geração. A transação v4 de `36b94c6d` possui uma continuação igualmente fechada, exclusiva de `finalize`, para seis entradas de `.next/cache` criadas após a ativação. O manifesto privado autentica release, target, transação, índice, manifesto, intenção 3/3, aceite, lock e uma cópia byte-exata do journal `FAILED/saveCount=0`; o binding original do control plane permanece no journal, enquanto o HEAD sucessor e os bytes do driver corretivo são autenticados separadamente pelo mesmo manifesto. Antes do único `pm2 save`, o driver revalida todas as entradas indexadas e exige correspondência exata de caminho, tipo, modo, tamanho e SHA das seis entradas adicionais; ausência, drift, symlink ou qualquer sétima entrada negam. Cada request autorizado vincula um ordinal e três destinos exclusivos, preservando os outputs de todas as tentativas. Em retomada após interrupção, o dump durável é reconhecido antes de incrementar `saveCount`, impedindo um segundo save. Esta exceção não autoriza outra release, transação, inventário ou efeito de retenção.
 No fluxo fixed-current, o `preflight` aceita somente `--components api`, `--components api,frontend` ou `--components api,frontend,worker` e exige `--generation-retirement-*` e manifesto privado do runtime. Os dois perfis anteriores preservam schema 1 e comportamento; o perfil 3/3 usa schema 2, payload integral com `worker-runtime` e bindings PM2 candidata/rollback do worker, materializados e autenticados por `pm2-definition-control.py validate-pair`.
-O allowlist do worker contém somente variáveis consumidas e exclui `PWD`; nenhum perfil usa `--update-env`. No modo API-only, frontend e worker são dependências preservadas. Após aceite, `pm2 save`, dump validado,
+O allowlist do worker contém exatamente os 17 nomes funcionais autenticados (`APP_AUTH_SECRET`, `CHANNEL_ACCOUNT_SECRET_KEY`, `DATABASE_URL`, `NODE_ENV`, `SMTP_FROM`, `SMTP_HOST`, `SMTP_PASS`, `SMTP_PORT`, `SMTP_USER`, `WEB_PUSH_SUBJECT`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_SESSION_MEDIA_ROOT`, `WHATSAPP_WEB_WORKER_CONTROL_HOST`, `WHATSAPP_WEB_WORKER_CONTROL_PORT`, `WHATSAPP_WEB_WORKER_CONTROL_TOKEN`, `WHATSAPP_WEB_WORKER_CONTROL_URL`). Valores nunca entram em documentação ou journal. `PWD`, `PM2_HOME`, `PATH`, argumentos e metadados `pm_*` não são ambiente funcional. Requests do worker devem conter o conjunto completo; subconjunto ou campo extra é negativa. No modo API-only, frontend e worker são dependências preservadas. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
 `generation-retirement.py execute`. Sucesso encerra em `DEPLOYED_SANITIZED`. Na retirada autônoma pós-rollback terminal, `execute` cria o `deploy.lock` ausente por `O_CREAT|O_EXCL|O_NOFOLLOW`, `0600`, binding à intenção, `fsync` e `flock`; existente continua autenticado, ocupado nega e o arquivo criado permanece físico/livre após o recibo. Uma janela fixed-current posterior pode adotar o sentinel vazio ou um sentinel não vazio cuja retirada terminal seja comprovada pelo manifesto fechado `TERMINAL_GENERATION_RETIREMENT_SENTINEL_V1`. Esse manifesto vincula contrato, lifecycle, review `SANITIZED` e toda a closure canônica; o consumidor integrado executa `_canonical_retirement_closure()`, exige a release-pai ausente e exige que a intenção do último elo seja exatamente os 64 bytes hexadecimais gravados no sentinel. A interface é o par fechado `--retirement-sentinel-closure`/`--retirement-sentinel-closure-sha256`; ausência, binding parcial, closure cruzada, release presente ou prova divergente nega.
 
@@ -238,10 +238,10 @@ mesmos valores depois do restart; e chama `wait-existing-readiness` com release,
 entrypoint e, no frontend, BUILD_ID autenticados. A introspecção serve apenas para provar
 preservação e nunca para gerar configuração executável.
 
-`scripts/pm2-binding-materialize.py` e `validate-pair` ficam restritos ao primeiro
-caso. Não materializar bindings para satisfazer uma janela que apenas reutiliza o
-registro existente. Um marker operacional `DEPLOYED` na release de retorno também
-não participa da observação frontend-only.
+`scripts/pm2-binding-materialize.py` e `validate-pair` ficam restritos ao primeiro caso. Não materializar bindings para uma janela que apenas reutiliza o registro; marker `DEPLOYED` da release de retorno também não participa da observação frontend-only.
+
+No perfil 3/3, a admissão anterior ao build executa em fixture `fonte privada → projeção → request → pm2-binding-materialize.py → validate-pair → preflight` para candidato e retorno. O frontend mantém schema 1; o worker usa somente fontes históricas e identidades físicas fechadas, projeta os 17 campos e vincula o entrypoint. O retorno legado `e2e7f17a` admite apenas `release-manifest.json`/`release-index.json`, marker e entrypoint autenticados; releases modernas não são flexibilizadas.
+Se uma release instalada exigir correção do control plane, manifesto schema 2 e requests originais permanecem imutáveis. O schema 3 e `WORKER_PM2_CONTROL_PLANE_SUCCESSION` vinculam por SHA-256 control planes, release/target/pacote, três receipts, requests, bindings e scripts. O checkout sucessor limpo vira autoridade; drift nega antes do preflight, sem repetir build, upload ou instalação.
 
 O executor deve chamar o observador versionado com `--report`, redirecionar stdout e
 stderr para arquivos privados exclusivos e sincronizar esses três artefatos antes de

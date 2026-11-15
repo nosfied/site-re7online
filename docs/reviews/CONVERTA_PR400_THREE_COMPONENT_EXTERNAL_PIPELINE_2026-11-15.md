@@ -115,3 +115,25 @@ Não houve build produtivo, upload, instalação, ativação, restart, `pm2 save
 alteração de sessão, banco ou exclusão. A próxima ação é revisar e integrar esta
 extensão; somente depois disso pode existir autorização separada para materializar
 uma geração externa 3/3.
+
+## Continuidade PM2 sucessora após a instalação inerte
+
+A execução real expôs uma lacuna que a homologação original não atravessava: os
+testes do PR #401 entregavam bindings worker prontos ao consumidor. A cadeia real
+parou antes do preflight porque `pm2-binding-materialize.py` aceitava somente
+frontend e os requests worker pediam 16 nomes que não correspondiam ao ambiente
+funcional comprovado.
+
+Cronologia preventiva consolidada: impacto transitivo do worker → perfil 3/3;
+pipeline antes limitado a API/frontend → produtor/instalador 3/3; falha entre
+`pm2 delete` e `start` → rollback retomável; Node 22 herdado → toolchain 20.20.0
+validada no produtor antes de `open`; materializador frontend-only → projeção worker;
+requests 16 campos incorretos → allowlist fechada de 17 campos; fontes ausentes →
+artefatos históricos candidato/retorno autenticados. Cada correção agora é coberta
+pelo teste integrado fonte → projeção → materializador → `validate-pair` → preflight.
+
+Os precedentes usados são PRs #199 (isolamento estrutural), #200 (allowlist por
+papel), #207 (manifesto privado), #231 (materialização), #233 (dispensa somente
+quando não há substituição) e #401 (pipeline/rollback 3/3). A release instalada e
+os efeitos anteriores permanecem intactos; a continuação usa control plane sucessor
+e manifesto privado schema 3, sem rebuild, reupload ou reinstalação.

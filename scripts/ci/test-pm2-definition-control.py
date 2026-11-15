@@ -571,16 +571,21 @@ class DefinitionControlTests(unittest.TestCase):
     def test_worker_allowlist_contract_covers_runtime_without_inheriting_pwd(self):
         common = CONTROL.load_repository_allowlist()["worker"]["common"]
         self.assertEqual(common, {
-            "DATABASE_URL", "META_APP_ID", "META_APP_SECRET", "META_GRAPH_API_VERSION",
-            "NODE_ENV", "OPENAI_API_KEY", "TEMPLATE_MEDIA_ROOT", "TZ",
-            "WHATSAPP_AGENT_INTERNAL_PORT", "WHATSAPP_AGENT_INTERNAL_URL",
-            "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_WABA_ID",
+            "APP_AUTH_SECRET", "CHANNEL_ACCOUNT_SECRET_KEY", "DATABASE_URL", "NODE_ENV",
+            "SMTP_FROM", "SMTP_HOST", "SMTP_PASS", "SMTP_PORT", "SMTP_USER",
+            "WEB_PUSH_SUBJECT", "WEB_PUSH_VAPID_PRIVATE_KEY", "WEB_PUSH_VAPID_PUBLIC_KEY",
+            "WEB_SESSION_MEDIA_ROOT",
             "WHATSAPP_WEB_WORKER_CONTROL_HOST", "WHATSAPP_WEB_WORKER_CONTROL_PORT",
-            "WHATSAPP_WEB_WORKER_CONTROL_TOKEN",
+            "WHATSAPP_WEB_WORKER_CONTROL_TOKEN", "WHATSAPP_WEB_WORKER_CONTROL_URL",
         })
         self.assertNotIn("PWD", common)
         self.assertEqual(CONTROL.load_repository_allowlist()["worker"]["candidate"], set())
         self.assertEqual(CONTROL.load_repository_allowlist()["worker"]["rollbackCompatibility"], set())
+
+        incomplete = request(component="worker")
+        incomplete["environmentKeys"] = sorted(common - {"APP_AUTH_SECRET"})
+        with self.assertRaisesRegex(CONTROL.Denied, "worker_environment_keys_incomplete"):
+            CONTROL.validate_request(incomplete)
 
     def test_nfkc_casefold_collision_is_denied(self):
         candidate = request()
