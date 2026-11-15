@@ -99,6 +99,8 @@ class FakeHost(deploy.Host):
         self.wait_samples = 3
         self.restart_drift: tuple[str, str] | None = None
         self.worker_drift = False
+        self.worker_candidate_start_fail = False
+        self.worker_candidate_disappears_after_start = False
         self.save_calls = 0
         self.retirement_calls = 0
         self.retirement_pass_fds: tuple[int, ...] = ()
@@ -190,6 +192,10 @@ class FakeHost(deploy.Host):
         if len(args) == 4 and args[0] == "start" and args[2] == "--only":
             definition = json.loads(Path(args[1]).read_text())["apps"][0]
             name = args[3]
+            candidate_worker = (name == deploy.PROCESS_NAMES["worker"] and
+                                "worker-candidate" in Path(args[1]).name)
+            if candidate_worker and self.worker_candidate_start_fail:
+                raise deploy.Denied("injected:worker_candidate_start")
             self.next_pid += 1
             env = {
                 "status": "online", "pm_cwd": definition["cwd"],
@@ -203,6 +209,9 @@ class FakeHost(deploy.Host):
             }
             self.rows[name] = {"name": name, "pid": self.next_pid, "pm2_env": env}
             self.process_cwds[self.next_pid] = Path(definition["cwd"]).resolve()
+            if candidate_worker and self.worker_candidate_disappears_after_start:
+                self.rows.pop(name)
+                self.process_cwds.pop(self.next_pid, None)
             return
         if len(args) != 2 or args[0] != "restart" or "--update-env" in args:
             raise AssertionError(f"unexpected PM2 mutation: {args}")
@@ -2382,6 +2391,86 @@ if config_path:
         self.assertEqual(self.stable["worker"].resolve(),
                          self.releases / self.rollback / "worker-runtime")
         self.assertEqual(self.host.save_calls, 0)
+
+    def test_worker_candidate_start_failure_restores_all_affected_components(self) -> None:
+        driver = self.three_component()
+        self.host.worker_candidate_start_fail = True
+        driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "injected:worker_candidate_start"):
+            driver.activate()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "ROLLED_BACK")
+        self.assertEqual(journal["workerActivationTransition"]["state"], "START_ATTEMPT")
+        self.assertEqual(journal["rollback"]["workerTransition"]["state"], "VERIFIED")
+        self.assertEqual(journal["rollback"]["restoredComponents"],
+                         ["worker", "frontend", "api"])
+        self.assertEqual(set(self.host.rows), set(deploy.PROCESS_NAMES.values()))
+        self.assertEqual(self.stable["api"].resolve(), self.releases / self.rollback / "api-runtime")
+        self.assertEqual(self.stable["frontend"].resolve(),
+                         self.releases / self.rollback / "frontend-runtime")
+        self.assertEqual(self.stable["worker"].resolve(),
+                         self.releases / self.rollback / "worker-runtime")
+        self.assertEqual(self.host.save_calls, 0)
+
+    def test_worker_disappearing_after_candidate_start_is_restored_without_overlap(self) -> None:
+        driver = self.three_component()
+        self.host.worker_candidate_disappears_after_start = True
+        driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "process_identity_count.*:0"):
+            driver.activate()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "ROLLED_BACK")
+        self.assertEqual(journal["workerActivationTransition"]["state"], "START_CONFIRMED")
+        self.assertTrue(journal["rollback"]["workerTransition"]
+                        ["absenceReconciledFromActivation"])
+        self.assertEqual(journal["rollback"]["workerTransition"]["state"], "VERIFIED")
+        worker_rows = [row for row in self.host.rows.values()
+                       if row["name"] == deploy.PROCESS_NAMES["worker"]]
+        self.assertEqual(len(worker_rows), 1)
+        self.assertEqual(self.stable["worker"].resolve(),
+                         self.releases / self.rollback / "worker-runtime")
+
+    def test_worker_rollback_resume_reconciles_start_without_second_effect(self) -> None:
+        driver = self.three_component()
+        self.host.worker_candidate_start_fail = True
+        driver.failpoints.add("rollback_worker_after_start_effect")
+        driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "injected:rollback_worker_after_start_effect"):
+            driver.activate()
+        failed = driver._journal_read()
+        self.assertEqual(failed["state"], "FAILED")
+        self.assertEqual(failed["recoveryAction"], "rollback")
+        self.assertEqual(failed["rollback"]["workerTransition"]["state"], "START_ATTEMPT")
+        rollback_definition = str(self.base / "worker-rollback.pm2.private.json")
+        rollback_start = ("PM2:start " + rollback_definition +
+                          " --only " + deploy.PROCESS_NAMES["worker"])
+        self.assertEqual(self.host.events.count(rollback_start), 1)
+        self.host.worker_candidate_start_fail = False
+        driver.rollback()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "ROLLED_BACK")
+        self.assertEqual(journal["rollback"]["workerTransition"]["state"], "VERIFIED")
+        self.assertTrue(journal["rollback"]["workerTransition"]["startReconciled"])
+        self.assertEqual(self.host.events.count(rollback_start), 1)
+        self.assertEqual(len([row for row in self.host.rows.values()
+                              if row["name"] == deploy.PROCESS_NAMES["worker"]]), 1)
+        self.assertEqual(self.host.save_calls, 0)
+
+    def test_worker_absence_without_authenticated_activation_frontier_is_denied(self) -> None:
+        driver = self.three_component()
+        driver.preflight()
+        journal = driver._journal_read()
+        journal["previous"] = {
+            "worker": journal["preflight"]["worker"],
+            "releases": {"worker": self.rollback},
+        }
+        journal["activationAttempted"] = ["worker"]
+        self.host.pm2_mutate(self.host.node, ["delete", deploy.PROCESS_NAMES["worker"]])
+        with self.assertRaisesRegex(deploy.Denied, "rollback_worker_absence_unauthenticated"):
+            driver._restore_worker(
+                journal, {"restoredComponents": []}, self.rollback,
+                (self.releases / self.rollback / "worker-runtime").resolve())
+        self.assertFalse(any(event.startswith("PM2:start ") for event in self.host.events))
 
     def test_drift_of_args_environment_cwd_or_script_is_denied(self) -> None:
         for field in ("args", "env", "cwd", "script"):

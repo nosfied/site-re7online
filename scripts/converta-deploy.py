@@ -1307,6 +1307,13 @@ class Driver:
     def _worker(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
         return self._process_snapshot(self._row(rows, PROCESS_NAMES["worker"]), "worker")
 
+    def _optional_worker_row(self) -> dict[str, Any] | None:
+        matches = [row for row in self.host.pm2_rows(self._resolve_pm2())
+                   if row.get("name") == PROCESS_NAMES["worker"]]
+        if len(matches) > 1:
+            deny("worker_process_cardinality")
+        return matches[0] if matches else None
+
     def _worker_pm2_binding(self, role: str) -> dict[str, Any]:
         manifest = self._authenticated_runtime_manifest()
         try:
@@ -2264,13 +2271,39 @@ class Driver:
 
     def _restart_existing(self, component: str, before: dict[str, Any],
                           release_id: str, runtime: Path, evidence_name: str,
-                          *, worker_role: str = "candidate") -> tuple[dict[str, Any], dict[str, Any]]:
+                          *, worker_role: str = "candidate",
+                          journal: dict[str, Any] | None = None,
+                          worker_already_started: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
         pm2 = self._resolve_pm2()
         name = self._process_name(component)
         if component == "worker":
             definition = self._worker_pm2_binding(worker_role)["definition"]
-            self.host.pm2_mutate(pm2, ["delete", name])
-            self.host.pm2_mutate(pm2, ["start", str(definition), "--only", name])
+            if not worker_already_started:
+                if journal is None or worker_role != "candidate":
+                    deny("worker_transition_journal")
+                transition = journal.setdefault("workerActivationTransition", {
+                    "schemaVersion": 1, "role": "candidate", "state": "PENDING",
+                    "definitionSha256": digest(Path(definition)),
+                    "priorPid": before["pid"], "priorStartTicks": before["startTicks"],
+                })
+                if (transition.get("schemaVersion") != 1 or transition.get("role") != "candidate" or
+                        transition.get("definitionSha256") != digest(Path(definition)) or
+                        transition.get("priorPid") != before["pid"] or
+                        transition.get("priorStartTicks") != before["startTicks"] or
+                        transition.get("state") != "PENDING"):
+                    deny("worker_transition_state")
+                transition["state"] = "DELETE_ATTEMPT"
+                self._journal_write(journal, "ACTIVATING")
+                self.host.pm2_mutate(pm2, ["delete", name])
+                transition["state"] = "DELETE_CONFIRMED"
+                self._journal_write(journal, "ACTIVATING")
+                self._failpoint("worker_after_delete")
+                transition["state"] = "START_ATTEMPT"
+                self._journal_write(journal, "ACTIVATING")
+                self.host.pm2_mutate(pm2, ["start", str(definition), "--only", name])
+                transition["state"] = "START_CONFIRMED"
+                self._journal_write(journal, "ACTIVATING")
+                self._failpoint("worker_after_start")
         else:
             self.host.pm2_mutate(pm2, ["restart", name])
         row = self._row(self.host.pm2_rows(pm2), name)
@@ -2289,6 +2322,95 @@ class Driver:
             if key in readiness and readiness[key] != after[key]:
                 deny(f"readiness_identity:{component}:{key}")
         return after, readiness
+
+    def _authenticated_worker_during_rollback(
+            self, journal: dict[str, Any], row: dict[str, Any]) -> tuple[dict[str, Any], str]:
+        observed = self._process_snapshot(row, "worker")
+        if observed == journal.get("previous", {}).get("worker"):
+            return observed, "prior"
+        for role, release_id in (("candidate", self.inputs.release),
+                                 ("rollback", journal.get("previous", {}).get("releases", {}).get("worker"))):
+            if not isinstance(release_id, str):
+                continue
+            runtime = self.releases / release_id / RUNTIME_DIR["worker"]
+            try:
+                authenticated = self._process_snapshot(row, "worker", runtime.resolve(strict=True))
+            except (Denied, OSError):
+                continue
+            if self._configuration_projection(authenticated) == self._worker_definition_projection(role):
+                return authenticated, role
+        deny("rollback_worker_unrelated_process")
+
+    def _restore_worker(
+            self, journal: dict[str, Any], progress: dict[str, Any], release_id: str,
+            rollback_runtime: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Restore one authenticated worker and reconcile interruption around PM2 effects."""
+        transition = progress.setdefault("workerTransition", {
+            "schemaVersion": 1, "state": "PENDING", "role": "rollback",
+            "definitionSha256": digest(Path(self._worker_pm2_binding("rollback")["definition"])),
+        })
+        if (transition.get("schemaVersion") != 1 or transition.get("role") != "rollback" or
+                transition.get("definitionSha256") !=
+                digest(Path(self._worker_pm2_binding("rollback")["definition"])) or
+                transition.get("state") not in {
+                    "PENDING", "DELETE_ATTEMPT", "DELETE_CONFIRMED", "START_ATTEMPT",
+                    "START_CONFIRMED", "VERIFIED",
+                }):
+            deny("rollback_worker_transition")
+        row = self._optional_worker_row()
+        role: str | None = None
+        if row is not None:
+            observed, role = self._authenticated_worker_during_rollback(journal, row)
+        if row is not None and role == "rollback" and transition["state"] in {
+                "START_ATTEMPT", "START_CONFIRMED", "VERIFIED"}:
+            if self.stable["worker"].resolve(strict=True) != rollback_runtime:
+                deny("rollback_worker_symlink_drift")
+            transition["state"] = "START_CONFIRMED"
+            transition["startReconciled"] = True
+            self._journal_write(journal, "ROLLING_BACK")
+        else:
+            if row is not None:
+                transition.update(state="DELETE_ATTEMPT", deletedPid=observed["pid"],
+                                  deletedStartTicks=observed["startTicks"], deletedRole=role)
+                self._journal_write(journal, "ROLLING_BACK")
+                self.host.pm2_mutate(self._resolve_pm2(), ["delete", PROCESS_NAMES["worker"]])
+                row = None
+            elif transition["state"] == "PENDING":
+                activation = journal.get("workerActivationTransition", {})
+                if ("worker" not in journal.get("activationAttempted", []) or
+                        activation.get("state") not in {
+                            "DELETE_ATTEMPT", "DELETE_CONFIRMED", "START_ATTEMPT", "START_CONFIRMED",
+                        }):
+                    deny("rollback_worker_absence_unauthenticated")
+                transition["absenceReconciledFromActivation"] = True
+            transition["state"] = "DELETE_CONFIRMED"
+            self._journal_write(journal, "ROLLING_BACK")
+            self._failpoint("rollback_worker_after_delete")
+
+        if transition["state"] != "START_CONFIRMED":
+            atomic_symlink(self.stable["worker"], rollback_runtime)
+            transition["state"] = "START_ATTEMPT"
+            self._journal_write(journal, "ROLLING_BACK")
+            definition = self._worker_pm2_binding("rollback")["definition"]
+            self.host.pm2_mutate(
+                self._resolve_pm2(), ["start", str(definition), "--only", PROCESS_NAMES["worker"]])
+            self._failpoint("rollback_worker_after_start_effect")
+            transition["state"] = "START_CONFIRMED"
+            self._journal_write(journal, "ROLLING_BACK")
+        row = self._optional_worker_row()
+        if row is None:
+            deny("rollback_worker_missing_after_start")
+        _, role = self._authenticated_worker_during_rollback(journal, row)
+        if role != "rollback":
+            deny("rollback_worker_definition_not_restored")
+        restored, readiness = self._restart_existing(
+            "worker", journal.get("previous", {}).get("worker", {}), release_id,
+            rollback_runtime, "rollback-worker", worker_role="rollback",
+            worker_already_started=True)
+        transition.update(state="VERIFIED", restoredPid=restored["pid"],
+                          restoredStartTicks=restored["startTicks"])
+        self._journal_write(journal, "ROLLING_BACK")
+        return restored, readiness
 
     @staticmethod
     def _validate_private_data_continuity(journal: dict[str, Any], release: dict[str, Any]) -> None:
@@ -2369,7 +2491,7 @@ class Driver:
                 atomic_symlink(self.stable[component], runtime)
                 candidate_processes[component], readiness[component] = self._restart_existing(
                     component, previous["processes"][component], self.inputs.release,
-                    runtime, f"activate-{component}")
+                    runtime, f"activate-{component}", journal=journal)
                 journal.setdefault("activationProgress", []).append(component)
                 self._journal_write(journal, "ACTIVATING")
                 if component == "frontend":
@@ -2409,20 +2531,22 @@ class Driver:
                 if component != "worker" and not isinstance(target, str):
                     deny(f"rollback_symlink_missing:{component}")
                 if component not in progress["restoredComponents"]:
-                    current = self._process_snapshot(
-                        self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
-                        component, self.stable[component].resolve(strict=True))
                     release_id = previous.get("releases", {}).get(component)
                     if not isinstance(release_id, str):
                         deny(f"rollback_release_missing:{component}")
                     rollback_runtime = self.releases / release_id / RUNTIME_DIR[component]
                     if component == "worker":
-                        atomic_symlink(self.stable[component], rollback_runtime)
+                        restored, readiness = self._restore_worker(
+                            journal, progress, release_id, rollback_runtime.resolve(strict=True))
                     else:
+                        current = self._process_snapshot(
+                            self._row(self.host.pm2_rows(self._resolve_pm2()),
+                                      self._process_name(component)),
+                            component, self.stable[component].resolve(strict=True))
                         atomic_symlink(self.stable[component], Path(target))
-                    restored, readiness = self._restart_existing(
-                        component, current, release_id, rollback_runtime.resolve(strict=True),
-                        f"rollback-{component}", worker_role="rollback")
+                        restored, readiness = self._restart_existing(
+                            component, current, release_id, rollback_runtime.resolve(strict=True),
+                            f"rollback-{component}", worker_role="rollback")
                     progress.setdefault("processes", {})[component] = restored
                     progress.setdefault("readiness", {})[component] = readiness
                     progress["restoredComponents"].append(component)
