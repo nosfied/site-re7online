@@ -3346,6 +3346,24 @@ if config_path:
             put(self.dump, rows)
 
         self.host.pm2_mutate = save_with_real_worker_dump_shape  # type: ignore[method-assign]
+        original_dump_validation = self.driver._candidate_dump_identity
+        # Reproduce the actual ED74 frontier: the save completes durably, but
+        # the first post-save dump validation fails. The same transaction then
+        # resumes with saveCount=1 and must NOT save again.
+        def fail_first_postsave_validation(journal: dict[str, Any]) -> dict[str, Any]:
+            raise deploy.Denied("final_dump_field:worker:logs")
+
+        self.driver._candidate_dump_identity = fail_first_postsave_validation  # type: ignore[method-assign]
+        try:
+            with self.assertRaisesRegex(deploy.Denied, "final_dump_field:worker:logs"):
+                self.driver.finalize()
+        finally:
+            self.driver._candidate_dump_identity = original_dump_validation  # type: ignore[method-assign]
+        failed = self.driver._journal_read()
+        self.assertEqual((failed["state"], failed["recoveryAction"], failed["saveCount"]),
+                         ("FAILED", "finalize", 1))
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 0)
         self.driver.finalize()
         self.assertEqual(self.driver._journal_read()["saveCount"], 1)
         self.assertEqual(self.driver._journal_read()["state"], "DEPLOYED_SANITIZED")
