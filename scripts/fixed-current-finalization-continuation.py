@@ -259,9 +259,11 @@ def _validate_cache_successor_refresh(
         raise Denied("request_recovery_cache_successor")
     # Require the prior committed driver to match the previously authenticated
     # cache successor, rather than trusting the prior request's self-declaration.
-    old_repo = Path(prior["driver"]).parent.parent
+    # The current authenticated checkout carries the immutable Git history;
+    # the prior checkout may already have completed its own custody lifecycle.
+    current_repo = Path(current["driver"]).parent.parent
     committed = subprocess.run(
-        ["git", "-C", str(old_repo), "show",
+        ["git", "-C", str(current_repo), "show",
          f"{old['continuationControlPlane']}:scripts/converta-deploy.py"],
         check=False, capture_output=True,
     )
