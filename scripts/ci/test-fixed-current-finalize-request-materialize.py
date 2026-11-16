@@ -449,6 +449,115 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_ed74_postsave_failed_ordinal2_produces_only_ordinal3_no_save(self) -> None:
+        fixture = ProducerFixture(self, "api_frontend_worker")
+        try:
+            fixture.add_runtime_cache()
+            first = fixture.run()
+            self.assertEqual(first.returncode, 0, first.stderr)
+            original_request = fixture.custody / "original-finalize.private.json"
+            original_request.write_bytes(fixture.output.read_bytes())
+            original_request.chmod(0o600)
+            journal_path = fixture.deploy.transaction / "transaction.v1.private.json"
+            journal = json.loads(journal_path.read_text())
+            journal.update(state="FAILED", recoveryAction="finalize",
+                           failure="control_plane_succession_script:deploy", saveCount=0)
+            private_json(journal_path, journal)
+            for name, content in (("stdout", ""),
+                                  ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\\n"),
+                                  ("exit", "2\\n")):
+                path = fixture.deploy.transaction / (
+                    f"fixed-current-finalize-continuation.{name}.private.txt")
+                path.write_text(content); path.chmod(0o600)
+            fixture.driver.write_text(fixture.driver.read_text() +
+                                      "\\n# second control plane\\n")
+            subprocess.run(["git", "-C", str(fixture.repo), "add",
+                            "scripts/converta-deploy.py"], check=True)
+            subprocess.run(["git", "-C", str(fixture.repo),
+                            "-c", "user.name=Fixture", "-c",
+                            "user.email=fixture@example.invalid", "commit", "-qm",
+                            "ordinal-02-control"], check=True)
+            fixture.output = fixture.custody / "ordinal-02.private.json"
+            cache02 = fixture.custody / "cache-02.private.json"
+            base = {
+                "schemaVersion": 1,
+                "action": "materialize_fixed_current_finalize_continuation",
+                "transactionRoot": str(fixture.deploy.transaction),
+                "transactionJournal": str(journal_path),
+                "transactionJournalSha256": digest(journal_path),
+                "lockPath": str(fixture.deploy.lock),
+                "lockSha256": digest(fixture.deploy.lock),
+                "driver": str(fixture.driver), "driverSha256": digest(fixture.driver),
+                "wrapper": str(fixture.wrapper), "wrapperSha256": digest(fixture.wrapper),
+            }
+            fixture.value = dict(base, priorRequest=str(original_request),
+                                 priorRequestSha256=digest(original_request),
+                                 cacheManifestOutput=str(cache02),
+                                 finalizeRequestOutput=str(fixture.output))
+            private_json(fixture.input, fixture.value)
+            result02 = fixture.run()
+            self.assertEqual(result02.returncode, 0, result02.stderr)
+            produced02 = json.loads(fixture.output.read_text())
+            self.assertEqual(produced02["attemptOrdinal"], 2)
+
+            # The second attempt has already saved the PM2 dump durably.
+            journal = json.loads(journal_path.read_text())
+            journal.update(state="FAILED", recoveryAction="finalize",
+                           failure="final_dump_field:worker:logs", saveCount=1)
+            private_json(journal_path, journal)
+            for name, content in (("stdout", ""),
+                                  ("stderr", "DEPLOY_DENY:final_dump_field:worker:logs\\n"),
+                                  ("exit", "2\\n")):
+                path = fixture.deploy.transaction / (
+                    f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt")
+                path.write_text(content); path.chmod(0o600)
+            second_request = fixture.output
+            fixture.driver.write_text(fixture.driver.read_text() +
+                                      "\\n# corrected post-save dump parser\\n")
+            subprocess.run(["git", "-C", str(fixture.repo), "add",
+                            "scripts/converta-deploy.py"], check=True)
+            subprocess.run(["git", "-C", str(fixture.repo),
+                            "-c", "user.name=Fixture", "-c",
+                            "user.email=fixture@example.invalid", "commit", "-qm",
+                            "ordinal-03-control"], check=True)
+            cache03 = fixture.custody / "cache-03.private.json"
+            fixture.output = fixture.custody / "ordinal-03.private.json"
+            fixture.value = dict(base, transactionJournalSha256=digest(journal_path),
+                                 driverSha256=digest(fixture.driver),
+                                 priorRequest=str(second_request),
+                                 priorRequestSha256=digest(second_request),
+                                 cacheManifestOutput=str(cache03),
+                                 finalizeRequestOutput=str(fixture.output))
+            private_json(fixture.input, fixture.value)
+            journal_before = journal_path.read_bytes()
+            dump_before = fixture.deploy.dump.read_bytes()
+            save_before = fixture.deploy.host.save_calls
+            result03 = fixture.run()
+            self.assertEqual(result03.returncode, 0, result03.stderr)
+            produced03 = json.loads(fixture.output.read_text())
+            self.assertEqual(produced03["action"], "finalize_continuation")
+            self.assertEqual(produced03["attemptOrdinal"], 3)
+            self.assertEqual(produced03["recovery"]["priorRequestSha256"],
+                             digest(second_request))
+            self.assertEqual(journal_path.read_bytes(), journal_before)
+            self.assertEqual(fixture.deploy.dump.read_bytes(), dump_before)
+            self.assertEqual(fixture.deploy.host.save_calls, save_before)
+            retirement = fixture.deploy.retirement
+            assert retirement is not None
+            with patch.multiple(
+                continuation,
+                ED74_RUNTIME_CACHE_RELEASE=fixture.deploy.candidate,
+                ED74_RUNTIME_CACHE_TARGET=fixture.deploy.target,
+                ED74_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
+                ED74_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+            ):
+                self.assertEqual(continuation.load_request(
+                    fixture.output, digest(fixture.output)), produced03)
+            self.assertEqual(fixture.run().returncode, 2)
+            self.assertEqual(journal_path.read_bytes(), journal_before)
+        finally:
+            fixture.close()
+
     def test_denies_authority_drift_cross_transaction_arbitrary_argv_and_replay(self) -> None:
         variants = ("sha", "path", "identity", "journal", "scope", "cross", "argv")
         for variant in variants:
