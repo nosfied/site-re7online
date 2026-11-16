@@ -91,7 +91,9 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
             {"release", "target", "controlPlane", "components"} or
             not all(isinstance(binding.get(name), str)
                     for name in ("release", "target", "controlPlane")) or
-            binding.get("components") not in (["api"], ["api", "frontend"])):
+            binding.get("components") not in (
+                ["api"], ["api", "frontend"], ["api", "frontend", "worker"]
+            )):
         raise Denied("request_binding")
     root = Path(value["transactionRoot"])
     if (Path(value["transactionJournal"]) != root / "transaction.v1.private.json" or
