@@ -336,8 +336,8 @@ class ContinuationTests(unittest.TestCase):
         private_json(prior, old_request)
         prior_evidence = {}
         for name, content in (
-            ("stdout", ""), ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\\n"),
-            ("exit", "2\\n"),
+            ("stdout", ""), ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\n"),
+            ("exit", "2\n"),
         ):
             path = self.fixture.tx / f"fixed-current-finalize-continuation.{name}.private.txt"
             path.write_text(content); path.chmod(0o600)
