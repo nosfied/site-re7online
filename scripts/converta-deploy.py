@@ -705,6 +705,7 @@ class Driver:
                 # driver independently of the currently executing driver.
                 expected = rollback_continuation["originalDriverSha256"]
             elif name == "deploy" and self.inputs.runtime_cache_reconciliation is not None:
+                self._runtime_cache_manifest()
                 # A finalize cache continuation can use a newer authenticated
                 # driver. The worker succession manifest still seals the driver
                 # from its *own* successor control plane, not the new checkout.
