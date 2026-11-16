@@ -373,6 +373,72 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
             replay = fixture.run()
             self.assertEqual(replay.returncode, 2)
             self.assertEqual(journal_path.read_bytes(), before)
+
+            # Complete the same FAILED transaction through the existing wrapper
+            # and deploy driver, not just through request schema validation.
+            # This isolated fixture intentionally does not claim to reproduce
+            # the VPS's private worker succession manifest.
+            deploy_module = deploy_tests.deploy
+            fixture.deploy.inputs = replace(
+                fixture.deploy.inputs,
+                runtime_cache_reconciliation=new_cache,
+                runtime_cache_reconciliation_sha256=digest(new_cache),
+            )
+            fixture.deploy.driver = fixture.deploy._driver(fixture.repo)
+            fixture.deploy.host.control_plane = fixture.head()
+            lock_fd = continuation.acquire_lock(fixture.deploy.lock)
+            save_before = fixture.deploy.host.save_calls
+
+            def real_driver(argv, **kwargs):
+                previous = os.environ.get(continuation.LOCK_ENV)
+                os.environ[continuation.LOCK_ENV] = kwargs["env"][continuation.LOCK_ENV]
+                try:
+                    fixture.deploy.driver.finalize()
+                finally:
+                    if previous is None:
+                        os.environ.pop(continuation.LOCK_ENV, None)
+                    else:
+                        os.environ[continuation.LOCK_ENV] = previous
+                return subprocess.CompletedProcess(argv, 0)
+
+            try:
+                with patch.multiple(
+                    continuation,
+                    ED74_RUNTIME_CACHE_RELEASE=fixture.deploy.candidate,
+                    ED74_RUNTIME_CACHE_TARGET=fixture.deploy.target,
+                    ED74_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
+                    ED74_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+                ), patch.multiple(
+                    deploy_module,
+                    RUNTIME_CACHE_ED74_RELEASE=fixture.deploy.candidate,
+                    RUNTIME_CACHE_ED74_TARGET=fixture.deploy.target,
+                    RUNTIME_CACHE_ED74_TRANSACTION=fixture.deploy.transaction,
+                    RUNTIME_CACHE_ED74_INDEX_SHA256=digest(
+                        fixture.deploy.releases / fixture.deploy.candidate / "index.sha256"),
+                    RUNTIME_CACHE_ED74_MANIFEST_SHA256=digest(
+                        fixture.deploy.releases / fixture.deploy.candidate / "manifest.json"),
+                    RUNTIME_CACHE_ED74_INTENT_SHA256=retirement.intent_sha256,
+                    RUNTIME_CACHE_ED74_ACCEPTANCE_JOURNAL_SHA256=digest(
+                        fixture.custody / "acceptance-journal.authenticated.private.json"),
+                    RUNTIME_CACHE_ED74_ACCEPTANCE_SHA256=digest(
+                        fixture.deploy.transaction / "acceptance.private.txt"),
+                    RUNTIME_CACHE_ED74_LOCK_SHA256=digest(fixture.deploy.lock),
+                ):
+                    self.assertEqual(continuation.run(
+                        output, lock_fd, runner=real_driver), 0)
+                    continuation.release_terminal_lock(output, lock_fd)
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                os.close(lock_fd)
+            final_journal = fixture.deploy.driver._journal_read()
+            self.assertIn(final_journal["state"], {
+                "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
+            self.assertEqual(final_journal["saveCount"], 1)
+            self.assertEqual(fixture.deploy.host.save_calls, save_before + 1)
+            self.assertFalse(fixture.deploy.lock.exists())
+            self.assertTrue((fixture.deploy.releases /
+                             fixture.deploy.candidate / "DEPLOYED").exists())
+            self.assertEqual(fixture.deploy.host.retirement_calls, 1)
         finally:
             fixture.close()
 
