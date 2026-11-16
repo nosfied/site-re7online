@@ -273,6 +273,85 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_failed_ed74_continuation_materialized_without_operator_argv(self) -> None:
+        fixture = ProducerFixture(self, "api_frontend_worker")
+        try:
+            fixture.add_runtime_cache()
+            self.assertEqual(fixture.run().returncode, 0)
+            old_request = fixture.custody / "prior-finalize-request.private.json"
+            old_request.write_bytes(fixture.output.read_bytes())
+            old_request.chmod(0o600)
+            journal_path = fixture.deploy.transaction / "transaction.v1.private.json"
+            journal = json.loads(journal_path.read_text())
+            journal.update(
+                state="FAILED", recoveryAction="finalize",
+                failure="control_plane_succession_script:deploy", saveCount=0)
+            private_json(journal_path, journal)
+            for name, content in (
+                ("stdout", ""),
+                ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\n"),
+                ("exit", "2\n"),
+            ):
+                path = fixture.deploy.transaction / (
+                    f"fixed-current-finalize-continuation.{name}.private.txt")
+                path.write_text(content); path.chmod(0o600)
+            fixture.driver.write_text(fixture.driver.read_text() +
+                                      "\n# successor control plane test\n")
+            subprocess.run(["git", "-C", str(fixture.repo), "add",
+                            "scripts/converta-deploy.py"], check=True)
+            subprocess.run([
+                "git", "-C", str(fixture.repo), "-c", "user.name=Fixture",
+                "-c", "user.email=fixture@example.invalid",
+                "commit", "-qm", "corrected driver successor",
+            ], check=True)
+            fixture.output = fixture.custody / "continuation-request.private.json"
+            new_cache = fixture.custody / "continuation-cache.private.json"
+            fixture.value = {
+                "schemaVersion": 1,
+                "action": "materialize_fixed_current_finalize_continuation",
+                "transactionRoot": str(fixture.deploy.transaction),
+                "transactionJournal": str(journal_path),
+                "transactionJournalSha256": digest(journal_path),
+                "priorRequest": str(old_request),
+                "priorRequestSha256": digest(old_request),
+                "lockPath": str(fixture.deploy.lock),
+                "lockSha256": digest(fixture.deploy.lock),
+                "driver": str(fixture.driver),
+                "driverSha256": digest(fixture.driver),
+                "wrapper": str(fixture.wrapper),
+                "wrapperSha256": digest(fixture.wrapper),
+                "cacheManifestOutput": str(new_cache),
+                "finalizeRequestOutput": str(fixture.output),
+            }
+            private_json(fixture.input, fixture.value)
+            before = journal_path.read_bytes()
+            result = fixture.run()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            output = json.loads(fixture.output.read_text())
+            self.assertEqual(output["action"], "finalize_continuation")
+            self.assertEqual(output["attemptOrdinal"], 2)
+            self.assertEqual(output["driverSha256"], digest(fixture.driver))
+            self.assertEqual(output["finalizeArgv"][2], str(fixture.driver))
+            self.assertNotIn("finalizeArgv", fixture.value)
+            self.assertEqual(journal_path.read_bytes(), before)
+            self.assertEqual(fixture.deploy.host.save_calls, 0)
+            retirement = fixture.deploy.retirement
+            assert retirement is not None
+            with patch.multiple(
+                continuation,
+                ED74_RUNTIME_CACHE_RELEASE=fixture.deploy.candidate,
+                ED74_RUNTIME_CACHE_TARGET=fixture.deploy.target,
+                ED74_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
+                ED74_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+            ):
+                self.assertEqual(continuation.load_request(
+                    fixture.output, digest(fixture.output)), output)
+            replay = fixture.run()
+            self.assertEqual(replay.returncode, 2)
+            self.assertEqual(journal_path.read_bytes(), before)
+        finally:
+            fixture.close()
+
     def test_denies_authority_drift_cross_transaction_arbitrary_argv_and_replay(self) -> None:
         variants = ("sha", "path", "identity", "journal", "scope", "cross", "argv")
         for variant in variants:
