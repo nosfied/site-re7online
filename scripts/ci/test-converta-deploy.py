@@ -1058,6 +1058,55 @@ class DriverTests(DeployFixture):
             candidate_request.write_text(candidate_request.read_text() + " ")
             with self.assertRaisesRegex(deploy.Denied, "control_plane_succession"):
                 self._driver()._authenticated_runtime_manifest()
+            candidate_request.write_text(candidate_request.read_text()[:-1])
+
+            # A later finalize checkout cannot retroactively change the driver
+            # sealed by the historical worker PM2 succession. Without a cache
+            # successor this difference must still fail closed.
+            historical_blob = "# historical authenticated deploy driver\\n"
+            self.host.committed_driver = historical_blob
+            historical_manifest = json.loads(succession.read_text())
+            historical_manifest["scripts"]["deploy"] = hashlib.sha256(
+                historical_blob.encode()).hexdigest()
+            put(succession, historical_manifest)
+            runtime = json.loads(self.runtime_manifest.read_text())
+            runtime["controlPlaneSuccessionSha256"] = sha(succession)
+            put(self.runtime_manifest, runtime)
+            self.inputs = dataclasses.replace(
+                self.inputs, runtime_manifest_sha256=sha(self.runtime_manifest),
+                control_plane_succession=deploy.ControlPlaneSuccessionBinding(
+                    succession, sha(succession)))
+            with self.assertRaisesRegex(deploy.Denied, "control_plane_succession_script:deploy"):
+                self._driver()._authenticated_runtime_manifest()
+
+            # Only a SHA-bound runtime cache continuation permits the historic
+            # deploy blob, while current checkout identity is checked later.
+            cache = self.base / "cache-succession.private.json"
+            put(cache, {
+                "schemaVersion": 1, "kind": deploy.RUNTIME_CACHE_RECONCILIATION_KIND,
+                "releaseId": self.candidate, "targetCommit": self.target,
+                "transactionRoot": str(self.transaction),
+                "indexSha256": "a" * 64, "manifestSha256": "b" * 64,
+                "retirementIntentSha256": "c" * 64,
+                "originalControlPlane": self.control_plane,
+                "continuationControlPlane": "d" * 40,
+                "continuationDriverSha256": "e" * 64,
+                "negativeJournal": {"path": str(self.driver.journal), "sha256": "f" * 64},
+                "acceptanceSha256": "1" * 64, "lockSha256": "2" * 64,
+                "cacheEntries": [],
+            })
+            self.inputs = dataclasses.replace(
+                self.inputs, runtime_cache_reconciliation=cache,
+                runtime_cache_reconciliation_sha256=sha(cache))
+            self.assertEqual(self._driver()._authenticated_runtime_manifest()["schemaVersion"], 3)
+            self.host.committed_driver = "# wrong historical deploy driver\\n"
+            with self.assertRaisesRegex(deploy.Denied, "control_plane_succession_script:deploy"):
+                self._driver()._authenticated_runtime_manifest()
+            self.host.committed_driver = historical_blob
+            self.inputs = dataclasses.replace(
+                self.inputs, runtime_cache_reconciliation_sha256="0" * 64)
+            with self.assertRaisesRegex(deploy.Denied, "runtime_cache_reconciliation_identity"):
+                self._driver()._authenticated_runtime_manifest()
 
     def test_successor_accepts_only_closed_legacy_worker_rollback_authority(self) -> None:
         self.three_component()
