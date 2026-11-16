@@ -784,13 +784,20 @@ class DeployFixture(unittest.TestCase):
     def runtime_cache_finalize(self, *, repo: Path = ROOT, prepare_transaction: bool = True,
                                continuation_control_plane: str | None = None,
                                preserve_retirement: bool = False,
+                               acceptance_authority: bool = False,
                                ) -> tuple[FixtureDriver, Path, dict[str, Any]]:
         driver = self.driver
         if prepare_transaction:
             driver.preflight(); driver.activate(); self.acceptance()
         root = self.releases / self.candidate
         paths = sorted(deploy.RUNTIME_CACHE_36B_EXTRAS)
-        files = [path for path in paths if path.endswith(".webp")]
+        if acceptance_authority:
+            for suffix in ("png", "jpeg"):
+                key = f"ed74CacheKey{suffix.upper()}" + "A" * 24
+                directory = f"frontend-runtime/.next/cache/images/{key}"
+                paths.extend((directory, f"{directory}/14400.ed74-cache-file.{suffix}"))
+            paths.sort()
+        files = [path for path in paths if path.endswith((".webp", ".png", ".jpeg"))]
         for relative in paths:
             target = root / relative
             if relative in files:
@@ -817,13 +824,17 @@ class DeployFixture(unittest.TestCase):
 
         journal = json.loads(driver.journal.read_text())
         journal["binding"] = self.inputs.binding()
-        journal["state"] = "FAILED"
-        journal["failure"] = "release_index_inventory"
-        journal["recoveryAction"] = "finalize"
-        journal["saveCount"] = 0
-        put(driver.journal, journal)
-        negative = self.base / "negative-journal.authenticated.private.json"
-        negative.write_bytes(driver.journal.read_bytes()); negative.chmod(0o600)
+        if not acceptance_authority:
+            journal["state"] = "FAILED"
+            journal["failure"] = "release_index_inventory"
+            journal["recoveryAction"] = "finalize"
+            journal["saveCount"] = 0
+            put(driver.journal, journal)
+        journal_authority = self.base / (
+            "acceptance-journal.authenticated.private.json" if acceptance_authority else
+            "negative-journal.authenticated.private.json")
+        journal_authority.write_bytes(driver.journal.read_bytes())
+        journal_authority.chmod(0o600)
 
         entries: list[dict[str, Any]] = []
         for relative in paths:
@@ -837,7 +848,7 @@ class DeployFixture(unittest.TestCase):
             entries.append(item)
         manifest = self.base / "runtime-cache-reconciliation.private.json"
         continuation_control_plane = continuation_control_plane or "d" * 40
-        put(manifest, {
+        payload = {
             "schemaVersion": 1, "kind": deploy.RUNTIME_CACHE_RECONCILIATION_KIND,
             "releaseId": self.candidate, "targetCommit": self.target,
             "transactionRoot": str(self.transaction),
@@ -847,10 +858,13 @@ class DeployFixture(unittest.TestCase):
             "originalControlPlane": self.control_plane,
             "continuationControlPlane": continuation_control_plane,
             "continuationDriverSha256": sha(ROOT / "scripts/converta-deploy.py"),
-            "negativeJournal": {"path": str(negative), "sha256": sha(negative)},
             "acceptanceSha256": sha(driver.acceptance), "lockSha256": sha(self.lock),
             "cacheEntries": entries,
-        })
+        }
+        payload["acceptanceJournal" if acceptance_authority else "negativeJournal"] = {
+            "path": str(journal_authority), "sha256": sha(journal_authority),
+        }
+        put(manifest, payload)
         self.inputs = replace(
             self.inputs, runtime_cache_reconciliation=manifest,
             runtime_cache_reconciliation_sha256=sha(manifest))
@@ -864,7 +878,7 @@ class DeployFixture(unittest.TestCase):
             "RUNTIME_CACHE_36B_INDEX_SHA256": sha(root / "index.sha256"),
             "RUNTIME_CACHE_36B_MANIFEST_SHA256": sha(root / "manifest.json"),
             "RUNTIME_CACHE_36B_INTENT_SHA256": self.retirement.intent_sha256,
-            "RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256": sha(negative),
+            "RUNTIME_CACHE_36B_NEGATIVE_JOURNAL_SHA256": sha(journal_authority),
             "RUNTIME_CACHE_36B_ACCEPTANCE_SHA256": sha(driver.acceptance),
             "RUNTIME_CACHE_36B_LOCK_SHA256": sha(self.lock),
             "RUNTIME_CACHE_36B_EXTRAS": {
@@ -872,6 +886,18 @@ class DeployFixture(unittest.TestCase):
                 for item in entries
             },
         }
+        if acceptance_authority:
+            constants = {
+                "RUNTIME_CACHE_ED74_RELEASE": self.candidate,
+                "RUNTIME_CACHE_ED74_TARGET": self.target,
+                "RUNTIME_CACHE_ED74_TRANSACTION": self.transaction,
+                "RUNTIME_CACHE_ED74_INDEX_SHA256": sha(root / "index.sha256"),
+                "RUNTIME_CACHE_ED74_MANIFEST_SHA256": sha(root / "manifest.json"),
+                "RUNTIME_CACHE_ED74_INTENT_SHA256": self.retirement.intent_sha256,
+                "RUNTIME_CACHE_ED74_ACCEPTANCE_JOURNAL_SHA256": sha(journal_authority),
+                "RUNTIME_CACHE_ED74_ACCEPTANCE_SHA256": sha(driver.acceptance),
+                "RUNTIME_CACHE_ED74_LOCK_SHA256": sha(self.lock),
+            }
         return self.driver, manifest, constants
 
 
@@ -2334,6 +2360,24 @@ if config_path:
                 self.assertEqual(self.host.save_calls, 0)
                 self.assertEqual(self.host.retirement_calls, 0)
 
+    def test_ed74_runtime_cache_profile_resumes_without_second_save(self) -> None:
+        intent = json.loads(self.retirement.intent.read_text())
+        intent["commands"] = []
+        put(self.retirement.intent, intent)
+        self.retirement = replace(self.retirement, intent_sha256=sha(self.retirement.intent))
+        self.inputs = replace(self.inputs, retirement=self.retirement)
+        self.driver = self._driver()
+        driver, _, constants = self.runtime_cache_finalize(
+            acceptance_authority=True, preserve_retirement=True)
+        driver.failpoints.add("after_save")
+        with patch.multiple(deploy, **constants):
+            with self.assertRaisesRegex(deploy.Denied, "injected:after_save"):
+                driver.finalize()
+            self.assertEqual(self.host.save_calls, 1)
+            driver.finalize()
+        self.assertEqual(driver._journal_read()["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+
     def test_fa10_runtime_cache_profile_finishes_with_zero_command_retirement(self) -> None:
         intent = json.loads(self.retirement.intent.read_text())
         intent["commands"] = []
@@ -2363,6 +2407,81 @@ if config_path:
         self.assertEqual(journal["saveCount"], 1)
         self.assertEqual(self.host.save_calls, 1)
         self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_ed74_runtime_cache_profile_finalizes_from_awaiting_acceptance(self) -> None:
+        intent = json.loads(self.retirement.intent.read_text())
+        intent["commands"] = []
+        put(self.retirement.intent, intent)
+        self.retirement = replace(self.retirement, intent_sha256=sha(self.retirement.intent))
+        self.inputs = replace(self.inputs, retirement=self.retirement)
+        self.driver = self._driver()
+        driver, manifest, constants = self.runtime_cache_finalize(
+            acceptance_authority=True, preserve_retirement=True)
+        payload = json.loads(manifest.read_text())
+        self.assertIn("acceptanceJournal", payload)
+        self.assertNotIn("negativeJournal", payload)
+        self.assertEqual(driver._journal_read()["state"], "AWAITING_ACCEPTANCE")
+        self.assertTrue(any(item["path"].endswith(".png")
+                            for item in payload["cacheEntries"]))
+        self.assertTrue(any(item["path"].endswith(".jpeg")
+                            for item in payload["cacheEntries"]))
+        with patch.multiple(deploy, **constants):
+            driver.finalize()
+        journal = driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_ed74_runtime_cache_profile_denies_drift_before_save(self) -> None:
+        variants = ("extra", "outside", "symlink", "mode", "size", "sha",
+                    "acceptance_state", "successor_control")
+        for variant in variants:
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                driver, manifest, constants = self.runtime_cache_finalize(
+                    acceptance_authority=True)
+                root = self.releases / self.candidate
+                payload = json.loads(manifest.read_text())
+                file_entry = next(item for item in payload["cacheEntries"]
+                                  if item["type"] == "file")
+                file_path = root / file_entry["path"]
+                if variant == "extra":
+                    (root / "frontend-runtime/.next/cache/images/unsealed").mkdir()
+                elif variant == "outside":
+                    extra = root / "frontend-runtime/.next/cache/unexpected.txt"
+                    extra.write_text("outside policy\n"); extra.chmod(0o644)
+                    payload["cacheEntries"].append({
+                        "path": "frontend-runtime/.next/cache/unexpected.txt",
+                        "type": "file", "mode": 0o644, "size": extra.stat().st_size,
+                        "sha256": sha(extra),
+                    })
+                    put(manifest, payload)
+                elif variant == "symlink":
+                    file_path.unlink(); file_path.symlink_to(root / "manifest.json")
+                elif variant == "mode":
+                    file_path.chmod(0o600)
+                elif variant == "size":
+                    file_entry["size"] += 1; put(manifest, payload)
+                elif variant == "sha":
+                    file_entry["sha256"] = "f" * 64; put(manifest, payload)
+                elif variant == "acceptance_state":
+                    authority = Path(payload["acceptanceJournal"]["path"])
+                    value = json.loads(authority.read_text()); value["state"] = "FAILED"
+                    put(authority, value)
+                    payload["acceptanceJournal"]["sha256"] = sha(authority)
+                    put(manifest, payload)
+                    constants["RUNTIME_CACHE_ED74_ACCEPTANCE_JOURNAL_SHA256"] = sha(authority)
+                else:
+                    self.host.control_plane = "e" * 40
+                self.inputs = replace(
+                    self.inputs, runtime_cache_reconciliation_sha256=sha(manifest))
+                driver = self._driver()
+                with patch.multiple(deploy, **constants):
+                    with self.assertRaises(deploy.Denied):
+                        driver.finalize()
+                self.assertEqual(self.host.save_calls, 0)
+                self.assertEqual(self.host.retirement_calls, 0)
 
     def test_fa10_runtime_cache_profile_accepts_the_ten_observed_entries(self) -> None:
         driver, manifest, old = self.runtime_cache_finalize()
