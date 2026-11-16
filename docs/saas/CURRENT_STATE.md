@@ -1,5 +1,37 @@
 # Estado canônico do Converta
 
+## ED74 ativa e aceita, aguardando finalização — 16/11/2026
+
+**AWAITING_ACCEPTANCE / ACCEPTANCE_MATERIALIZED / FINALIZE PENDING.** Esta
+entrada é posterior ao rollback terminal descrito abaixo e prevalece somente para
+o estado corrente da implantação ED74. A release
+`immutable-ed74c483-external-20261115T162015Z`, target
+`ed74c483b35c6cfebbdaa1a0a16e233101c46dd4`, está selecionada em API, frontend
+e worker; o frontend mantém BUILD_ID `DL7flKybPJUYQKtRLSuch`. O aceite humano
+5/5 e o aceite técnico `1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a`
+foram materializados. O journal permanece `AWAITING_ACCEPTANCE`, `saveCount=0`,
+sob o control plane original `4e55c9d93788f93761a4786917a4dd08c90c0d0f`.
+
+O primeiro `finalize` foi negado antes de mutação por cache de imagens Next.js
+criado em runtime e ausente do índice instalado. O PR #409, head
+`617cbb4adc3a09a9d252670177cec0eb77cdefe1`, implementa a reconciliação fechada
+para essa fronteira, passou CI 4/4 e foi integrado pelo merge
+`3ac77ac1e8dadebf41e7f427e8128f44d886c25f`, árvore
+`a2f86c7871a1e18cd5442b1583502ee08f0dadbd`. Não executar `finalize`,
+`pm2 save`, retirement ou limpeza antes da materialização autenticada de um
+request novo. O draft de request SHA-256
+`6e82041470a36d3286efe9edbe14eef06cc47bfc2df76ed5a83778e94538222d`
+não é autoridade produtiva. A transação, release, pacote, bindings, aceite,
+journal, lock e retornos continuam preservados.
+
+O control plane integrado ainda não contém produtor/materializador versionado do
+request de finalização. A correção candidata adiciona
+`fixed-current-finalize-request-materialize.py`, que deriva o `argv` somente do
+journal e das autoridades autenticadas e prova a cadeia produtor → wrapper →
+driver em ambiente isolado. Até sua revisão, CI e integração, a preparação
+permanece negada em `FINALIZE_REQUEST_CANONICAL_MATERIALIZER_UNAVAILABLE`: não
+reutilizar o draft nem reconstruir argumentos manualmente.
+
 ## Incidente de implantação 3/3 e retorno terminal — 15/11/2026
 
 **ROLLED_BACK / PRODUCTION RESTORED / CANDIDATE INSTALLED INACTIVE.** A
