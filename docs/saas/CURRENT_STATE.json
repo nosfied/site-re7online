@@ -1,6 +1,6 @@
 {
   "schemaVersion": 8,
-  "updatedAtUtc": "2026-11-15T21:39:46Z",
+  "updatedAtUtc": "2026-11-16T12:12:23Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
@@ -14,6 +14,37 @@
     "e1Started": false
   },
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+  "ed74CurrentDeployment20261116": {
+    "state": "AWAITING_ACCEPTANCE",
+    "releaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "targetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+    "components": [
+      "api",
+      "frontend",
+      "worker"
+    ],
+    "frontendBuildId": "DL7flKybPJUYQKtRLSuch",
+    "originalControlPlane": "4e55c9d93788f93761a4786917a4dd08c90c0d0f",
+    "acceptanceSha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
+    "humanAcceptance": "PASS_5_OF_5",
+    "saveCount": 0,
+    "finalizeAttemptMutationOccurred": false,
+    "finalizeBlocker": "UNINDEXED_AUTHENTIC_NEXT_IMAGE_RUNTIME_CACHE",
+    "correctivePullRequest": 409,
+    "correctiveHead": "617cbb4adc3a09a9d252670177cec0eb77cdefe1",
+    "correctiveCi": "PASS_4_OF_4_INTEGRATED",
+    "correctiveMerge": "3ac77ac1e8dadebf41e7f427e8128f44d886c25f",
+    "correctiveTree": "a2f86c7871a1e18cd5442b1583502ee08f0dadbd",
+    "finalizeRequestPreparationState": "BLOCKED_BY_MISSING_VERSIONED_MATERIALIZER",
+    "finalizeRequestPreparationPredicate": "FINALIZE_REQUEST_CANONICAL_MATERIALIZER_UNAVAILABLE",
+    "finalizeRequestMaterializerCandidate": "scripts/fixed-current-finalize-request-materialize.py",
+    "finalizeRequestMaterializerCandidateState": "ISOLATED_INTEGRATION_PASS_PENDING_REVIEW_AND_CI",
+    "draftFinalizeRequestSha256": "6e82041470a36d3286efe9edbe14eef06cc47bfc2df76ed5a83778e94538222d",
+    "draftFinalizeRequestIsProductionAuthority": false,
+    "productionMutationAuthorizedByThisRecord": false,
+    "supersedesHistoricalRollbackOnlyForCurrentRuntimeSelection": true,
+    "legacyTopLevelDeploymentRecordPointersRemainHistorical": true
+  },
   "releaseGraphReconciliationControlPlane": {
     "state": "IMPLEMENTED_AND_TESTED_LOCALLY_NOT_OPERATIONAL",
     "producerRolesAreComponentScoped": true,
@@ -2226,8 +2257,8 @@
     "destructiveCommandsExecuted": 0,
     "nextAction": "AUTHORIZE_SEPARATE_EMBEDDED_DATA_MIGRATION_AND_WHOLE_RELEASE_CUSTODY_PLAN_FOR_NINE_LITERAL_RELEASES"
   },
-  "updatedAtDate": "2026-11-14",
-  "updatedAtUtcScope": "PROJECT_AUDIT_COMPLETE_BACKLOG_READY_AFTER_P00_TERMINAL_CLOSURE",
+  "updatedAtDate": "2026-11-16",
+  "updatedAtUtcScope": "ED74_AWAITING_FINALIZE_AND_P00D_EXISTING_STANDARD_RECONCILED",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",
