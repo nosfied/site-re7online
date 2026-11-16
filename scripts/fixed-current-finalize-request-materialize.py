@@ -91,6 +91,25 @@ def absolute(value: Any, predicate: str) -> Path:
 def load_request(path: Path, expected: str) -> dict[str, Any]:
     raw = bound_regular(path, expected, modes={0o600})
     value = json_object(raw, path.name)
+    if value.get("action") == "materialize_fixed_current_finalize_continuation":
+        required_continuation = {
+            "schemaVersion", "action", "transactionRoot", "transactionJournal",
+            "transactionJournalSha256", "priorRequest", "priorRequestSha256",
+            "lockPath", "lockSha256", "driver", "driverSha256",
+            "wrapper", "wrapperSha256", "cacheManifestOutput",
+            "finalizeRequestOutput",
+        }
+        if set(value) != required_continuation or value.get("schemaVersion") != 1:
+            raise Denied("continuation_request_schema")
+        for name in ("transactionRoot", "transactionJournal", "priorRequest",
+                     "lockPath", "driver", "wrapper", "cacheManifestOutput",
+                     "finalizeRequestOutput"):
+            absolute(value.get(name), f"continuation_request_path:{name}")
+        for name in ("transactionJournalSha256", "priorRequestSha256", "lockSha256",
+                     "driverSha256", "wrapperSha256"):
+            if not SHA256.fullmatch(str(value.get(name, ""))):
+                raise Denied(f"continuation_request_sha256:{name}")
+        return value
     required = {
         "schemaVersion", "action", "transactionRoot", "transactionJournal",
         "transactionJournalSha256", "acceptance", "acceptanceSha256",
