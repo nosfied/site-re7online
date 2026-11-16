@@ -91,6 +91,25 @@ def absolute(value: Any, predicate: str) -> Path:
 def load_request(path: Path, expected: str) -> dict[str, Any]:
     raw = bound_regular(path, expected, modes={0o600})
     value = json_object(raw, path.name)
+    if value.get("action") == "materialize_fixed_current_finalize_continuation":
+        required_continuation = {
+            "schemaVersion", "action", "transactionRoot", "transactionJournal",
+            "transactionJournalSha256", "priorRequest", "priorRequestSha256",
+            "lockPath", "lockSha256", "driver", "driverSha256",
+            "wrapper", "wrapperSha256", "cacheManifestOutput",
+            "finalizeRequestOutput",
+        }
+        if set(value) != required_continuation or value.get("schemaVersion") != 1:
+            raise Denied("continuation_request_schema")
+        for name in ("transactionRoot", "transactionJournal", "priorRequest",
+                     "lockPath", "driver", "wrapper", "cacheManifestOutput",
+                     "finalizeRequestOutput"):
+            absolute(value.get(name), f"continuation_request_path:{name}")
+        for name in ("transactionJournalSha256", "priorRequestSha256", "lockSha256",
+                     "driverSha256", "wrapperSha256"):
+            if not SHA256.fullmatch(str(value.get(name, ""))):
+                raise Denied(f"continuation_request_sha256:{name}")
+        return value
     required = {
         "schemaVersion", "action", "transactionRoot", "transactionJournal",
         "transactionJournalSha256", "acceptance", "acceptanceSha256",
@@ -384,6 +403,160 @@ def publish(request: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def continuation_argument(argv: list[str], flag: str) -> str:
+    if argv.count(flag) != 1:
+        raise Denied(f"continuation_prior_argv:{flag}")
+    index = argv.index(flag)
+    if index + 1 >= len(argv):
+        raise Denied(f"continuation_prior_argv:{flag}")
+    return argv[index + 1]
+
+
+def derive_failed_finalize_continuation(
+    request: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Produce a new authenticated cache authority and recovery request.
+
+    The existing first-finalize argv is the sole argument source; only the
+    authenticated driver and cache binding can change.
+    """
+    root = Path(request["transactionRoot"])
+    authenticate_root(root)
+    journal_path = Path(request["transactionJournal"])
+    lock_path = Path(request["lockPath"])
+    if journal_path != root / "transaction.v1.private.json":
+        raise Denied("continuation_journal_path")
+    journal = json_object(bound_regular(
+        journal_path, request["transactionJournalSha256"], modes={0o600}),
+        journal_path.name)
+    if (journal.get("state") != "FAILED" or
+            journal.get("recoveryAction") != "finalize" or
+            journal.get("saveCount") != 0 or
+            journal.get("deployedMarkerCreated") is not False or
+            journal.get("lockDigest") != request["lockSha256"]):
+        raise Denied("continuation_journal_state")
+    bound_regular(lock_path, request["lockSha256"], modes={0o600})
+    prior_path = Path(request["priorRequest"])
+    prior = json_object(bound_regular(
+        prior_path, request["priorRequestSha256"], modes={0o600}), prior_path.name)
+    if (set(prior) != {
+            "schemaVersion", "action", "lockPath", "transactionRoot",
+            "driver", "driverSha256", "finalizeArgv",
+        } or prior.get("schemaVersion") != 1 or prior.get("action") != "finalize" or
+            prior.get("transactionRoot") != str(root) or
+            prior.get("lockPath") != str(lock_path)):
+        raise Denied("continuation_prior_request")
+    original = prior["finalizeArgv"]
+    if (not isinstance(original, list) or len(original) < 5 or
+            original[:4] != ["/usr/bin/python3", "-B", prior["driver"], "finalize"]):
+        raise Denied("continuation_prior_argv")
+    binding = journal.get("binding")
+    if not isinstance(binding, dict):
+        raise Denied("continuation_journal_binding")
+    expected = {
+        "--release": binding.get("release"),
+        "--target": binding.get("target"),
+        "--control-plane": binding.get("controlPlane"),
+        "--components": ",".join(binding.get("components", [])),
+        "--transaction-root": str(root),
+    }
+    if any(continuation_argument(original, flag) != value
+           for flag, value in expected.items()):
+        raise Denied("continuation_prior_scope")
+    evidence: dict[str, dict[str, str]] = {}
+    for name in ("stdout", "stderr", "exit"):
+        path = root / f"fixed-current-finalize-continuation.{name}.private.txt"
+        raw, _ = stable_regular(path, modes={0o600})
+        evidence[name] = {"path": str(path), "sha256": sha256(raw)}
+    stderr, _ = stable_regular(Path(evidence["stderr"]["path"]), modes={0o600})
+    exit_bytes, _ = stable_regular(Path(evidence["exit"]["path"]), modes={0o600})
+    if (exit_bytes != b"2\n" or
+            b"control_plane_succession_script:deploy" not in stderr):
+        raise Denied("continuation_prior_failure_evidence")
+
+    old_cache_path = Path(continuation_argument(
+        original, "--runtime-cache-reconciliation"))
+    old_cache_sha = continuation_argument(
+        original, "--runtime-cache-reconciliation-sha256")
+    historic = json_object(bound_regular(
+        old_cache_path, old_cache_sha, modes={0o600}), old_cache_path.name)
+    if (historic.get("kind") != RUNTIME_CACHE_KIND or
+            historic.get("releaseId") != binding.get("release") or
+            historic.get("targetCommit") != binding.get("target") or
+            historic.get("transactionRoot") != str(root) or
+            historic.get("originalControlPlane") != binding.get("controlPlane") or
+            historic.get("continuationDriverSha256") != prior.get("driverSha256")):
+        raise Denied("continuation_original_cache_scope")
+
+    driver = Path(request["driver"])
+    wrapper = Path(request["wrapper"])
+    bound_regular(driver, request["driverSha256"], modes={0o500, 0o600})
+    bound_regular(wrapper, request["wrapperSha256"], modes={0o500, 0o600})
+    repo = driver.parent.parent
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode or not SHA40.fullmatch(result.stdout.strip()):
+        raise Denied("continuation_successor_head")
+    head = result.stdout.strip()
+    authenticate_checkout(
+        driver, request["driverSha256"], wrapper, request["wrapperSha256"], head)
+    if (head == historic.get("continuationControlPlane") or
+            request["driverSha256"] == prior["driverSha256"]):
+        raise Denied("continuation_successor_not_changed")
+    new_cache = dict(historic)
+    new_cache["continuationControlPlane"] = head
+    new_cache["continuationDriverSha256"] = request["driverSha256"]
+    cache_output = Path(request["cacheManifestOutput"])
+    request_output = Path(request["finalizeRequestOutput"])
+    if (cache_output == request_output or
+            cache_output == old_cache_path or
+            cache_output.parent != request_output.parent):
+        raise Denied("continuation_output_scope")
+    cache_raw = (
+        json.dumps(new_cache, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    argv = list(original)
+    argv[2] = str(driver)
+    cache_index = argv.index("--runtime-cache-reconciliation")
+    cache_sha_index = argv.index("--runtime-cache-reconciliation-sha256")
+    argv[cache_index + 1] = str(cache_output)
+    argv[cache_sha_index + 1] = sha256(cache_raw)
+    outputs = {
+        name: str(root / f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt")
+        for name in ("stdout", "stderr", "exit")
+    }
+    next_request = {
+        "schemaVersion": 1, "action": "finalize_continuation",
+        "attemptOrdinal": 2, "lockPath": str(lock_path),
+        "transactionRoot": str(root), "driver": str(driver),
+        "driverSha256": request["driverSha256"],
+        "finalizeArgv": argv, "evidenceOutputs": outputs,
+        "recovery": {
+            "priorRequest": str(prior_path),
+            "priorRequestSha256": request["priorRequestSha256"],
+            "negativeJournal": str(journal_path),
+            "negativeJournalSha256": request["transactionJournalSha256"],
+            "priorEvidence": evidence,
+        },
+    }
+    return new_cache, next_request
+
+
+def publish_failed_finalize_continuation(request: dict[str, Any]) -> dict[str, Any]:
+    cache, next_request = derive_failed_finalize_continuation(request)
+    # Both writes are exclusive and immutable. If the second fails, preserve
+    # the first artifact as forensic evidence, never overwrite or retry.
+    cache_receipt = publish(
+        {"finalizeRequestOutput": request["cacheManifestOutput"]}, cache)
+    output = publish(request, next_request)
+    return {
+        "result": "FIXED_CURRENT_FINALIZE_CONTINUATION_REQUEST_MATERIALIZED",
+        "request": output, "cacheReconciliation": cache_receipt,
+    }
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", type=Path, required=True)
@@ -391,8 +564,10 @@ def main() -> int:
     args = parser.parse_args()
     try:
         request = load_request(args.request, args.request_sha256)
-        print(json.dumps(publish(request, derive(request)), sort_keys=True,
-                         separators=(",", ":")))
+        receipt = (publish_failed_finalize_continuation(request)
+                   if request["action"] == "materialize_fixed_current_finalize_continuation"
+                   else publish(request, derive(request)))
+        print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
         return 0
     except (Denied, OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"FIXED_CURRENT_FINALIZE_REQUEST_DENY:{error}", file=sys.stderr)

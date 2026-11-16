@@ -329,6 +329,82 @@ class ContinuationTests(unittest.TestCase):
         self.assertTrue(self.fixture.lock.is_file())
         CONTINUATION.validate_lock(self.fixture.lock, lock_fd)
 
+    def test_ed74_failed_finalize_allows_only_bound_new_driver_and_same_cache(self):
+        constants, old_manifest_path = self.fixture.ed74_pre_finalize_request()
+        old_request = dict(self.fixture.request)
+        prior = self.fixture.root / "ed74-prior-finalize.private.json"
+        private_json(prior, old_request)
+        prior_evidence = {}
+        for name, content in (
+            ("stdout", ""), ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\n"),
+            ("exit", "2\n"),
+        ):
+            path = self.fixture.tx / f"fixed-current-finalize-continuation.{name}.private.txt"
+            path.write_text(content); path.chmod(0o600)
+            prior_evidence[name] = {"path": str(path), "sha256": digest(path)}
+        private_json(self.fixture.tx / "transaction.v1.private.json", {
+            "state": "FAILED", "recoveryAction": "finalize", "saveCount": 0,
+        })
+        driver = self.fixture.request["driver"]
+        repo_path = Path(driver).parent.parent
+        old_manifest = json.loads(old_manifest_path.read_text())
+        Path(driver).write_text("# corrected successor deploy driver\\n")
+        subprocess.run(["git", "-C", str(repo_path), "add",
+                        "scripts/converta-deploy.py"], check=True)
+        subprocess.run([
+            "git", "-C", str(repo_path), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid", "commit",
+            "-qm", "corrected successor",
+        ], check=True)
+        Path(driver).chmod(0o600)
+        successor_head = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse", "HEAD"],
+            check=True, text=True, capture_output=True,
+        ).stdout.strip()
+        new_manifest = self.fixture.root / "ed74-cache-successor.private.json"
+        refreshed = dict(old_manifest)
+        refreshed["continuationControlPlane"] = successor_head
+        refreshed["continuationDriverSha256"] = digest(Path(driver))
+        private_json(new_manifest, refreshed)
+
+        outputs = {name: str(self.fixture.tx /
+                   f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt")
+                   for name in ("stdout", "stderr", "exit")}
+        updated_argv = list(old_request["finalizeArgv"])
+        position = updated_argv.index("--runtime-cache-reconciliation")
+        updated_argv[position + 1] = str(new_manifest)
+        updated_argv[position + 3] = digest(new_manifest)
+        self.fixture.request = {
+            "schemaVersion": 1, "action": "finalize_continuation",
+            "attemptOrdinal": 2, "lockPath": str(self.fixture.lock),
+            "transactionRoot": str(self.fixture.tx),
+            "driver": driver, "driverSha256": digest(Path(driver)),
+            "finalizeArgv": updated_argv,
+            "evidenceOutputs": outputs,
+            "recovery": {
+                "priorRequest": str(prior), "priorRequestSha256": digest(prior),
+                "negativeJournal": str(self.fixture.tx / "transaction.v1.private.json"),
+                "negativeJournalSha256": digest(
+                    self.fixture.tx / "transaction.v1.private.json"),
+                "priorEvidence": prior_evidence,
+            },
+        }
+        private_json(self.fixture.request_path, self.fixture.request)
+        with patch.multiple(CONTINUATION, **constants):
+            loaded = CONTINUATION.load_request(
+                self.fixture.request_path, digest(self.fixture.request_path))
+            self.assertEqual(loaded["action"], "finalize_continuation")
+            self.assertEqual(loaded["driverSha256"], digest(Path(driver)))
+
+            modified = dict(refreshed)
+            modified["cacheEntries"] = [{"path": "unauthorized"}]
+            private_json(new_manifest, modified)
+            updated_argv[position + 3] = digest(new_manifest)
+            private_json(self.fixture.request_path, self.fixture.request)
+            with self.assertRaisesRegex(CONTINUATION.Denied, "request_recovery_cache_successor"):
+                CONTINUATION.load_request(
+                    self.fixture.request_path, digest(self.fixture.request_path))
+
     def test_ed74_pre_finalize_request_authenticates_successor_checkout(self):
         constants, _ = self.fixture.ed74_pre_finalize_request()
         with patch.multiple(CONTINUATION, **constants):

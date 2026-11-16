@@ -218,6 +218,60 @@ def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
         raise Denied("request_driver_checkout")
 
 
+def _validate_cache_successor_refresh(
+    prior: dict[str, Any], current: dict[str, Any]
+) -> None:
+    """Authenticate a new driver against an unchanged ED74 cache authority.
+
+    Only the successor checkout and script digest may change; the release,
+    original binding, inventory and historical journal authority remain sealed.
+    """
+    previous = _runtime_cache_arguments(prior["finalizeArgv"])
+    following = _runtime_cache_arguments(current["finalizeArgv"])
+    if previous is None or following is None or previous == following:
+        raise Denied("request_recovery_prior_binding")
+    old_raw = _bound_regular(Path(previous[0]), previous[1])
+    new_raw = _bound_regular(Path(following[0]), following[1])
+    try:
+        old = json.loads(old_raw)
+        new = json.loads(new_raw)
+    except json.JSONDecodeError as error:
+        raise Denied("request_recovery_cache_manifest") from error
+    if (not isinstance(old, dict) or not isinstance(new, dict) or
+            old.get("releaseId") != ED74_RUNTIME_CACHE_RELEASE or
+            new.get("releaseId") != ED74_RUNTIME_CACHE_RELEASE or
+            set(old) != set(new) or
+            set(old) != {
+                "schemaVersion", "kind", "releaseId", "targetCommit",
+                "transactionRoot", "indexSha256", "manifestSha256",
+                "retirementIntentSha256", "originalControlPlane",
+                "continuationControlPlane", "continuationDriverSha256",
+                "acceptanceJournal", "acceptanceSha256", "lockSha256",
+                "cacheEntries",
+            }):
+        raise Denied("request_recovery_cache_scope")
+    stable = set(old) - {"continuationControlPlane", "continuationDriverSha256"}
+    if (any(old[key] != new[key] for key in stable) or
+            old["continuationDriverSha256"] != prior["driverSha256"] or
+            new["continuationDriverSha256"] != current["driverSha256"] or
+            old["continuationControlPlane"] == new["continuationControlPlane"] or
+            _runtime_cache_successor(current, current["finalizeArgv"]) is None):
+        raise Denied("request_recovery_cache_successor")
+    # Require the prior committed driver to match the previously authenticated
+    # cache successor, rather than trusting the prior request's self-declaration.
+    # The current authenticated checkout carries the immutable Git history;
+    # the prior checkout may already have completed its own custody lifecycle.
+    current_repo = Path(current["driver"]).parent.parent
+    committed = subprocess.run(
+        ["git", "-C", str(current_repo), "show",
+         f"{old['continuationControlPlane']}:scripts/converta-deploy.py"],
+        check=False, capture_output=True,
+    )
+    if (committed.returncode or sha256(committed.stdout) !=
+            old["continuationDriverSha256"]):
+        raise Denied("request_recovery_historical_driver")
+
+
 def _validate_finalize_continuation(value: dict[str, Any], argv: list[str]) -> None:
     attempt = value.get("attemptOrdinal")
     if not isinstance(attempt, int) or isinstance(attempt, bool) or not 2 <= attempt <= 99:
@@ -276,7 +330,10 @@ def _validate_finalize_continuation(value: dict[str, Any], argv: list[str]) -> N
             raise Denied("request_recovery_prior_binding")
     elif (prior_cache != current_cache or prior["finalizeArgv"][4:] != argv[4:] or
           prior.get("driverSha256") != value["driverSha256"]):
-        raise Denied("request_recovery_prior_binding")
+        if (_without_runtime_cache_arguments(prior["finalizeArgv"])[4:] !=
+                _without_runtime_cache_arguments(argv)[4:]):
+            raise Denied("request_recovery_prior_binding")
+        _validate_cache_successor_refresh(prior, value)
     if prior_action == "finalize_continuation" and (
             prior.get("attemptOrdinal") != attempt - 1 or
             not isinstance(prior.get("evidenceOutputs"), dict) or

@@ -273,6 +273,182 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_failed_ed74_continuation_materialized_without_operator_argv(self) -> None:
+        fixture = ProducerFixture(self, "api_frontend_worker")
+        try:
+            original_cache = fixture.add_runtime_cache()
+            cache_root = (fixture.deploy.releases / fixture.deploy.candidate /
+                          "frontend-runtime/.next/cache")
+            cache_leaf_dir = cache_root / "images" / "SyntheticEd74ImageCacheKey123456789"
+            cache_leaf_dir.mkdir(parents=True)
+            # The fixture must model the sealed Next image cache modes under
+            # any runner umask; do not relax the production validator.
+            for directory in (cache_root, cache_root / "images", cache_leaf_dir):
+                directory.chmod(0o755)
+            cache_leaf = cache_leaf_dir / "14400.synthetic-ed74-cache-value.webp"
+            cache_leaf.write_bytes(b"synthetic-cache-fixture")
+            cache_leaf.chmod(0o644)
+            cache_entries = []
+            for path in (cache_root, cache_root / "images", cache_leaf_dir, cache_leaf):
+                info = path.lstat()
+                item = {
+                    "path": path.relative_to(
+                        fixture.deploy.releases / fixture.deploy.candidate).as_posix(),
+                    "type": "file" if path == cache_leaf else "directory",
+                    "mode": 0o644 if path == cache_leaf else 0o755,
+                }
+                if path == cache_leaf:
+                    item.update(size=info.st_size, sha256=digest(path))
+                cache_entries.append(item)
+            old_cache_payload = json.loads(original_cache.read_text())
+            old_cache_payload["cacheEntries"] = cache_entries
+            private_json(original_cache, old_cache_payload)
+            fixture.value["optionalAuthorities"]["runtimeCacheReconciliation"]["sha256"] = (
+                digest(original_cache))
+            private_json(fixture.input, fixture.value)
+            self.assertEqual(fixture.run().returncode, 0)
+            old_request = fixture.custody / "prior-finalize-request.private.json"
+            old_request.write_bytes(fixture.output.read_bytes())
+            old_request.chmod(0o600)
+            journal_path = fixture.deploy.transaction / "transaction.v1.private.json"
+            journal = json.loads(journal_path.read_text())
+            journal.update(
+                state="FAILED", recoveryAction="finalize",
+                failure="control_plane_succession_script:deploy", saveCount=0)
+            private_json(journal_path, journal)
+            for name, content in (
+                ("stdout", ""),
+                ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\n"),
+                ("exit", "2\n"),
+            ):
+                path = fixture.deploy.transaction / (
+                    f"fixed-current-finalize-continuation.{name}.private.txt")
+                path.write_text(content); path.chmod(0o600)
+            fixture.driver.write_text(fixture.driver.read_text() +
+                                      "\n# successor control plane test\n")
+            subprocess.run(["git", "-C", str(fixture.repo), "add",
+                            "scripts/converta-deploy.py"], check=True)
+            subprocess.run([
+                "git", "-C", str(fixture.repo), "-c", "user.name=Fixture",
+                "-c", "user.email=fixture@example.invalid",
+                "commit", "-qm", "corrected driver successor",
+            ], check=True)
+            fixture.output = fixture.custody / "continuation-request.private.json"
+            new_cache = fixture.custody / "continuation-cache.private.json"
+            fixture.value = {
+                "schemaVersion": 1,
+                "action": "materialize_fixed_current_finalize_continuation",
+                "transactionRoot": str(fixture.deploy.transaction),
+                "transactionJournal": str(journal_path),
+                "transactionJournalSha256": digest(journal_path),
+                "priorRequest": str(old_request),
+                "priorRequestSha256": digest(old_request),
+                "lockPath": str(fixture.deploy.lock),
+                "lockSha256": digest(fixture.deploy.lock),
+                "driver": str(fixture.driver),
+                "driverSha256": digest(fixture.driver),
+                "wrapper": str(fixture.wrapper),
+                "wrapperSha256": digest(fixture.wrapper),
+                "cacheManifestOutput": str(new_cache),
+                "finalizeRequestOutput": str(fixture.output),
+            }
+            private_json(fixture.input, fixture.value)
+            before = journal_path.read_bytes()
+            result = fixture.run()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            output = json.loads(fixture.output.read_text())
+            self.assertEqual(output["action"], "finalize_continuation")
+            self.assertEqual(output["attemptOrdinal"], 2)
+            self.assertEqual(output["driverSha256"], digest(fixture.driver))
+            self.assertEqual(output["finalizeArgv"][2], str(fixture.driver))
+            self.assertNotIn("finalizeArgv", fixture.value)
+            self.assertEqual(journal_path.read_bytes(), before)
+            self.assertEqual(fixture.deploy.host.save_calls, 0)
+            retirement = fixture.deploy.retirement
+            assert retirement is not None
+            with patch.multiple(
+                continuation,
+                ED74_RUNTIME_CACHE_RELEASE=fixture.deploy.candidate,
+                ED74_RUNTIME_CACHE_TARGET=fixture.deploy.target,
+                ED74_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
+                ED74_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+            ):
+                self.assertEqual(continuation.load_request(
+                    fixture.output, digest(fixture.output)), output)
+            replay = fixture.run()
+            self.assertEqual(replay.returncode, 2)
+            self.assertEqual(journal_path.read_bytes(), before)
+
+            # Complete the same FAILED transaction through the existing wrapper
+            # and deploy driver, not just through request schema validation.
+            # This isolated fixture intentionally does not claim to reproduce
+            # the VPS's private worker succession manifest.
+            deploy_module = deploy_tests.deploy
+            fixture.deploy.inputs = replace(
+                fixture.deploy.inputs,
+                runtime_cache_reconciliation=new_cache,
+                runtime_cache_reconciliation_sha256=digest(new_cache),
+            )
+            fixture.deploy.driver = fixture.deploy._driver(fixture.repo)
+            fixture.deploy.host.control_plane = fixture.head()
+            lock_fd = continuation.acquire_lock(fixture.deploy.lock)
+            save_before = fixture.deploy.host.save_calls
+
+            def real_driver(argv, **kwargs):
+                previous = os.environ.get(continuation.LOCK_ENV)
+                os.environ[continuation.LOCK_ENV] = kwargs["env"][continuation.LOCK_ENV]
+                try:
+                    fixture.deploy.driver.finalize()
+                finally:
+                    if previous is None:
+                        os.environ.pop(continuation.LOCK_ENV, None)
+                    else:
+                        os.environ[continuation.LOCK_ENV] = previous
+                return subprocess.CompletedProcess(argv, 0)
+
+            try:
+                with patch.multiple(
+                    continuation,
+                    ED74_RUNTIME_CACHE_RELEASE=fixture.deploy.candidate,
+                    ED74_RUNTIME_CACHE_TARGET=fixture.deploy.target,
+                    ED74_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
+                    ED74_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+                ), patch.object(
+                    deploy_module, "__file__", str(fixture.driver)
+                ), patch.multiple(
+                    deploy_module,
+                    RUNTIME_CACHE_ED74_RELEASE=fixture.deploy.candidate,
+                    RUNTIME_CACHE_ED74_TARGET=fixture.deploy.target,
+                    RUNTIME_CACHE_ED74_TRANSACTION=fixture.deploy.transaction,
+                    RUNTIME_CACHE_ED74_INDEX_SHA256=digest(
+                        fixture.deploy.releases / fixture.deploy.candidate / "index.sha256"),
+                    RUNTIME_CACHE_ED74_MANIFEST_SHA256=digest(
+                        fixture.deploy.releases / fixture.deploy.candidate / "manifest.json"),
+                    RUNTIME_CACHE_ED74_INTENT_SHA256=retirement.intent_sha256,
+                    RUNTIME_CACHE_ED74_ACCEPTANCE_JOURNAL_SHA256=digest(
+                        fixture.custody / "acceptance-journal.authenticated.private.json"),
+                    RUNTIME_CACHE_ED74_ACCEPTANCE_SHA256=digest(
+                        fixture.deploy.transaction / "acceptance.private.txt"),
+                    RUNTIME_CACHE_ED74_LOCK_SHA256=digest(fixture.deploy.lock),
+                ):
+                    self.assertEqual(continuation.run(
+                        output, lock_fd, runner=real_driver), 0)
+                    continuation.release_terminal_lock(output, lock_fd)
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                os.close(lock_fd)
+            final_journal = fixture.deploy.driver._journal_read()
+            self.assertIn(final_journal["state"], {
+                "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
+            self.assertEqual(final_journal["saveCount"], 1)
+            self.assertEqual(fixture.deploy.host.save_calls, save_before + 1)
+            self.assertFalse(fixture.deploy.lock.exists())
+            self.assertTrue((fixture.deploy.releases /
+                             fixture.deploy.candidate / "DEPLOYED").exists())
+            self.assertEqual(fixture.deploy.host.retirement_calls, 1)
+        finally:
+            fixture.close()
+
     def test_denies_authority_drift_cross_transaction_arbitrary_argv_and_replay(self) -> None:
         variants = ("sha", "path", "identity", "journal", "scope", "cross", "argv")
         for variant in variants:
