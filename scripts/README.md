@@ -56,6 +56,22 @@ checkout antes de chamar o driver; o driver recaptura o inventário imediatament
 antes do único `pm2 save`. Não criar journal negativo para essa fronteira e não
 reutilizar o perfil fechado da ED74 em outra release.
 
+## `fixed-current-finalize-request-materialize.py` — produtor do request final
+
+Materializa, mas nunca executa, o request schema 1 consumido por
+`fixed-current-finalization-continuation.py`. O produtor não aceita `finalizeArgv`:
+ele deriva a linha completa do journal `AWAITING_ACCEPTANCE`, do runtime manifest,
+do binding de retirement e das autoridades opcionais autenticadas. Driver e
+wrapper devem ser arquivos rastreados de um checkout limpo no control plane
+original ou no sucessor explicitamente vinculado pela reconciliação de cache.
+
+Os perfis admitidos são somente `api`, `api,frontend` e
+`api,frontend,worker`. Journal, aceite, lock, artefatos de retirement e eventuais
+reconciliações são reabertos por SHA-256; o destino deve estar ausente e é
+publicado `0600` com `O_EXCL`, `fsync` e readback. A materialização não chama o
+wrapper, o driver, PM2 ou retirement. A execução continua sendo uma autorização
+separada sobre o SHA-256 do request publicado.
+
 ## `pm2-binding-materialize.py` — materializador de bindings privados
 
 O frontend mantém o fluxo schema 1 homologado. Para o worker, o materializador
