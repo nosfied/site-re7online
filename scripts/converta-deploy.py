@@ -2207,14 +2207,25 @@ class Driver:
                 self.host.pm2_rows(self._resolve_pm2()), PROCESS_NAMES["worker"])
             if not self._worker_definition_matches(live_row, live, "candidate"):
                 deny("final_dump_field:worker:logs")
-            observed_logs = {
-                "out": row.get("pm_out_log_path"),
-                "error": row.get("pm_err_log_path"),
-            }
             expected_logs = {
                 "out": self._pm2_field(live_row, "pm_out_log_path"),
                 "error": self._pm2_field(live_row, "pm_err_log_path"),
             }
+            if "pm_out_log_path" in row or "pm_err_log_path" in row:
+                # Real saved dump: both paths at top level, no fabricated pm_id.
+                observed_logs = {
+                    "out": row.get("pm_out_log_path"),
+                    "error": row.get("pm_err_log_path"),
+                }
+            else:
+                # Preserve the previously admitted nested representation only
+                # when its own PM2 id and log paths remain authenticated.
+                if not self._worker_definition_matches(row, live, "candidate"):
+                    deny("final_dump_field:worker:logs")
+                observed_logs = {
+                    "out": self._pm2_field(row, "pm_out_log_path"),
+                    "error": self._pm2_field(row, "pm_err_log_path"),
+                }
             if (any(not isinstance(value, str) or not Path(value).is_absolute()
                     for value in observed_logs.values()) or
                     observed_logs != expected_logs):
