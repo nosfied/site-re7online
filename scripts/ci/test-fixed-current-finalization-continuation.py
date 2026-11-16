@@ -221,6 +221,77 @@ class Fixture:
         }
         return constants, outputs, ordinal2_request
 
+    def ed74_pre_finalize_request(self) -> tuple[dict[str, object], Path]:
+        repo = self.root / "ed74-successor-control"
+        scripts = repo / "scripts"; scripts.mkdir(parents=True)
+        driver = scripts / "converta-deploy.py"
+        driver.write_text("# original driver\n")
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "add", "scripts/converta-deploy.py"],
+                       check=True)
+        subprocess.run([
+            "git", "-C", str(repo), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid", "commit", "-qm", "original",
+        ], check=True)
+        original_head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True,
+            text=True, capture_output=True).stdout.strip()
+        driver.write_text("# successor driver\n")
+        subprocess.run(["git", "-C", str(repo), "add", "scripts/converta-deploy.py"],
+                       check=True)
+        subprocess.run([
+            "git", "-C", str(repo), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid", "commit", "-qm", "successor",
+        ], check=True)
+        successor_head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True,
+            text=True, capture_output=True).stdout.strip()
+        driver.chmod(0o600)
+        target = "a" * 40
+        intent_sha256 = "b" * 64
+        acceptance_journal = self.root / "acceptance-journal.authenticated.private.json"
+        private_json(acceptance_journal, {
+            "state": "AWAITING_ACCEPTANCE", "saveCount": 0,
+        })
+        reconciliation = self.root / "ed74-runtime-cache-reconciliation.private.json"
+        private_json(reconciliation, {
+            "schemaVersion": 1,
+            "kind": CONTINUATION.RUNTIME_CACHE_RECONCILIATION_KIND,
+            "releaseId": "immutable-test", "targetCommit": target,
+            "transactionRoot": str(self.tx), "indexSha256": "c" * 64,
+            "manifestSha256": "d" * 64,
+            "retirementIntentSha256": intent_sha256,
+            "originalControlPlane": original_head,
+            "continuationControlPlane": successor_head,
+            "continuationDriverSha256": digest(driver),
+            "acceptanceJournal": {
+                "path": str(acceptance_journal), "sha256": digest(acceptance_journal),
+            },
+            "acceptanceSha256": "e" * 64, "lockSha256": "f" * 64,
+            "cacheEntries": [],
+        })
+        self.request = {
+            "schemaVersion": 1, "action": "finalize", "lockPath": str(self.lock),
+            "transactionRoot": str(self.tx), "driver": str(driver),
+            "driverSha256": digest(driver),
+            "finalizeArgv": [
+                "/usr/bin/python3", "-B", str(driver), "finalize",
+                "--release", "immutable-test", "--target", target,
+                "--control-plane", original_head, "--transaction-root", str(self.tx),
+                "--generation-retirement-intent-sha256", intent_sha256,
+                "--runtime-cache-reconciliation", str(reconciliation),
+                "--runtime-cache-reconciliation-sha256", digest(reconciliation),
+            ],
+        }
+        private_json(self.request_path, self.request)
+        constants = {
+            "ED74_RUNTIME_CACHE_RELEASE": "immutable-test",
+            "ED74_RUNTIME_CACHE_TARGET": target,
+            "ED74_RUNTIME_CACHE_TRANSACTION": self.tx,
+            "ED74_RUNTIME_CACHE_INTENT_SHA256": intent_sha256,
+        }
+        return constants, reconciliation
+
     def lock_fd(self) -> int:
         return CONTINUATION.acquire_lock(self.lock)
 
@@ -257,6 +328,47 @@ class ContinuationTests(unittest.TestCase):
         self.assertEqual((self.fixture.tx / "fixed-current-finalize-continuation.exit.private.txt").read_text(), "7\n")
         self.assertTrue(self.fixture.lock.is_file())
         CONTINUATION.validate_lock(self.fixture.lock, lock_fd)
+
+    def test_ed74_pre_finalize_request_authenticates_successor_checkout(self):
+        constants, _ = self.fixture.ed74_pre_finalize_request()
+        with patch.multiple(CONTINUATION, **constants):
+            request = CONTINUATION.load_request(
+                self.fixture.request_path, digest(self.fixture.request_path))
+            lock_fd = self.fixture.lock_fd()
+            observed = {}
+
+            def runner(argv, **kwargs):
+                observed["argv"] = argv
+                return subprocess.CompletedProcess(argv, 7)
+
+            code = CONTINUATION.run(request, lock_fd, runner=runner)
+        self.assertEqual(code, 7)
+        self.assertEqual(observed["argv"], self.fixture.request["finalizeArgv"])
+        self.assertTrue(self.fixture.lock.is_file())
+
+    def test_ed74_pre_finalize_request_rejects_manifest_or_control_plane_drift(self):
+        for variant in ("manifest", "original", "successor", "driver"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp()
+                constants, reconciliation = self.fixture.ed74_pre_finalize_request()
+                payload = json.loads(reconciliation.read_text())
+                if variant == "manifest":
+                    payload["releaseId"] = "immutable-other"
+                elif variant == "original":
+                    payload["originalControlPlane"] = "0" * 40
+                elif variant == "successor":
+                    payload["continuationControlPlane"] = "1" * 40
+                else:
+                    payload["continuationDriverSha256"] = "2" * 64
+                private_json(reconciliation, payload)
+                argv = self.fixture.request["finalizeArgv"]
+                index = argv.index("--runtime-cache-reconciliation-sha256")
+                argv[index + 1] = digest(reconciliation)
+                private_json(self.fixture.request_path, self.fixture.request)
+                with patch.multiple(CONTINUATION, **constants):
+                    with self.assertRaises(CONTINUATION.Denied):
+                        CONTINUATION.load_request(
+                            self.fixture.request_path, digest(self.fixture.request_path))
 
     def test_existing_stdout_or_stderr_denies_before_subprocess(self):
         for name in ("stdout", "stderr"):

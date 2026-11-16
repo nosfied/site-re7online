@@ -35,6 +35,14 @@ FA10_RUNTIME_CACHE_TRANSACTION = Path(
     "immutable-fa10f4f5-external-20261112T233820Z-api-frontend-88a5e8b7-v1-once"
 )
 FA10_RUNTIME_CACHE_INTENT_SHA256 = "cf22eb0f466b448092e1bebd9bf83279c076cf654b6b00b4e57e725ade3b9bc2"
+ED74_RUNTIME_CACHE_RELEASE = "immutable-ed74c483-external-20261115T162015Z"
+ED74_RUNTIME_CACHE_TARGET = "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4"
+ED74_RUNTIME_CACHE_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "immutable-ed74c483-external-20261115T162015Z-api-frontend-worker-"
+    "preflight-4e55c9d9-v2/transaction"
+)
+ED74_RUNTIME_CACHE_INTENT_SHA256 = "250a535c4c756a7fcc087b39a722d5237e04a1150b6720c6b8337cb98d7f5496"
 RUNTIME_CACHE_RECONCILIATION_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
 
 
@@ -130,27 +138,43 @@ def _runtime_cache_successor(value: dict[str, Any], argv: list[str]) -> tuple[st
         manifest = json.loads(raw)
     except json.JSONDecodeError as error:
         raise Denied("request_runtime_cache_json") from error
-    required = {
+    common = {
         "schemaVersion", "kind", "releaseId", "targetCommit", "transactionRoot",
         "indexSha256", "manifestSha256", "retirementIntentSha256",
         "originalControlPlane", "continuationControlPlane",
-        "continuationDriverSha256", "negativeJournal", "acceptanceSha256",
+        "continuationDriverSha256", "acceptanceSha256",
         "lockSha256", "cacheEntries",
     }
+    profiles = {
+        FA10_RUNTIME_CACHE_RELEASE: {
+            "target": FA10_RUNTIME_CACHE_TARGET,
+            "transaction": FA10_RUNTIME_CACHE_TRANSACTION,
+            "intentSha256": FA10_RUNTIME_CACHE_INTENT_SHA256,
+            "journalAuthority": "negativeJournal",
+        },
+        ED74_RUNTIME_CACHE_RELEASE: {
+            "target": ED74_RUNTIME_CACHE_TARGET,
+            "transaction": ED74_RUNTIME_CACHE_TRANSACTION,
+            "intentSha256": ED74_RUNTIME_CACHE_INTENT_SHA256,
+            "journalAuthority": "acceptanceJournal",
+        },
+    }
+    profile = profiles.get(manifest.get("releaseId")) if isinstance(manifest, dict) else None
+    required = common | ({profile["journalAuthority"]} if profile is not None else set())
     original = _argv_value(argv, "--control-plane")
     if (not isinstance(manifest, dict) or set(manifest) != required or
             manifest.get("schemaVersion") != 1 or
             manifest.get("kind") != RUNTIME_CACHE_RECONCILIATION_KIND or
-            manifest.get("releaseId") != FA10_RUNTIME_CACHE_RELEASE or
-            manifest.get("targetCommit") != FA10_RUNTIME_CACHE_TARGET or
-            manifest.get("transactionRoot") != str(FA10_RUNTIME_CACHE_TRANSACTION) or
-            manifest.get("retirementIntentSha256") != FA10_RUNTIME_CACHE_INTENT_SHA256 or
+            profile is None or
+            manifest.get("targetCommit") != profile["target"] or
+            manifest.get("transactionRoot") != str(profile["transaction"]) or
+            manifest.get("retirementIntentSha256") != profile["intentSha256"] or
             manifest.get("originalControlPlane") != original or
-            _argv_value(argv, "--release") != FA10_RUNTIME_CACHE_RELEASE or
-            _argv_value(argv, "--target") != FA10_RUNTIME_CACHE_TARGET or
-            _argv_value(argv, "--transaction-root") != str(FA10_RUNTIME_CACHE_TRANSACTION) or
+            _argv_value(argv, "--release") != manifest.get("releaseId") or
+            _argv_value(argv, "--target") != profile["target"] or
+            _argv_value(argv, "--transaction-root") != str(profile["transaction"]) or
             _argv_value(argv, "--generation-retirement-intent-sha256") !=
-            FA10_RUNTIME_CACHE_INTENT_SHA256 or
+            profile["intentSha256"] or
             not _sha256_value(manifest.get("continuationDriverSha256")) or
             not isinstance(manifest.get("continuationControlPlane"), str) or
             len(manifest["continuationControlPlane"]) != 40 or
@@ -372,6 +396,8 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
                 raise Denied("request_evidence_outputs")
         elif action == "finalize_continuation":
             _validate_finalize_continuation(value, argv)
+        elif _runtime_cache_arguments(argv) is not None:
+            _validate_checkout_driver(value, argv)
     elif action == "release_terminal_lock":
         required = common | {
             "transactionJournalSha256", "lockSha256", "receiptOutput",

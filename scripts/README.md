@@ -48,6 +48,14 @@ Para pacote 3/3 já instalado, o schema 3 admite somente uma sucessão autentica
 do control plane, vinculando receipts, requests antigos e bindings novos sem
 repetir build, transferência ou instalação.
 
+Na finalização fixed-current da ED74, cache runtime de imagens não indexado é
+admitido somente pelo manifesto
+`FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1`, vinculado ao journal
+autenticado `AWAITING_ACCEPTANCE` e ao checkout sucessor. O wrapper valida o
+checkout antes de chamar o driver; o driver recaptura o inventário imediatamente
+antes do único `pm2 save`. Não criar journal negativo para essa fronteira e não
+reutilizar o perfil fechado da ED74 em outra release.
+
 ## `pm2-binding-materialize.py` — materializador de bindings privados
 
 O frontend mantém o fluxo schema 1 homologado. Para o worker, o materializador

@@ -117,6 +117,21 @@ RUNTIME_CACHE_FA10_EXTRAS = {
         "sha256": "13dee2bb6a89329bbf40e96f4b359040105393ad2c551eb5bf765eaeeac520ab",
     },
 }
+RUNTIME_CACHE_ED74_RELEASE = "immutable-ed74c483-external-20261115T162015Z"
+RUNTIME_CACHE_ED74_TARGET = "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4"
+RUNTIME_CACHE_ED74_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/preparations/"
+    "immutable-ed74c483-external-20261115T162015Z-api-frontend-worker-"
+    "preflight-4e55c9d9-v2/transaction"
+)
+RUNTIME_CACHE_ED74_INDEX_SHA256 = "6a4b5f1ac0e6f03b752019eeb8bdadedded2b29d6b6fbfb848f1cf2c433e639d"
+RUNTIME_CACHE_ED74_MANIFEST_SHA256 = "b93851eeb3b3129a9ac5fbf0b8bfa263c800114064d3f4239ed2207f7deba850"
+RUNTIME_CACHE_ED74_INTENT_SHA256 = "250a535c4c756a7fcc087b39a722d5237e04a1150b6720c6b8337cb98d7f5496"
+RUNTIME_CACHE_ED74_ACCEPTANCE_JOURNAL_SHA256 = (
+    "7b903e0f7606af2b65bc5f9a89f34ae576f83236ac26160c90c28bc93cbaf61c"
+)
+RUNTIME_CACHE_ED74_ACCEPTANCE_SHA256 = "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
+RUNTIME_CACHE_ED74_LOCK_SHA256 = "973215dd06be1517ff14e00b85bceb91dc7698f906fc589b86aab98d49e8b582"
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -827,10 +842,12 @@ class Driver:
                 hashlib.sha256(raw).hexdigest() != expected_sha256):
             deny("runtime_cache_reconciliation_identity")
         value = json_object(raw, path.name)
+        journal_authority = ("acceptanceJournal" if self.inputs.release ==
+                             RUNTIME_CACHE_ED74_RELEASE else "negativeJournal")
         required = {"schemaVersion", "kind", "releaseId", "targetCommit", "transactionRoot",
                     "indexSha256", "manifestSha256", "retirementIntentSha256",
                     "originalControlPlane", "continuationControlPlane",
-                    "continuationDriverSha256", "negativeJournal", "acceptanceSha256",
+                    "continuationDriverSha256", journal_authority, "acceptanceSha256",
                     "lockSha256", "cacheEntries"}
         if (set(value) != required or value.get("schemaVersion") != 1 or
                 value.get("kind") != RUNTIME_CACHE_RECONCILIATION_KIND):
@@ -1085,6 +1102,22 @@ class Driver:
                 "lockSha256": RUNTIME_CACHE_FA10_LOCK_SHA256,
                 "extras": None,
                 "volatileCachePolicy": "FA10_NEXT_IMAGE_CACHE_V1",
+                "allowedImageExtensions": {"webp"},
+                "journalAuthority": "negative",
+            },
+            RUNTIME_CACHE_ED74_RELEASE: {
+                "target": RUNTIME_CACHE_ED74_TARGET,
+                "transaction": RUNTIME_CACHE_ED74_TRANSACTION,
+                "indexSha256": RUNTIME_CACHE_ED74_INDEX_SHA256,
+                "manifestSha256": RUNTIME_CACHE_ED74_MANIFEST_SHA256,
+                "intentSha256": RUNTIME_CACHE_ED74_INTENT_SHA256,
+                "acceptanceJournalSha256": RUNTIME_CACHE_ED74_ACCEPTANCE_JOURNAL_SHA256,
+                "acceptanceSha256": RUNTIME_CACHE_ED74_ACCEPTANCE_SHA256,
+                "lockSha256": RUNTIME_CACHE_ED74_LOCK_SHA256,
+                "extras": None,
+                "volatileCachePolicy": "ED74_NEXT_IMAGE_CACHE_V1",
+                "allowedImageExtensions": {"webp", "png", "jpeg"},
+                "journalAuthority": "acceptance",
             },
         }
         profile = profiles.get(self.inputs.release)
@@ -1110,29 +1143,62 @@ class Driver:
                 not SHA256.fullmatch(str(value.get("continuationDriverSha256", "")))):
             deny("runtime_cache_reconciliation_binding")
 
-        negative = value.get("negativeJournal")
-        if (not isinstance(negative, dict) or set(negative) != {"path", "sha256"} or
-                negative.get("sha256") != profile["negativeJournalSha256"] or
-                not isinstance(negative.get("path"), str) or
-                not Path(negative["path"]).is_absolute()):
-            deny("runtime_cache_reconciliation_negative_journal")
-        negative_raw, negative_info = stable_regular_bytes(Path(negative["path"]), required_mode=0o600)
-        if ((negative_info.st_uid, negative_info.st_gid) != (os.geteuid(), os.getegid()) or
-                hashlib.sha256(negative_raw).hexdigest() != negative["sha256"]):
-            deny("runtime_cache_reconciliation_negative_journal")
-        negative_journal = json_object(negative_raw, Path(negative["path"]).name)
-        if (negative_journal.get("state") != "FAILED" or
-                negative_journal.get("recoveryAction") != "finalize" or
-                negative_journal.get("saveCount") != 0 or
-                negative_journal.get("binding") != journal.get("binding") or
-                negative_journal.get("lockDigest") != value["lockSha256"]):
-            deny("runtime_cache_reconciliation_negative_state")
-        if (journal.get("state") not in {"FAILED", "FINALIZING"} or
-                (journal.get("state") == "FAILED" and journal.get("recoveryAction") != "finalize") or
-                journal.get("saveCount") not in {0, 1} or
-                journal.get("binding") != negative_journal.get("binding") or
-                journal.get("lockDigest") != value["lockSha256"]):
-            deny("runtime_cache_reconciliation_state")
+        if profile.get("journalAuthority") == "acceptance":
+            authority = value.get("acceptanceJournal")
+            if (not isinstance(authority, dict) or
+                    set(authority) != {"path", "sha256"} or
+                    authority.get("sha256") != profile["acceptanceJournalSha256"] or
+                    not isinstance(authority.get("path"), str) or
+                    not Path(authority["path"]).is_absolute()):
+                deny("runtime_cache_reconciliation_acceptance_journal")
+            authority_raw, authority_info = stable_regular_bytes(
+                Path(authority["path"]), required_mode=0o600)
+            if ((authority_info.st_uid, authority_info.st_gid) !=
+                    (os.geteuid(), os.getegid()) or
+                    hashlib.sha256(authority_raw).hexdigest() != authority["sha256"]):
+                deny("runtime_cache_reconciliation_acceptance_journal")
+            authority_journal = json_object(authority_raw, Path(authority["path"]).name)
+            if (authority_journal.get("state") != "AWAITING_ACCEPTANCE" or
+                    authority_journal.get("saveCount") != 0 or
+                    authority_journal.get("recoveryAction") is not None or
+                    authority_journal.get("binding") != journal.get("binding") or
+                    authority_journal.get("lockDigest") != value["lockSha256"]):
+                deny("runtime_cache_reconciliation_acceptance_state")
+            if (journal.get("state") not in {"AWAITING_ACCEPTANCE", "FAILED", "FINALIZING"} or
+                    (journal.get("state") == "FAILED" and
+                     journal.get("recoveryAction") != "finalize") or
+                    journal.get("saveCount") not in {0, 1} or
+                    journal.get("binding") != authority_journal.get("binding") or
+                    journal.get("lockDigest") != value["lockSha256"]):
+                deny("runtime_cache_reconciliation_state")
+        else:
+            negative = value.get("negativeJournal")
+            if (not isinstance(negative, dict) or
+                    set(negative) != {"path", "sha256"} or
+                    negative.get("sha256") != profile["negativeJournalSha256"] or
+                    not isinstance(negative.get("path"), str) or
+                    not Path(negative["path"]).is_absolute()):
+                deny("runtime_cache_reconciliation_negative_journal")
+            negative_raw, negative_info = stable_regular_bytes(
+                Path(negative["path"]), required_mode=0o600)
+            if ((negative_info.st_uid, negative_info.st_gid) !=
+                    (os.geteuid(), os.getegid()) or
+                    hashlib.sha256(negative_raw).hexdigest() != negative["sha256"]):
+                deny("runtime_cache_reconciliation_negative_journal")
+            authority_journal = json_object(negative_raw, Path(negative["path"]).name)
+            if (authority_journal.get("state") != "FAILED" or
+                    authority_journal.get("recoveryAction") != "finalize" or
+                    authority_journal.get("saveCount") != 0 or
+                    authority_journal.get("binding") != journal.get("binding") or
+                    authority_journal.get("lockDigest") != value["lockSha256"]):
+                deny("runtime_cache_reconciliation_negative_state")
+            if (journal.get("state") not in {"FAILED", "FINALIZING"} or
+                    (journal.get("state") == "FAILED" and
+                     journal.get("recoveryAction") != "finalize") or
+                    journal.get("saveCount") not in {0, 1} or
+                    journal.get("binding") != authority_journal.get("binding") or
+                    journal.get("lockDigest") != value["lockSha256"]):
+                deny("runtime_cache_reconciliation_state")
         acceptance_raw, acceptance_info = stable_regular_bytes(self.acceptance, required_mode=0o600)
         if ((acceptance_info.st_uid, acceptance_info.st_gid) != (os.geteuid(), os.getegid()) or
                 hashlib.sha256(acceptance_raw).hexdigest() != value["acceptanceSha256"]):
@@ -1151,7 +1217,8 @@ class Driver:
         if len(declared) != len(entries):
             deny("runtime_cache_reconciliation_entries")
         expected_extras = profile["extras"]
-        if profile.get("volatileCachePolicy") == "FA10_NEXT_IMAGE_CACHE_V1":
+        if profile.get("volatileCachePolicy") in {
+                "FA10_NEXT_IMAGE_CACHE_V1", "ED74_NEXT_IMAGE_CACHE_V1"}:
             bases = {
                 "frontend-runtime/.next/cache",
                 "frontend-runtime/.next/cache/images",
@@ -1173,9 +1240,11 @@ class Driver:
                 if (len(parts) == 6 and parts[:4] ==
                         ("frontend-runtime", ".next", "cache", "images")):
                     parent = "/".join(parts[:5])
+                    allowed = "|".join(sorted(profile["allowedImageExtensions"]))
                     if (parent not in declared or declared[parent].get("type") != "directory" or
                             item.get("type") != "file" or item.get("mode") != 0o644 or
-                            not re.fullmatch(r"[A-Za-z0-9._-]{20,240}\.webp", parts[5]) or
+                            not re.fullmatch(
+                                rf"[A-Za-z0-9._-]{{20,240}}\.(?:{allowed})", parts[5]) or
                             not isinstance(item.get("size"), int) or
                             not 0 <= item["size"] <= 10 * 1024 * 1024 or
                             not SHA256.fullmatch(str(item.get("sha256", "")))):
