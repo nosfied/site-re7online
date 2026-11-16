@@ -464,13 +464,13 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
                            failure="control_plane_succession_script:deploy", saveCount=0)
             private_json(journal_path, journal)
             for name, content in (("stdout", ""),
-                                  ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\\n"),
-                                  ("exit", "2\\n")):
+                                  ("stderr", "DEPLOY_DENY:control_plane_succession_script:deploy\n"),
+                                  ("exit", "2\n")):
                 path = fixture.deploy.transaction / (
                     f"fixed-current-finalize-continuation.{name}.private.txt")
                 path.write_text(content); path.chmod(0o600)
             fixture.driver.write_text(fixture.driver.read_text() +
-                                      "\\n# second control plane\\n")
+                                      "\n# second control plane\n")
             subprocess.run(["git", "-C", str(fixture.repo), "add",
                             "scripts/converta-deploy.py"], check=True)
             subprocess.run(["git", "-C", str(fixture.repo),
@@ -506,14 +506,14 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
                            failure="final_dump_field:worker:logs", saveCount=1)
             private_json(journal_path, journal)
             for name, content in (("stdout", ""),
-                                  ("stderr", "DEPLOY_DENY:final_dump_field:worker:logs\\n"),
-                                  ("exit", "2\\n")):
+                                  ("stderr", "DEPLOY_DENY:final_dump_field:worker:logs\n"),
+                                  ("exit", "2\n")):
                 path = fixture.deploy.transaction / (
                     f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt")
                 path.write_text(content); path.chmod(0o600)
             second_request = fixture.output
             fixture.driver.write_text(fixture.driver.read_text() +
-                                      "\\n# corrected post-save dump parser\\n")
+                                      "\n# corrected post-save dump parser\n")
             subprocess.run(["git", "-C", str(fixture.repo), "add",
                             "scripts/converta-deploy.py"], check=True)
             subprocess.run(["git", "-C", str(fixture.repo),
