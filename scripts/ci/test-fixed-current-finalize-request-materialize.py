@@ -276,7 +276,31 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
     def test_failed_ed74_continuation_materialized_without_operator_argv(self) -> None:
         fixture = ProducerFixture(self, "api_frontend_worker")
         try:
-            fixture.add_runtime_cache()
+            original_cache = fixture.add_runtime_cache()
+            cache_root = (fixture.deploy.releases / fixture.deploy.candidate /
+                          "frontend-runtime/.next/cache")
+            cache_leaf_dir = cache_root / "images" / "SyntheticEd74ImageCacheKey123456789"
+            cache_leaf_dir.mkdir(parents=True)
+            cache_leaf = cache_leaf_dir / "14400.synthetic-ed74-cache-value.webp"
+            cache_leaf.write_bytes(b"synthetic-cache-fixture")
+            cache_entries = []
+            for path in (cache_root, cache_root / "images", cache_leaf_dir, cache_leaf):
+                info = path.lstat()
+                item = {
+                    "path": path.relative_to(
+                        fixture.deploy.releases / fixture.deploy.candidate).as_posix(),
+                    "type": "file" if path == cache_leaf else "directory",
+                    "mode": 0o644 if path == cache_leaf else 0o755,
+                }
+                if path == cache_leaf:
+                    item.update(size=info.st_size, sha256=digest(path))
+                cache_entries.append(item)
+            old_cache_payload = json.loads(original_cache.read_text())
+            old_cache_payload["cacheEntries"] = cache_entries
+            private_json(original_cache, old_cache_payload)
+            fixture.value["optionalAuthorities"]["runtimeCacheReconciliation"]["sha256"] = (
+                digest(original_cache))
+            private_json(fixture.input, fixture.value)
             self.assertEqual(fixture.run().returncode, 0)
             old_request = fixture.custody / "prior-finalize-request.private.json"
             old_request.write_bytes(fixture.output.read_bytes())
