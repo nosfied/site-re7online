@@ -551,16 +551,6 @@ def publish_failed_finalize_continuation(request: dict[str, Any]) -> dict[str, A
     # the first artifact as forensic evidence, never overwrite or retry.
     cache_receipt = publish(
         {"finalizeRequestOutput": request["cacheManifestOutput"]}, cache)
-    import importlib.util
-    wrapper = Path(request["wrapper"])
-    spec = importlib.util.spec_from_file_location(
-        "fixed_current_finalize_consumer", wrapper)
-    if spec is None or spec.loader is None:
-        raise Denied("continuation_wrapper_import")
-    consumer = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(consumer)
-    consumer._validate_finalize_continuation(
-        next_request, next_request["finalizeArgv"])
     output = publish(request, next_request)
     return {
         "result": "FIXED_CURRENT_FINALIZE_CONTINUATION_REQUEST_MATERIALIZED",
