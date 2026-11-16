@@ -119,6 +119,8 @@ class FakeHost(deploy.Host):
         self.retirement_environment: dict[str, str] | None = None
         self.retirement_command: list[str] = []
         self.committed_driver: str | None = None
+        self.historical_driver_commit: str | None = None
+        self.historical_driver_blob: str | None = None
 
     def run(self, command: list[str], *, timeout: float = 40,
             pass_fds: tuple[int, ...] = (),
@@ -132,9 +134,17 @@ class FakeHost(deploy.Host):
             return subprocess.CompletedProcess(command, 0, "scripts/converta-deploy.py\n", "")
         if (command[:4] == ["git", "-C", str(ROOT), "show"] and
                 command[-1].endswith(":scripts/converta-deploy.py")):
-            return subprocess.CompletedProcess(
-                command, 0, self.committed_driver if self.committed_driver is not None
-                else (ROOT / "scripts/converta-deploy.py").read_text(), "")
+            historical_ref = (
+                f"{self.historical_driver_commit}:scripts/converta-deploy.py"
+                if self.historical_driver_commit is not None else None
+            )
+            source = (
+                self.historical_driver_blob
+                if historical_ref == command[-1] and self.historical_driver_blob is not None
+                else self.committed_driver if self.committed_driver is not None
+                else (ROOT / "scripts/converta-deploy.py").read_text()
+            )
+            return subprocess.CompletedProcess(command, 0, source, "")
         if command[-1:] == ["--version"]:
             return subprocess.CompletedProcess(command, 0, "6.0.14\n", "")
         if (len(command) > 2 and Path(command[1]).name == "pm2-definition-control.py" and
