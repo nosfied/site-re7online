@@ -700,8 +700,25 @@ class Driver:
         rollback_continuation = (self._worker_rollback_continuation_manifest(self._journal_read())
                                  if self.inputs.worker_rollback_continuation is not None else None)
         for name, path in script_paths.items():
-            expected = (rollback_continuation["originalDriverSha256"]
-                        if name == "deploy" and rollback_continuation is not None else digest(path))
+            if name == "deploy" and rollback_continuation is not None:
+                # The authenticated rollback continuation names the historical
+                # driver independently of the currently executing driver.
+                expected = rollback_continuation["originalDriverSha256"]
+            elif name == "deploy" and self.inputs.runtime_cache_reconciliation is not None:
+                # A finalize cache continuation can use a newer authenticated
+                # driver. The worker succession manifest still seals the driver
+                # from its *own* successor control plane, not the new checkout.
+                # _control_head() independently authenticates the executing
+                # checkout against the cache reconciliation's successor HEAD.
+                historic = self.host.run([
+                    "git", "-C", str(self.repo), "show",
+                    f"{value['successorControlPlane']}:scripts/converta-deploy.py",
+                ])
+                if historic.returncode:
+                    deny("control_plane_succession_script:deploy:historical_blob")
+                expected = hashlib.sha256(historic.stdout.encode()).hexdigest()
+            else:
+                expected = digest(path)
             if scripts.get(name) != expected:
                 deny(f"control_plane_succession_script:{name}")
         return value
