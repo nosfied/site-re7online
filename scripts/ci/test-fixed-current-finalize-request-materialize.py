@@ -408,6 +408,8 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
                     ED74_RUNTIME_CACHE_TARGET=fixture.deploy.target,
                     ED74_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
                     ED74_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+                ), patch.object(
+                    deploy_module, "__file__", str(fixture.driver)
                 ), patch.multiple(
                     deploy_module,
                     RUNTIME_CACHE_ED74_RELEASE=fixture.deploy.candidate,
