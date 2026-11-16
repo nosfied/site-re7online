@@ -3326,6 +3326,82 @@ if config_path:
         self.driver.finalize()
         self.assertEqual(self.driver._journal_read()["saveCount"], 1)
 
+    def test_worker_saved_dump_uses_top_level_effective_logs_and_resumes_without_save(self) -> None:
+        self.three_component()
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        original = self.host.pm2_mutate
+
+        def save_with_real_worker_dump_shape(pm2: Path, args: list[str]) -> None:
+            original(pm2, args)
+            if args != ["save"]:
+                return
+            rows = json.loads(self.dump.read_text())
+            for row in rows:
+                if row["name"] != deploy.PROCESS_NAMES["worker"]:
+                    continue
+                env = row["pm2_env"]
+                for key in ("pm_out_log_path", "pm_err_log_path"):
+                    row[key] = env.pop(key)
+                env.pop("pm_id")
+            put(self.dump, rows)
+
+        self.host.pm2_mutate = save_with_real_worker_dump_shape  # type: ignore[method-assign]
+        original_dump_validation = self.driver._candidate_dump_identity
+        # Reproduce the actual ED74 frontier: the save completes durably, but
+        # the first post-save dump validation fails. The same transaction then
+        # resumes with saveCount=1 and must NOT save again.
+        def fail_first_postsave_validation(journal: dict[str, Any]) -> dict[str, Any]:
+            raise deploy.Denied("final_dump_field:worker:logs")
+
+        self.driver._candidate_dump_identity = fail_first_postsave_validation  # type: ignore[method-assign]
+        try:
+            with self.assertRaisesRegex(deploy.Denied, "final_dump_field:worker:logs"):
+                self.driver.finalize()
+        finally:
+            self.driver._candidate_dump_identity = original_dump_validation  # type: ignore[method-assign]
+        failed = self.driver._journal_read()
+        self.assertEqual((failed["state"], failed["recoveryAction"], failed["saveCount"]),
+                         ("FAILED", "finalize", 1))
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 0)
+        self.driver.finalize()
+        self.assertEqual(self.driver._journal_read()["saveCount"], 1)
+        self.assertEqual(self.driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_worker_saved_dump_bad_top_level_logs_denied_and_resume_never_saves_twice(self) -> None:
+        self.three_component()
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        original = self.host.pm2_mutate
+
+        def save_with_bad_worker_log(pm2: Path, args: list[str]) -> None:
+            original(pm2, args)
+            if args != ["save"]:
+                return
+            rows = json.loads(self.dump.read_text())
+            for row in rows:
+                if row["name"] == deploy.PROCESS_NAMES["worker"]:
+                    env = row["pm2_env"]
+                    row["pm_out_log_path"] = str(self.base / "unexpected-worker-out.log")
+                    row["pm_err_log_path"] = env.pop("pm_err_log_path")
+                    env.pop("pm_out_log_path"); env.pop("pm_id")
+            put(self.dump, rows)
+
+        self.host.pm2_mutate = save_with_bad_worker_log  # type: ignore[method-assign]
+        with self.assertRaisesRegex(deploy.Denied, "final_dump_field:worker:logs"):
+            self.driver.finalize()
+        journal = self.driver._journal_read()
+        self.assertEqual(journal["state"], "FAILED")
+        self.assertEqual(journal["recoveryAction"], "finalize")
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 0)
+        with self.assertRaises(deploy.Denied):
+            self.driver.finalize()
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 0)
+
     def test_dump_top_level_pm2_6014_representation_matches_live_configuration(self) -> None:
         self.driver.preflight(); self.driver.activate(); self.acceptance()
         original = self.host.pm2_mutate
