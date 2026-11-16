@@ -281,8 +281,13 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
                           "frontend-runtime/.next/cache")
             cache_leaf_dir = cache_root / "images" / "SyntheticEd74ImageCacheKey123456789"
             cache_leaf_dir.mkdir(parents=True)
+            # The fixture must model the sealed Next image cache modes under
+            # any runner umask; do not relax the production validator.
+            for directory in (cache_root, cache_root / "images", cache_leaf_dir):
+                directory.chmod(0o755)
             cache_leaf = cache_leaf_dir / "14400.synthetic-ed74-cache-value.webp"
             cache_leaf.write_bytes(b"synthetic-cache-fixture")
+            cache_leaf.chmod(0o644)
             cache_entries = []
             for path in (cache_root, cache_root / "images", cache_leaf_dir, cache_leaf):
                 info = path.lstat()
