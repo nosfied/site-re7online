@@ -556,6 +556,38 @@ class DeployFixture(unittest.TestCase):
         self.driver.acceptance.write_text("ACEITE TÉCNICO PASS\n")
         self.driver.acceptance.chmod(0o600)
 
+    def acceptance_materializer_request(self) -> tuple[Path, Path]:
+        custody = self.base / "acceptance-custody"
+        custody.mkdir(mode=0o700)
+        materializer = custody / "fixed-current-acceptance-materialize.py"
+        copied_driver = custody / "converta-deploy.py"
+        payload = custody / "acceptance.payload.private.txt"
+        shutil.copyfile(ROOT / "scripts/fixed-current-acceptance-materialize.py", materializer)
+        shutil.copyfile(ROOT / "scripts/converta-deploy.py", copied_driver)
+        materializer.chmod(0o600); copied_driver.chmod(0o600)
+        payload.write_bytes("ACEITE TÉCNICO PASS\n".encode("utf-8")); payload.chmod(0o600)
+        binding = self.driver._journal_read()["binding"]
+        request = custody / "acceptance-request.private.json"
+        put(request, {
+            "schemaVersion": 1, "action": "materialize_fixed_current_acceptance",
+            "transactionRoot": str(self.transaction),
+            "transactionJournal": str(self.transaction / "transaction.v1.private.json"),
+            "acceptanceOutput": str(self.transaction / "acceptance.private.txt"),
+            "acceptancePayload": str(payload), "acceptancePayloadSha256": sha(payload),
+            "driver": str(copied_driver), "driverSha256": sha(copied_driver),
+            "binding": {name: binding[name] for name in
+                        ("release", "target", "controlPlane", "components")},
+        })
+        return materializer, request
+
+    @staticmethod
+    def run_acceptance_materializer(
+        materializer: Path, request: Path,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-B", str(materializer), "--request", str(request),
+             "--request-sha256", sha(request)], capture_output=True, text=True)
+
     def api_only(self) -> FixtureDriver:
         self.inputs = dataclasses.replace(self.inputs, components=("api",))
         self.driver = self._driver()
@@ -3036,6 +3068,71 @@ if config_path:
                      "--request-sha256", sealed], capture_output=True, text=True)
                 self.assertEqual(completed.returncode, 2)
                 self.assertFalse(self.driver.acceptance.exists())
+
+    def test_acceptance_materializer_accepts_api_only_and_three_components(self) -> None:
+        for profile in ("api", "api_frontend_worker"):
+            with self.subTest(profile=profile):
+                self.tearDown(); self.setUp()
+                if profile == "api":
+                    self.api_only()
+                else:
+                    self.three_component()
+                self.driver.preflight(); self.driver.activate()
+                materializer, request = self.acceptance_materializer_request()
+                completed = self.run_acceptance_materializer(materializer, request)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                result = json.loads(completed.stdout)
+                self.assertEqual(result["sha256"],
+                                 "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a")
+                self.assertEqual(self.driver.acceptance.read_bytes(),
+                                 "ACEITE TÉCNICO PASS\n".encode("utf-8"))
+
+    def test_three_component_acceptance_materializer_denies_noncanonical_component_sets(self) -> None:
+        for components in (
+            ["api", "worker"],
+            ["frontend", "api", "worker"],
+            ["api", "frontend", "worker", "scheduler"],
+        ):
+            with self.subTest(components=components):
+                self.tearDown(); self.setUp(); self.three_component()
+                self.driver.preflight(); self.driver.activate()
+                materializer, request = self.acceptance_materializer_request()
+                value = json.loads(request.read_text())
+                value["binding"]["components"] = components
+                put(request, value)
+                completed = self.run_acceptance_materializer(materializer, request)
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn("FIXED_CURRENT_ACCEPTANCE_DENY:request_binding", completed.stderr)
+                self.assertFalse(self.driver.acceptance.exists())
+
+    def test_three_component_acceptance_materializer_denies_journal_drift_and_replay(self) -> None:
+        for variant in ("activation_progress", "journal_state", "replay"):
+            with self.subTest(variant=variant):
+                self.tearDown(); self.setUp(); self.three_component()
+                self.driver.preflight(); self.driver.activate()
+                materializer, request = self.acceptance_materializer_request()
+                if variant == "replay":
+                    first = self.run_acceptance_materializer(materializer, request)
+                    self.assertEqual(first.returncode, 0, first.stderr)
+                    expected = self.driver.acceptance.read_bytes()
+                else:
+                    journal = self.driver._journal_read()
+                    if variant == "activation_progress":
+                        journal["activationProgress"] = ["api", "frontend"]
+                    else:
+                        journal["state"] = "PREFLIGHT_PASS"
+                    put(self.driver.journal, journal)
+                completed = self.run_acceptance_materializer(materializer, request)
+                self.assertEqual(completed.returncode, 2)
+                if variant == "replay":
+                    self.assertIn("FIXED_CURRENT_ACCEPTANCE_DENY:acceptance_output", completed.stderr)
+                    self.assertEqual(self.driver.acceptance.read_bytes(), expected)
+                else:
+                    self.assertIn(
+                        "FIXED_CURRENT_ACCEPTANCE_DENY:transaction_not_awaiting_bound_acceptance",
+                        completed.stderr,
+                    )
+                    self.assertFalse(self.driver.acceptance.exists())
 
     def test_dump_instances_missing_is_only_equivalent_for_single_fork_process(self) -> None:
         self.driver.preflight(); self.driver.activate(); self.acceptance()
