@@ -1010,7 +1010,7 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
             deny(f"operational_state_list:{key}")
     immediate = value.get("immediateRollbackReleases")
     if immediate is not None and (not isinstance(immediate, dict) or
-                                  set(immediate) != {"api", "frontend"} or
+                                  set(immediate) not in ({"api", "frontend"}, {"api", "frontend", "worker"}) or
                                   any(not isinstance(item, str) or not item
                                       for item in immediate.values()) or
                                   any(item not in value["rollbackReleases"]
@@ -5346,7 +5346,7 @@ def _rich_graph(value: Any, label: str) -> dict[str, Any]:
     result = {key: sorted(value[key]) for key in RICH_GRAPH_KEYS}
     immediate = value.get("immediateRollbackReleases")
     if immediate is not None:
-        if (not isinstance(immediate, dict) or set(immediate) != {"api", "frontend"} or
+        if (not isinstance(immediate, dict) or set(immediate) not in ({"api", "frontend"}, {"api", "frontend", "worker"}) or
                 any(not isinstance(item, str) or not item or
                     item not in result["rollbackReleases"] for item in immediate.values())):
             deny(f"release_reconciliation_graph:{label}")
