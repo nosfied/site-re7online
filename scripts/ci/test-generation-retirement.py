@@ -4334,6 +4334,43 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                 successor.qualify({"schemaVersion": 1, "action": "execute"})
             process.assert_not_called()
 
+    def test_independent_owner_grant_is_bound_to_exact_successor_request(self):
+        successor = self.successor
+        with tempfile.TemporaryDirectory(prefix="ed74-owner-grant-") as directory:
+            path = Path(directory) / "owner-authorization.private.json"
+            request_sha = "f" * 64
+            value = {
+                "schemaVersion": 1,
+                "kind": "ED74_RETIREMENT_SUCCESSOR_OWNER_AUTHORIZATION_V1",
+                "decision": "AUTHORIZE_ONCE",
+                "owner": "fixture-owner",
+                "requestSha256": request_sha,
+                "historicalJournalSha256": successor.JOURNAL_SHA,
+                "approvedPaths": [],
+                "maxExecutions": 1,
+            }
+            private_json(path, value)
+            successor.authorize_successor(path, sha(path), request_sha)
+            for key, altered in (
+                ("requestSha256", "0" * 64),
+                ("historicalJournalSha256", "1" * 64),
+                ("approvedPaths", ["/opt/re7online/releases/protected"]),
+                ("maxExecutions", 2),
+                ("decision", "AUTHORIZE_REPEATED"),
+            ):
+                with self.subTest(field=key):
+                    changed = dict(value)
+                    changed[key] = altered
+                    private_json(path, changed)
+                    with self.assertRaisesRegex(
+                        successor.Denied, "successor_owner_authorization"):
+                        successor.authorize_successor(path, sha(path), request_sha)
+            # The legacy Owner authorization cannot be used as a successor grant.
+            private_json(path, {"schemaVersion": 1, "decision": "AUTHORIZE_ONCE",
+                                "approvedPaths": []})
+            with self.assertRaisesRegex(successor.Denied, "successor_owner_authorization"):
+                successor.authorize_successor(path, sha(path), request_sha)
+
     def test_successor_request_producer_uses_only_sealed_ed74_authorities(self):
         successor = self.successor
         transaction = Path(
