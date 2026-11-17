@@ -4365,8 +4365,10 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                        "consumer": consumer, "operational": operational}
             receipt = {
                 "schemaVersion": 1, "state": "DEPLOYED_SANITIZED",
+                "failurePredicate": None, "automaticRetry": False,
                 "attemptedCommands": 0, "completedCommands": 0,
-                "removedPaths": [], "intentSha256": "1" * 64,
+                "removedPaths": [], "remainingDerivedPaths": [],
+                "intentSha256": "1" * 64,
             }
             receipt_raw = successor.canonical(receipt)
             calls = []
