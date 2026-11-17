@@ -240,7 +240,9 @@ def qualify(request: dict[str, Any]) -> dict[str, Any]:
             "operational": operational, "journal": journal}
 
 
-def execute(request: dict[str, Any]) -> dict[str, Any]:
+def execute(request: dict[str, Any], owner_grant: Path,
+            owner_grant_sha256: str, request_sha256: str) -> dict[str, Any]:
+    authorize_successor(owner_grant, owner_grant_sha256, request_sha256)
     context = qualify(request)
     transaction, retirement = context["transaction"], context["retirement"]
     arguments = [
@@ -304,6 +306,10 @@ def execute(request: dict[str, Any]) -> dict[str, Any]:
         "historicalJournal": {"path": str(transaction / "transaction.v1.private.json"),
                               "sha256": JOURNAL_SHA, "state": "DEPLOYED_RETENTION_INCOMPLETE"},
         "originalConsumerSha256": OLD_CONSUMER_SHA,
+        "successorAuthorization": {"path": str(owner_grant),
+                                   "sha256": owner_grant_sha256,
+                                   "requestSha256": request_sha256,
+                                   "approvedPaths": [], "maxExecutions": 1},
         "successor": {"head": SUCCESSOR_HEAD, "tree": SUCCESSOR_TREE,
                       "consumerSha256": NEW_CONSUMER_SHA},
         "deployment": {"saveCount": 1, "dumpSha256": DUMP_SHA, "markerSha256": MARKER_SHA},
@@ -412,9 +418,10 @@ def main() -> int:
         require(args.successor_authorization is not None and
                 args.successor_authorization_sha256 is not None,
                 "successor_owner_authorization_required")
-        authorize_successor(args.successor_authorization,
-                            args.successor_authorization_sha256, args.request_sha256)
-        print(json.dumps(execute(request), sort_keys=True, separators=(",", ":")))
+        print(json.dumps(execute(request, args.successor_authorization,
+                                 args.successor_authorization_sha256,
+                                 args.request_sha256),
+                         sort_keys=True, separators=(",", ":")))
         return 0
     except (Denied, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         print(f"ED74_RETIREMENT_SUCCESSOR_DENY:{error}", file=sys.stderr)
