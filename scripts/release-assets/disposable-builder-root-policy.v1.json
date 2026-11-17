@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "DISPOSABLE_BUILDER_DURABLE_ROOT_POLICY",
+  "rootClass": "DURABLE_LOCAL_EXPLICIT_LIFECYCLE_RETIREMENT",
+  "allowedPathPrefixes": [
+    "/home",
+    "/opt/re7online/builders",
+    "/srv/re7online/builders"
+  ],
+  "deniedBootCleanupPrefixes": [
+    "/tmp",
+    "/var/tmp",
+    "/run",
+    "/dev/shm"
+  ],
+  "deniedFilesystemTypes": [
+    "ramfs",
+    "tmpfs"
+  ],
+  "requiredMountOptions": [
+    "rw"
+  ],
+  "retention": "PRESERVE_ACROSS_BOOT_UNTIL_EXPLICIT_LIFECYCLE_RETIREMENT"
+}

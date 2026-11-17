@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import fnmatch
 import hashlib
 import importlib.util
 import json
@@ -17,7 +18,9 @@ import marshal
 import os
 from pathlib import Path, PurePosixPath
 import pwd
+import re
 import secrets
+import shlex
 import stat
 import subprocess
 import sys
@@ -43,6 +46,8 @@ PRIVILEGED_GENERATION = "immutable-fa10f4f5-external-20261112T233820Z"
 PRIVILEGED_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 PRIVILEGED_OBSERVER_COMMAND = "collect-disposable-builder-fa10f4f5"
 PRIVILEGED_INSTALLER_SHA256 = "a39a3e2c9106baf9a1e19be1ab569528288ac4285e3423d59874484473feb9c1"
+CANONICAL_ROOT_POLICY = (Path(__file__).resolve().parent /
+                         "release-assets/disposable-builder-root-policy.v1.json")
 
 
 class Denied(RuntimeError):
@@ -202,6 +207,116 @@ def no_symlink_ancestors(path: Path, boundary: Path, predicate: str) -> None:
         require(boundary in current.parents and not current.is_symlink(), predicate)
         current = current.parent
     require(not boundary.is_symlink(), predicate)
+
+
+def _mountinfo_path(value: str) -> Path:
+    return Path(re.sub(r"\\([0-7]{3})",
+                       lambda match: chr(int(match.group(1), 8)), value))
+
+
+def filesystem_authority(path: Path) -> dict[str, Any]:
+    """Return the effective mount that owns an existing path."""
+    resolved = path.resolve(strict=True)
+    matches: list[tuple[int, Path, str, list[str]]] = []
+    for line in Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+        before, separator, after = line.partition(" - ")
+        require(bool(separator), "disposable_root_mountinfo")
+        fields = before.split(); trailing = after.split()
+        require(len(fields) >= 6 and len(trailing) >= 3,
+                "disposable_root_mountinfo")
+        mount = _mountinfo_path(fields[4])
+        if resolved == mount or mount in resolved.parents:
+            matches.append((len(mount.parts), mount, trailing[0], fields[5].split(",")))
+    require(bool(matches), "disposable_root_mountinfo")
+    _, mount, filesystem, options = max(matches, key=lambda item: item[0])
+    return {"mountPoint": str(mount), "filesystemType": filesystem,
+            "mountOptions": sorted(options)}
+
+
+def tmpfiles_authority(root: Path) -> str:
+    """Authenticate effective tmpfiles configuration and reject matching cleanup."""
+    result = subprocess.run(["systemd-tmpfiles", "--cat-config"],
+                            capture_output=True, check=False)
+    require(result.returncode == 0, "disposable_root_tmpfiles_policy")
+    try:
+        text = result.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        deny("disposable_root_tmpfiles_policy")
+    candidates = [str(root), *(str(item) for item in root.parents)]
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        try:
+            fields = shlex.split(stripped, comments=True)
+        except ValueError:
+            deny("disposable_root_tmpfiles_policy")
+        if len(fields) < 2:
+            continue
+        entry_type = fields[0].rstrip("!")
+        age = fields[5] if len(fields) > 5 else "-"
+        cleanup_capable = (entry_type in {"r", "R"} or
+                           (entry_type in {"d", "D", "e", "q", "Q", "v"} and
+                            age != "-"))
+        if cleanup_capable and any(fnmatch.fnmatchcase(item, fields[1])
+                                   for item in candidates):
+            deny("disposable_root_tmpfiles_cleanup")
+    return digest(result.stdout)
+
+
+def durable_root_authority(args: argparse.Namespace, root: Path) -> dict[str, Any]:
+    """Authenticate the versioned policy and the root's effective storage."""
+    policy_path = getattr(args, "root_policy", None)
+    policy_sha = getattr(args, "root_policy_sha256", None)
+    require(isinstance(policy_path, Path) and is_digest(policy_sha),
+            "disposable_root_policy_required")
+    canonical_raw = stable_bytes(CANONICAL_ROOT_POLICY,
+                                 calculate_stable_hash(CANONICAL_ROOT_POLICY,
+                                                       "disposable_root_policy_canonical"),
+                                 "disposable_root_policy_canonical")
+    require(digest(canonical_raw) == policy_sha, "disposable_root_policy_version")
+    policy, raw = stable_json(policy_path, policy_sha, "disposable_root_policy",
+                              mode=None)
+    require(raw == canonical_raw and set(policy) == {
+                "schemaVersion", "kind", "rootClass", "allowedPathPrefixes",
+                "deniedBootCleanupPrefixes", "deniedFilesystemTypes",
+                "requiredMountOptions", "retention"} and
+            policy.get("schemaVersion") == 1 and
+            policy.get("kind") == "DISPOSABLE_BUILDER_DURABLE_ROOT_POLICY" and
+            policy.get("rootClass") ==
+            "DURABLE_LOCAL_EXPLICIT_LIFECYCLE_RETIREMENT" and
+            policy.get("retention") ==
+            "PRESERVE_ACROSS_BOOT_UNTIL_EXPLICIT_LIFECYCLE_RETIREMENT",
+            "disposable_root_policy_schema")
+    allowed = [Path(item) for item in policy.get("allowedPathPrefixes", [])]
+    denied = [Path(item) for item in policy.get("deniedBootCleanupPrefixes", [])]
+    require(all(item.is_absolute() for item in (*allowed, *denied)) and
+            allowed and len(allowed) == len(set(allowed)) and
+            len(denied) == len(set(denied)), "disposable_root_policy_paths")
+    require(any(root == item or item in root.parents for item in allowed),
+            "disposable_root_not_durable")
+    require(not any(root == item or item in root.parents for item in denied),
+            "disposable_root_boot_cleanup")
+    parent = root.parent.resolve(strict=True)
+    require(parent == root.parent and not root.parent.is_symlink(),
+            "disposable_root_parent_identity")
+    mount = filesystem_authority(parent)
+    denied_filesystems = policy.get("deniedFilesystemTypes")
+    required_options = policy.get("requiredMountOptions")
+    require(isinstance(denied_filesystems, list) and
+            all(isinstance(item, str) for item in denied_filesystems) and
+            mount["filesystemType"] not in denied_filesystems,
+            "disposable_root_filesystem")
+    require(isinstance(required_options, list) and
+            all(isinstance(item, str) for item in required_options) and
+            set(required_options) <= set(mount["mountOptions"]),
+            "disposable_root_mount_options")
+    info = parent.stat()
+    return {"policySha256": policy_sha, "rootClass": policy["rootClass"],
+            "retention": policy["retention"], "allowedPrefix": str(next(
+                item for item in allowed if root == item or item in root.parents)),
+            **mount, "parentPath": str(parent), "parentDevice": info.st_dev,
+            "tmpfilesConfigSha256": tmpfiles_authority(root)}
 
 
 def validate_contract(value: dict[str, Any]) -> dict[str, Any]:
@@ -382,6 +497,7 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
     for protected in contract["protectedPaths"]:
         require(Path(protected) != root, "disposable_protected_overlap")
     lifecycle_file = lifecycle_path(contract)
+    root_storage = None
     if not lifecycle_file.exists() and not lifecycle_file.is_symlink():
         # The producer has a closed physical contract for the isolated npm
         # cache.  Enforce it before creating locks, lifecycle state, or any
@@ -389,6 +505,7 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
         # their original contract so that export/retirement can finish.
         require(Path(contract["roots"]["cache"]) == root / "npm-cache",
                 "disposable_contract_cache_root")
+        root_storage = durable_root_authority(args, root)
     descriptors = acquire_locks(contract)
     try:
         if lifecycle_file.exists() or lifecycle_file.is_symlink():
@@ -400,6 +517,10 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
                      (lifecycle.get("state") == "RETENTION_DEBT" and
                       lifecycle.get("event") == "ROOT_ALLOCATION_INTERRUPTED")),
                     "disposable_open_resume_lifecycle")
+            if "rootStorage" in lifecycle:
+                root_storage = durable_root_authority(args, root)
+                require(root_storage == lifecycle["rootStorage"],
+                        "disposable_root_storage_drift")
             if lifecycle.get("event") == "ROOT_ALLOCATED":
                 require(directory_identity(root) == lifecycle.get("rootIdentity"),
                         "disposable_root_drift")
@@ -408,6 +529,7 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
                             lifecycle["rootIdentities"][key], "disposable_root_drift")
                 return {"state": "OPEN", "generationId": contract["generationId"],
                         "rootIdentity": lifecycle["rootIdentity"],
+                        "rootStorage": lifecycle.get("rootStorage"),
                         "lifecycleSha256": digest(lifecycle_raw), "replayed": True}
         else:
             require(args.lifecycle_sha256 is None, "disposable_open_resume_lifecycle")
@@ -415,7 +537,8 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
             # The identity and OPEN lifecycle are durable before the first byte
             # is allocated under the disposable root.
             write_lifecycle(contract, digest(raw), "OPEN", "ALLOCATION_STARTED",
-                            plannedRoot=str(root), plannedRoots=contract["roots"])
+                            plannedRoot=str(root), plannedRoots=contract["roots"],
+                            rootStorage=root_storage)
         if root.exists() or root.is_symlink():
             private_directory(root, "disposable_root_identity")
             allowed = {Path(path).name for path in contract["roots"].values()}
@@ -433,17 +556,20 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
             identities = {key: directory_identity(Path(contract["roots"][key]))
                           for key in ROOT_KEYS}
             root_identity = directory_identity(root)
+            extra = ({"rootStorage": root_storage} if root_storage is not None else {})
             lifecycle_raw = write_lifecycle(
                 contract, digest(raw), "OPEN", "ROOT_ALLOCATED",
                 rootIdentity=root_identity, rootIdentities=identities,
                 initialCapacity={"freeBytes": usage.f_bavail * usage.f_frsize,
-                                 "freeInodes": usage.f_favail})
+                                 "freeInodes": usage.f_favail}, **extra)
             return {"state": "OPEN", "generationId": contract["generationId"],
-                    "rootIdentity": root_identity,
+                    "rootIdentity": root_identity, "rootStorage": root_storage,
                     "lifecycleSha256": digest(lifecycle_raw)}
         except BaseException as error:
             write_lifecycle(contract, digest(raw), "RETENTION_DEBT",
-                            "ROOT_ALLOCATION_INTERRUPTED", failurePredicate=str(error))
+                            "ROOT_ALLOCATION_INTERRUPTED", plannedRoot=str(root),
+                            plannedRoots=contract["roots"], rootStorage=root_storage,
+                            failurePredicate=str(error))
             raise
     finally:
         close_locks(descriptors)
@@ -590,13 +716,15 @@ def export_generation(args: argparse.Namespace) -> dict[str, Any]:
         lifecycle_raw = write_lifecycle(
             contract, digest(contract_raw), "EXPORTED", "AUTHORITY_EXPORTED",
             rootIdentity=lifecycle["rootIdentity"], rootIdentities=lifecycle["rootIdentities"],
-            outcome=request["outcome"], exportReceiptSha256=digest(receipt_raw))
+            rootStorage=lifecycle.get("rootStorage"), outcome=request["outcome"],
+            exportReceiptSha256=digest(receipt_raw))
         return {"state": "EXPORTED", "exportReceiptSha256": digest(receipt_raw),
                 "lifecycleSha256": digest(lifecycle_raw), "exportedArtifacts": len(exported)}
     except BaseException as error:
         write_lifecycle(contract, digest(contract_raw), "RETENTION_DEBT",
                         "EXPORT_INTERRUPTED", rootIdentity=lifecycle.get("rootIdentity"),
                         rootIdentities=lifecycle.get("rootIdentities"),
+                        rootStorage=lifecycle.get("rootStorage"),
                         failurePredicate=str(error))
         raise
     finally:
@@ -886,7 +1014,8 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
                   "generationId": contract["generationId"], "targetCommit": contract["targetCommit"],
                   "contractSha256": digest(contract_raw), "lifecycleSha256": args.lifecycle_sha256,
                   "exportReceiptSha256": lifecycle["exportReceiptSha256"],
-                  "rootIdentity": lifecycle["rootIdentity"], "inventory": items,
+                  "rootIdentity": lifecycle["rootIdentity"],
+                  "rootStorage": lifecycle.get("rootStorage"), "inventory": items,
                   "usage": usage, "processObservation": observation,
                   "commands": commands, "automaticRetry": False}
         raw = canonical(intent); output = Path(contract["custodyRoot"]) / "disposable-builder.intent.private.json"
@@ -1340,7 +1469,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     require(intent.get("state") == "SEALED_FOR_EXPLICIT_AUTHORIZATION" and
             intent.get("generationId") == contract["generationId"] and
             intent.get("contractSha256") == digest(contract_raw) and
-            intent.get("exportReceiptSha256") == lifecycle.get("exportReceiptSha256"),
+            intent.get("exportReceiptSha256") == lifecycle.get("exportReceiptSha256") and
+            intent.get("rootStorage") == lifecycle.get("rootStorage"),
             "disposable_intent_binding")
     auth = authorization(args, digest(intent_raw))
     commands = intent.get("commands")
@@ -1433,6 +1563,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
                    "remainingPaths": [], "rootAbsent": True, "worktreeRegistrationAbsent": True,
                    "retiredBytes": intent["usage"]["allocatedBytes"],
                    "retiredInodes": intent["usage"]["allocatedInodes"],
+                   "rootStorage": intent.get("rootStorage"),
                    "processObservation": execution_observation,
                    "automaticRetry": False}
         receipt_raw = canonical(receipt)
@@ -1444,6 +1575,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         lifecycle_raw = write_lifecycle(contract, digest(contract_raw), "SANITIZED",
                                         "CLOSURE_RECORDED", terminalReceiptSha256=digest(receipt_raw),
                                         exportReceiptSha256=intent["exportReceiptSha256"],
+                                        rootStorage=intent.get("rootStorage"),
                                         rootAbsent=True, worktreeRegistrationAbsent=True)
         return {"state": "SANITIZED", "receiptSha256": digest(receipt_raw),
                 "journalSha256": receipt["journalSha256"],
@@ -1454,6 +1586,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             write_lifecycle(contract, digest(contract_raw), "RETENTION_DEBT",
                             "RETIREMENT_INTERRUPTED", rootIdentity=intent.get("rootIdentity"),
                             rootIdentities=lifecycle.get("rootIdentities"),
+                            rootStorage=intent.get("rootStorage"),
                             exportReceiptSha256=intent.get("exportReceiptSha256"),
                             failurePredicate=str(error))
         raise
@@ -1470,6 +1603,8 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--contract-sha256", required=True)
         if name == "open":
             command.add_argument("--lifecycle-sha256")
+            command.add_argument("--root-policy", type=Path)
+            command.add_argument("--root-policy-sha256")
         else:
             command.add_argument("--lifecycle-sha256", required=True)
         if name == "export":

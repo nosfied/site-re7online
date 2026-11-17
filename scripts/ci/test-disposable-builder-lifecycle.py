@@ -52,7 +52,12 @@ def run(*args: str, cwd: Path | None = None) -> str:
 
 class DisposableLifecycleTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory(prefix="disposable-lifecycle-test-")
+        self.test_parent = Path(os.environ.get(
+            "RE7_DURABLE_TEST_ROOT",
+            str(Path.home() / ".cache/re7-disposable-builder-tests")))
+        self.test_parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="disposable-lifecycle-test-", dir=self.test_parent)
         self.base = Path(self.temporary.name)
         self.repository = self.base / "repository"; self.repository.mkdir(mode=0o700)
         run("git", "init", "-q", str(self.repository))
@@ -98,6 +103,8 @@ class DisposableLifecycleTests(unittest.TestCase):
         }
         self.contract_path = self.custody / "contract.private.json"
         self.contract_sha = write(self.contract_path, self.contract)
+        self.root_policy = MODULE.CANONICAL_ROOT_POLICY
+        self.root_policy_sha = sha(self.root_policy.read_bytes())
         opened = MODULE.open_generation(self.args())
         self.lifecycle_sha = opened["lifecycleSha256"]
         self.worktree = Path(self.contract["worktreePath"])
@@ -112,10 +119,16 @@ class DisposableLifecycleTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(self.repository), "worktree", "remove", "--force",
                             str(self.worktree)], capture_output=True)
         self.temporary.cleanup()
+        try:
+            self.test_parent.rmdir()
+        except OSError:
+            pass
 
     def args(self, **values):
         defaults = {"contract": self.contract_path, "contract_sha256": self.contract_sha,
-                    "lifecycle_sha256": getattr(self, "lifecycle_sha", None)}
+                    "lifecycle_sha256": getattr(self, "lifecycle_sha", None),
+                    "root_policy": self.root_policy,
+                    "root_policy_sha256": self.root_policy_sha}
         defaults.update(values)
         return type("Args", (), defaults)()
 
@@ -248,6 +261,10 @@ class DisposableLifecycleTests(unittest.TestCase):
             self.assertTrue(path.is_file())
         receipt = json.loads((self.custody / "disposable-builder.terminal-receipt.private.json").read_bytes())
         self.assertTrue(receipt["rootAbsent"] and receipt["worktreeRegistrationAbsent"])
+        self.assertEqual(receipt["rootStorage"]["policySha256"], self.root_policy_sha)
+        lifecycle = json.loads(
+            (self.custody / "disposable-builder.lifecycle.private.json").read_bytes())
+        self.assertEqual(lifecycle["rootStorage"], receipt["rootStorage"])
 
     def assert_new_cache_root_denied(self, cache_name: str) -> None:
         root = self.base / f"invalid-{cache_name}"
@@ -276,6 +293,114 @@ class DisposableLifecycleTests(unittest.TestCase):
     def test_new_generation_requires_canonical_npm_cache_before_allocation(self) -> None:
         self.assert_new_cache_root_denied("cache")
         self.assert_new_cache_root_denied("alternate-cache")
+
+    def test_new_generation_denies_boot_cleaned_tmp_root_before_allocation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="disposable-boot-cleaned-") as directory:
+            base = Path(directory)
+            root = base / "generation"
+            custody = base / "custody"; custody.mkdir(mode=0o700)
+            contract = json.loads(json.dumps(self.contract))
+            contract["generationId"] += "-boot-cleaned"
+            contract["disposableRoot"] = str(root)
+            contract["custodyRoot"] = str(custody)
+            contract["roots"] = {key: str(root / Path(value).name)
+                                 for key, value in contract["roots"].items()}
+            contract["worktreePath"] = str(Path(contract["roots"]["worktrees"]) / "source")
+            contract["locks"] = {"lifecycle": str(custody / "lifecycle.lock"),
+                                 "writer": str(custody / "writer.lock")}
+            path = custody / "contract.private.json"; contract_sha = write(path, contract)
+            args = type("Args", (), {"contract": path, "contract_sha256": contract_sha,
+                                      "lifecycle_sha256": None,
+                                      "root_policy": self.root_policy,
+                                      "root_policy_sha256": self.root_policy_sha})()
+            with self.assertRaisesRegex(MODULE.Denied,
+                                        "disposable_root_(not_durable|boot_cleanup)"):
+                MODULE.open_generation(args)
+            self.assertFalse(root.exists())
+            self.assertFalse((custody / "disposable-builder.lifecycle.private.json").exists())
+            self.assertFalse((custody / "lifecycle.lock").exists())
+
+    def test_new_generation_requires_authenticated_root_policy(self) -> None:
+        root = self.base / "missing-policy-root"
+        custody = self.base / "missing-policy-custody"; custody.mkdir(mode=0o700)
+        contract = json.loads(json.dumps(self.contract))
+        contract["generationId"] += "-missing-policy"
+        contract["disposableRoot"] = str(root)
+        contract["custodyRoot"] = str(custody)
+        contract["roots"] = {key: str(root / Path(value).name)
+                             for key, value in contract["roots"].items()}
+        contract["worktreePath"] = str(Path(contract["roots"]["worktrees"]) / "source")
+        contract["locks"] = {"lifecycle": str(custody / "lifecycle.lock"),
+                             "writer": str(custody / "writer.lock")}
+        path = custody / "contract.private.json"; contract_sha = write(path, contract)
+        args = type("Args", (), {"contract": path, "contract_sha256": contract_sha,
+                                  "lifecycle_sha256": None})()
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_root_policy_required"):
+            MODULE.open_generation(args)
+        self.assertFalse(root.exists())
+        self.assertFalse((custody / "lifecycle.lock").exists())
+
+    def test_ephemeral_filesystem_and_effective_tmpfiles_cleanup_are_denied(self) -> None:
+        with patch.object(MODULE, "filesystem_authority", return_value={
+                "mountPoint": "/home", "filesystemType": "tmpfs",
+                "mountOptions": ["rw"]}):
+            with self.assertRaisesRegex(MODULE.Denied, "disposable_root_filesystem"):
+                MODULE.durable_root_authority(self.args(), self.base / "fresh-root")
+        completed = subprocess.CompletedProcess(
+            ["systemd-tmpfiles", "--cat-config"], 0,
+            stdout=b"q /home 0755 root root 1d\n", stderr=b"")
+        with patch.object(MODULE.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(MODULE.Denied,
+                                        "disposable_root_tmpfiles_cleanup"):
+                MODULE.tmpfiles_authority(self.base / "fresh-root")
+
+    def test_durable_root_reopens_after_simulated_reboot_without_reallocation(self) -> None:
+        lifecycle_path = self.custody / "disposable-builder.lifecycle.private.json"
+        lifecycle_before = lifecycle_path.read_bytes()
+        root_inode = self.root.stat().st_ino
+        artifacts = {path: path.read_bytes() for path in self.sources.values()}
+        result = MODULE.open_generation(self.args())
+        self.assertTrue(result["replayed"])
+        self.assertEqual(result["rootStorage"]["policySha256"], self.root_policy_sha)
+        self.assertEqual(self.root.stat().st_ino, root_inode)
+        self.assertEqual(lifecycle_path.read_bytes(), lifecycle_before)
+        self.assertEqual({path: path.read_bytes() for path in self.sources.values()}, artifacts)
+
+    def test_interrupted_new_allocation_preserves_storage_authority_for_resume(self) -> None:
+        root = self.base / "interrupted-policy-root"
+        custody = self.base / "interrupted-policy-custody"; custody.mkdir(mode=0o700)
+        contract = json.loads(json.dumps(self.contract))
+        contract["generationId"] += "-interrupted-policy"
+        contract["disposableRoot"] = str(root)
+        contract["custodyRoot"] = str(custody)
+        contract["roots"] = {key: str(root / Path(value).name)
+                             for key, value in contract["roots"].items()}
+        contract["worktreePath"] = str(Path(contract["roots"]["worktrees"]) / "source")
+        contract["locks"] = {"lifecycle": str(custody / "lifecycle.lock"),
+                             "writer": str(custody / "writer.lock")}
+        path = custody / "contract.private.json"; contract_sha = write(path, contract)
+        args = type("Args", (), {"contract": path, "contract_sha256": contract_sha,
+                                  "lifecycle_sha256": None,
+                                  "root_policy": self.root_policy,
+                                  "root_policy_sha256": self.root_policy_sha})()
+        real_mkdir = MODULE.os.mkdir
+        interrupted = {"done": False}
+        def interrupt_first_child(path_value, mode=0o777, *, dir_fd=None):
+            if Path(path_value).parent == root and not interrupted["done"]:
+                interrupted["done"] = True
+                raise OSError("synthetic allocation interruption")
+            return real_mkdir(path_value, mode, dir_fd=dir_fd)
+        with patch.object(MODULE.os, "mkdir", side_effect=interrupt_first_child):
+            with self.assertRaisesRegex(OSError, "synthetic allocation interruption"):
+                MODULE.open_generation(args)
+        lifecycle_path = custody / "disposable-builder.lifecycle.private.json"
+        lifecycle = json.loads(lifecycle_path.read_bytes())
+        self.assertEqual(lifecycle["event"], "ROOT_ALLOCATION_INTERRUPTED")
+        self.assertEqual(lifecycle["rootStorage"]["policySha256"], self.root_policy_sha)
+        args.lifecycle_sha256 = sha(lifecycle_path.read_bytes())
+        resumed = MODULE.open_generation(args)
+        self.assertEqual(resumed["state"], "OPEN")
+        self.assertEqual(resumed["rootStorage"], lifecycle["rootStorage"])
 
     def test_historical_contract_remains_parseable_for_retirement(self) -> None:
         historical = json.loads(json.dumps(self.contract))
