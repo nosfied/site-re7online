@@ -364,13 +364,38 @@ def prepare() -> dict[str, Any]:
             "executionAuthorized": False}
 
 
+def authorize_successor(path: Path, sha256: str, request_sha256: str) -> None:
+    """An independent Owner grant; the original AUTHORIZE_ONCE is historical."""
+    authorization = json_object(private(path, sha256))
+    expected = {"schemaVersion", "kind", "decision", "owner", "requestSha256",
+                "historicalJournalSha256", "approvedPaths", "maxExecutions"}
+    require(set(authorization) == expected and
+            authorization.get("schemaVersion") == 1 and
+            authorization.get("kind") == "ED74_RETIREMENT_SUCCESSOR_OWNER_AUTHORIZATION_V1" and
+            authorization.get("decision") == "AUTHORIZE_ONCE" and
+            isinstance(authorization.get("owner"), str) and
+            authorization["owner"].strip() and
+            authorization.get("requestSha256") == request_sha256 and
+            authorization.get("historicalJournalSha256") == JOURNAL_SHA and
+            authorization.get("approvedPaths") == [] and
+            type(authorization.get("maxExecutions")) is int and
+            authorization["maxExecutions"] == 1,
+            "successor_owner_authorization")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", type=Path)
     parser.add_argument("--request-sha256")
+    parser.add_argument("--successor-authorization", type=Path)
+    parser.add_argument("--successor-authorization-sha256")
     parser.add_argument("--mode", choices=("prepare", "qualify", "execute"), required=True)
     args = parser.parse_args()
     try:
+        if args.mode != "execute":
+            require(args.successor_authorization is None and
+                    args.successor_authorization_sha256 is None,
+                    "owner_grant_execution_only")
         if args.mode == "prepare":
             require(args.request is None and args.request_sha256 is None,
                     "prepare_no_external_request")
@@ -384,6 +409,11 @@ def main() -> int:
             print(json.dumps({"result": "ED74_RETIREMENT_SUCCESSOR_PRECHECK_PASS",
                               "executionAuthorized": False}, sort_keys=True))
             return 0
+        require(args.successor_authorization is not None and
+                args.successor_authorization_sha256 is not None,
+                "successor_owner_authorization_required")
+        authorize_successor(args.successor_authorization,
+                            args.successor_authorization_sha256, args.request_sha256)
         print(json.dumps(execute(request), sort_keys=True, separators=(",", ":")))
         return 0
     except (Denied, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
