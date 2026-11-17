@@ -432,7 +432,7 @@ def derive_failed_finalize_continuation(
         journal_path.name)
     if (journal.get("state") != "FAILED" or
             journal.get("recoveryAction") != "finalize" or
-            journal.get("saveCount") != 0 or
+            journal.get("saveCount") not in (0, 1) or
             journal.get("deployedMarkerCreated") is not False or
             journal.get("lockDigest") != request["lockSha256"]):
         raise Denied("continuation_journal_state")
@@ -440,12 +440,36 @@ def derive_failed_finalize_continuation(
     prior_path = Path(request["priorRequest"])
     prior = json_object(bound_regular(
         prior_path, request["priorRequestSha256"], modes={0o600}), prior_path.name)
-    if (set(prior) != {
-            "schemaVersion", "action", "lockPath", "transactionRoot",
-            "driver", "driverSha256", "finalizeArgv",
-        } or prior.get("schemaVersion") != 1 or prior.get("action") != "finalize" or
+    prior_action = prior.get("action")
+    base_keys = {
+        "schemaVersion", "action", "lockPath", "transactionRoot",
+        "driver", "driverSha256", "finalizeArgv",
+    }
+    if prior_action == "finalize":
+        expected_keys = base_keys
+        ordinal, required_save = 2, 0
+        evidence_predicate = b"control_plane_succession_script:deploy"
+    elif prior_action == "finalize_continuation":
+        expected_keys = base_keys | {"attemptOrdinal", "evidenceOutputs", "recovery"}
+        # ED74 post-save continuation is the direct ordinal-02 successor.
+        if prior.get("attemptOrdinal") != 2:
+            raise Denied("continuation_prior_ordinal")
+        ordinal, required_save = 3, 1
+        evidence_predicate = b"final_dump_field:worker:logs"
+        recovery = prior.get("recovery")
+        if (not isinstance(recovery, dict) or
+                set(recovery) != {
+                    "priorRequest", "priorRequestSha256", "negativeJournal",
+                    "negativeJournalSha256", "priorEvidence",
+                } or
+                recovery.get("negativeJournal") != str(journal_path)):
+            raise Denied("continuation_prior_chain")
+    else:
+        raise Denied("continuation_prior_request")
+    if (set(prior) != expected_keys or prior.get("schemaVersion") != 1 or
             prior.get("transactionRoot") != str(root) or
-            prior.get("lockPath") != str(lock_path)):
+            prior.get("lockPath") != str(lock_path) or
+            journal.get("saveCount") != required_save):
         raise Denied("continuation_prior_request")
     original = prior["finalizeArgv"]
     if (not isinstance(original, list) or len(original) < 5 or
@@ -466,13 +490,20 @@ def derive_failed_finalize_continuation(
         raise Denied("continuation_prior_scope")
     evidence: dict[str, dict[str, str]] = {}
     for name in ("stdout", "stderr", "exit"):
-        path = root / f"fixed-current-finalize-continuation.{name}.private.txt"
+        path = (root / f"fixed-current-finalize-continuation.{name}.private.txt"
+                if ordinal == 2 else root /
+                f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt")
+        if ordinal == 3:
+            prior_output = prior.get("evidenceOutputs")
+            if not isinstance(prior_output, dict) or (
+                    set(prior_output) != {"stdout", "stderr", "exit"} or
+                    prior_output.get(name) != str(path)):
+                raise Denied("continuation_prior_evidence_scope")
         raw, _ = stable_regular(path, modes={0o600})
         evidence[name] = {"path": str(path), "sha256": sha256(raw)}
     stderr, _ = stable_regular(Path(evidence["stderr"]["path"]), modes={0o600})
     exit_bytes, _ = stable_regular(Path(evidence["exit"]["path"]), modes={0o600})
-    if (exit_bytes != b"2\n" or
-            b"control_plane_succession_script:deploy" not in stderr):
+    if exit_bytes != b"2\n" or evidence_predicate not in stderr:
         raise Denied("continuation_prior_failure_evidence")
 
     old_cache_path = Path(continuation_argument(
@@ -525,12 +556,12 @@ def derive_failed_finalize_continuation(
     argv[cache_index + 1] = str(cache_output)
     argv[cache_sha_index + 1] = sha256(cache_raw)
     outputs = {
-        name: str(root / f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt")
+        name: str(root / f"fixed-current-finalize-continuation-attempt-{ordinal:02d}.{name}.private.txt")
         for name in ("stdout", "stderr", "exit")
     }
     next_request = {
         "schemaVersion": 1, "action": "finalize_continuation",
-        "attemptOrdinal": 2, "lockPath": str(lock_path),
+        "attemptOrdinal": ordinal, "lockPath": str(lock_path),
         "transactionRoot": str(root), "driver": str(driver),
         "driverSha256": request["driverSha256"],
         "finalizeArgv": argv, "evidenceOutputs": outputs,
