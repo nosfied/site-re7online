@@ -4316,5 +4316,110 @@ class GenerationRetirementTest(unittest.TestCase):
 
 
 
+class ED74RetirementSuccessorClosureTests(unittest.TestCase):
+    """Directed, nonproductive regression for the append-only successor route."""
+
+    @classmethod
+    def setUpClass(cls):
+        path = ROOT / "scripts/ed74-retirement-successor-closure.py"
+        spec = importlib.util.spec_from_file_location("ed74_retirement_successor", path)
+        assert spec and spec.loader
+        cls.successor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.successor)
+
+    def test_precheck_rejects_unbound_request_before_any_execution(self):
+        successor = self.successor
+        with patch.object(successor.subprocess, "run") as process:
+            with self.assertRaisesRegex(successor.Denied, "request_schema"):
+                successor.qualify({"schemaVersion": 1, "action": "execute"})
+            process.assert_not_called()
+
+    def test_zero_command_closure_is_append_only_and_invokes_consumer_once(self):
+        successor = self.successor
+        with tempfile.TemporaryDirectory(prefix="ed74-retirement-successor-") as raw:
+            root = Path(raw)
+            transaction = root / "transaction"; transaction.mkdir(mode=0o700)
+            journal_path = transaction / "transaction.v1.private.json"
+            journal_path.write_bytes(b"historical journal bytes"); journal_path.chmod(0o600)
+            saved_journal = journal_path.read_bytes()
+            receipt_root = root / "retirement-receipt"
+            consumer = root / "generation-retirement.py"; consumer.write_text("# fixture")
+            operational = transaction / "generation-operational.final.private.json"
+            request = {
+                "receiptRoot": str(receipt_root),
+                "operationalStateSha256": "a" * 64,
+                "dumpPath": str(root / "dump.pm2"),
+                "closureOutput": str(transaction / "generation-retirement-successor-closure.private.json"),
+            }
+            retirement = {
+                "intent": str(root / "intent.private.json"), "intentSha256": "1" * 64,
+                "authorization": str(root / "authorization.private.json"),
+                "authorizationSha256": "2" * 64,
+                "rootPolicy": str(root / "root-policy.private.json"),
+                "rootPolicySha256": "3" * 64,
+                "deploymentLock": str(root / "deployment.lock"),
+                "receiptRoot": str(receipt_root),
+                "reviewOutput": str(root / "review.private.json"),
+            }
+            context = {"transaction": transaction, "retirement": retirement,
+                       "consumer": consumer, "operational": operational}
+            receipt = {
+                "schemaVersion": 1, "state": "DEPLOYED_SANITIZED",
+                "attemptedCommands": 0, "completedCommands": 0,
+                "removedPaths": [], "intentSha256": "1" * 64,
+            }
+            receipt_raw = successor.canonical(receipt)
+            calls = []
+
+            def fake_consumer(argv, **kwargs):
+                calls.append(list(argv))
+                self.assertEqual(argv[1:4], ["-B", str(consumer), "execute"])
+                self.assertNotIn("finalize", argv)
+                self.assertNotIn("pm2", argv)
+                receipt_root.mkdir(mode=0o700)
+                saved = receipt_root / "execution-receipt.private.json"
+                saved.write_bytes(receipt_raw); saved.chmod(0o600)
+                output = successor.canonical({
+                    "result": "DEPLOYED_SANITIZED", "removedPaths": 0,
+                    "receiptSha256": successor.digest(receipt_raw),
+                })
+                return subprocess.CompletedProcess(argv, 0, output, b"")
+
+            original_private = successor.private
+            def bound_read(path, expected):
+                if path == journal_path:
+                    self.assertEqual(expected, successor.JOURNAL_SHA)
+                    return saved_journal
+                if path == Path(request["dumpPath"]):
+                    self.assertEqual(expected, successor.DUMP_SHA)
+                    return b"dump is verified by prior immutable authority"
+                if path == Path("/opt/re7online/releases") / successor.RELEASE / "DEPLOYED":
+                    self.assertEqual(expected, successor.MARKER_SHA)
+                    return b"marker is verified by prior immutable authority"
+                return original_private(path, expected)
+
+            with patch.object(successor, "qualify", return_value=context), \\
+                 patch.object(successor.subprocess, "run", side_effect=fake_consumer), \\
+                 patch.object(successor, "private", side_effect=bound_read):
+                report = successor.execute(request)
+            self.assertEqual(report["result"], "ED74_RETIREMENT_CLOSED_BY_SUCCESSOR")
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(journal_path.read_bytes(), saved_journal)
+            closure = json.loads(Path(request["closureOutput"]).read_text())
+            self.assertEqual(closure["historicalJournal"]["sha256"], successor.JOURNAL_SHA)
+            self.assertEqual(closure["retirement"]["attemptedCommands"], 0)
+            self.assertEqual(closure["retirement"]["completedCommands"], 0)
+            self.assertEqual(closure["retirement"]["removedPaths"], [])
+            self.assertEqual(closure["retirement"]["receipt"]["sha256"],
+                             successor.digest(receipt_raw))
+            for kind in ("stdout", "stderr", "exit"):
+                self.assertTrue((transaction / f"retirement-successor-01.{kind}.private.txt").is_file())
+            with patch.object(successor, "qualify", side_effect=successor.Denied("replay")), \\
+                 patch.object(successor.subprocess, "run") as retry:
+                with self.assertRaisesRegex(successor.Denied, "replay"):
+                    successor.execute(request)
+                retry.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
