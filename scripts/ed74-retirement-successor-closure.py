@@ -186,6 +186,7 @@ def qualify(request: dict[str, Any]) -> dict[str, Any]:
         require(Path(request[key]).is_absolute(), f"output_path:{key}")
     safe_parent(Path(request["receiptRoot"]))
     safe_parent(Path(request["closureOutput"]))
+    safe_parent(transaction / "retirement-successor-01.execution-claim.private.json")
     for name in ("stdout", "stderr", "exit"):
         safe_parent(transaction / f"retirement-successor-01.{name}.private.txt")
     original = Path(retirement["tool"])
@@ -245,6 +246,15 @@ def execute(request: dict[str, Any], owner_grant: Path,
     authorize_successor(owner_grant, owner_grant_sha256, request_sha256)
     context = qualify(request)
     transaction, retirement = context["transaction"], context["retirement"]
+    claim_path = transaction / "retirement-successor-01.execution-claim.private.json"
+    claim = {
+        "schemaVersion": 1, "kind": "ED74_RETIREMENT_SUCCESSOR_ONE_SHOT_CLAIM",
+        "historicalJournalSha256": JOURNAL_SHA,
+        "requestSha256": request_sha256,
+        "ownerAuthorizationSha256": owner_grant_sha256,
+        "ordinal": 1, "consumerSha256": NEW_CONSUMER_SHA,
+        "state": "ATTEMPT_CLAIMED_BEFORE_CONSUMER",
+    }
     arguments = [
         "/usr/bin/python3", "-B", str(context["consumer"]), "execute",
         "--intent", retirement["intent"], "--intent-sha256", retirement["intentSha256"],
@@ -264,6 +274,9 @@ def execute(request: dict[str, Any], owner_grant: Path,
     safe_parent(out_paths["stdout"])
     safe_parent(out_paths["stderr"])
     safe_parent(out_paths["exit"])
+    # A durable exclusive claim rules out replay even if SSH drops while the
+    # consumer runs and before stdout or the retirement receipt is published.
+    exclusive(claim_path, canonical(claim))
     # No retry after a subprocess error or loss of connection.
     done = subprocess.run(arguments, capture_output=True, check=False)
     exclusive(out_paths["stdout"], done.stdout)
@@ -310,6 +323,7 @@ def execute(request: dict[str, Any], owner_grant: Path,
                                    "sha256": owner_grant_sha256,
                                    "requestSha256": request_sha256,
                                    "approvedPaths": [], "maxExecutions": 1},
+        "executionClaim": {"path": str(claim_path), "sha256": digest(canonical(claim))},
         "successor": {"head": SUCCESSOR_HEAD, "tree": SUCCESSOR_TREE,
                       "consumerSha256": NEW_CONSUMER_SHA},
         "deployment": {"saveCount": 1, "dumpSha256": DUMP_SHA, "markerSha256": MARKER_SHA},
