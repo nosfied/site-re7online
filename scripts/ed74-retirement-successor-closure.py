@@ -232,6 +232,22 @@ def qualify(request: dict[str, Any]) -> dict[str, Any]:
     require(intent.get("commands") == [] and authorization.get("approvedPaths") == [] and
             authorization.get("intentSha256") == request["intentSha256"],
             "zero_command_scope")
+    # The sealed ED74 external handoff is schema 3 with a documented
+    # PENDING_RETENTION_DEBT. The current consumer necessarily returns
+    # DEPLOYED_RETENTION_INCOMPLETE, even with zero commands. Never claim an
+    # executable terminal closure before authenticated disposable-builder
+    # retirement evidence and an explicit successor handoff contract exist.
+    handoff_binding = intent.get("externalHandoff")
+    require(isinstance(handoff_binding, dict) and
+            set(handoff_binding) == {"path", "sha256"},
+            "external_handoff_binding")
+    handoff = json_object(private(
+        Path(handoff_binding["path"]), handoff_binding["sha256"]))
+    if (handoff.get("schemaVersion") == 3 and
+            isinstance(handoff.get("retentionDebt"), dict) and
+            handoff["retentionDebt"].get("state") == "PENDING_RETENTION_DEBT"):
+        raise Denied("external_builder_retention_debt_requires_terminal_closure")
+    require(handoff.get("schemaVersion") != 3, "external_handoff_successor_not_implemented")
     require(digest(private(Path(request["dumpPath"]), DUMP_SHA)) == DUMP_SHA,
             "dump_sha256")
     marker = Path("/opt/re7online/releases") / RELEASE / "DEPLOYED"
