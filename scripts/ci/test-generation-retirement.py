@@ -2042,6 +2042,59 @@ class GenerationRetirementTest(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Denied, "release_reconciliation_graph"):
             MODULE._rich_graph(graph, "fixture")
 
+    def test_operational_rollback_admission_accepts_strict_three_component_binding(self):
+        fixture = Fixture()
+        try:
+            policy_raw = fixture.policy.read_bytes()
+            policy = MODULE.validate_root_policy(policy_raw, sha(fixture.policy))
+            contract = json.loads(fixture.contract.read_text())
+            operational = json.loads(fixture.operational.read_text())
+            bindings = {
+                "api": "immutable-return-api",
+                "frontend": "immutable-return-frontend",
+                "worker": "immutable-return-worker",
+            }
+            operational["rollbackReleases"] = sorted(bindings.values())
+            operational["immediateRollbackReleases"] = dict(bindings)
+            MODULE.validate_operational(operational, contract, policy)
+            graph = {key: operational[key] for key in MODULE.RICH_GRAPH_KEYS}
+            graph["immediateRollbackReleases"] = dict(bindings)
+            self.assertEqual(MODULE._rich_graph(graph, "ed74")["immediateRollbackReleases"],
+                             bindings)
+
+            for variant in ("missing_worker", "extra_component", "unknown_release",
+                            "empty_worker", "non_string_worker"):
+                with self.subTest(variant=variant):
+                    altered = dict(bindings)
+                    if variant == "missing_worker":
+                        altered.pop("worker")
+                        altered.pop("frontend")
+                    elif variant == "extra_component":
+                        altered["scheduler"] = bindings["worker"]
+                    elif variant == "unknown_release":
+                        altered["worker"] = "immutable-unauthorized"
+                    elif variant == "empty_worker":
+                        altered["worker"] = ""
+                    else:
+                        altered["worker"] = 23
+                    operational["immediateRollbackReleases"] = altered
+                    with self.assertRaisesRegex(
+                        MODULE.Denied, "operational_state_immediate_rollbacks"):
+                        MODULE.validate_operational(operational, contract, policy)
+                    graph["immediateRollbackReleases"] = altered
+                    with self.assertRaisesRegex(
+                        MODULE.Denied, "release_reconciliation_graph:ed74"):
+                        MODULE._rich_graph(graph, "ed74")
+            # The original api/frontend compatibility remains strictly admitted.
+            two = {key: bindings[key] for key in ("api", "frontend")}
+            operational["immediateRollbackReleases"] = two
+            MODULE.validate_operational(operational, contract, policy)
+            graph["immediateRollbackReleases"] = two
+            self.assertEqual(MODULE._rich_graph(graph, "legacy")["immediateRollbackReleases"],
+                             two)
+        finally:
+            fixture.close()
+
     def test_versioned_d436_f160_descriptors_are_closed_and_use_exact_batch_ordinals(self):
         expected = {
             "immutable-d436239e-vps-20261026T131821Z": ("2", "6", "7"),
