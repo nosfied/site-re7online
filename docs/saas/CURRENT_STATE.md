@@ -1,38 +1,30 @@
 # Estado canônico do Converta
 
-## ED74 ativa e aceita, aguardando finalização — 16/11/2026
+## ED74 ativa, aceita e finalizada com retenção incompleta — 17/11/2026
 
-**AWAITING_ACCEPTANCE / ACCEPTANCE_MATERIALIZED / FINALIZE PENDING.** Esta
-entrada é posterior ao rollback terminal descrito abaixo e prevalece somente para
-o estado corrente da implantação ED74. A release
+**DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER ROOT EXTERNALLY
+ABSENT.** Esta entrada prevalece para o estado corrente. A release
 `immutable-ed74c483-external-20261115T162015Z`, target
 `ed74c483b35c6cfebbdaa1a0a16e233101c46dd4`, está selecionada em API, frontend
 e worker; o frontend mantém BUILD_ID `DL7flKybPJUYQKtRLSuch`. O aceite humano
 5/5 e o aceite técnico `1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a`
-foram materializados. O journal permanece `AWAITING_ACCEPTANCE`, `saveCount=0`,
-sob o control plane original `4e55c9d93788f93761a4786917a4dd08c90c0d0f`.
+foram materializados. A continuação ordinal concluiu o único `pm2 save`; o dump
+é `04674bf54bb55d86db9494d8475b8835163329f0872d53be5f535a6b1f66cc20`, o
+marker `DEPLOYED` é `2bf0d3bb8e5c2183a2dbd365a53e6b8d517f0a9368ab8a8c66e8d048c2e52b7a`
+e o journal terminal é
+`2a625c3aa326bb9a868a7ef5c8655abae6e6d5e4fc299b97f83a837e62f5bab2`.
 
-O primeiro `finalize` foi negado antes de mutação por cache de imagens Next.js
-criado em runtime e ausente do índice instalado. O PR #409, head
-`617cbb4adc3a09a9d252670177cec0eb77cdefe1`, implementa a reconciliação fechada
-para essa fronteira, passou CI 4/4 e foi integrado pelo merge
-`3ac77ac1e8dadebf41e7f427e8128f44d886c25f`, árvore
-`a2f86c7871a1e18cd5442b1583502ee08f0dadbd`. Não executar `finalize`,
-`pm2 save`, retirement ou limpeza antes da materialização autenticada de um
-request novo. O draft de request SHA-256
-`6e82041470a36d3286efe9edbe14eef06cc47bfc2df76ed5a83778e94538222d`
-não é autoridade produtiva. A transação, release, pacote, bindings, aceite,
-journal, lock e retornos continuam preservados.
+O retirement local tinha intenção autenticada com zero caminhos e zero comandos,
+mas foi negado por `operational_state_immediate_rollbacks`; não existe receipt
+terminal de retirement. A raiz descartável do builder desapareceu externamente,
+provavelmente durante o reboot/limpeza de `/tmp`; a custódia está preservada e o
+registro Git órfão foi regularizado. A classificação correta é
+`ROOT_EXTERNALLY_ABSENT / CAPACITY_UNATTRIBUTED / CUSTODY_PRESERVED`, nunca
+`SANITIZED/CLOSURE_RECORDED`. Não há retirada física restante comprovada nem
+bytes retiravéis autorizados na VPS. A autoridade ativa é
+[INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json](releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json).
 
-O control plane integrado ainda não contém produtor/materializador versionado do
-request de finalização. A correção candidata adiciona
-`fixed-current-finalize-request-materialize.py`, que deriva o `argv` somente do
-journal e das autoridades autenticadas e prova a cadeia produtor → wrapper →
-driver em ambiente isolado. Até sua revisão, CI e integração, a preparação
-permanece negada em `FINALIZE_REQUEST_CANONICAL_MATERIALIZER_UNAVAILABLE`: não
-reutilizar o draft nem reconstruir argumentos manualmente.
-
-## Incidente de implantação 3/3 e retorno terminal — 15/11/2026
+## Incidente histórico da primeira transação 3/3 — 15/11/2026 (SUPERADO)
 
 **ROLLED_BACK / PRODUCTION RESTORED / CANDIDATE INSTALLED INACTIVE.** A
 transação da release `immutable-ed74c483-external-20261115T162015Z` terminou em
@@ -58,14 +50,10 @@ PM2 6.0.14 durante rollback do worker (PR #405, control plane
 correções dos PRs #403–#405 permanecem evidências reutilizáveis, mas não concedem
 autoridade para outra mutação.
 
-Uma próxima tentativa exige **transação independente**, destinos de journal,
-receipt e evidências fisicamente ausentes, fotografia nova de produção/retornos,
-lock livre, bindings reabertos por SHA, preflight novo e autorização faseada do
-owner. Antes disso, o percurso integrado precisa atravessar produtor → instalador
-→ materializador/`validate-pair` → handoff/preflight → activate/rollback com PM2
-6.0.14 real. A CI atual prova esses contratos em ensaios complementares, mas a
-ativação/retomada 3/3 do driver ainda usa `FakeHost`; portanto a requalificação
-integral permanece bloqueada, sem efeito produtivo nesta reconciliação.
+A transação independente posterior satisfez esses requisitos, promoveu ED74 e
+terminou no estado vigente acima. Este bloco permanece somente como evidência do
+rollback anterior; não descreve a seleção produtiva atual nem autoriza sua
+reabertura.
 
 ## Auditoria integral e retorno ao backlog — 14/11/2026
 

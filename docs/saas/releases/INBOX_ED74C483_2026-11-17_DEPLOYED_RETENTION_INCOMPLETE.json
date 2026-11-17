@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_WORKER_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_RETENTION_INCOMPLETE",
+  "result": "ED74_ACTIVE_ACCEPTED_FIXED_CURRENT_BUILDER_ROOT_EXTERNALLY_ABSENT",
+  "observedDate": "2026-11-17",
+  "release": {
+    "id": "immutable-ed74c483-external-20261115T162015Z",
+    "path": "/opt/re7online/releases/immutable-ed74c483-external-20261115T162015Z",
+    "target": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+    "tree": "f0f037cf908cbca59265bd73c6efbe926ea2636e",
+    "buildId": "DL7flKybPJUYQKtRLSuch",
+    "packageSha256": "0570b8e86ed189d2383a445ebd11c5ef0654dcc387d252e7dfaaad194f536fcf",
+    "manifestSha256": "b93851eeb3b3129a9ac5fbf0b8bfa263c800114064d3f4239ed2207f7deba850",
+    "indexSha256": "6a4b5f1ac0e6f03b752019eeb8bdadedded2b29d6b6fbfb848f1cf2c433e639d",
+    "indexEntries": 42333,
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "workerEntrypointSha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "buildCount": 1,
+    "uploadCount": 1,
+    "installCount": 1
+  },
+  "selection": {
+    "components": ["api", "frontend", "worker"],
+    "apiReleaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "frontendReleaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "workerReleaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "immediateRollbackReleases": {
+      "api": "immutable-fa10f4f5-external-20261112T233820Z",
+      "frontend": "immutable-fa10f4f5-external-20261112T233820Z",
+      "worker": "immutable-e2e7f17a-20261022T005110Z"
+    }
+  },
+  "acceptance": {
+    "technical": "PASS",
+    "human": "PASS_5_OF_5",
+    "sha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
+  },
+  "finalization": {
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "journalSha256": "2a625c3aa326bb9a868a7ef5c8655abae6e6d5e4fc299b97f83a837e62f5bab2",
+    "pm2SaveCount": 1,
+    "dumpSha256": "04674bf54bb55d86db9494d8475b8835163329f0872d53be5f535a6b1f66cc20",
+    "markerSha256": "2bf0d3bb8e5c2183a2dbd365a53e6b8d517f0a9368ab8a8c66e8d048c2e52b7a",
+    "lockReleased": true
+  },
+  "retirement": {
+    "state": "PENDING_RETENTION_DEBT",
+    "intentSha256": "250a535c4c756a7fcc087b39a722d5237e04a1150b6720c6b8337cb98d7f5496",
+    "approvedPaths": [],
+    "commandsAttempted": 0,
+    "commandsCompleted": 0,
+    "receiptPresent": false,
+    "denialPredicate": "operational_state_immediate_rollbacks",
+    "localPhysicalEffectsRemaining": 0
+  },
+  "builder": {
+    "exportReceiptSha256": "c7e97d09e613e262a4c218d4fea0852cd3d7b815c613f5d225485b49ab936cbb",
+    "state": "ROOT_EXTERNALLY_ABSENT_CAPACITY_UNATTRIBUTED_CUSTODY_PRESERVED",
+    "rootAbsent": true,
+    "gitWorktreeRegistrationAbsent": true,
+    "custodyPreserved": true,
+    "terminalReceiptPresent": false,
+    "canonicalSanitizedClaimAllowed": false
+  },
+  "capacity": {
+    "vpsFreeBytes": 29474721792,
+    "activeReleaseBytes": 1367244800,
+    "packageAndPreparationBytes": 211464192,
+    "transactionAndHandoffBytes": 1318912,
+    "identifiedBytes": 1580027904,
+    "unattributedBaselineDeltaBytes": 731480064,
+    "provenRemovableBytes": 0
+  },
+  "evidence": {
+    "source": "AUTHENTICATED_PRIVATE_AUTHORITIES_AND_DIRECTED_READ_ONLY_OBSERVATION",
+    "productionMutationPerformedByThisRecord": false,
+    "historicalEvidenceRecreated": false
+  }
+}

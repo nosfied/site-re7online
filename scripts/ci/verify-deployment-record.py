@@ -1163,6 +1163,62 @@ def main() -> None:
 
     if (record.get("schemaVersion") == 1 and
             record.get("recordType") ==
+            "API_FRONTEND_WORKER_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT"):
+        require(not (walk_keys(record) & FORBIDDEN_KEYS),
+                "sensitive identifier key in three-component record")
+        release = record.get("release", {})
+        selection = record.get("selection", {})
+        finalization = record.get("finalization", {})
+        retirement = record.get("retirement", {})
+        builder = record.get("builder", {})
+        require(record.get("status") == "DEPLOYED_RETENTION_INCOMPLETE",
+                "three-component status")
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))) and
+                bool(re.fullmatch(r"[0-9a-f]{40}", release.get("tree", ""))),
+                "three-component Git identity")
+        for field in ("packageSha256", "manifestSha256", "indexSha256",
+                      "apiEntrypointSha256", "workerEntrypointSha256"):
+            require(bool(SHA256.fullmatch(release.get(field, ""))),
+                    f"three-component {field}")
+        require(selection.get("components") == ["api", "frontend", "worker"] and
+                all(selection.get(f"{component}ReleaseId") == release.get("id")
+                    for component in ("api", "frontend", "worker")),
+                "three-component selection")
+        require(set(selection.get("immediateRollbackReleases", {})) ==
+                {"api", "frontend", "worker"}, "three-component rollback map")
+        require(finalization.get("state") == "DEPLOYED_RETENTION_INCOMPLETE" and
+                finalization.get("pm2SaveCount") == 1 and
+                finalization.get("lockReleased") is True and
+                all(bool(SHA256.fullmatch(finalization.get(field, "")))
+                    for field in ("journalSha256", "dumpSha256", "markerSha256")),
+                "three-component finalization")
+        require(retirement.get("approvedPaths") == [] and
+                retirement.get("commandsAttempted") == 0 and
+                retirement.get("commandsCompleted") == 0 and
+                retirement.get("receiptPresent") is False and
+                retirement.get("localPhysicalEffectsRemaining") == 0,
+                "three-component zero-command retirement")
+        require(builder.get("state") ==
+                "ROOT_EXTERNALLY_ABSENT_CAPACITY_UNATTRIBUTED_CUSTODY_PRESERVED" and
+                builder.get("rootAbsent") is True and
+                builder.get("gitWorktreeRegistrationAbsent") is True and
+                builder.get("custodyPreserved") is True and
+                builder.get("terminalReceiptPresent") is False and
+                builder.get("canonicalSanitizedClaimAllowed") is False,
+                "three-component builder disposition")
+        state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+        require(state.get("activeDeploymentRecord") ==
+                record_path.relative_to(ROOT).as_posix(), "active three-component record")
+        production = state.get("production", {})
+        require(production.get("releaseId") == release.get("id") and
+                production.get("targetCommit") == release.get("target") and
+                production.get("pm2", {}).get("dumpSha256") ==
+                finalization.get("dumpSha256"), "active three-component state")
+        print("DEPLOYMENT_RECORD_OK: ED74 three-component state and non-canonical builder absence agree")
+        return
+
+    if (record.get("schemaVersion") == 1 and
+            record.get("recordType") ==
             "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT"):
         if record.get("status") == "DEPLOYED_RETENTION_INCOMPLETE":
             verify_api_only_fixed_current_incomplete(record_path, record)

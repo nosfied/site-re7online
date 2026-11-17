@@ -1,35 +1,30 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API+FRONTEND FA10F4F5 ATIVOS / WORKER E2E7 PRESERVADO / BUILD EXTERNO DEMONSTRADO**
+**Status: CANÔNICO / ED74 ATIVA EM API+FRONTEND+WORKER / BUILD EXTERNO COMPROVADO**
 
 Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação.
 A única instrução executável permanece o [runbook](DEPLOY_RUNBOOK.md). O estado
-produtivo informado em 13/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md),
-e com o registro legado E0 ainda validado por
-[CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json)
-(exclusivamente histórico, não seleção atual),
+produtivo reconciliado em 17/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md)
+e no registro ativo
+[INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json](releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json),
 com recibos e limites de inferência em
 [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md).
 
-**Fotografia de fechamento, sem nova coleta:** API e frontend
-`immutable-fa10f4f5-external-20261112T233820Z`, BUILD_ID
-`4j3t9N75vsvYu9t3DoFq4`; worker
-`immutable-e2e7f17a-20261022T005110Z`. A transação finalizou com um
-`pm2 save`, marker `DEPLOYED`, lock liberado e zero comandos VPS de
-retirada. A geração descartável de sucesso do builder foi posteriormente
-encerrada em `SANITIZED/CLOSURE_RECORDED`, com 2.508.197.888 B físicos
-atribuídos à retirada. As dívidas externas históricas e a geração builder falha
-continuam independentes; `DEPLOYED_RETENTION_INCOMPLETE` permanece o estado
-imutável da fotografia de conclusão produtiva.
+**Fotografia de fechamento, sem nova coleta:** ED74 está selecionada nos três
+componentes, BUILD_ID `DL7flKybPJUYQKtRLSuch`, com um `pm2 save`, marker
+`DEPLOYED` e lock liberado. O retirement da VPS tinha zero comandos. A raiz do
+builder ficou externamente ausente sem receipt canônico; por isso a conclusão é
+`DEPLOYED_RETENTION_INCOMPLETE`, com custódia preservada e capacidade não
+atribuída, e não `DEPLOYED_SANITIZED`.
 
-**Incidente 3/3 de 15/11/2026:** a tentativa de promover `ed74c483` terminou em
+**Incidente histórico 3/3 de 15/11/2026:** a primeira tentativa de promover `ed74c483` terminou em
 rollback canônico verificado. API/frontend `fa10f4f5` e worker `e2e7f17a` foram
 restaurados, `saveCount=0` e a transação é terminal. A candidata permanece
 instalada e inativa, reutilizável apenas por nova transação. PRs #404/#405
 corrigiram respectivamente o escopo do handoff e a identidade real dos logs PM2;
-eles não convertem o journal terminal em autorização. A próxima janela depende de
-ensaio integrado do driver 3/3 com PM2 6.0.14 real e destinos exclusivos novos.
+eles não converteram o journal terminal em autorização. Uma transação posterior,
+independente e autenticada concluiu a promoção atualmente registrada.
 
 **Posicionamento arquitetural vigente:** builder externo descartável é o caminho
 normal de produção de novas gerações, comprovado em API-only, API+frontend e no

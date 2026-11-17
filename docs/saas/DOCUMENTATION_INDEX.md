@@ -9,9 +9,11 @@
 
 ## Snapshot vigente e política de não retrabalho
 
+- [Consolidação do builder externo e saneamento Git (17/11/2026)](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md) — matriz de implementação, precedentes A838/FA10/ED74, PR #415 e três lacunas preventivas restantes.
 - [Padrão preferencial de build externo e ledger VPS + builder (13/11/2026)](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md) — **começar aqui** para capacidade, histórico já retirado, categorias preservadas, dívidas, geração falha, restrições e futura automação; não autoriza exclusões.
-- [Registro terminal de fa10f4f5: deploy + closure do builder](releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json) — referência ativa com proveniência explícita; não substitui os receipts privados.
-- [Estado canônico atualizado](CURRENT_STATE.md) e [snapshot verificável](CURRENT_STATE.json) — API+frontend `fa10f4f5`, worker `e2e7f17a`, implantação `DEPLOYED_RETENTION_INCOMPLETE` e builder da mesma release posteriormente `SANITIZED`.
+- [Registro ativo ED74](releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json) — API, frontend e worker ativos; aceite/finalização comprovados e ausência externa do builder explicitamente distinta de sanitização canônica.
+- [Registro terminal de fa10f4f5: deploy + closure do builder](releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json) — precedente histórico de closure canônica; não substitui os receipts privados.
+- [Estado canônico atualizado](CURRENT_STATE.md) e [snapshot verificável](CURRENT_STATE.json) — ED74 3/3 ativa em `DEPLOYED_RETENTION_INCOMPLETE`; retornos FA10/E2E preservados.
 - [Inventário VPS de 24/10](VPS_CAPACITY_AUDIT_2026-10-24.md), [inventário de 26/10](VPS_CAPACITY_AUDIT_2026-10-26.md) e [política com receipts P00](CAPACITY_RECOVERY_POLICY.md) — **históricos reaproveitáveis**, lotes terminais irrepetíveis. Não reiniciar coleta massiva; qualificar apenas delta de candidatos pendentes.
 
 ## Estado ativo
@@ -25,7 +27,7 @@
   — mapa existente atualizado: concluído, próximas homologações, correções e manutenção.
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
-  o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
+  o produtor `scripts/converta-release.py`, o builder externo canônico e a fronteira com a ativação; build na VPS é fallback excepcional
 - [Histórico API-only a838bd33: elegibilidade multilote e dívida externa](releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json)
   — fotografia histórica, **não representa as seleções atuais**. Worktrees builder v1/v2 permanecem em escopos protegidos independentes da release fa10.
 - [Encerramento dirigido da árvore histórica da auditoria E0](releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json)

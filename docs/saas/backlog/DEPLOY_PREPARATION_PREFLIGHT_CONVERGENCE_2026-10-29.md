@@ -654,11 +654,11 @@ receipts e incidentes históricos permanecem evidência e não viram autorizaç�
 | Paridade integral `observations` entre admissão e retirement | `PARTIALLY_IMPLEMENTED` | a admissão copia a fotografia, mas `validate_request()` ainda não chama o schema integral de `generation-retirement.py::validate_operational()`; a lacuna nominal de `pm2.fingerprintSha256` continua aberta |
 | Perfis fixed-current `api`, `api,frontend` e `api,frontend,worker` | `IMPLEMENTED_AND_PROVEN` | PRs #401, #404 e #407; produtor, instalação, handoff, driver e PM2 real cobertos sem remover os perfis anteriores |
 | Definições PM2 sem ambiente estrutural contaminado | `IMPLEMENTED_AND_PROVEN` | PRs #199, #200, #207, #231, #233, #403, #405 e #407; fontes privadas, allowlist por papel, `validate-pair` e PM2 6.0.14 real |
-| Aceite técnico dos três componentes | `IMPLEMENTED_AND_PROVEN` | PR #408 e aceite ED74 materializado em `AWAITING_ACCEPTANCE`, sem save ou finalize |
+| Aceite técnico dos três componentes | `IMPLEMENTED_AND_PROVEN` | PR #408, aceite ED74 5/5 e finalização posterior com save único |
 | Retomada por journal, lock e evidências exclusivas | `IMPLEMENTED_AND_PROVEN` | PRs #275, #401, #405 e os rollbacks/retomadas ED74; efeitos concluídos não são repetidos |
-| Cache Next.js permitido no primeiro finalize | `IMPLEMENTED_NOT_FULLY_PROVEN` | precedentes 36b/FA10 e PR #409 integrado por `3ac77ac1e8dadebf41e7f427e8128f44d886c25f`, CI 4/4; falta somente a prova terminal da ED74 |
-| Lifecycle do builder externo | `IMPLEMENTED_AND_PROVEN` | `disposable-builder-lifecycle.py`, fechamento FA10 e geração ED74 build-once/exportada sem rebuild |
-| Request fixed-current de finalização produzido sem reconstrução manual de `argv` | `IMPLEMENTED_NOT_FULLY_PROVEN` | `fixed-current-finalize-request-materialize.py` deriva o comando do journal e das autoridades autenticadas; a regressão isolada percorre produtor → request → wrapper → driver nos três perfis e rejeita drift/replay. Falta revisão, CI do commit efetivo e integração antes de uso operacional |
+| Cache Next.js permitido no primeiro finalize | `IMPLEMENTED_AND_PROVEN_FOR_CLOSED_PROFILES` | precedentes 36b/FA10, PR #409 e continuação terminal ED74; a generalização para novas subárvores continua separada |
+| Lifecycle do builder externo | `IMPLEMENTED_AND_PROVEN_WITH_DURABILITY_GAP` | `disposable-builder-lifecycle.py`, closure FA10 e ED74 build-once/exportada; a raiz ED74 em `/tmp` desapareceu sem receipt canônico após reboot |
+| Request fixed-current de finalização produzido sem reconstrução manual de `argv` | `IMPLEMENTED_AND_PROVEN` | PRs #410–#413; `fixed-current-finalize-request-materialize.py` derivou continuações autenticadas, preservou `saveCount=1` e concluiu ED74 sem segundo save |
 
 ### Lacunas estruturais que permanecem abertas
 
@@ -669,17 +669,16 @@ receipts e incidentes históricos permanecem evidência e não viram autorizaç�
    contrato da geração. Hoje 36b, FA10 e ED74 usam perfis literais fechados. A
    generalização futura deve continuar exigindo confinamento, inventário exato e
    recaptura na fronteira; ela não bloqueia a finalização ED74 pelo PR #409.
-3. Integrar, após revisão e CI, o produtor versionado do request de finalização.
-   A implementação candidata não aceita `argv`, não executa `finalize` e mantém o
-   wrapper atual como único executor; a lacuna só fecha operacionalmente depois
-   da integração e de uma materialização autenticada.
+3. Exigir raiz descartável do builder em armazenamento durável e não sujeito a
+   limpeza automática durante uma geração aberta, ou autenticar explicitamente a
+   política equivalente. O contrato atual aceita uma raiz sob `/tmp`; ED74 provou
+   que isso pode apagar a raiz sem receipt e impedir atribuição de capacidade.
 
 ### Continuidade sem retrabalho
 
-A ED74 permanece ativa, aceita e em `AWAITING_ACCEPTANCE`. Sua próxima ação é
-revisar e integrar o produtor versionado e então materializar um request novo e
-autenticado para o mesmo wrapper. O PR #409 já está integrado; não o repetir. A
-materialização produtiva permanece uma operação separada e não está autorizada
-por esta revisão. Não condicionar esse fechamento ao item 1 ou à generalização do
-item 2; não repetir build, upload, instalação, preflight, activate, aceite ou
-testes funcionais já válidos.
+A ED74 permanece ativa e aceita em `DEPLOYED_RETENTION_INCOMPLETE`. Seu builder
+está externamente ausente, a custódia preservada e não existe retirada física a
+repetir. O produtor de finalização está integrado e comprovado; não reabrir
+build, upload, instalação, preflight, activate, aceite ou finalização. As três
+lacunas acima são preventivas para gerações futuras e não autorizam novo projeto
+ou mutação produtiva.
