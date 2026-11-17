@@ -4368,6 +4368,9 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                 "failurePredicate": None, "automaticRetry": False,
                 "attemptedCommands": 0, "completedCommands": 0,
                 "removedPaths": [], "remainingDerivedPaths": [],
+                "commandLogSha256": successor.digest(b""),
+                "lock": {"canonicalHeldThroughReceiptFsync": True,
+                         "writerHeldThroughReceiptFsync": True},
                 "intentSha256": "1" * 64,
             }
             receipt_raw = successor.canonical(receipt)
@@ -4381,6 +4384,8 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                 receipt_root.mkdir(mode=0o700)
                 saved = receipt_root / "execution-receipt.private.json"
                 saved.write_bytes(receipt_raw); saved.chmod(0o600)
+                command_journal = receipt_root / "command-results.private.jsonl"
+                command_journal.write_bytes(b""); command_journal.chmod(0o600)
                 output = successor.canonical({
                     "result": "DEPLOYED_SANITIZED", "removedPaths": 0,
                     "receiptSha256": successor.digest(receipt_raw),
