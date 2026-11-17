@@ -4431,6 +4431,17 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                 "dumpPath": str(root / "dump.pm2"),
                 "closureOutput": str(transaction / "generation-retirement-successor-closure.private.json"),
             }
+            request_sha = successor.digest(successor.canonical(request))
+            owner_path = root / "successor-owner.private.json"
+            private_json(owner_path, {
+                "schemaVersion": 1,
+                "kind": "ED74_RETIREMENT_SUCCESSOR_OWNER_AUTHORIZATION_V1",
+                "decision": "AUTHORIZE_ONCE", "owner": "fixture-owner",
+                "requestSha256": request_sha,
+                "historicalJournalSha256": successor.JOURNAL_SHA,
+                "approvedPaths": [], "maxExecutions": 1,
+            })
+            owner_sha = sha(owner_path)
             retirement = {
                 "intent": str(root / "intent.private.json"), "intentSha256": "1" * 64,
                 "authorization": str(root / "authorization.private.json"),
@@ -4488,7 +4499,7 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
             with patch.object(successor, "qualify", return_value=context), \
                  patch.object(successor.subprocess, "run", side_effect=fake_consumer), \
                  patch.object(successor, "private", side_effect=bound_read):
-                report = successor.execute(request)
+                report = successor.execute(request, owner_path, owner_sha, request_sha)
             self.assertEqual(report["result"], "ED74_RETIREMENT_CLOSED_BY_SUCCESSOR")
             self.assertEqual(len(calls), 1)
             self.assertEqual(journal_path.read_bytes(), saved_journal)
@@ -4499,12 +4510,14 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
             self.assertEqual(closure["retirement"]["removedPaths"], [])
             self.assertEqual(closure["retirement"]["receipt"]["sha256"],
                              successor.digest(receipt_raw))
+            self.assertEqual(closure["successorAuthorization"]["sha256"], owner_sha)
+            self.assertEqual(closure["successorAuthorization"]["requestSha256"], request_sha)
             for kind in ("stdout", "stderr", "exit"):
                 self.assertTrue((transaction / f"retirement-successor-01.{kind}.private.txt").is_file())
             with patch.object(successor, "qualify", side_effect=successor.Denied("replay")), \
                  patch.object(successor.subprocess, "run") as retry:
                 with self.assertRaisesRegex(successor.Denied, "replay"):
-                    successor.execute(request)
+                    successor.execute(request, owner_path, owner_sha, request_sha)
                 retry.assert_not_called()
 
 
