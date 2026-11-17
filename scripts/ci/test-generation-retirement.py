@@ -4512,11 +4512,16 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                              successor.digest(receipt_raw))
             self.assertEqual(closure["successorAuthorization"]["sha256"], owner_sha)
             self.assertEqual(closure["successorAuthorization"]["requestSha256"], request_sha)
+            claim_path = transaction / "retirement-successor-01.execution-claim.private.json"
+            self.assertTrue(claim_path.is_file())
+            self.assertEqual(closure["executionClaim"]["sha256"], sha(claim_path))
+            self.assertEqual(json.loads(claim_path.read_text())["state"],
+                             "ATTEMPT_CLAIMED_BEFORE_CONSUMER")
             for kind in ("stdout", "stderr", "exit"):
                 self.assertTrue((transaction / f"retirement-successor-01.{kind}.private.txt").is_file())
-            with patch.object(successor, "qualify", side_effect=successor.Denied("replay")), \
+            with patch.object(successor, "qualify", return_value=context), \
                  patch.object(successor.subprocess, "run") as retry:
-                with self.assertRaisesRegex(successor.Denied, "replay"):
+                with self.assertRaisesRegex(successor.Denied, "output_already_exists"):
                     successor.execute(request, owner_path, owner_sha, request_sha)
                 retry.assert_not_called()
 
