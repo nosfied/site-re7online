@@ -281,8 +281,17 @@ def execute(request: dict[str, Any]) -> dict[str, Any]:
             receipt_value.get("completedCommands") == 0 and
             receipt_value.get("removedPaths") == [] and
             receipt_value.get("remainingDerivedPaths") == [] and
+            "externalRetentionDebt" not in receipt_value and
+            receipt_value.get("commandLogSha256") == digest(b"") and
+            receipt_value.get("lock") == {
+                "canonicalHeldThroughReceiptFsync": True,
+                "writerHeldThroughReceiptFsync": True,
+            } and
             receipt_value.get("intentSha256") == retirement["intentSha256"],
             "retirement_receipt_scope")
+    command_journal = Path(retirement["receiptRoot"]) / "command-results.private.jsonl"
+    require(private(command_journal, digest(b"")) == b"",
+            "retirement_command_journal_not_empty")
     # Reauthenticate the historical snapshot *after* the consumer has returned.
     private(transaction / "transaction.v1.private.json", JOURNAL_SHA)
     private(Path(request["dumpPath"]), DUMP_SHA)
