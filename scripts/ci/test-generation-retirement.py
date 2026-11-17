@@ -4400,8 +4400,8 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                     return b"marker is verified by prior immutable authority"
                 return original_private(path, expected)
 
-            with patch.object(successor, "qualify", return_value=context), \\
-                 patch.object(successor.subprocess, "run", side_effect=fake_consumer), \\
+            with patch.object(successor, "qualify", return_value=context), \
+                 patch.object(successor.subprocess, "run", side_effect=fake_consumer), \
                  patch.object(successor, "private", side_effect=bound_read):
                 report = successor.execute(request)
             self.assertEqual(report["result"], "ED74_RETIREMENT_CLOSED_BY_SUCCESSOR")
@@ -4416,7 +4416,7 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                              successor.digest(receipt_raw))
             for kind in ("stdout", "stderr", "exit"):
                 self.assertTrue((transaction / f"retirement-successor-01.{kind}.private.txt").is_file())
-            with patch.object(successor, "qualify", side_effect=successor.Denied("replay")), \\
+            with patch.object(successor, "qualify", side_effect=successor.Denied("replay")), \
                  patch.object(successor.subprocess, "run") as retry:
                 with self.assertRaisesRegex(successor.Denied, "replay"):
                     successor.execute(request)
