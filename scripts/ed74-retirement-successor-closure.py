@@ -275,9 +275,12 @@ def execute(request: dict[str, Any]) -> dict[str, Any]:
     receipt_raw = private(receipt, report["receiptSha256"])
     receipt_value = json_object(receipt_raw)
     require(receipt_value.get("state") == "DEPLOYED_SANITIZED" and
+            receipt_value.get("failurePredicate") is None and
+            receipt_value.get("automaticRetry") is False and
             receipt_value.get("attemptedCommands") == 0 and
             receipt_value.get("completedCommands") == 0 and
             receipt_value.get("removedPaths") == [] and
+            receipt_value.get("remainingDerivedPaths") == [] and
             receipt_value.get("intentSha256") == retirement["intentSha256"],
             "retirement_receipt_scope")
     # Reauthenticate the historical snapshot *after* the consumer has returned.
