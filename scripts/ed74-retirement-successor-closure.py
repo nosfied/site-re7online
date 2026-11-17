@@ -324,13 +324,60 @@ def execute(request: dict[str, Any]) -> dict[str, Any]:
             "historicalJournalUnchanged": True}
 
 
+def prepare() -> dict[str, Any]:
+    """Derive the sealed successor request from ED74 itself; no manual argv."""
+    transaction = Path(
+        "/opt/re7online/backups/converta-persistent/preparations/"
+        "immutable-ed74c483-external-20261115T162015Z-"
+        "api-frontend-worker-preflight-4e55c9d9-v2/transaction"
+    )
+    journal = json_object(private(transaction / "transaction.v1.private.json", JOURNAL_SHA))
+    binding = journal.get("binding")
+    require(isinstance(binding, dict), "producer_journal_binding")
+    retirement = binding.get("generationRetirement")
+    require(isinstance(retirement, dict), "producer_retirement_binding")
+    op_path = transaction / "generation-operational.final.private.json"
+    op_sha = digest(op_path.read_bytes())
+    private(op_path, op_sha)
+    request = {
+        "schemaVersion": 1, "action": "ED74_RETIREMENT_SUCCESSOR_V1",
+        "transactionRoot": str(transaction),
+        "journalSha256": JOURNAL_SHA,
+        "successorCheckout": "/opt/re7online/deploy-control/c2beccb2d6d9",
+        "originalConsumerSha256": OLD_CONSUMER_SHA,
+        "successorConsumerSha256": NEW_CONSUMER_SHA,
+        "operationalStateSha256": op_sha,
+        "intentSha256": retirement.get("intentSha256"),
+        "authorizationSha256": retirement.get("authorizationSha256"),
+        "rootPolicySha256": retirement.get("rootPolicySha256"),
+        "dumpPath": str(Path.home() / ".pm2/dump.pm2"),
+        "dumpSha256": DUMP_SHA,
+        "markerSha256": MARKER_SHA,
+        "receiptRoot": retirement.get("receiptRoot"),
+        "closureOutput": str(transaction / "generation-retirement-successor-closure.private.json"),
+    }
+    qualify(request)
+    output = transaction / "generation-retirement-successor-request.private.json"
+    exclusive(output, canonical(request))
+    return {"result": "ED74_RETIREMENT_SUCCESSOR_REQUEST_MATERIALIZED",
+            "requestPath": str(output), "requestSha256": digest(canonical(request)),
+            "executionAuthorized": False}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--request", type=Path, required=True)
-    parser.add_argument("--request-sha256", required=True)
-    parser.add_argument("--mode", choices=("qualify", "execute"), required=True)
+    parser.add_argument("--request", type=Path)
+    parser.add_argument("--request-sha256")
+    parser.add_argument("--mode", choices=("prepare", "qualify", "execute"), required=True)
     args = parser.parse_args()
     try:
+        if args.mode == "prepare":
+            require(args.request is None and args.request_sha256 is None,
+                    "prepare_no_external_request")
+            print(json.dumps(prepare(), sort_keys=True, separators=(",", ":")))
+            return 0
+        require(args.request is not None and args.request_sha256 is not None,
+                "request_binding_required")
         request = json_object(private(args.request, args.request_sha256))
         if args.mode == "qualify":
             qualify(request)
