@@ -4334,6 +4334,49 @@ class ED74RetirementSuccessorClosureTests(unittest.TestCase):
                 successor.qualify({"schemaVersion": 1, "action": "execute"})
             process.assert_not_called()
 
+    def test_successor_request_producer_uses_only_sealed_ed74_authorities(self):
+        successor = self.successor
+        transaction = Path(
+            "/opt/re7online/backups/converta-persistent/preparations/"
+            "immutable-ed74c483-external-20261115T162015Z-"
+            "api-frontend-worker-preflight-4e55c9d9-v2/transaction")
+        original = {"binding": {"generationRetirement": {
+            "intentSha256": "1" * 64, "authorizationSha256": "2" * 64,
+            "rootPolicySha256": "3" * 64,
+            "receiptRoot": "/opt/re7online/backups/converta-persistent/receipt-isolated",
+        }}}
+        saved = []
+        def fake_private(path, sha):
+            if path.name == "transaction.v1.private.json":
+                self.assertEqual(sha, successor.JOURNAL_SHA)
+                return successor.canonical(original)
+            self.assertEqual(path.name, "generation-operational.final.private.json")
+            return b"final-operational-isolated"
+        def fake_exclusive(path, raw):
+            saved.append((path, json.loads(raw)))
+        with patch.object(successor, "private", side_effect=fake_private), \
+             patch.object(Path, "read_bytes", return_value=b"final-operational-isolated"), \
+             patch.object(successor, "qualify") as qualifier, \
+             patch.object(successor, "exclusive", side_effect=fake_exclusive):
+            report = successor.prepare()
+        self.assertEqual(report["result"], "ED74_RETIREMENT_SUCCESSOR_REQUEST_MATERIALIZED")
+        self.assertFalse(report["executionAuthorized"])
+        qualifier.assert_called_once()
+        self.assertEqual(len(saved), 1)
+        request = saved[0][1]
+        self.assertEqual(request["journalSha256"], successor.JOURNAL_SHA)
+        self.assertEqual(request["originalConsumerSha256"], successor.OLD_CONSUMER_SHA)
+        self.assertEqual(request["successorConsumerSha256"], successor.NEW_CONSUMER_SHA)
+        self.assertEqual(request["intentSha256"], "1" * 64)
+        self.assertEqual(request["authorizationSha256"], "2" * 64)
+        self.assertEqual(request["successorCheckout"],
+                         "/opt/re7online/deploy-control/c2beccb2d6d9")
+        self.assertEqual(saved[0][0], transaction /
+                         "generation-retirement-successor-request.private.json")
+        self.assertEqual(report["requestSha256"], successor.digest(successor.canonical(request)))
+        self.assertNotIn("argv", request)
+        self.assertNotIn("commands", request)
+
     def test_zero_command_closure_is_append_only_and_invokes_consumer_once(self):
         successor = self.successor
         with tempfile.TemporaryDirectory(prefix="ed74-retirement-successor-") as raw:
