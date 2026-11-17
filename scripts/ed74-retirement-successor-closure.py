@@ -175,7 +175,9 @@ def qualify(request: dict[str, Any]) -> dict[str, Any]:
         require(retirement.get(sha_key) == request[arg_name], f"historical_binding:{k}")
     require(Path(retirement["receiptRoot"]) == Path(request["receiptRoot"]),
             "historical_receipt_scope")
-    require(journal.get("generationRetirement", {}).get("failurePredicate") == FAILURE,
+    historical_retirement = journal.get("generationRetirement")
+    require(isinstance(historical_retirement, dict) and
+            historical_retirement.get("failurePredicate") == FAILURE,
             "historical_retirement_failure")
     require(Path(request["closureOutput"]) ==
             transaction / "generation-retirement-successor-closure.private.json",
@@ -192,8 +194,30 @@ def qualify(request: dict[str, Any]) -> dict[str, Any]:
                               ("authorization", "authorizationSha256")):
         private(Path(retirement[key]), request[original_key])
     policy_path = Path(retirement["rootPolicy"])
-    require(digest(policy_path.read_bytes()) == request["rootPolicySha256"],
-            "root_policy_sha256")
+    policy_before = policy_path.lstat()
+    policy_fd = os.open(policy_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        policy_opened = os.fstat(policy_fd)
+        require(not stat.S_ISLNK(policy_before.st_mode) and
+                stat.S_ISREG(policy_opened.st_mode) and
+                (policy_opened.st_dev, policy_opened.st_ino) ==
+                (policy_before.st_dev, policy_before.st_ino) and
+                stat.S_IMODE(policy_opened.st_mode) in {0o600, 0o644} and
+                (policy_opened.st_uid, policy_opened.st_gid) ==
+                (os.geteuid(), os.getegid()), "root_policy_identity")
+        policy_bytes = bytearray()
+        while block := os.read(policy_fd, 1024 * 1024):
+            policy_bytes.extend(block)
+        policy_after = os.fstat(policy_fd)
+        require((policy_opened.st_dev, policy_opened.st_ino, policy_opened.st_size,
+                 policy_opened.st_mtime_ns, policy_opened.st_ctime_ns) ==
+                (policy_after.st_dev, policy_after.st_ino, policy_after.st_size,
+                 policy_after.st_mtime_ns, policy_after.st_ctime_ns),
+                "root_policy_drift")
+        require(digest(bytes(policy_bytes)) == request["rootPolicySha256"],
+                "root_policy_sha256")
+    finally:
+        os.close(policy_fd)
     operational = transaction / "generation-operational.final.private.json"
     operational_raw = private(operational, request["operationalStateSha256"])
     op = json_object(operational_raw)
@@ -256,6 +280,10 @@ def execute(request: dict[str, Any]) -> dict[str, Any]:
             receipt_value.get("removedPaths") == [] and
             receipt_value.get("intentSha256") == retirement["intentSha256"],
             "retirement_receipt_scope")
+    # Reauthenticate the historical snapshot *after* the consumer has returned.
+    private(transaction / "transaction.v1.private.json", JOURNAL_SHA)
+    private(Path(request["dumpPath"]), DUMP_SHA)
+    private(Path("/opt/re7online/releases") / RELEASE / "DEPLOYED", MARKER_SHA)
     # The separate closure is an append-only terminal successor, not a journal edit.
     closure = {
         "schemaVersion": 1, "kind": "ED74_RETIREMENT_SUCCESSOR_CLOSURE_V1",
@@ -288,9 +316,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", type=Path, required=True)
     parser.add_argument("--request-sha256", required=True)
+    parser.add_argument("--mode", choices=("qualify", "execute"), required=True)
     args = parser.parse_args()
     try:
         request = json_object(private(args.request, args.request_sha256))
+        if args.mode == "qualify":
+            qualify(request)
+            print(json.dumps({"result": "ED74_RETIREMENT_SUCCESSOR_PRECHECK_PASS",
+                              "executionAuthorized": False}, sort_keys=True))
+            return 0
         print(json.dumps(execute(request), sort_keys=True, separators=(",", ":")))
         return 0
     except (Denied, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
