@@ -15,7 +15,7 @@ def require(value, reason):
 
 
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
-require(state["schemaVersion"] in (6, 7, 8), "schema")
+require(state["schemaVersion"] in (6, 7, 8, 9), "schema")
 require(state["production"]["status"] in (
             "DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED",
             "DEPLOYED_RETENTION_INCOMPLETE"),
@@ -30,22 +30,27 @@ require(state["activeOperationalRecord"] == state["activeDeploymentRecord"],
         "single active record")
 production = state["production"]
 
-if state["schemaVersion"] == 8:
+if state["schemaVersion"] in (8, 9):
     transition = state.get("transitionAudit", {})
-    require(transition == {
+    expected_transition = {
                 "state": "E0_PASS",
                 "closureRecord": "docs/saas/releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json",
                 "historicalProcessesAbsent": True,
                 "signalsSent": 1,
                 "productionPreserved": True,
                 "e1Started": False,
-            }, "transition audit closure")
+            }
+    if state["schemaVersion"] == 9:
+        expected_transition["historicalPm2DumpSha256"] = (
+            "67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171")
+    require(transition == expected_transition, "transition audit closure")
     closure = json.loads((ROOT / transition["closureRecord"]).read_text())
     require(closure.get("status") == "TERMINAL_SUCCESS" and
             closure.get("e0Result") == "E0_PASS" and
             closure.get("after", {}).get("historicalPidsAbsent") is True and
             closure.get("after", {}).get("pm2DumpSha256") ==
-            production.get("pm2", {}).get("dumpSha256") and
+            (transition.get("historicalPm2DumpSha256") or
+             production.get("pm2", {}).get("dumpSha256")) and
             closure.get("after", {}).get("campaignGuard") == {
                 "open": True,
                 "generation": 47,
@@ -53,7 +58,51 @@ if state["schemaVersion"] == 8:
                 "ledgerFault": None,
             }, "transition audit evidence")
 
-if record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE":
+if record.get("recordType") == "API_FRONTEND_WORKER_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
+    release = record["release"]
+    selection = record["selection"]
+    require(state["schemaVersion"] == 9 and record["schemaVersion"] == 1 and
+            record["status"] == "DEPLOYED_RETENTION_INCOMPLETE",
+            "three-component record schema")
+    require(selection["components"] == ["api", "frontend", "worker"] and
+            all(selection[f"{component}ReleaseId"] == release["id"]
+                for component in ("api", "frontend", "worker")),
+            "three-component closed selection")
+    require(production["targetCommit"] == release["target"] and
+            production["releaseId"] == release["id"] and
+            production["api"]["selectedReleaseId"] == release["id"] and
+            production["api"]["entrySha256"] == release["apiEntrypointSha256"] and
+            production["frontend"]["selectedReleaseId"] == release["id"] and
+            production["frontend"]["buildId"] == release["buildId"] and
+            production["worker"]["selectedReleaseId"] == release["id"] and
+            production["worker"]["entrySha256"] == release["workerEntrypointSha256"] and
+            production["worker"]["changed"] is True and
+            production["worker"]["preserved"] is False,
+            "three-component release identity")
+    require(production["database"]["lastDeploymentMigration"] ==
+            release["migration"] == "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+            "three-component no-schema-change deployment")
+    require(production["pm2"]["dumpSha256"] ==
+            record["finalization"]["dumpSha256"] and
+            record["finalization"]["pm2SaveCount"] == 1 and
+            record["finalization"]["lockReleased"] is True,
+            "three-component finalization")
+    require(record["retirement"] == {
+                "state": "PENDING_RETENTION_DEBT",
+                "intentSha256": "250a535c4c756a7fcc087b39a722d5237e04a1150b6720c6b8337cb98d7f5496",
+                "approvedPaths": [], "commandsAttempted": 0,
+                "commandsCompleted": 0, "receiptPresent": False,
+                "denialPredicate": "operational_state_immediate_rollbacks",
+                "localPhysicalEffectsRemaining": 0,
+            }, "three-component zero-command retirement")
+    require(record["builder"]["state"] ==
+            "ROOT_EXTERNALLY_ABSENT_CAPACITY_UNATTRIBUTED_CUSTODY_PRESERVED" and
+            record["builder"]["rootAbsent"] is True and
+            record["builder"]["custodyPreserved"] is True and
+            record["builder"]["terminalReceiptPresent"] is False and
+            record["builder"]["canonicalSanitizedClaimAllowed"] is False,
+            "external builder non-canonical absence")
+elif record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE":
     require(record["schemaVersion"] == 1 and record["status"] == "DEPLOYED_SANITIZED",
             "frontend closure schema")
     require(production["targetCommit"] == record["release"]["target"] and

@@ -1,21 +1,22 @@
 {
-  "schemaVersion": 8,
-  "updatedAtUtc": "2026-11-16T12:12:23Z",
+  "schemaVersion": 9,
+  "updatedAtUtc": "2026-11-17T19:07:40Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
-  "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
-  "activeApiDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
+  "activeDeploymentRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
+  "activeOperationalRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
+  "activeApiDeploymentRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
   "transitionAudit": {
     "state": "E0_PASS",
     "closureRecord": "docs/saas/releases/CONVERTA_E0_HISTORICAL_AUDIT_PROCESS_TERMINATION_2026-11-12.json",
     "historicalProcessesAbsent": true,
     "signalsSent": 1,
     "productionPreserved": true,
-    "e1Started": false
+    "e1Started": false,
+    "historicalPm2DumpSha256": "67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171"
   },
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "ed74CurrentDeployment20261116": {
-    "state": "AWAITING_ACCEPTANCE",
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
     "releaseId": "immutable-ed74c483-external-20261115T162015Z",
     "targetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
     "components": [
@@ -27,23 +28,27 @@
     "originalControlPlane": "4e55c9d93788f93761a4786917a4dd08c90c0d0f",
     "acceptanceSha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
     "humanAcceptance": "PASS_5_OF_5",
-    "saveCount": 0,
-    "finalizeAttemptMutationOccurred": false,
-    "finalizeBlocker": "UNINDEXED_AUTHENTIC_NEXT_IMAGE_RUNTIME_CACHE",
+    "saveCount": 1,
+    "finalizeAttemptMutationOccurred": true,
+    "finalizeBlocker": null,
     "correctivePullRequest": 409,
     "correctiveHead": "617cbb4adc3a09a9d252670177cec0eb77cdefe1",
     "correctiveCi": "PASS_4_OF_4_INTEGRATED",
     "correctiveMerge": "3ac77ac1e8dadebf41e7f427e8128f44d886c25f",
     "correctiveTree": "a2f86c7871a1e18cd5442b1583502ee08f0dadbd",
-    "finalizeRequestPreparationState": "BLOCKED_BY_MISSING_VERSIONED_MATERIALIZER",
-    "finalizeRequestPreparationPredicate": "FINALIZE_REQUEST_CANONICAL_MATERIALIZER_UNAVAILABLE",
+    "finalizeRequestPreparationState": "IMPLEMENTED_AND_PROVEN_BY_ORDINAL_CONTINUATION",
+    "finalizeRequestPreparationPredicate": null,
     "finalizeRequestMaterializerCandidate": "scripts/fixed-current-finalize-request-materialize.py",
-    "finalizeRequestMaterializerCandidateState": "ISOLATED_INTEGRATION_PASS_PENDING_REVIEW_AND_CI",
+    "finalizeRequestMaterializerCandidateState": "INTEGRATED_AND_PROVEN",
     "draftFinalizeRequestSha256": "6e82041470a36d3286efe9edbe14eef06cc47bfc2df76ed5a83778e94538222d",
     "draftFinalizeRequestIsProductionAuthority": false,
     "productionMutationAuthorizedByThisRecord": false,
+    "finalJournalSha256": "2a625c3aa326bb9a868a7ef5c8655abae6e6d5e4fc299b97f83a837e62f5bab2",
+    "pm2DumpSha256": "04674bf54bb55d86db9494d8475b8835163329f0872d53be5f535a6b1f66cc20",
+    "deployedMarkerSha256": "2bf0d3bb8e5c2183a2dbd365a53e6b8d517f0a9368ab8a8c66e8d048c2e52b7a",
+    "builderState": "ROOT_EXTERNALLY_ABSENT_CAPACITY_UNATTRIBUTED_CUSTODY_PRESERVED",
     "supersedesHistoricalRollbackOnlyForCurrentRuntimeSelection": true,
-    "legacyTopLevelDeploymentRecordPointersRemainHistorical": true
+    "legacyTopLevelDeploymentRecordPointersRemainHistorical": false
   },
   "releaseGraphReconciliationControlPlane": {
     "state": "IMPLEMENTED_AND_TESTED_LOCALLY_NOT_OPERATIONAL",
@@ -594,29 +599,31 @@
   "production": {
     "status": "DEPLOYED_RETENTION_INCOMPLETE",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-a838bd33-external-20261110T130618Z",
-    "releasePath": "/opt/re7online/releases/immutable-a838bd33-external-20261110T130618Z",
-    "targetCommit": "a838bd33ea00ea49be52d61e025a36320a4154c1",
+    "releaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "releasePath": "/opt/re7online/releases/immutable-ed74c483-external-20261115T162015Z",
+    "targetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
       "entrySha256Scope": "CURRENT_FIXED_CURRENT_RELEASE",
-      "selectedTargetCommit": "a838bd33ea00ea49be52d61e025a36320a4154c1",
-      "selectedReleaseId": "immutable-a838bd33-external-20261110T130618Z"
+      "selectedTargetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+      "selectedReleaseId": "immutable-ed74c483-external-20261115T162015Z"
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "zguwjBfQne4CTh6dLIlfq",
+      "buildId": "DL7flKybPJUYQKtRLSuch",
       "execMode": "fork_mode",
       "instances": 1,
-      "selectedTargetCommit": "b8d284b6b2e269e6d284dfaaadda0e79a4685572",
-      "selectedReleaseId": "immutable-b8d284b6-vps-20261108T132846Z"
+      "selectedTargetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+      "selectedReleaseId": "immutable-ed74c483-external-20261115T162015Z"
     },
     "worker": {
-      "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
+      "releasePath": "/opt/re7online/releases/immutable-ed74c483-external-20261115T162015Z/worker-runtime",
       "entrySha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
-      "preserved": true,
-      "changed": false,
+      "selectedTargetCommit": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+      "selectedReleaseId": "immutable-ed74c483-external-20261115T162015Z",
+      "preserved": false,
+      "changed": true,
       "restartCount": 0
     },
     "database": {
@@ -634,15 +641,15 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171",
+      "dumpSha256": "04674bf54bb55d86db9494d8475b8835163329f0872d53be5f535a6b1f66cc20",
       "dumpSha256Scope": "CURRENT_FIXED_CURRENT_TOPOLOGY",
-      "currentDumpSha256": "67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171",
-      "rollbackSha256": "2fca8bcc84f897cc1f3df37996f55d92a661ddb3279009090babba6395e2d695",
+      "currentDumpSha256": "04674bf54bb55d86db9494d8475b8835163329f0872d53be5f535a6b1f66cc20",
+      "rollbackSha256": "3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
       "savedExactlyOnce": true,
-      "previousDumpSha256": "2fca8bcc84f897cc1f3df37996f55d92a661ddb3279009090babba6395e2d695",
+      "previousDumpSha256": "3a7566603da04a5bd2ac929b0c9c8993ea5aa587e596d23d8d97c113687eb64a",
       "saveCount": 1,
       "instancesRepresentation": {
         "apiFrontend": "LIVE_ONE_EQUALS_DUMP_OMITTED_ONLY_FOR_AUTHENTICATED_PM2_6_0_14_FORK_MODE_SINGLETON",
@@ -650,18 +657,18 @@
       },
       "representationLookup": "TOP_LEVEL_THEN_PM2_ENV_CANONICAL_AND_ALIASES_WITHOUT_UNPROVEN_DEFAULTS"
     },
-    "markerSha256": "50039ed69dc14260bee1789dc2852aec30d29ec09e140b816aaca3f623e5ecad",
-    "markerSha256Scope": "CURRENT_CAMPAIGN_MULTIBATCH_API_ONLY_RELEASE",
-    "currentMarkerSha256": "50039ed69dc14260bee1789dc2852aec30d29ec09e140b816aaca3f623e5ecad",
+    "markerSha256": "2bf0d3bb8e5c2183a2dbd365a53e6b8d517f0a9368ab8a8c66e8d048c2e52b7a",
+    "markerSha256Scope": "CURRENT_ED74_THREE_COMPONENT_RELEASE",
+    "currentMarkerSha256": "2bf0d3bb8e5c2183a2dbd365a53e6b8d517f0a9368ab8a8c66e8d048c2e52b7a",
     "releaseGraphSha256": "b41713acbb1e4d496d61bb97dbe04b2fb70db381ca58c173035d5e3e76d1d156",
     "operationalStateSha256": "e239d8dc7febee852e11d1921d99322585c1680dee2e289c77fdd14de8aac20a",
     "lastFinalization": {
-      "component": "api",
+      "component": "api,frontend,worker",
       "journalState": "DEPLOYED_RETENTION_INCOMPLETE",
       "lockReleased": true,
       "pm2SaveCount": 1,
-      "retirementReceiptSha256": "1ee1da610324411266591f1dd5e36f1b72da28289ba9b0ad8a4607cf3a2498d7",
-      "markerSha256": "50039ed69dc14260bee1789dc2852aec30d29ec09e140b816aaca3f623e5ecad",
+      "retirementReceiptSha256": null,
+      "markerSha256": "2bf0d3bb8e5c2183a2dbd365a53e6b8d517f0a9368ab8a8c66e8d048c2e52b7a",
       "externalBuilderDebt": true
     },
     "readiness": {
@@ -669,17 +676,15 @@
       "requiredStableSamples": 3,
       "apiResult": "READINESS_PASS",
       "frontendResult": "READINESS_PASS",
-      "activationMethod": "API_ONLY_FIXED_CURRENT_EXISTING_PM2_REGISTRATION"
+      "activationMethod": "THREE_COMPONENT_FIXED_CURRENT_EXISTING_PM2_REGISTRATIONS"
     },
     "fixedCurrentCapabilities": {
       "acceptedComponentSets": [
         "api",
-        "api,frontend"
+        "api,frontend",
+        "api,frontend,worker"
       ],
-      "payloadComponents": [
-        "api",
-        "frontend"
-      ],
+      "payloadComponents": ["api", "frontend", "worker"],
       "apiOnlyPreserves": [
         "frontend",
         "worker"
@@ -688,10 +693,10 @@
     },
     "observation": {
       "source": "DIRECT_LOCAL_AND_VPS_READ_ONLY_RECONCILIATION",
-      "reportedDate": "2026-11-12",
+      "reportedDate": "2026-11-17",
       "timezone": "America/Fortaleza",
       "independentVpsInspectionByDocumentationEditor": false,
-      "scope": "a838bd33 API-only active and accepted; b8d284b6 frontend and worker e2e7f17a preserved; external builder retention debt remains"
+      "scope": "ED74 API, frontend and worker active and accepted; save durable; builder root externally absent without canonical sanitation receipt"
     },
     "p00TenantRuntime": {
       "state": "DB_FIRST_API_DEPLOYED",
@@ -1215,12 +1220,12 @@
   },
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
-    "deploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
-    "apiDeploymentRecord": "docs/saas/releases/CAMPAIGN_MULTIBATCH_ELIGIBILITY_A838BD33_2026-11-11_DEPLOYED_RETENTION_INCOMPLETE.json",
+    "deploymentRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
+    "apiDeploymentRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
     "components": [
       "api",
       "frontend",
-      "worker_preserved"
+      "worker"
     ],
     "migrationApplied": true,
     "persistentStorageReady": true,
@@ -1283,7 +1288,7 @@
     "latestCampaignHomologationState": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN",
     "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md",
     "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK",
-    "frontendPresentationDeploymentRecord": "docs/saas/releases/CAMPAIGN_RECIPIENT_RESULT_B8D284B6_2026-11-08_DEPLOYED_SANITIZED.json",
+    "frontendPresentationDeploymentRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
     "frontendPresentationState": "DEPLOYED_VISUAL_ACCEPTANCE_PASS",
     "draftSelectionReconciliation": {
       "state": "DEPLOYED_ACCEPTED",
@@ -2258,7 +2263,7 @@
     "nextAction": "AUTHORIZE_SEPARATE_EMBEDDED_DATA_MIGRATION_AND_WHOLE_RELEASE_CUSTODY_PLAN_FOR_NINE_LITERAL_RELEASES"
   },
   "updatedAtDate": "2026-11-16",
-  "updatedAtUtcScope": "ED74_AWAITING_FINALIZE_AND_P00D_EXISTING_STANDARD_RECONCILED",
+  "updatedAtUtcScope": "ED74_DEPLOYED_RETENTION_INCOMPLETE_AND_EXTERNAL_BUILDER_STANDARD_RECONCILED",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",
@@ -2322,7 +2327,7 @@
       "capacity": "docs/saas/CAPACITY_RECOVERY_POLICY.md",
       "noRework": "docs/saas/WORKING_PRINCIPLES.md"
     },
-    "legacyValidatorNote": "activeDeploymentRecord/activeOperationalRecord/activeApiDeploymentRecord remain historical a838 references solely for verify-current-state.py schema v8 and E0 closure; this snapshot is the later reported state, and those legacy pointers are not live selections. Migration of schema/validator is a separate future compatibility task."
+    "legacyValidatorNote": "Schema 9 points to the live ED74 three-component record. Historical A838/FA10/E0 records remain immutable evidence and are not active selections."
   },
   "projectAudit20261114": {
     "state": "PROJECT_AUDIT_COMPLETE_BACKLOG_READY",
