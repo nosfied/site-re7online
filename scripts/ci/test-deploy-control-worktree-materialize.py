@@ -15,6 +15,8 @@ TOOL = SCRIPTS / "deploy-control-worktree-materialize.py"
 LIFECYCLE = SCRIPTS / "preparation_artifact_lifecycle.py"
 spec = importlib.util.spec_from_file_location("preparation_artifact_lifecycle", LIFECYCLE)
 lifecycle = importlib.util.module_from_spec(spec); spec.loader.exec_module(lifecycle)
+CONTROL_NAMES = ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py",
+                 "operational_state_contract.py")
 
 
 class DeployControlWorktreeTests(unittest.TestCase):
@@ -26,7 +28,7 @@ class DeployControlWorktreeTests(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "fixture@example.test"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Fixture"], check=True)
         (self.repo / "scripts").mkdir()
-        for name in ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py"):
+        for name in CONTROL_NAMES:
             shutil.copyfile(SCRIPTS / name, self.repo / "scripts" / name)
         (self.repo / ".gitignore").write_text("private-*.txt\n")
         subprocess.run(["git", "-C", str(self.repo), "add", "scripts", ".gitignore"],
@@ -101,7 +103,7 @@ class DeployControlWorktreeTests(unittest.TestCase):
         private = self.destination / "private-control"
         private.mkdir(mode=0o700)
         result = []
-        for name in ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py"):
+        for name in CONTROL_NAMES:
             authority = "scripts/" + name
             path = "private-control/" + name
             shutil.copyfile(self.destination / authority, self.destination / path)
@@ -115,7 +117,7 @@ class DeployControlWorktreeTests(unittest.TestCase):
         output = self.base / "private-custody"; output.mkdir(mode=0o700)
         request = self.base / "consume-request.private.json"
         controls = []
-        for name in ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py"):
+        for name in CONTROL_NAMES:
             source = "scripts/" + name
             controls.append({"source": source, "destination": source,
                 "sha256": hashlib.sha256((self.repo / source).read_bytes()).hexdigest()})
@@ -188,6 +190,10 @@ class DeployControlWorktreeTests(unittest.TestCase):
         copied = output / "scripts/deploy-preparation-admission.py"
         self.assertEqual(copied.read_bytes(), (SCRIPTS / copied.name).read_bytes())
         self.assertEqual(copied.stat().st_mode & 0o777, 0o600)
+        imported = subprocess.run([sys.executable, "-B", str(copied), "--help"],
+                                  capture_output=True, text=True,
+                                  env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+        self.assertEqual(imported.returncode, 0, imported.stderr)
         self.assertTrue((output / "deploy-control-operation-receipt.private.json").exists())
         self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
         lifecycle_path = Path(materialized["lifecyclePath"])
@@ -203,7 +209,7 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         value = json.loads(result.stdout)
         self.assertEqual(value["state"], "SANITIZED")
-        self.assertEqual(len(value["derivedCopyReceipts"]), 2)
+        self.assertEqual(len(value["derivedCopyReceipts"]), len(CONTROL_NAMES))
         for ordinal, item in enumerate(copies, 1):
             attempt = output / f"deploy-control-derived-copy-{ordinal:02d}-attempt.private.json"
             receipt = output / f"deploy-control-derived-copy-{ordinal:02d}-receipt.private.json"
@@ -379,7 +385,7 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         value = json.loads(result.stdout)
         self.assertEqual(value["state"], "SANITIZED")
-        self.assertEqual(len(value["derivedCopyReceipts"]), 2)
+        self.assertEqual(len(value["derivedCopyReceipts"]), len(CONTROL_NAMES))
         self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
         self.assertNotIn(f"worktree {self.destination}",
                          self.git("worktree", "list", "--porcelain").splitlines())

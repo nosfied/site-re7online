@@ -53,7 +53,7 @@ class ReconciliationMaterializerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             custody = Path(temporary) / "custody"
             result = MODULE.materialize(ROOT, custody, SOURCE_COMMIT)
-            self.assertEqual(len(result["readback"]["files"]), 5)
+            self.assertEqual(len(result["readback"]["files"]), 6)
             releases = {item["releaseId"] for item in result["readback"]["descriptors"]}
             self.assertEqual(releases, {
                 "immutable-d436239e-vps-20261026T131821Z",

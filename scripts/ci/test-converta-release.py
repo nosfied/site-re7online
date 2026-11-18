@@ -689,6 +689,7 @@ class ReleaseProducerTest(unittest.TestCase):
             control = evidence / "control"
             control.mkdir(mode=0o700)
             for name in ("generation-retirement.py", "preparation_artifact_lifecycle.py",
+                         "operational_state_contract.py",
                          "converta-release.py", "converta-deploy.py"):
                 shutil.copyfile(ROOT / "scripts" / name, control / name)
                 (control / name).chmod(0o600)

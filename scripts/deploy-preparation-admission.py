@@ -28,6 +28,20 @@ _lifecycle_spec = importlib.util.spec_from_file_location(
 preparation_lifecycle = importlib.util.module_from_spec(_lifecycle_spec)
 _lifecycle_spec.loader.exec_module(preparation_lifecycle)
 
+OPERATIONAL_STATE_CONTRACT_SHA256 = "715dd7f17500ce0734188dd4aab86d5979967b80be79f0a557aec6a2cfad5c1d"
+_operational_contract_path = Path(__file__).resolve().parent / "operational_state_contract.py"
+try:
+    _operational_contract_raw = _operational_contract_path.read_bytes()
+except OSError as error:
+    raise RuntimeError("operational_state_contract_dependency_missing") from error
+if hashlib.sha256(_operational_contract_raw).hexdigest() != OPERATIONAL_STATE_CONTRACT_SHA256:
+    raise RuntimeError("operational_state_contract_dependency_drift")
+_operational_contract_spec = importlib.util.spec_from_file_location(
+    "operational_state_contract", _operational_contract_path)
+operational_state_contract = importlib.util.module_from_spec(_operational_contract_spec)
+exec(compile(_operational_contract_raw, str(_operational_contract_path), "exec"),
+     operational_state_contract.__dict__)
+
 SHA256 = re.compile(r"[0-9a-f]{64}")
 CONTROL_ROLES = {
     "generation-retirement": "generation-retirement.py",
@@ -75,6 +89,10 @@ def digest(raw: bytes) -> str:
 
 def valid_sha(value: Any) -> bool:
     return isinstance(value, str) and SHA256.fullmatch(value) is not None
+
+
+def deny_contract(predicate: str) -> None:
+    raise RuntimeError(predicate)
 
 
 def identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
@@ -427,8 +445,20 @@ def expected_materialization(
     # Required by the copied generation-retirement entrypoint in both admission
     # schemas. Its bytes are pinned by this admission and by the consumer.
     payloads["preparation_artifact_lifecycle.py"] = _lifecycle_raw
+    payloads["operational_state_contract.py"] = _operational_contract_raw
     operational = json.loads(template_raw)
     operational["controlPlaneArtifacts"] = control_projection
+    policy = operational_state_contract.validate_root_policy(
+        controls["root-policy"][1], controls["root-policy"][2],
+        deny_contract,
+    )
+    operational_state_contract.validate_operational_structure(
+        operational,
+        {"generationId": value["generationId"], "releaseId": value["releaseId"],
+         "targetCommit": value["targetCommit"]},
+        policy,
+        deny_contract,
+    )
     operational_raw = canonical(operational)
     payloads[value["operationalStateOutputName"]] = operational_raw
     preparation_contract = None
@@ -455,12 +485,20 @@ def expected_materialization(
         "operationalStateSha256": digest(operational_raw),
         "consumableMaterialized": True,
         "automaticRetry": False,
-        "preparationRuntimeDependencies": [{
-            "consumer": "generation-retirement",
-            "path": str(final_root / "preparation_artifact_lifecycle.py"),
-            "sha256": PREPARATION_LIFECYCLE_SHA256,
-            "copied": True,
-        }],
+        "preparationRuntimeDependencies": [
+            {
+                "consumer": "generation-retirement",
+                "path": str(final_root / "preparation_artifact_lifecycle.py"),
+                "sha256": PREPARATION_LIFECYCLE_SHA256,
+                "copied": True,
+            },
+            {
+                "consumer": "deploy-preparation-admission,generation-retirement",
+                "path": str(final_root / "operational_state_contract.py"),
+                "sha256": OPERATIONAL_STATE_CONTRACT_SHA256,
+                "copied": True,
+            },
+        ],
     }
     if preparation_contract is not None:
         report["preparationArtifactContract"] = {
