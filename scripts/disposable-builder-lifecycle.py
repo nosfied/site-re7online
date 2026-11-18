@@ -46,6 +46,14 @@ PRIVILEGED_GENERATION = "immutable-fa10f4f5-external-20261112T233820Z"
 PRIVILEGED_OBSERVER_PATH = Path("/usr/local/libexec/re7online/capacity-proc-observer.py")
 PRIVILEGED_OBSERVER_COMMAND = "collect-disposable-builder-fa10f4f5"
 PRIVILEGED_INSTALLER_SHA256 = "a39a3e2c9106baf9a1e19be1ab569528288ac4285e3423d59874484473feb9c1"
+PRIVILEGED_OBSERVER_SHA256 = "f154dcfebc3d767cbb319dc2c30cf2b125c178401af3775c4dea93969d1d4003"
+DURABLE_PRIVILEGED_OBSERVER_COMMAND = "collect-disposable-builder-durable-v1"
+DURABLE_PRIVILEGED_OBSERVER_SHA256 = "32c6d63def172e39787afc2969a092a113e265c3dba8c444f5ad77882354c71f"
+DURABLE_PRIVILEGED_INSTALLER_SHA256 = "57402b87750b9071fed781cbca66c4bdcbb675bb19d2ab919f2fed4e61dc1842"
+DURABLE_PRIVILEGED_INSTALLATION_KIND = "DISPOSABLE_BUILDER_DURABLE_PROC_V1_INSTALLATION"
+DURABLE_ROOT_POLICY_SHA256 = "405d613026ce4b65c665f6bd9bdc07d14abc562489460d0417a96878307f4f8c"
+DURABLE_ROOT_CLASS = "DURABLE_LOCAL_EXPLICIT_LIFECYCLE_RETIREMENT"
+DURABLE_ROOT_RETENTION = "PRESERVE_ACROSS_BOOT_UNTIL_EXPLICIT_LIFECYCLE_RETIREMENT"
 CANONICAL_ROOT_POLICY = (Path(__file__).resolve().parent /
                          "release-assets/disposable-builder-root-policy.v1.json")
 
@@ -849,18 +857,31 @@ def _process_start_ticks(pid: int) -> int:
 
 
 def _installed_observer(path: Path, expected: str, report_path: Path,
-                        report_sha256: str) -> dict[str, Any]:
+                        report_sha256: str, *, durable: bool) -> dict[str, Any]:
     require(path == PRIVILEGED_OBSERVER_PATH and is_digest(expected),
             "disposable_privileged_observer_identity")
+    if durable:
+        require(expected == DURABLE_PRIVILEGED_OBSERVER_SHA256,
+                "disposable_privileged_observer_identity")
+        expected_kind = DURABLE_PRIVILEGED_INSTALLATION_KIND
+        expected_installer = DURABLE_PRIVILEGED_INSTALLER_SHA256
+    elif expected == PRIVILEGED_OBSERVER_SHA256:
+        expected_kind = "A838BD33_BUILDER_OBSERVER_INSTALLATION"
+        expected_installer = PRIVILEGED_INSTALLER_SHA256
+    else:
+        require(expected == DURABLE_PRIVILEGED_OBSERVER_SHA256,
+                "disposable_privileged_observer_identity")
+        expected_kind = DURABLE_PRIVILEGED_INSTALLATION_KIND
+        expected_installer = DURABLE_PRIVILEGED_INSTALLER_SHA256
     report, _ = stable_json(report_path, report_sha256,
                             "disposable_privileged_observer_installation")
     helper = report.get("helper")
     require(set(report) == {"schemaVersion", "kind", "state", "installerSha256", "helper",
                             "createdDirectories", "sudoersChanged"} and
             report.get("schemaVersion") == 1 and
-            report.get("kind") == "A838BD33_BUILDER_OBSERVER_INSTALLATION" and
+            report.get("kind") == expected_kind and
             report.get("state") in {"INSTALLED", "UPGRADED", "RECOVERED"} and
-            report.get("installerSha256") == PRIVILEGED_INSTALLER_SHA256 and
+            report.get("installerSha256") == expected_installer and
             report.get("sudoersChanged") is False and
             isinstance(report.get("createdDirectories"), list) and
             isinstance(helper, dict) and
@@ -871,6 +892,15 @@ def _installed_observer(path: Path, expected: str, report_path: Path,
             helper["device"] > 0 and helper["inode"] > 0,
             "disposable_privileged_observer_installation")
     return helper
+
+
+def _durable_observer_profile(contract: dict[str, Any], lifecycle: dict[str, Any]) -> bool:
+    storage = lifecycle.get("rootStorage")
+    return bool(isinstance(storage, dict) and
+                storage.get("policySha256") == DURABLE_ROOT_POLICY_SHA256 and
+                storage.get("rootClass") == DURABLE_ROOT_CLASS and
+                storage.get("retention") == DURABLE_ROOT_RETENTION and
+                storage.get("parentPath") == str(Path(contract["disposableRoot"]).parent))
 
 
 def _attested_observer(mechanism: Any, installed: dict[str, Any]) -> None:
@@ -916,7 +946,9 @@ def privileged_process_observation(args: argparse.Namespace, contract: dict[str,
     observer_sha = getattr(args, "process_observer_sha256", None)
     installation = getattr(args, "process_observer_installation_report", None)
     installation_sha = getattr(args, "process_observer_installation_report_sha256", None)
-    if contract["generationId"] != PRIVILEGED_GENERATION:
+    durable = _durable_observer_profile(contract, lifecycle)
+    legacy_privileged = contract["generationId"] == PRIVILEGED_GENERATION
+    if not durable and not legacy_privileged:
         require(observer is None and observer_sha is None and
                 installation is None and installation_sha is None,
                 "disposable_privileged_observer_scope")
@@ -924,7 +956,10 @@ def privileged_process_observation(args: argparse.Namespace, contract: dict[str,
     require(observer is not None and observer_sha is not None and
             installation is not None and installation_sha is not None,
             "disposable_privileged_observer_required")
-    mechanism = _installed_observer(observer, observer_sha, installation, installation_sha)
+    mechanism = _installed_observer(observer, observer_sha, installation, installation_sha,
+                                    durable=durable)
+    command_name = (DURABLE_PRIVILEGED_OBSERVER_COMMAND if durable else
+                    PRIVILEGED_OBSERVER_COMMAND)
     maximum = 300 if phase == "PREPARE" else 60
     request = {
         "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_PROC_REQUEST", "phase": phase,
@@ -938,7 +973,7 @@ def privileged_process_observation(args: argparse.Namespace, contract: dict[str,
     }
     request_raw = canonical(request)
     command = ["/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
-               str(observer), PRIVILEGED_OBSERVER_COMMAND]
+               str(observer), command_name]
     result = subprocess.run(command, input=request_raw, capture_output=True, check=False)
     require(result.returncode == 0, "disposable_privileged_observer_execution")
     require(len(result.stdout) <= 4 * 1024 * 1024 and not result.stderr,
@@ -969,7 +1004,7 @@ def privileged_process_observation(args: argparse.Namespace, contract: dict[str,
                 "mode": "AUTHENTICATED_SUDO", "uid": contract["ownerUid"],
                 "gid": contract["groupGid"], "user": pwd.getpwuid(contract["ownerUid"]).pw_name,
                 "commandSha256": digest(("/usr/bin/python3 -I -B -E -s " +
-                    str(observer) + " " + PRIVILEGED_OBSERVER_COMMAND).encode())} and
+                    str(observer) + " " + command_name).encode())} and
             isinstance(captured, int) and isinstance(finished, int) and
             0 <= captured <= finished <= now and now - captured <= maximum * 1_000_000_000 and
             isinstance(observation, dict) and observation.get("complete") is True and

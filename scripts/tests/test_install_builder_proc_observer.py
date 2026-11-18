@@ -40,6 +40,7 @@ class BuilderObserverInstaller(unittest.TestCase):
     def test_install_and_recover_without_sudoers_change(self):
         first = installer.install()
         self.assertEqual(first["state"], "INSTALLED")
+        self.assertEqual(first["kind"], "DISPOSABLE_BUILDER_DURABLE_PROC_V1_INSTALLATION")
         self.assertEqual(first["helper"]["mode"], "0500")
         self.assertFalse(first["sudoersChanged"])
         inode = first["helper"]["inode"]
@@ -47,6 +48,12 @@ class BuilderObserverInstaller(unittest.TestCase):
         self.assertEqual(second["state"], "RECOVERED")
         self.assertEqual(second["helper"]["inode"], inode)
         self.assertEqual(second["createdDirectories"], [])
+
+    def test_successor_is_bound_to_the_fa10_helper(self):
+        self.assertEqual(installer.PREDECESSOR_SHA256,
+                         "f154dcfebc3d767cbb319dc2c30cf2b125c178401af3775c4dea93969d1d4003")
+        self.assertEqual(installer.SOURCE_SHA256,
+                         installer.digest(installer.SOURCE.read_bytes()))
 
     def test_foreign_existing_target_is_denied(self):
         self.target.parent.mkdir(parents=True, mode=0o755)

@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Closed installer for the a838bd33 external-builder /proc observer."""
+"""Closed successor installer for the durable-builder /proc observer."""
 from __future__ import annotations
 
 import hashlib
@@ -12,11 +12,11 @@ from typing import Any
 
 INSTALLER = Path(__file__).resolve()
 SOURCE = INSTALLER.with_name("capacity-proc-observer-builder-a838bd33.py")
-SOURCE_SHA256 = "f154dcfebc3d767cbb319dc2c30cf2b125c178401af3775c4dea93969d1d4003"
-PREDECESSOR_SHA256 = "30af1520bfcf1726674a57193b0f8c4b5178fc7be7aec5f0e97b982abd57630b"
+SOURCE_SHA256 = "32c6d63def172e39787afc2969a092a113e265c3dba8c444f5ad77882354c71f"
+PREDECESSOR_SHA256 = "f154dcfebc3d767cbb319dc2c30cf2b125c178401af3775c4dea93969d1d4003"
 TARGET_BASE = Path("/usr/local")
 TARGET = TARGET_BASE / "libexec/re7online/capacity-proc-observer.py"
-TEMPORARY = TARGET.with_name(".capacity-proc-observer.py.a838bd33.installing")
+TEMPORARY = TARGET.with_name(".capacity-proc-observer.py.durable-v1.installing")
 ROOT_UID = 0
 ROOT_GID = 0
 
@@ -235,7 +235,7 @@ def install() -> dict[str, Any]:
         state = "RECOVERED"
     if (current.st_uid, current.st_gid) != (ROOT_UID, ROOT_GID):
         raise RuntimeError("TARGET_IDENTITY")
-    return {"schemaVersion": 1, "kind": "A838BD33_BUILDER_OBSERVER_INSTALLATION",
+    return {"schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_DURABLE_PROC_V1_INSTALLATION",
             "state": state, "installerSha256": digest(installer_raw),
             "helper": target_projection(current_raw, current),
             "createdDirectories": created, "sudoersChanged": False}

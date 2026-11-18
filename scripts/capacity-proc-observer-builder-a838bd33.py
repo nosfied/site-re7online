@@ -110,6 +110,26 @@ DISPOSABLE_SUDO_COMMAND = (
     "/usr/local/libexec/re7online/capacity-proc-observer.py "
     "collect-disposable-builder-fa10f4f5"
 )
+DURABLE_DISPOSABLE_COMMAND = "collect-disposable-builder-durable-v1"
+DURABLE_DISPOSABLE_SUDO_COMMAND = (
+    "/usr/bin/python3 -I -B -E -s "
+    "/usr/local/libexec/re7online/capacity-proc-observer.py "
+    + DURABLE_DISPOSABLE_COMMAND
+)
+DURABLE_ROOT_POLICY_SHA256 = "405d613026ce4b65c665f6bd9bdc07d14abc562489460d0417a96878307f4f8c"
+DURABLE_ROOT_CLASS = "DURABLE_LOCAL_EXPLICIT_LIFECYCLE_RETIREMENT"
+DURABLE_RETENTION = "PRESERVE_ACROSS_BOOT_UNTIL_EXPLICIT_LIFECYCLE_RETIREMENT"
+DURABLE_ALLOWED_PREFIXES = {
+    Path("/home"), Path("/opt/re7online/builders"), Path("/srv/re7online/builders"),
+}
+DURABLE_CONTRACT_KEYS = {
+    "schemaVersion", "generationId", "targetCommit", "repository",
+    "disposableRoot", "custodyRoot", "ownerUid", "groupGid", "rootMode",
+    "budget", "roots", "worktreePath", "locks", "protectedPaths",
+}
+DURABLE_ROOT_KEYS = {
+    "worktrees", "outputs", "releases", "staging", "cache", "temporary", "auxiliary",
+}
 
 
 class Refused(RuntimeError):
@@ -766,6 +786,126 @@ def disposable_request(raw: bytes) -> dict[str, Any]:
     return value
 
 
+def _closed_absolute_path(value: Any, predicate: str) -> Path:
+    if not isinstance(value, str) or not value.startswith("/") or "\x00" in value:
+        refuse(predicate)
+    path = Path(value)
+    if os.path.normpath(value) != value or ".." in path.parts:
+        refuse(predicate)
+    return path
+
+
+def _disjoint_paths(left: Path, right: Path) -> bool:
+    return left != right and left not in right.parents and right not in left.parents
+
+
+def durable_disposable_request(raw: bytes) -> dict[str, Any]:
+    """Authenticate one durable-root lifecycle request without trusting request paths alone."""
+    if len(raw) > MAX_REQUEST_BYTES:
+        refuse("REQUEST_VOLUME")
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        refuse("REQUEST_JSON")
+    expected_fields = {
+        "schemaVersion", "kind", "phase", "generationId", "targetCommit",
+        "contractSha256", "lifecycleSha256", "contract", "lifecycle", "nonce",
+        "consumer", "root", "worktree", "locks", "maxAgeSeconds",
+    }
+    if (not isinstance(value, dict) or set(value) != expected_fields or canonical(value) != raw or
+            value.get("schemaVersion") != 1 or
+            value.get("kind") != "DISPOSABLE_BUILDER_PROC_REQUEST" or
+            value.get("phase") not in {"PREPARE", "EXECUTE"} or
+            value.get("maxAgeSeconds") != (300 if value.get("phase") == "PREPARE" else 60)):
+        refuse("DURABLE_DISPOSABLE_REQUEST_SCHEMA")
+    generation = value.get("generationId")
+    target = value.get("targetCommit")
+    nonce = value.get("nonce")
+    if (not isinstance(generation, str) or not generation.startswith("immutable-") or
+            not isinstance(target, str) or len(target) != 40 or
+            any(char not in "0123456789abcdef" for char in target) or
+            not isinstance(nonce, str) or len(nonce) != SHA256_LENGTH or
+            any(char not in "0123456789abcdef" for char in nonce)):
+        refuse("DURABLE_DISPOSABLE_REQUEST_IDENTITY")
+    try:
+        contract_raw = value["contract"].encode()
+        lifecycle_raw = value["lifecycle"].encode()
+        contract = json.loads(contract_raw)
+        lifecycle = json.loads(lifecycle_raw)
+    except (AttributeError, UnicodeEncodeError, json.JSONDecodeError):
+        refuse("DURABLE_DISPOSABLE_AUTHORITY")
+    if (canonical(contract) != contract_raw or canonical(lifecycle) != lifecycle_raw or
+            digest(contract_raw) != value.get("contractSha256") or
+            digest(lifecycle_raw) != value.get("lifecycleSha256")):
+        refuse("DURABLE_DISPOSABLE_AUTHORITY")
+    if (not isinstance(contract, dict) or set(contract) != DURABLE_CONTRACT_KEYS or
+            contract.get("schemaVersion") != 1 or contract.get("generationId") != generation or
+            contract.get("targetCommit") != target or contract.get("rootMode") != "0700" or
+            type(contract.get("ownerUid")) is not int or type(contract.get("groupGid")) is not int or
+            contract["ownerUid"] <= 0 or contract["groupGid"] < 0):
+        refuse("DURABLE_DISPOSABLE_CONTRACT")
+    root = _closed_absolute_path(contract.get("disposableRoot"), "DURABLE_DISPOSABLE_ROOT")
+    custody = _closed_absolute_path(contract.get("custodyRoot"), "DURABLE_DISPOSABLE_CUSTODY")
+    repository = _closed_absolute_path(contract.get("repository"), "DURABLE_DISPOSABLE_REPOSITORY")
+    root_storage = lifecycle.get("rootStorage")
+    if (not isinstance(root_storage, dict) or
+            root_storage.get("policySha256") != DURABLE_ROOT_POLICY_SHA256 or
+            root_storage.get("rootClass") != DURABLE_ROOT_CLASS or
+            root_storage.get("retention") != DURABLE_RETENTION):
+        refuse("DURABLE_DISPOSABLE_ROOT_POLICY")
+    allowed_raw = root_storage.get("allowedPrefix")
+    allowed = _closed_absolute_path(allowed_raw, "DURABLE_DISPOSABLE_ROOT_POLICY")
+    if (allowed not in DURABLE_ALLOWED_PREFIXES or root == allowed or allowed not in root.parents or
+            not _disjoint_paths(root, custody) or not _disjoint_paths(root, repository) or
+            not _disjoint_paths(custody, repository) or root_storage.get("parentPath") != str(root.parent)):
+        refuse("DURABLE_DISPOSABLE_ROOT_SCOPE")
+    roots = contract.get("roots")
+    if (not isinstance(roots, dict) or set(roots) != DURABLE_ROOT_KEYS or
+            any(_closed_absolute_path(item, "DURABLE_DISPOSABLE_ROOTS").parent != root
+                for item in roots.values()) or
+            roots.get("cache") != str(root / "npm-cache")):
+        refuse("DURABLE_DISPOSABLE_ROOTS")
+    worktree = _closed_absolute_path(contract.get("worktreePath"),
+                                     "DURABLE_DISPOSABLE_WORKTREE")
+    if worktree != Path(roots["worktrees"]) / "source" or value.get("worktree") != str(worktree):
+        refuse("DURABLE_DISPOSABLE_WORKTREE")
+    lock_map = contract.get("locks")
+    expected_lock_paths = ([lock_map.get(key) for key in ("lifecycle", "writer")]
+                           if isinstance(lock_map, dict) and
+                           set(lock_map) == {"lifecycle", "writer"} else [])
+    if (len(expected_lock_paths) != 2 or len(set(expected_lock_paths)) != 2 or
+            any(_closed_absolute_path(item, "DURABLE_DISPOSABLE_LOCKS").parent != custody
+                for item in expected_lock_paths)):
+        refuse("DURABLE_DISPOSABLE_LOCKS")
+    protected = contract.get("protectedPaths")
+    if (not isinstance(protected, list) or len(protected) != len(set(protected)) or
+            any(not _disjoint_paths(root, _closed_absolute_path(item,
+                    "DURABLE_DISPOSABLE_PROTECTED")) or
+                not _disjoint_paths(custody, _closed_absolute_path(item,
+                    "DURABLE_DISPOSABLE_PROTECTED")) for item in protected)):
+        refuse("DURABLE_DISPOSABLE_PROTECTED")
+    if (not isinstance(lifecycle, dict) or lifecycle.get("schemaVersion") != 1 or
+            lifecycle.get("generationId") != generation or lifecycle.get("targetCommit") != target or
+            lifecycle.get("contractSha256") != value.get("contractSha256") or
+            lifecycle.get("state") != "EXPORTED" or lifecycle.get("event") != "AUTHORITY_EXPORTED"):
+        refuse("DURABLE_DISPOSABLE_LIFECYCLE")
+    root_binding = value.get("root")
+    if (not isinstance(root_binding, dict) or root_binding != lifecycle.get("rootIdentity") or
+            root_binding.get("path") != str(root)):
+        refuse("DURABLE_DISPOSABLE_ROOT_BINDING")
+    locks = value.get("locks")
+    if (not isinstance(locks, list) or len(locks) != 2 or
+            [item.get("path") for item in locks if isinstance(item, dict)] != expected_lock_paths):
+        refuse("DURABLE_DISPOSABLE_LOCK_BINDING")
+    consumer = value.get("consumer")
+    if (not isinstance(consumer, dict) or set(consumer) != {"pid", "startTicks"} or
+            type(consumer.get("pid")) is not int or type(consumer.get("startTicks")) is not int or
+            consumer["pid"] <= 0 or consumer["startTicks"] <= 0):
+        refuse("DURABLE_DISPOSABLE_CONSUMER")
+    value["_durable"] = {"root": root, "custody": custody, "contract": contract}
+    return value
+
+
 def _disposable_identity(path: Path, expected: dict[str, Any], owner: tuple[int, int],
                          *, lock: bool = False) -> dict[str, Any]:
     info = path.lstat()
@@ -855,6 +995,53 @@ def collect_disposable(raw: bytes) -> dict[str, Any]:
     }
 
 
+def collect_disposable_durable(raw: bytes) -> dict[str, Any]:
+    request = durable_disposable_request(raw)
+    durable = request.pop("_durable")
+    root: Path = durable["root"]
+    custody: Path = durable["custody"]
+    contract: dict[str, Any] = durable["contract"]
+    root_info = root.lstat()
+    custody_info = custody.lstat()
+    owner = (contract["ownerUid"], contract["groupGid"])
+    if (owner[0] == 0 or (root_info.st_uid, root_info.st_gid) != owner or
+            (custody_info.st_uid, custody_info.st_gid) != owner or custody.is_symlink() or
+            not stat.S_ISDIR(custody_info.st_mode) or stat.S_IMODE(custody_info.st_mode) != 0o700 or
+            root_info.st_dev != request["root"].get("device")):
+        refuse("DURABLE_DISPOSABLE_OWNER")
+    before_root = _disposable_identity(root, request["root"], owner)
+    before_locks = [
+        _disposable_identity(Path(item["path"]), item, owner, lock=True)
+        for item in request["locks"]
+    ]
+    _consumer_holds_locks(request["consumer"], request["locks"], owner)
+    started = time.time_ns()
+    observation = scan_proc([str(root)], owner[0])
+    if observation.get("complete") is not True:
+        refuse("DURABLE_DISPOSABLE_PROCESS_OBSERVATION_INCOMPLETE")
+    if observation.get("references"):
+        refuse("DURABLE_DISPOSABLE_PROCESS_REFERENCE")
+    if observation.get("activeWriters"):
+        refuse("DURABLE_DISPOSABLE_ACTIVE_WRITER")
+    if (_disposable_identity(root, request["root"], owner) != before_root or
+            [_disposable_identity(Path(item["path"]), item, owner, lock=True)
+             for item in request["locks"]] != before_locks):
+        refuse("DURABLE_DISPOSABLE_PATH_CHANGED")
+    _consumer_holds_locks(request["consumer"], request["locks"], owner)
+    return {
+        "schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_PROC_ATTESTATION",
+        "state": "COMPLETE", "phase": request["phase"],
+        "requestSha256": digest(raw), "nonce": request["nonce"],
+        "generationId": request["generationId"], "targetCommit": request["targetCommit"],
+        "contractSha256": request["contractSha256"],
+        "lifecycleSha256": request["lifecycleSha256"],
+        "candidatePaths": [str(root)], "root": before_root,
+        "locks": before_locks, "consumer": request["consumer"],
+        "capturedAtNs": started, "finishedAtNs": time.time_ns(),
+        "observation": observation,
+    }
+
+
 def collect_builder(raw: bytes) -> dict[str, Any]:
     request = builder_request(raw)
     bindings = request["paths"]
@@ -908,6 +1095,20 @@ def collect_builder(raw: bytes) -> dict[str, Any]:
 
 
 def run() -> dict[str, Any]:
+    if sys.argv[1:] == [DURABLE_DISPOSABLE_COMMAND]:
+        mechanism = installation_identity()
+        request_raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
+        request = durable_disposable_request(request_raw)
+        durable = request["_durable"]
+        root = durable["root"].lstat()
+        administrative_execution = builder_administrative_execution(
+            (root.st_uid, root.st_gid), DURABLE_DISPOSABLE_SUDO_COMMAND)
+        result = collect_disposable_durable(request_raw)
+        result["mechanism"] = mechanism
+        result["administrativeExecution"] = administrative_execution
+        if len(canonical(result)) > MAX_RESPONSE_BYTES:
+            refuse("RESPONSE_VOLUME")
+        return result
     if sys.argv[1:] == ["collect-disposable-builder-fa10f4f5"]:
         mechanism = installation_identity()
         root = DISPOSABLE_ROOT.lstat()
