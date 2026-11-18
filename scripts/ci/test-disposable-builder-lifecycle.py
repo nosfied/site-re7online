@@ -113,6 +113,12 @@ class DisposableLifecycleTests(unittest.TestCase):
         (self.worktree / "node_modules").mkdir()
         (self.worktree / "node_modules/module.bin").write_text("derived\n")
         self.populate_success_artifacts()
+        # Historical tests exercise the original unprivileged path. Dedicated
+        # tests below enable the durable privileged profile explicitly.
+        self.durable_profile = patch.object(MODULE, "_durable_observer_profile",
+                                            return_value=False)
+        self.durable_profile.start()
+        self.addCleanup(self.durable_profile.stop)
 
     def tearDown(self) -> None:
         if self.worktree.exists():
@@ -1077,11 +1083,14 @@ class DisposableLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.Denied, "disposable_process_observation_incomplete"):
                 MODULE.prepare(self.args())
 
-    def privileged_context(self, *, reference_phase=None):
+    def privileged_context(self, *, reference_phase=None, durable=False, successor=False):
         original_run = MODULE.subprocess.run
         observations = []
         report = self.custody / "observer-installation.private.json"
-        helper = {"path": str(MODULE.PRIVILEGED_OBSERVER_PATH), "sha256": "a" * 64,
+        successor = successor or durable
+        helper_sha = (MODULE.DURABLE_PRIVILEGED_OBSERVER_SHA256 if successor else
+                      MODULE.PRIVILEGED_OBSERVER_SHA256)
+        helper = {"path": str(MODULE.PRIVILEGED_OBSERVER_PATH), "sha256": helper_sha,
                   "device": 7, "inode": 11, "uid": 0, "gid": 0, "mode": "0500"}
         attested_helper = {
             "path": helper["path"], "sha256": helper["sha256"],
@@ -1095,9 +1104,11 @@ class DisposableLifecycleTests(unittest.TestCase):
                             "identity": {"type": "regular"}},
         }
         write(report, {"schemaVersion": 1,
-                       "kind": "A838BD33_BUILDER_OBSERVER_INSTALLATION",
+                       "kind": (MODULE.DURABLE_PRIVILEGED_INSTALLATION_KIND if successor else
+                                "A838BD33_BUILDER_OBSERVER_INSTALLATION"),
                        "state": "UPGRADED",
-                       "installerSha256": MODULE.PRIVILEGED_INSTALLER_SHA256,
+                       "installerSha256": (MODULE.DURABLE_PRIVILEGED_INSTALLER_SHA256 if successor else
+                                           MODULE.PRIVILEGED_INSTALLER_SHA256),
                        "helper": helper, "createdDirectories": [],
                        "sudoersChanged": False})
 
@@ -1129,15 +1140,95 @@ class DisposableLifecycleTests(unittest.TestCase):
                     "user": MODULE.pwd.getpwuid(self.contract["ownerUid"]).pw_name,
                     "commandSha256": MODULE.digest(("/usr/bin/python3 -I -B -E -s " +
                         str(MODULE.PRIVILEGED_OBSERVER_PATH) + " " +
-                        MODULE.PRIVILEGED_OBSERVER_COMMAND).encode())},
+                        (MODULE.DURABLE_PRIVILEGED_OBSERVER_COMMAND if durable else
+                         MODULE.PRIVILEGED_OBSERVER_COMMAND)).encode())},
             }
             return subprocess.CompletedProcess(command, 0, MODULE.canonical(value), b"")
 
-        patches = (
-            patch.object(MODULE, "PRIVILEGED_GENERATION", self.contract["generationId"]),
-            patch.object(MODULE.subprocess, "run", side_effect=run_observer),
-        )
+        patches = (patch.object(MODULE, "PRIVILEGED_GENERATION",
+                                ("never-durable" if durable else self.contract["generationId"])),
+                   patch.object(MODULE.subprocess, "run", side_effect=run_observer))
         return patches, observations, report
+
+    def test_durable_privileged_profile_bridges_real_consumers_to_terminal_receipt(self) -> None:
+        self.durable_profile.stop()
+        self.export()
+        patches, observations, report = self.privileged_context(durable=True)
+        with patches[0], patches[1]:
+            prepared = MODULE.prepare(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256=MODULE.DURABLE_PRIVILEGED_OBSERVER_SHA256,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes())))
+            authorization, auth_sha = self.authorize(prepared["intentSha256"])
+            result = MODULE.execute(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256=MODULE.DURABLE_PRIVILEGED_OBSERVER_SHA256,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes()),
+                intent=self.custody / "disposable-builder.intent.private.json",
+                intent_sha256=prepared["intentSha256"], authorization=authorization,
+                authorization_sha256=auth_sha))
+        self.assertEqual(result["state"], "SANITIZED")
+        self.assertEqual([item["phase"] for item in observations], ["PREPARE", "EXECUTE"])
+        self.assertEqual(json.loads((self.custody /
+            "disposable-builder.lifecycle.private.json").read_bytes())["event"],
+            "CLOSURE_RECORDED")
+        self.assertTrue((self.custody / "disposable-builder.terminal-receipt.private.json").is_file())
+
+    def test_durable_profile_requires_successor_and_denies_reference_before_effect(self) -> None:
+        self.durable_profile.stop()
+        self.export()
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_privileged_observer_required"):
+            MODULE.prepare(self.args())
+        self.assertFalse((self.custody / "disposable-builder.intent.private.json").exists())
+
+        patches, observations, report = self.privileged_context(
+            durable=True, reference_phase="EXECUTE")
+        with patches[0], patches[1]:
+            prepared = MODULE.prepare(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256=MODULE.DURABLE_PRIVILEGED_OBSERVER_SHA256,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes())))
+            authorization, auth_sha = self.authorize(prepared["intentSha256"])
+            with self.assertRaisesRegex(MODULE.Denied,
+                                        "disposable_privileged_observer_execution"):
+                MODULE.execute(self.args(
+                    process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                    process_observer_sha256=MODULE.DURABLE_PRIVILEGED_OBSERVER_SHA256,
+                    process_observer_installation_report=report,
+                    process_observer_installation_report_sha256=sha(report.read_bytes()),
+                    intent=self.custody / "disposable-builder.intent.private.json",
+                    intent_sha256=prepared["intentSha256"], authorization=authorization,
+                    authorization_sha256=auth_sha))
+        self.assertEqual([item["phase"] for item in observations], ["PREPARE", "EXECUTE"])
+        self.assertFalse((self.custody / "disposable-builder.journal.private.jsonl").exists())
+        self.assertTrue(self.root.exists())
+
+    def test_durable_profile_rejects_legacy_installation_receipt(self) -> None:
+        self.durable_profile.stop()
+        self.export()
+        _, _, report = self.privileged_context(durable=False)
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_privileged_observer_identity"):
+            MODULE.prepare(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256=MODULE.PRIVILEGED_OBSERVER_SHA256,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes())))
+        self.assertFalse((self.custody / "disposable-builder.intent.private.json").exists())
+
+    def test_successor_preserves_the_literal_fa10_profile(self) -> None:
+        self.export()
+        patches, observations, report = self.privileged_context(successor=True)
+        with patches[0], patches[1]:
+            prepared = MODULE.prepare(self.args(
+                process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
+                process_observer_sha256=MODULE.DURABLE_PRIVILEGED_OBSERVER_SHA256,
+                process_observer_installation_report=report,
+                process_observer_installation_report_sha256=sha(report.read_bytes())))
+        self.assertEqual(prepared["state"], "SEALED_FOR_EXPLICIT_AUTHORIZATION")
+        self.assertEqual(observations[0]["generationId"], self.contract["generationId"])
 
     def test_privileged_attestation_requires_runtime_identity_bound_to_installation(self) -> None:
         installed = {"path": str(MODULE.PRIVILEGED_OBSERVER_PATH), "sha256": "a" * 64,
@@ -1164,7 +1255,7 @@ class DisposableLifecycleTests(unittest.TestCase):
         with patches[0], patches[1]:
             prepared = MODULE.prepare(self.args(
                 process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
-                process_observer_sha256="a" * 64,
+                process_observer_sha256=MODULE.PRIVILEGED_OBSERVER_SHA256,
                 process_observer_installation_report=report,
                 process_observer_installation_report_sha256=sha(report.read_bytes())))
             intent = json.loads((self.custody / "disposable-builder.intent.private.json").read_bytes())
@@ -1172,7 +1263,7 @@ class DisposableLifecycleTests(unittest.TestCase):
             authorization, auth_sha = self.authorize(prepared["intentSha256"])
             result = MODULE.execute(self.args(
                 process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
-                process_observer_sha256="a" * 64,
+                process_observer_sha256=MODULE.PRIVILEGED_OBSERVER_SHA256,
                 process_observer_installation_report=report,
                 process_observer_installation_report_sha256=sha(report.read_bytes()),
                 intent=self.custody / "disposable-builder.intent.private.json",
@@ -1193,14 +1284,14 @@ class DisposableLifecycleTests(unittest.TestCase):
         with patches[0], patches[1]:
             prepared = MODULE.prepare(self.args(
                 process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
-                process_observer_sha256="a" * 64,
+                process_observer_sha256=MODULE.PRIVILEGED_OBSERVER_SHA256,
                 process_observer_installation_report=report,
                 process_observer_installation_report_sha256=sha(report.read_bytes())))
             authorization, auth_sha = self.authorize(prepared["intentSha256"])
             with self.assertRaisesRegex(MODULE.Denied, "disposable_privileged_observer_execution"):
                 MODULE.execute(self.args(
                     process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
-                    process_observer_sha256="a" * 64,
+                    process_observer_sha256=MODULE.PRIVILEGED_OBSERVER_SHA256,
                     process_observer_installation_report=report,
                     process_observer_installation_report_sha256=sha(report.read_bytes()),
                     intent=self.custody / "disposable-builder.intent.private.json",
@@ -1220,7 +1311,7 @@ class DisposableLifecycleTests(unittest.TestCase):
                 MODULE.Denied, "disposable_privileged_observer_installation"):
             MODULE.prepare(self.args(
                 process_observer=MODULE.PRIVILEGED_OBSERVER_PATH,
-                process_observer_sha256="a" * 64,
+                process_observer_sha256=MODULE.PRIVILEGED_OBSERVER_SHA256,
                 process_observer_installation_report=report,
                 process_observer_installation_report_sha256=report_sha))
 

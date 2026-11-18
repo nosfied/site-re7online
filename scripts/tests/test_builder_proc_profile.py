@@ -342,5 +342,99 @@ class DisposableBuilderProcProfile(unittest.TestCase):
             self.collect()
 
 
+class DurableDisposableBuilderProcProfile(DisposableBuilderProcProfile):
+    def setUp(self):
+        super().setUp()
+        self.enterContext(patch.object(
+            observer, "DURABLE_ALLOWED_PREFIXES",
+            {*observer.DURABLE_ALLOWED_PREFIXES, Path(tempfile.gettempdir())}))
+        generation = "immutable-durable-proc-v1-external-20261118T000000Z"
+        target = "1" * 40
+        self.contract["generationId"] = generation
+        self.contract["targetCommit"] = target
+        self.lifecycle.update(
+            generationId=generation,
+            targetCommit=target,
+            rootStorage={
+                "policySha256": observer.DURABLE_ROOT_POLICY_SHA256,
+                "rootClass": observer.DURABLE_ROOT_CLASS,
+                "retention": observer.DURABLE_RETENTION,
+                "allowedPrefix": tempfile.gettempdir(),
+                "parentPath": str(self.root.parent),
+            },
+        )
+        self._refresh_authorities()
+
+    def _refresh_authorities(self):
+        contract_raw = observer.canonical(self.contract)
+        self.lifecycle["contractSha256"] = observer.digest(contract_raw)
+        lifecycle_raw = observer.canonical(self.lifecycle)
+        self.request.update(
+            generationId=self.contract["generationId"],
+            targetCommit=self.contract["targetCommit"],
+            contractSha256=observer.digest(contract_raw),
+            lifecycleSha256=observer.digest(lifecycle_raw),
+            contract=contract_raw.decode(),
+            lifecycle=lifecycle_raw.decode(),
+        )
+
+    def collect(self):
+        return observer.collect_disposable_durable(observer.canonical(self.request))
+
+    def test_valid_request_is_bound_to_durable_policy_and_real_locks(self):
+        result = self.collect()
+        self.assertEqual(result["generationId"], self.contract["generationId"])
+        self.assertEqual(result["candidatePaths"], [str(self.root)])
+        self.assertEqual(
+            [(item["device"], item["inode"]) for item in result["locks"]],
+            [(item["device"], item["inode"]) for item in self.request["locks"]])
+
+    def test_unknown_policy_generation_and_root_scope_are_denied(self):
+        variants = (
+            ("policySha256", "f" * 64, "DURABLE_DISPOSABLE_ROOT_POLICY"),
+            ("allowedPrefix", "/var/tmp", "DURABLE_DISPOSABLE_ROOT_SCOPE"),
+        )
+        for key, value, predicate in variants:
+            with self.subTest(key=key):
+                original = self.lifecycle["rootStorage"][key]
+                self.lifecycle["rootStorage"][key] = value
+                self._refresh_authorities()
+                with self.assertRaisesRegex(observer.Refused, predicate):
+                    self.collect()
+                self.lifecycle["rootStorage"][key] = original
+                self._refresh_authorities()
+
+    def test_cross_custody_and_forged_consumer_are_denied(self):
+        original = self.contract["custodyRoot"]
+        self.contract["custodyRoot"] = str(self.root / "inside")
+        self._refresh_authorities()
+        with self.assertRaisesRegex(observer.Refused, "DURABLE_DISPOSABLE_ROOT_SCOPE"):
+            self.collect()
+        self.contract["custodyRoot"] = original
+        self._refresh_authorities()
+        self.request["consumer"]["startTicks"] += 1
+        with self.assertRaisesRegex(observer.Refused, "DISPOSABLE_CONSUMER_IDENTITY"):
+            self.collect()
+
+    def test_durable_sudo_command_is_exact(self):
+        account = observer.pwd.getpwuid(os.getuid())
+        environment = {
+            "SUDO_UID": str(os.getuid()), "SUDO_GID": str(os.getgid()),
+            "SUDO_USER": account.pw_name,
+            "SUDO_COMMAND": observer.DURABLE_DISPOSABLE_SUDO_COMMAND,
+        }
+        with patch.object(observer.os, "geteuid", return_value=0), \
+                patch.dict(observer.os.environ, environment, clear=True):
+            result = observer.builder_administrative_execution(
+                (os.getuid(), os.getgid()), observer.DURABLE_DISPOSABLE_SUDO_COMMAND)
+        self.assertEqual(result["mode"], "AUTHENTICATED_SUDO")
+        environment["SUDO_COMMAND"] += " extra"
+        with patch.object(observer.os, "geteuid", return_value=0), \
+                patch.dict(observer.os.environ, environment, clear=True), \
+                self.assertRaisesRegex(observer.Refused, "BUILDER_SUDO_CALLER_IDENTITY"):
+            observer.builder_administrative_execution(
+                (os.getuid(), os.getgid()), observer.DURABLE_DISPOSABLE_SUDO_COMMAND)
+
+
 if __name__ == "__main__":
     unittest.main()
