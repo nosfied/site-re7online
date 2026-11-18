@@ -1,5 +1,22 @@
 # Estado canônico do Converta
 
+## Builder externo durável homologado sinteticamente — 18/11/2026
+
+**EXTERNAL_BUILDER_STANDARD_INTEGRATED / SYNTHETIC_CLOSURE_VERIFIED.** Os PRs
+#417–#420 integraram raiz durável, paridade estrutural admissão→retirement e o
+observador privilegiado `DISPOSABLE_BUILDER_DURABLE_PROC_V1`. A geração isolada
+`immutable-durable-proc-v1-synthetic-20261118T143839Z` concluiu dois efeitos e
+seis eventos `ATTEMPT → RESULT → VERIFIED`, recuperou 49.152 B/12 inodes e
+terminou `SANITIZED/CLOSURE_RECORDED`; journal `efbd0a0a…020a`, receipt
+`fb4bd2b5…6d49`, lifecycle `febff099…930`, raiz/worktree ausentes, custódia
+preservada e locks livres.
+
+Esta prova não altera produção nem reclassifica a ausência externa da ED74.
+Continuam pendentes apenas reboot real entre `open`/retomada, primeira release
+produtiva usando conjuntamente #417–#420 e replay checks não efetivamente
+invocados na homologação real. Detalhes e limites estão na
+[consolidação definitiva](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md).
+
 ## ED74 ativa, aceita e finalizada com retenção incompleta — 17/11/2026
 
 **DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER ROOT EXTERNALLY

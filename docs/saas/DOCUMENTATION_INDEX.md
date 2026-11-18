@@ -9,7 +9,7 @@
 
 ## Snapshot vigente e política de não retrabalho
 
-- [Consolidação do builder externo e saneamento Git (17/11/2026)](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md) — matriz de implementação, precedentes A838/FA10/ED74, PR #415 e três lacunas preventivas restantes.
+- [Consolidação definitiva do builder externo (17–18/11/2026)](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md) — precedentes A838/FA10/ED74, PRs #375–#420, PR #415 draft histórico e closure sintética durável real.
 - [Padrão preferencial de build externo e ledger VPS + builder (13/11/2026)](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md) — **começar aqui** para capacidade, histórico já retirado, categorias preservadas, dívidas, geração falha, restrições e futura automação; não autoriza exclusões.
 - [Registro ativo ED74](releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json) — API, frontend e worker ativos; aceite/finalização comprovados e ausência externa do builder explicitamente distinta de sanitização canônica.
 - [Registro terminal de fa10f4f5: deploy + closure do builder](releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json) — precedente histórico de closure canônica; não substitui os receipts privados.

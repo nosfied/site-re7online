@@ -36,7 +36,7 @@ Antes de consumir uma tentativa, o health público `https://converta.re7online.c
 
 ## Preparação e retomada sem reiniciar a geração
 
-A automação integral das fronteiras permanece aberta no [P00-D](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md); a documentação não a declara entregue.
+A paridade estrutural admissão→retirement foi integrada pelo #419; o [P00-D](backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md) preserva o histórico e as três provas futuras, sem autorizar nova infraestrutura.
 
 | Fronteira | Prova antes da próxima fase | Retomada |
 | --- | --- | --- |
@@ -47,7 +47,8 @@ A automação integral das fronteiras permanece aberta no [P00-D](backlog/DEPLOY
 | Intenção → execute | autorização delimitada e recaptura sob locks | preservar parciais; continuar só remanescentes |
 | Ativação → fechamento | health/identidade/aceite, um save e retenção | retomar journal sem repetir efeitos |
 
-`observations.pm2` exige exatamente `path`, `sha256` e `fingerprintSha256`. O SHA autentica o executável; o fingerprint vem de jlist pela projeção `_pm2_fingerprint()` do consumidor, nunca do hash do binário/dump/JSON bruto. Recapturar também current/dump/grafo e preservar a fotografia negada. Antes de retenção prepare, confrontar a fotografia inteira com `generation-retirement.py::validate_operational()`. A admissão deve ser corrigida/testada contra o consumidor real antes da próxima geração normal; fixtures sem blocos obrigatórios não qualificam a fronteira.
+Sequência única: `qualification → admission → open → build → verify → export → transfer → install → preflight → activate → acceptance → finalize → retirement → closure`. Em cada fase, o executor versionado reabre inputs/hashes e precondições, executa apenas o efeito da fase, publica journal/receipt exclusivo, para no predicado nominal e retoma pelo journal. Build, upload, activate, `pm2 save` e retirement são não repetíveis; autorização administrativa, ativação, aceite/finalize e retirada são gates separados. Sucesso terminal exige health/identidades, receipt, raiz/worktree ausentes, custódia preservada e locks livres.
+`observations.pm2` exige exatamente `path`, `sha256` e `fingerprintSha256`. O SHA autentica o executável; o fingerprint vem de jlist pela projeção `_pm2_fingerprint()` do consumidor, nunca do hash do binário/dump/JSON bruto. Recapturar também current/dump/grafo e preservar a fotografia negada. Antes de retenção prepare, a admissão e o retirement aplicam o validador estrutural compartilhado; o retirement conserva a recaptura física integral. Fixtures sem blocos obrigatórios não qualificam a fronteira.
 
 Negativa de schema exige correção e regressão; fotografia vencida exige leitura dirigida; mudança real exige requalificação; capacidade exige separar orçamento/reserva de meta adicional; efeito parcial exige journal/receipt. `FAILED` preserva output/evidências/review; sucessora usa ID, raiz, custódia e output novos e protege a predecessora. Sanitização exige lifecycle e autorização. Retry cego, edição de prova e repetição de efeitos são proibidos. Uma transação `ROLLED_BACK` é terminal e não pode ser reaberta. A candidata instalada exige transação independente, destinos exclusivos ausentes, fotografia/preflight novos e autorização própria. Antes da janela 3/3, a CI deve atravessar num único ensaio o driver real e PM2 6.0.14, incluindo `delete → start`, logs efetivos, falha, rollback inverso e retomada sem duplicar efeitos; provas separadas e `FakeHost` não satisfazem sozinhos esse gate.
 
@@ -170,21 +171,22 @@ diferença de árvore exige CI própria do target resultante; não criar commit 
 apenas para fabricar execução. Para `worker-package-audit`, usar somente `scripts/capacity-recovery-worker-package-materialize.py` copiado, sem opção: par comprovado instalador `7b92d8b9…`/helper `a7f1a068…`, prova privada do instalador (sem ler o helper `root:root 0500`), `/usr/bin/node`, PM2 original por FD, fotografia final antes de seu SHA, request novo, readback de fotografia/request/manifesto e fingerprint pela projeção canônica do consumidor; caminho NVM, template anterior, helper presumido, fallback ao checkout ou binding divergente negam antes do supervisor, e custódias anteriores permanecem terminais. Para `ef7db111-prep`, usar o mesmo materializador exclusivamente com `--profile ef7db111-deploy-control` e o par separado instalador `757dc2f2…`/helper `89650e62…`; o instalador fechado `install-capacity-proc-observer-ef7.py` autentica primeiro o helper worker instalado por caminho/SHA/device/inode/UID/GID/modo, preserva sudoers `a1928823…` byte-exato e nega identidade desconhecida antes da substituição. Reutilizar supervisor/contenção/locks/autorização/journal/receipt, materializar consumidor, supervisor, observador, política e manifesto fixo em custódia exclusiva, finalizar fotografia antes do request 4/4 e reabrir todos os bindings; nunca copiar payloads, cruzar pares de perfil, aceitar a raiz de `deploy-control`, o worktree inteiro, um quinto caminho ou converter a publicação em autorização de fase. O percurso schema 3 e 34.298 efeitos completos/parciais foi ensaiado localmente; isso não substitui instalação, audit ou autorização produtiva. Para as duas árvores CRM inativas, usar exclusivamente `--profile inactive-crm-staging`: não há manifesto de disposição separado, pois os dois caminhos e os bindings das autoridades estão fixados no consumidor integrado. O instalador `install-capacity-proc-observer-crm-staging.py` aceita somente o helper ef7 `89650e62…` na identidade histórica autenticada, instala o helper `fb83ba7c…`, preserva o sudoers e nega par divergente antes da substituição; se a troca sincronizada perder apenas a prova, a mesma versão aceita somente o sucessor CRM exato `root:root 0500`, reautentica o mesmo inode e emite `RECOVERED` sem nova substituição. Capturar sua saída completa em `helper-installation-report.private.txt` e executar o materializador com `--capture-helper-proof --profile inactive-crm-staging`; somente após o readback por `helper_binding()` usar `--profile inactive-crm-staging` para fotografia/request. O request deve conter exatamente dois candidatos, sem `dispositionManifest`, e seguir fotografia → request → readback → selagem; instalação não autoriza audit, e audit não autoriza prepare ou retirada. Nesse perfil, `release-graph.private.json` é saída exclusiva: o materializador autentica caminho/SHA do grafo rico vigente, produz schema 3 e o consumidor copiado reabre a fonte e rederiva inventário e proteção antes da selagem. `ea3/d41` permanecem no inventário e só seguem sem papel operacional; omitir ativo, rollback, retorno transitivo, candidate ou rollback imediato nega antes do supervisor. A custódia encerrada por `LIVE_RELEASE_GRAPH_SCHEMA` é terminal e não fornece request, fotografia ou grafo reutilizável.
 Para `b58ed195-v3-once`, o perfil de captura `empty-transaction-preservation` autentica exclusivamente o par integrado `install-capacity-proc-observer-empty-transaction.py`/`capacity-proc-observer.py`, o predecessor CRM, `INSTALLED` ou `RECOVERED`, o sudoers e a identidade física atual, grava a prova por criação exclusiva e a reabre por `helper_binding()`, sem admitir materialização de audit/candidatos. Com `umask 077`, executar `sudo python3 <custodia-exclusiva>/control/scripts/install-capacity-proc-observer-empty-transaction.py > <custodia-exclusiva>/helper-installation-report.private.txt` e depois `python3 <custodia-exclusiva>/control/scripts/capacity-recovery-worker-package-materialize.py --capture-helper-proof --profile empty-transaction-preservation`; reabrir modo, proprietário e SHA do relatório/prova. Instalação/captura não autorizam receipt; preservação não autoriza audit do cache.
 
-```bash
-TARGET=<sha-completo>
-RELEASE=immutable-<sha-curto>-<timestamp-utc>
-EPOCH=$(git show -s --format=%ct "$TARGET")
-python3 scripts/converta-release.py build \
-  --repo "$PWD" --target "$TARGET" --release-id "$RELEASE" \
-  --components api,frontend --output <saida-exclusiva> \
-  --source-date-epoch "$EPOCH" \
-  --capacity-contract <capacity-contract.private.json> \
-  --root-policy config/deploy-artifact-roots.json \
-  --root-policy-sha256 <sha256-autenticado>
-python3 scripts/converta-release.py verify \
-  --package <saida-exclusiva>/$RELEASE.tar.xz \
-  --target "$TARGET" --release-id "$RELEASE" --components api,frontend
-```
+| Fase | Executor, entrada e efeito | Sucesso, negativa, retomada e autorização |
+| --- | --- | --- |
+| qualification | operador + Git/CI/política/toolchain; autentica target e orçamento | matriz PASS; drift nega; sem efeito e sem autorização produtiva |
+| admission | `deploy-preparation-admission.py` + projeção/provas; publica custódia privada | schema compartilhado PASS; negativa não publica; novo destino exclusivo |
+| open | `disposable-builder-lifecycle.py` + contrato/política; aloca raiz durável | lifecycle `OPEN`; raiz/tmpfiles/lock divergente nega; ato de build separado |
+| build | `converta-release.py` + target/worktree; produz uma vez | pacote/manifesto/índice; falha vira dívida; nunca repetir o mesmo efeito |
+| verify | mesmo produtor + pacote; verifica árvore/entrypoints | `RELEASE VERIFIED`; divergência nega; pacote permanece evidência |
+| export | lifecycle + artefatos; copia autoridade para custódia | export receipt; parcial nega; retoma sem rebuild |
+| transfer | transporte autenticado + pacote; upload único | readback/hash; divergência nega; autorização específica |
+| install | `converta-release.py install` + pacote; instala inerte | receipt/identidade; não ativa; recuperação só por manifesto fechado |
+| preflight | driver + runtime/bindings/retornos; observa sem promover | journal PASS; negativa preserva; ativação exige owner |
+| activate | driver + preflight/lock; promove componentes na ordem selada | readiness/identidade; falha usa rollback e journal; não repetir |
+| acceptance | materializador + journal/testes; vincula aceite humano/técnico | aceite autenticado; não executa save; finalize exige owner |
+| finalize | wrapper/driver + aceite; faz no máximo um `pm2 save` e marker | journal terminal ou retomável; save durável nunca se repete |
+| retirement | lifecycle/retirement + intent e `AUTHORIZE_ONCE`; efeitos literais | `ATTEMPT→RESULT→VERIFIED`; divergência para; continua remanescentes |
+| closure | lifecycle + journal/receipt/inventário; confirma ausência | `SANITIZED/CLOSURE_RECORDED`, custódia preservada e locks livres |
 
 `RELEASE BUILT` e `RELEASE VERIFIED` são obrigatórios. Diagnosticar primeiro
 `failure-evidence.private`; seu conteúdo não vai para stdout ou Git. Rebuild cria
@@ -197,8 +199,6 @@ O produtor exclui uploads/dados operacionais da aplicação, mas preserva depend
 sob `node_modules`, inclusive diretórios internos chamados `uploads`. O índice fechado
 e a extração independente comprovam que não há cache, segredo, worker ou arquivo
 adicional.
-
-
 ### Extração e verificação sob a máscara operacional
 
 O produtor é arquivo regular, legível, não symlink e autenticado por SHA-256;
