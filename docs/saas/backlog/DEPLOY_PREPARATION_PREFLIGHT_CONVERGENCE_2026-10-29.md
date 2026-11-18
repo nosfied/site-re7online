@@ -1,6 +1,6 @@
 # Plano P00 — convergência da preparação de deploy
 
-**Status:** P00 / PARCIALMENTE IMPLEMENTADO / PREVENÇÃO E2E AINDA ABERTA  
+**Status:** P00-D INTEGRADO / CLOSURE SINTÉTICA REAL COMPROVADA / PROVAS PRODUTIVAS FUTURAS
 **Data de abertura:** 29/10/2026  
 **Atualização de 30/10/2026:** convergência ainda aberta; nova lacuna confirmada entre admissão e schema de observações do consumidor. Entregas #275/#277/#278/#285/#287/#288 são preservadas; não comprovam fechamento integral da dívida.
 
@@ -682,3 +682,22 @@ repetir. O produtor de finalização está integrado e comprovado; não reabrir
 build, upload, instalação, preflight, activate, aceite ou finalização. As três
 lacunas acima são preventivas para gerações futuras e não autorizam novo projeto
 ou mutação produtiva.
+
+## Fechamento P00-D — 18/11/2026
+
+Os PRs #417–#420 superam a classificação preventiva anterior sem apagar seu
+histórico: raiz durável e política `tmpfiles` foram integradas; a camada
+estrutural de `validate_operational()` passou a ser compartilhada pela admissão e
+pelo retirement; e o perfil privilegiado durável foi instalado por sucessão
+autenticada. A cadeia real sintética terminou em `SANITIZED/CLOSURE_RECORDED`,
+receipt `fb4bd2b5dc833825fafe62492d881f3f5018f7748863c62311a7197b5b6a6d49`,
+com raiz/worktree ausentes, custódia preservada e locks livres.
+
+- paridade schema/fingerprint: `INTEGRATED_AND_TESTED` (#419);
+- raiz durável e `/proc` privilegiado: `REAL_SYNTHETIC_HOMOLOGATION_PASS` (#417/#420);
+- interrupção/retomada e três perfis: `INTEGRATED_AND_TESTED`;
+- reboot real e primeira release produtiva conjunta: `PENDING_FUTURE_OPERATIONAL_EVIDENCE`;
+- replay não invocado no host real: `PENDING_DIRECT_EVIDENCE`.
+
+P00-D deixa de ser frente de desenvolvimento. As provas pendentes acompanham a
+próxima atualização autorizada; não justificam novo pipeline ou PR preventivo.

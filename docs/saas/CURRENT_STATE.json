@@ -1,6 +1,6 @@
 {
   "schemaVersion": 9,
-  "updatedAtUtc": "2026-11-17T19:07:40Z",
+  "updatedAtUtc": "2026-11-18T18:00:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
   "activeOperationalRecord": "docs/saas/releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json",
@@ -15,6 +15,34 @@
     "historicalPm2DumpSha256": "67006b026e108d7ab1cb728624e0eb790434227dda5d9117193fcfd835be2171"
   },
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+  "externalBuilderDurableHomologation20261118": {
+    "state": "EXTERNAL_BUILDER_STANDARD_INTEGRATED_SYNTHETIC_CLOSURE_VERIFIED",
+    "generationId": "immutable-durable-proc-v1-synthetic-20261118T143839Z",
+    "integratedControlPlane": "c3e97072afdd7dda9e0e58825a79cec4ecc5d88f",
+    "rootPolicySha256": "405d613026ce4b65c665f6bd9bdc07d14abc562489460d0417a96878307f4f8c",
+    "consumerSha256": "0d5a8d4f168ad5eb6c60800e6aa53642f0b75d4df9098d6644dfdb36733be069",
+    "helperSha256": "32c6d63def172e39787afc2969a092a113e265c3dba8c444f5ad77882354c71f",
+    "installerSha256": "57402b87750b9071fed781cbca66c4bdcbb675bb19d2ab919f2fed4e61dc1842",
+    "installationReceiptSha256": "37e828a9cacc447eac9e4aa09da18c2d03adb98a5f268c2a8facee1d82fc5b1a",
+    "exportReceiptSha256": "0abc10ad28496b4fc17d718e7aa2ae306b8a057f0063bf080dac6bd69ae06e70",
+    "authorizationSha256": "acb36668b1a9cc9ae29f3c590f61a6c7eed5816e378f54a5eabfb17f6add5d71",
+    "journalSha256": "efbd0a0a9b08024e62cdcf92b03b772ed902749fde78e9b61f11fb6e7ce6020a",
+    "terminalReceiptSha256": "fb4bd2b5dc833825fafe62492d881f3f5018f7748863c62311a7197b5b6a6d49",
+    "lifecycleSha256": "febff099a94c3fa568ac45854730ea78a122ee8e73889c4cd0af35918ba67930",
+    "commandsCompleted": 2,
+    "journalEvents": 6,
+    "recoveredPhysicalBytes": 49152,
+    "recoveredInodes": 12,
+    "rootAndGitWorktreeAbsent": true,
+    "custodyPreserved": true,
+    "locksFree": true,
+    "productionMutationPerformed": false,
+    "pendingEvidence": [
+      "real reboot between open and resume",
+      "first productive release jointly using PR417 through PR420",
+      "replay checks not actually invoked in the real synthetic homologation"
+    ]
+  },
   "ed74CurrentDeployment20261116": {
     "state": "DEPLOYED_RETENTION_INCOMPLETE",
     "releaseId": "immutable-ed74c483-external-20261115T162015Z",
@@ -2262,8 +2290,8 @@
     "destructiveCommandsExecuted": 0,
     "nextAction": "AUTHORIZE_SEPARATE_EMBEDDED_DATA_MIGRATION_AND_WHOLE_RELEASE_CUSTODY_PLAN_FOR_NINE_LITERAL_RELEASES"
   },
-  "updatedAtDate": "2026-11-16",
-  "updatedAtUtcScope": "ED74_DEPLOYED_RETENTION_INCOMPLETE_AND_EXTERNAL_BUILDER_STANDARD_RECONCILED",
+  "updatedAtDate": "2026-11-18",
+  "updatedAtUtcScope": "ED74_DEPLOYED_RETENTION_INCOMPLETE_AND_EXTERNAL_BUILDER_SYNTHETIC_CLOSURE_VERIFIED",
   "lastOperationalChange": {
     "state": "GENERAL_OPERATIONS_OPEN",
     "front": "NOV03_RECONCILIATION_AND_GLOBAL_CAMPAIGN_GUARD_REOPENING",

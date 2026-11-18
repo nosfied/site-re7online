@@ -773,6 +773,18 @@ mantém os dois locks durante a coleta, usa prova distinta em `prepare` e `execu
 e nega cobertura incompleta, referência, writer, identidade divergente ou prova
 vencida antes do primeiro `ATTEMPT`. O sudoers existente permanece byte-intacto.
 
+Para novas raízes duráveis, o perfil fechado
+`collect-disposable-builder-durable-v1` autentica geração, target, raiz,
+lifecycle, custódia, locks, fase, processo solicitante e nonce. O helper
+`32c6d63d…c71f` sucedeu exclusivamente o FA10 `f154dcfe…4003`, pelo instalador
+`57402b87…1842`, receipt `37e828a9…5b1a`, preservando sudoers e comandos
+históricos. A homologação sintética
+`immutable-durable-proc-v1-synthetic-20261118T143839Z` terminou com receipt
+`fb4bd2b5…6d49`, lifecycle `febff099…930`, 49.152 B/12 inodes atribuídos, raiz e
+worktree ausentes, custódia preservada e locks livres. O teste incluiu negativa
+real por processo referenciando a raiz. Reboot real e primeira release produtiva
+sob o conjunto #417–#420 continuam provas futuras; não invalidam o receipt.
+
 O handoff externo schema 3 representa uma autoridade exportada bem-sucedida ainda
 aberta: contrato e lifecycle do produtor, contrato e lifecycle descartáveis,
 export receipt, pacote, manifesto, índice e instalação precisam concordar por

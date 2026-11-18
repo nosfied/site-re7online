@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / ED74 ATIVA EM API+FRONTEND+WORKER / BUILD EXTERNO COMPROVADO**
+**Status: CANÔNICO / ED74 ATIVA / BUILDER EXTERNO DURÁVEL HOMOLOGADO SINTETICAMENTE**
 
 Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação.
@@ -17,6 +17,13 @@ componentes, BUILD_ID `DL7flKybPJUYQKtRLSuch`, com um `pm2 save`, marker
 builder ficou externamente ausente sem receipt canônico; por isso a conclusão é
 `DEPLOYED_RETENTION_INCOMPLETE`, com custódia preservada e capacidade não
 atribuída, e não `DEPLOYED_SANITIZED`.
+
+**Fechamento do padrão em 18/11/2026:** os PRs #417–#420 integraram política de
+raiz durável, schema compartilhado admissão→retirement e observador privilegiado
+durável. Uma geração sintética real percorreu `open`, export, negativa por
+referência ativa, `prepare`, autorização e `execute` até receipt terminal, sem
+efeito produtivo. Isso homologa o lifecycle sintético; reboot real e a primeira
+release produtiva conjunta permanecem provas futuras, não lacunas de arquitetura.
 
 **Incidente histórico 3/3 de 15/11/2026:** a primeira tentativa de promover `ed74c483` terminou em
 rollback canônico verificado. API/frontend `fa10f4f5` e worker `e2e7f17a` foram
@@ -38,9 +45,8 @@ inertemente, validar fronteiras/retornos/cache, ativar só os componentes
 impactados, aceitar e salvar uma vez, encerrar lifecycle com recibo. A cadeia
 `producer → installer → driver → wrapper → finalize → retirement` deve passar
 em ensaio integrado representativo antes da primeira mutação, incluindo cache
-Next gerado durante execução. O roadmap de automação exige um controlador
-durável, mas não justifica criar outro mecanismo paralelo ou fazer experimentos
-no runtime ativo.
+Next gerado durante execução. O lifecycle durável integrado é o controlador
+vigente; não criar mecanismo paralelo nem fazer experimentos no runtime ativo.
 
 ## Topologia canônica
 
