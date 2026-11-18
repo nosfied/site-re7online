@@ -152,6 +152,7 @@ class PrepareMaterializationFixture:
                 "controlPlaneArtifacts": [
                     {"path": str(self.custody / "control" / name), "sha256": sha(ROOT / "scripts" / name), "copied": True}
                     for name in ("generation-retirement.py", "preparation_artifact_lifecycle.py",
+                                 "operational_state_contract.py",
                                  "capacity-recovery.py", "converta-release.py")],
                 "dependencies": [],
                 "deploymentState": {"state": item["deploymentState"]},
@@ -545,6 +546,7 @@ class LegacyP00PrepareMaterializationFixture:
                 "controlPlaneArtifacts": [{"path": str(self.custody / "control" / name),
                     "sha256": sha(ROOT / "scripts" / name), "copied": True}
                     for name in ("generation-retirement.py", "preparation_artifact_lifecycle.py",
+                                 "operational_state_contract.py",
                                  "capacity-recovery.py", "converta-release.py")],
                 "dependencies": [], "deploymentState": {"state": "SUPERSEDED"},
                 "canonicalRoots": {"repository": str(self.repo),

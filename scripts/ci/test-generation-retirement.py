@@ -862,9 +862,11 @@ class LegacyD7WorktreeClosureFixture:
         self.control = self.root / "control"; self.control.mkdir(mode=0o700)
         self.tool = self.control / "generation-retirement.py"
         self.dependency = self.control / "preparation_artifact_lifecycle.py"
+        self.structural_dependency = self.control / "operational_state_contract.py"
         shutil.copyfile(TOOL, self.tool)
         shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", self.dependency)
-        self.tool.chmod(0o500); self.dependency.chmod(0o600)
+        shutil.copyfile(ROOT / "scripts/operational_state_contract.py", self.structural_dependency)
+        self.tool.chmod(0o500); self.dependency.chmod(0o600); self.structural_dependency.chmod(0o600)
         spec = importlib.util.spec_from_file_location("legacy_d7_copied_consumer", self.tool)
         assert spec and spec.loader
         self.module = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.module)
@@ -935,9 +937,11 @@ class LegacyP00InstalledBatchFixture:
         self.tool = self.control / "generation-retirement.py"
         self.verifier = self.control / "converta-release.py"
         self.dependency = self.control / "preparation_artifact_lifecycle.py"
+        self.structural_dependency = self.control / "operational_state_contract.py"
         shutil.copyfile(TOOL, self.tool)
         shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", self.dependency)
-        self.tool.chmod(0o500); self.dependency.chmod(0o600)
+        shutil.copyfile(ROOT / "scripts/operational_state_contract.py", self.structural_dependency)
+        self.tool.chmod(0o500); self.dependency.chmod(0o600); self.structural_dependency.chmod(0o600)
         self.releases = []
         verifier_values = {}
         for index, cache in enumerate((True, False, False, True), 1):
@@ -1591,8 +1595,10 @@ class GenerationRetirementTest(unittest.TestCase):
             control = Path(directory)
             consumer = control / TOOL.name
             dependency = control / "preparation_artifact_lifecycle.py"
+            structural_dependency = control / "operational_state_contract.py"
             shutil.copyfile(TOOL, consumer)
             shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", dependency)
+            shutil.copyfile(ROOT / "scripts/operational_state_contract.py", structural_dependency)
             before = {path.name: path.read_bytes() for path in control.iterdir()}
             result = subprocess.run(
                 [sys.executable, "-I", str(consumer), "--help"],
@@ -3213,12 +3219,16 @@ class GenerationRetirementTest(unittest.TestCase):
             materialized.mkdir(mode=0o700)
             copied_tool = materialized / "generation-retirement.py"
             copied_dependency = materialized / "preparation_artifact_lifecycle.py"
+            copied_structural_dependency = materialized / "operational_state_contract.py"
             copied_consumer = materialized / "capacity-recovery.py"
             shutil.copyfile(TOOL, copied_tool)
             shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py",
                             copied_dependency)
+            shutil.copyfile(ROOT / "scripts/operational_state_contract.py",
+                            copied_structural_dependency)
             shutil.copyfile(ROOT / "scripts/capacity-recovery.py", copied_consumer)
             copied_tool.chmod(0o500); copied_dependency.chmod(0o600)
+            copied_structural_dependency.chmod(0o600)
             copied_consumer.chmod(0o600)
             self.assertEqual(sha(copied_tool), sha(TOOL))
             self.assertEqual(sha(copied_consumer), sha(ROOT / "scripts/capacity-recovery.py"))

@@ -236,6 +236,18 @@ class AdapterTests(unittest.TestCase):
             source = self.base / (role + '.source')
             if role == 'generation-retirement':
                 source.write_bytes((HERE / 'generation-retirement.py').read_bytes())
+            elif role == 'root-policy':
+                def policy_entry(name):
+                    return {'path': str(self.base / name), 'ownerUid': os.geteuid(),
+                            'groupGid': os.getegid(), 'allowedModes': ['0700']}
+                source.write_text(json.dumps({'schemaVersion': 1, 'canonicalRoots': {
+                    'repository': policy_entry('repository'),
+                    'worktrees': policy_entry('worktrees'),
+                    'outputs': policy_entry('outputs'),
+                    'releases': policy_entry('releases'),
+                    'staging': policy_entry('staging'),
+                    'evidence': [policy_entry('evidence')],
+                }}, sort_keys=True, separators=(',', ':')) + '\n')
             else:
                 source.write_text(role)
             source.chmod(0o644)
@@ -254,7 +266,32 @@ class AdapterTests(unittest.TestCase):
                    'preparationReservationRoot': str(self.parent),
                    'preparationArtifacts': [artifact],
                    'preparationProducerArtifacts': producer_inputs}
-        template = json.dumps({'schemaVersion': 2, 'controlPlaneArtifacts': []}).encode()
+        canonical_roots = {
+            'repository': str(self.base / 'repository'),
+            'worktrees': str(self.base / 'worktrees'),
+            'outputs': str(self.base / 'outputs'),
+            'releases': str(self.base / 'releases'),
+            'staging': str(self.base / 'staging'),
+            'evidence': [str(self.base / 'evidence')],
+        }
+        template = json.dumps({
+            'schemaVersion': 2, 'generationId': generation, 'releaseId': 'release',
+            'targetCommit': '1' * 40, 'gitRepository': str(self.base / 'repository'),
+            'currentPaths': [], 'pm2LivePaths': [], 'pm2DumpPaths': [],
+            'activeReleases': [], 'rollbackReleases': [],
+            'transitiveReturnReleases': [], 'candidateReleases': [],
+            'installedVerifiedReleases': [], 'supersededCandidates': [],
+            'controlPlaneArtifacts': [], 'dependencies': [],
+            'deploymentState': {'state': 'DEPLOYED'},
+            'canonicalRoots': canonical_roots,
+            'observations': {
+                'currentLinks': [],
+                'pm2': {'path': str(self.base / 'pm2'), 'sha256': '2' * 64,
+                        'fingerprintSha256': '3' * 64},
+                'dump': {'path': str(self.base / 'dump'), 'sha256': '4' * 64},
+                'releaseGraph': {'path': str(self.base / 'graph'), 'sha256': '5' * 64},
+            },
+        }, sort_keys=True, separators=(',', ':')).encode()
         template_path = self.base / 'template'; template_path.write_bytes(template); template_path.chmod(0o600)
         producer_errors = []
         producer = admission.validate_preparation_producer(

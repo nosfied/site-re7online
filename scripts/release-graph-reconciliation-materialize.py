@@ -23,6 +23,7 @@ GIT_SHA1 = re.compile(r"[0-9a-f]{40}")
 CONTROL_FILES = (
     "scripts/generation-retirement.py",
     "scripts/preparation_artifact_lifecycle.py",
+    "scripts/operational_state_contract.py",
     "scripts/capacity-recovery.py",
     "config/legacy-generation-d436239e-v1-preserve.json",
     "config/legacy-generation-f1602787-v1-preserve.json",

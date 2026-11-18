@@ -451,9 +451,13 @@ class DeployFixture(unittest.TestCase):
         control.mkdir()
         tool = control / "generation-retirement.py"
         dependency = control / "preparation_artifact_lifecycle.py"
+        structural_contract = control / "operational_state_contract.py"
         tool.write_bytes((ROOT / "scripts/generation-retirement.py").read_bytes())
         dependency.write_bytes((ROOT / "scripts/preparation_artifact_lifecycle.py").read_bytes())
-        tool.chmod(0o600); dependency.chmod(0o600)
+        structural_contract.write_bytes(
+            (ROOT / "scripts/operational_state_contract.py").read_bytes()
+        )
+        tool.chmod(0o600); dependency.chmod(0o600); structural_contract.chmod(0o600)
         release = "immutable-retired-sentinel"
         target = "d" * 40
         removed = self.releases / release
@@ -1853,6 +1857,8 @@ class DriverTests(DeployFixture):
         real_dependency = retirement_control / "preparation_artifact_lifecycle.py"
         shutil.copyfile(ROOT / "scripts/generation-retirement.py", real_tool)
         shutil.copyfile(ROOT / "scripts/preparation_artifact_lifecycle.py", real_dependency)
+        shutil.copyfile(ROOT / "scripts/operational_state_contract.py",
+                        retirement_control / "operational_state_contract.py")
         real_tool.chmod(0o600); real_dependency.chmod(0o600)
         receipt_parent = real_retirement.evidence_root / "finalize-receipts"
         receipt_parent.mkdir(mode=0o700)

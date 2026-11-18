@@ -35,6 +35,20 @@ preparation_lifecycle = importlib.util.module_from_spec(_preparation_spec)
 # Execute the authenticated bytes without reopening the dependency or writing bytecode.
 exec(compile(_preparation_raw, str(_preparation_path), "exec"), preparation_lifecycle.__dict__)
 
+OPERATIONAL_STATE_CONTRACT_SHA256 = "715dd7f17500ce0734188dd4aab86d5979967b80be79f0a557aec6a2cfad5c1d"
+_operational_contract_path = Path(__file__).resolve().parent / "operational_state_contract.py"
+try:
+    _operational_contract_raw = _operational_contract_path.read_bytes()
+except OSError as error:
+    raise RuntimeError("operational_state_contract_dependency_missing") from error
+if hashlib.sha256(_operational_contract_raw).hexdigest() != OPERATIONAL_STATE_CONTRACT_SHA256:
+    raise RuntimeError("operational_state_contract_dependency_drift")
+_operational_contract_spec = importlib.util.spec_from_file_location(
+    "operational_state_contract", _operational_contract_path)
+operational_state_contract = importlib.util.module_from_spec(_operational_contract_spec)
+exec(compile(_operational_contract_raw, str(_operational_contract_path), "exec"),
+     operational_state_contract.__dict__)
+
 SHA256 = re.compile(r"[0-9a-f]{64}")
 FIXED_CURRENT_LOCK_PREFIX = b"CONVERTA_FIXED_CURRENT_V1:"
 TERMINAL_DEPLOYMENT = {"DEPLOYED", "ROLLED_BACK", "SUPERSEDED"}
@@ -142,8 +156,8 @@ EXCEPTIONAL_ROOT_UID = 1000
 EXCEPTIONAL_ROOT_GID = 1000
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
-ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
-POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
+ROOT_KEYS = operational_state_contract.ROOT_KEYS
+POLICY_ENTRY_KEYS = operational_state_contract.POLICY_ENTRY_KEYS
 FAILED_BUILD_WORKTREE_BINDING = {
     "schemaVersion": 1,
     "kind": "FAILED_BUILD_WORKTREE_A838BD33",
@@ -922,41 +936,7 @@ def _validate_ancestors(path: Path, owner_uid: int, predicate: str, *,
 
 
 def validate_root_policy(raw: bytes, expected_sha256: str) -> dict[str, Any]:
-    if digest_bytes(raw) != expected_sha256:
-        deny("root_policy_hash")
-    policy = object_json(raw, "root-policy")
-    if set(policy) != {"schemaVersion", "canonicalRoots"} or policy.get("schemaVersion") != 1:
-        deny("root_policy_schema")
-    roots = policy.get("canonicalRoots")
-    if not isinstance(roots, dict) or set(roots) != ROOT_KEYS:
-        deny("root_policy_schema")
-    entries: dict[str, Any] = {}
-    definitions: dict[str, Any] = {}
-    for key in ROOT_KEYS:
-        raw_entries = roots[key] if key == "evidence" else [roots[key]]
-        if not isinstance(raw_entries, list) or not raw_entries:
-            deny(f"root_policy_entry:{key}")
-        parsed = []
-        parsed_definitions = []
-        for entry in raw_entries:
-            if not isinstance(entry, dict) or set(entry) != POLICY_ENTRY_KEYS:
-                deny(f"root_policy_entry:{key}")
-            path = Path(str(entry.get("path", "")))
-            modes = entry.get("allowedModes")
-            if (not path.is_absolute() or ".." in path.parts or
-                    not isinstance(entry.get("ownerUid"), int) or entry["ownerUid"] < 0 or
-                    not isinstance(entry.get("groupGid"), int) or entry["groupGid"] < 0 or
-                    not isinstance(modes, list) or not modes or
-                    any(not isinstance(mode, str) or not re.fullmatch(r"0[0-7]{3}", mode) for mode in modes)):
-                deny(f"root_policy_entry:{key}")
-            if Path(os.path.normpath(str(path))) != path:
-                deny(f"root_policy_entry:{key}")
-            parsed.append(str(path))
-            parsed_definitions.append(entry)
-        entries[key] = parsed if key == "evidence" else parsed[0]
-        definitions[key] = parsed_definitions if key == "evidence" else parsed_definitions[0]
-    return {"schemaVersion": 1, "canonicalRoots": entries,
-            "definitions": definitions, "sha256": expected_sha256}
+    return operational_state_contract.validate_root_policy(raw, expected_sha256, deny)
 
 
 def authenticate_policy_root(policy: dict[str, Any], key: str, *,
@@ -991,41 +971,8 @@ def authenticate_policy_root(policy: dict[str, Any], key: str, *,
 
 
 def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy: dict[str, Any]) -> None:
-    required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "gitRepository",
-                "currentPaths", "pm2LivePaths", "pm2DumpPaths", "activeReleases",
-                "rollbackReleases", "transitiveReturnReleases", "candidateReleases",
-                "installedVerifiedReleases", "supersededCandidates", "controlPlaneArtifacts",
-                "dependencies", "deploymentState", "canonicalRoots", "observations"}
-    optional = {"immediateRollbackReleases"}
-    if (frozenset(value) not in {frozenset(required), frozenset(required | optional)} or
-            value.get("schemaVersion") != 2):
-        deny("operational_state_schema")
-    for key in ("generationId", "releaseId", "targetCommit"):
-        if value.get(key) != contract[key]:
-            deny(f"operational_state_identity:{key}")
-    for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths", "activeReleases",
-                "rollbackReleases", "transitiveReturnReleases", "candidateReleases",
-                "installedVerifiedReleases", "supersededCandidates", "dependencies"):
-        if not isinstance(value.get(key), list) or any(not isinstance(item, str) for item in value[key]):
-            deny(f"operational_state_list:{key}")
-    immediate = value.get("immediateRollbackReleases")
-    if immediate is not None and (not isinstance(immediate, dict) or
-                                  set(immediate) not in ({"api", "frontend"}, {"api", "frontend", "worker"}) or
-                                  any(not isinstance(item, str) or not item
-                                      for item in immediate.values()) or
-                                  any(item not in value["rollbackReleases"]
-                                      for item in immediate.values())):
-        deny("operational_state_immediate_rollbacks")
-    if not Path(str(value.get("gitRepository", ""))).is_absolute():
-        deny("operational_git_repository")
-    roots = value.get("canonicalRoots")
-    if not isinstance(roots, dict) or set(roots) != ROOT_KEYS:
-        deny("canonical_roots_schema")
-    if roots != policy["canonicalRoots"]:
-        deny("canonical_roots_policy_mismatch")
-    if (not isinstance(roots["evidence"], list) or not roots["evidence"] or
-            any(not isinstance(item, str) for item in roots["evidence"])):
-        deny("canonical_root:evidence")
+    operational_state_contract.validate_operational_structure(value, contract, policy, deny)
+    roots = value["canonicalRoots"]
     resolved_roots = {key: authenticate_policy_root(policy, key)[0]
                       for key in ("repository", "worktrees", "outputs", "releases")}
     resolved_roots["staging"] = Path(roots["staging"])
@@ -1048,13 +995,7 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                     continue
                 deny(f"canonical_roots_overlap:{first}:{second}")
     controls = value.get("controlPlaneArtifacts")
-    if not isinstance(controls, list) or not controls:
-        deny("operational_control_plane")
     for item in controls:
-        if (not isinstance(item, dict) or set(item) != {"path", "sha256", "copied"} or
-                not Path(str(item["path"])).is_absolute() or not SHA256.fullmatch(str(item["sha256"])) or
-                item["copied"] is not True):
-            deny("operational_control_plane")
         path = Path(item["path"])
         try:
             info = path.lstat()
@@ -1062,39 +1003,6 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
                 deny("operational_control_plane_hash")
         except OSError:
             deny("operational_control_plane_hash")
-    deployment = value.get("deploymentState")
-    if not isinstance(deployment, dict) or set(deployment) != {"state"} or not isinstance(deployment["state"], str):
-        deny("operational_deployment_state")
-    observations = value.get("observations")
-    observation_keys = {"currentLinks", "pm2", "dump", "releaseGraph"}
-    if (not isinstance(observations, dict) or
-            set(observations) not in {frozenset(observation_keys),
-                                     frozenset(observation_keys | {"dependencies"})}):
-        deny("operational_observations")
-    links = observations.get("currentLinks")
-    if not isinstance(links, list) or any(not isinstance(item, dict) or set(item) != {"path", "target"}
-                                          or not Path(str(item["path"])).is_absolute()
-                                          or not Path(str(item["target"])).is_absolute() for item in links):
-        deny("operational_current_links")
-    pm2 = observations.get("pm2")
-    if (not isinstance(pm2, dict) or set(pm2) != {"path", "sha256", "fingerprintSha256"} or
-            not Path(str(pm2.get("path", ""))).is_absolute() or
-            not SHA256.fullmatch(str(pm2.get("sha256", ""))) or
-            not SHA256.fullmatch(str(pm2.get("fingerprintSha256", "")))):
-        deny("operational_pm2_observation")
-    for label in ("dump", "releaseGraph"):
-        item = observations.get(label)
-        if (not isinstance(item, dict) or set(item) != {"path", "sha256"} or
-                not Path(str(item.get("path", ""))).is_absolute() or
-                not SHA256.fullmatch(str(item.get("sha256", "")))):
-            deny(f"operational_{label}_observation")
-    dependency_observation = observations.get("dependencies")
-    if dependency_observation is not None:
-        if (not isinstance(dependency_observation, dict) or
-                set(dependency_observation) != {"path", "sha256"} or
-                not Path(str(dependency_observation.get("path", ""))).is_absolute() or
-                not SHA256.fullmatch(str(dependency_observation.get("sha256", "")))):
-            deny("operational_dependencies_observation")
 
 
 def _path_has_symlink(path: Path, root: Path) -> bool:
