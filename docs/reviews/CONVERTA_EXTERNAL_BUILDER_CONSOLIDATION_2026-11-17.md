@@ -7,7 +7,7 @@ transferência, instalação, deploy, PM2, retirement ou limpeza.
 
 | Entrega | Implementação existente | Prova anterior | Estado efetivo | Lacuna remanescente | Ação mínima |
 | --- | --- | --- | --- | --- | --- |
-| Observação e lifecycle do builder | `capacity-proc-observer.py`, `disposable-builder-lifecycle.py` | PRs #375–#377 | `INTEGRATED_AND_PROVEN` | raiz aberta ainda pode residir em `/tmp` | fechar admissão de raiz durável |
+| Observação e lifecycle do builder | `capacity-proc-observer.py`, `disposable-builder-lifecycle.py` | PRs #375–#377; PR #417, CI `44289415895` | `INTEGRATED / NOT_PRODUCTION_HOMOLOGATED` | proteção durável integrada; reboot real e primeira geração produtiva sob a política ainda não homologados | preservar regressões; homologar somente numa futura geração autorizada |
 | Cache e integração externa | lifecycle, produtor e handoff schema 3 | PRs #382–#384; FA10 | `INTEGRATED_AND_PROVEN` | nenhuma para os perfis já fechados | preservar |
 | Pipeline API+frontend+worker | produtor, instalador, driver, PM2 bindings e handoff | PR #401; pacote ED74 | `INTEGRATED_AND_PROVEN` | nenhuma no perfil ED74 | preservar |
 | Identidade PM2 real | normalização canônica de logs e teste PM2 6.0.14 | PRs #405 e #407 | `INTEGRATED_AND_PROVEN` | nenhuma conhecida | preservar a regressão real |
@@ -59,18 +59,18 @@ transferência, instalação, deploy, PM2, retirement ou limpeza.
 2. Subárvores mutáveis de runtime continuam em perfis literais por geração; falta
    um contrato reutilizável, enumerado e autenticado. Isso é melhoria não
    bloqueante para os perfis já comprovados.
-3. O lifecycle não nega explicitamente raiz descartável aberta em filesystem
-   efêmero ou sujeito a `tmpfiles`. Essa é a única lacuna diretamente demonstrada
-   pelo desaparecimento externo da raiz ED74.
+3. A proteção de raiz durável foi integrada pelo PR #417: novas aberturas negam
+   filesystem efêmero e regras efetivas de `tmpfiles`, e preservam o binding no
+   lifecycle. A prova atual cobre interrupção/reabertura simulada, não reboot real
+   nem homologação produtiva; estado `INTEGRATED / NOT_PRODUCTION_HOMOLOGATED`.
 
 ## F. Plano único de conclusão
 
-1. Reutilizar o lifecycle atual e acrescentar na admissão a prova de durabilidade
-   da raiz, sem criar outro executor.
-2. Fazer o produtor chamar o validador puro existente do retirement antes de
+1. Preservar a proteção durável integrada no PR #417 sem reabrir seu desenho.
+2. Fazer a admissão chamar o validador puro existente do retirement antes de
    publicar, mantendo os perfis fechados.
-3. Ensaiar em isolamento uma interrupção/reboot entre checkpoints, retomada sem
-   repetir efeitos e closure com receipt; manter os testes PM2 reais existentes.
+3. Ensaiar em isolamento a mesma autoridade operacional passando por admissão e
+   retirement, com negativas idênticas por schema, identidade, root policy e PM2.
 4. Homologar API-only, API+frontend e API+frontend+worker sem alterar seus bytes
    semânticos.
 5. Considerar concluído somente com CI integral, receipt terminal legítimo,
@@ -78,8 +78,10 @@ transferência, instalação, deploy, PM2, retirement ou limpeza.
 
 ## G. Próxima implementação mínima
 
-Uma única mudança no lifecycle/admissão existente deve exigir raiz de geração em
-armazenamento durável autenticado enquanto o estado não for terminal e negar
-`/tmp` sujeito a limpeza automática. A mesma revisão pode conectar a admissão ao
-validador puro de estado operacional já existente. Não são necessários novo
-pipeline, novo driver, novo framework ou exceção ED74.
+A próxima mudança deve tratar somente a paridade de schema admissão → retirement:
+extrair sem alteração semântica o validador puro `validate_operational()` e suas
+dependências de policy para um módulo versionado compartilhado, autenticar esses
+bytes nos dois consumidores e provar produtor → admissão → retirement com o mesmo
+payload. Perfis API-only, API+frontend e API+frontend+worker devem permanecer
+byte-semanticamente compatíveis. Não são necessários novo pipeline, novo driver,
+novo framework ou exceção ED74.
