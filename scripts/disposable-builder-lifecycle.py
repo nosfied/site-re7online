@@ -251,14 +251,29 @@ def tmpfiles_authority(root: Path) -> str:
             fields = shlex.split(stripped, comments=True)
         except ValueError:
             deny("disposable_root_tmpfiles_policy")
-        if len(fields) < 2:
-            continue
-        entry_type = fields[0].rstrip("!")
+        require(len(fields) >= 2, "disposable_root_tmpfiles_policy")
+        type_token = fields[0]
+        require(bool(type_token) and type_token[0] in set(
+                    "fFwdDevqQpLcbCmxXrRzZtThHaA") and
+                all(item in "+!-=~^$" for item in type_token[1:]) and
+                len(type_token[1:]) == len(set(type_token[1:])),
+                "disposable_root_tmpfiles_policy")
+        entry_type = type_token[0]
+        rule_path = fields[1]
+        require(rule_path.startswith("/"), "disposable_root_tmpfiles_policy")
         age = fields[5] if len(fields) > 5 else "-"
-        cleanup_capable = (entry_type in {"r", "R"} or
-                           (entry_type in {"d", "D", "e", "q", "Q", "v"} and
-                            age != "-"))
-        if cleanup_capable and any(fnmatch.fnmatchcase(item, fields[1])
+        # D participates in --remove regardless of Age.  The Age column only
+        # controls --clean.  r/R are likewise explicit removal rules.  `$`
+        # makes creation entries removable by --purge and is therefore also
+        # incompatible with lifecycle-only retirement.
+        cleanup_capable = (entry_type in {"D", "r", "R"} or
+                           (entry_type in {"d", "D", "e", "v", "q", "Q",
+                                           "C", "r", "R"} and age != "-") or
+                           "$" in type_token[1:])
+        if cleanup_capable:
+            require("\\" not in rule_path and "%" not in rule_path,
+                    "disposable_root_tmpfiles_policy")
+        if cleanup_capable and any(fnmatch.fnmatchcase(item, rule_path)
                                    for item in candidates):
             deny("disposable_root_tmpfiles_cleanup")
     return digest(result.stdout)

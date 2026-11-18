@@ -354,6 +354,73 @@ class DisposableLifecycleTests(unittest.TestCase):
                                         "disposable_root_tmpfiles_cleanup"):
                 MODULE.tmpfiles_authority(self.base / "fresh-root")
 
+    def test_tmpfiles_remove_clean_and_modifiers_cannot_bypass_admission(self) -> None:
+        root = self.base / "tmpfiles-rules" / "generation"
+        ancestor = Path.home()
+        destructive = tuple(f"{rule} {ancestor} 0755 root root {age}\n".encode()
+                            for rule, age in (("D", "-"), ("D", "30d"),
+                                              ("d", "30d"), ("r", "-"),
+                                              ("R", "-"), ("D!", "-"),
+                                              ("D-", "-"), ("D=", "-")))
+        for configuration in destructive:
+            with self.subTest(configuration=configuration):
+                completed = subprocess.CompletedProcess(
+                    ["systemd-tmpfiles", "--cat-config"], 0,
+                    stdout=configuration, stderr=b"")
+                with patch.object(MODULE.subprocess, "run", return_value=completed):
+                    with self.assertRaisesRegex(MODULE.Denied,
+                                                "disposable_root_tmpfiles_cleanup"):
+                        MODULE.tmpfiles_authority(root)
+        safe = subprocess.CompletedProcess(
+            ["systemd-tmpfiles", "--cat-config"], 0,
+            stdout=f"d! {ancestor} 0755 root root -\n".encode(), stderr=b"")
+        with patch.object(MODULE.subprocess, "run", return_value=safe):
+            self.assertEqual(MODULE.tmpfiles_authority(root), sha(safe.stdout))
+
+    def test_tmpfiles_uninterpretable_configuration_fails_closed(self) -> None:
+        root = self.base / "tmpfiles-invalid" / "generation"
+        for configuration in (b"D? /home 0755 root root -\n",
+                              b"D\n", b"D relative 0755 root root -\n",
+                              b"D /home/%u 0755 root root -\n",
+                              b"D '/home 0755 root root -\n"):
+            with self.subTest(configuration=configuration):
+                completed = subprocess.CompletedProcess(
+                    ["systemd-tmpfiles", "--cat-config"], 0,
+                    stdout=configuration, stderr=b"")
+                with patch.object(MODULE.subprocess, "run", return_value=completed):
+                    with self.assertRaisesRegex(MODULE.Denied,
+                                                "disposable_root_tmpfiles_policy"):
+                        MODULE.tmpfiles_authority(root)
+
+    def test_tmpfiles_D_denial_precedes_lifecycle_locks_and_root_allocation(self) -> None:
+        root = self.base / "tmpfiles-open-root"
+        custody = self.base / "tmpfiles-open-custody"; custody.mkdir(mode=0o700)
+        contract = json.loads(json.dumps(self.contract))
+        contract["generationId"] += "-tmpfiles-open"
+        contract["disposableRoot"] = str(root)
+        contract["custodyRoot"] = str(custody)
+        contract["roots"] = {key: str(root / Path(value).name)
+                             for key, value in contract["roots"].items()}
+        contract["worktreePath"] = str(Path(contract["roots"]["worktrees"]) / "source")
+        contract["locks"] = {"lifecycle": str(custody / "lifecycle.lock"),
+                             "writer": str(custody / "writer.lock")}
+        path = custody / "contract.private.json"; contract_sha = write(path, contract)
+        args = type("Args", (), {"contract": path, "contract_sha256": contract_sha,
+                                  "lifecycle_sha256": None,
+                                  "root_policy": self.root_policy,
+                                  "root_policy_sha256": self.root_policy_sha})()
+        completed = subprocess.CompletedProcess(
+            ["systemd-tmpfiles", "--cat-config"], 0,
+            stdout=f"D {self.base} 0755 root root -\n".encode(), stderr=b"")
+        with patch.object(MODULE.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(MODULE.Denied,
+                                        "disposable_root_tmpfiles_cleanup"):
+                MODULE.open_generation(args)
+        self.assertFalse(root.exists())
+        self.assertFalse((custody / "disposable-builder.lifecycle.private.json").exists())
+        self.assertFalse((custody / "lifecycle.lock").exists())
+        self.assertFalse((custody / "writer.lock").exists())
+
     def test_durable_root_reopens_after_simulated_reboot_without_reallocation(self) -> None:
         lifecycle_path = self.custody / "disposable-builder.lifecycle.private.json"
         lifecycle_before = lifecycle_path.read_bytes()
