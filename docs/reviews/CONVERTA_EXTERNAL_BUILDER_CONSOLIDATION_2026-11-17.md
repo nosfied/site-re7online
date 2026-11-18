@@ -79,9 +79,11 @@ transferência, instalação, deploy, PM2, retirement ou limpeza.
 ## G. Próxima implementação mínima
 
 A próxima mudança deve tratar somente a paridade de schema admissão → retirement:
-extrair sem alteração semântica o validador puro `validate_operational()` e suas
-dependências de policy para um módulo versionado compartilhado, autenticar esses
-bytes nos dois consumidores e provar produtor → admissão → retirement com o mesmo
-payload. Perfis API-only, API+frontend e API+frontend+worker devem permanecer
-byte-semanticamente compatíveis. Não são necessários novo pipeline, novo driver,
-novo framework ou exceção ED74.
+extrair sem alteração semântica a camada pura de schema/identidade/policy hoje
+embutida em `validate_operational()` para um módulo versionado compartilhado. A
+admissão chama essa camada sobre a projeção que publicará; o retirement chama a
+mesma camada e mantém seus checks físicos existentes de roots e control plane.
+Os bytes do módulo ficam autenticados nos dois consumidores e uma regressão prova
+produtor → admissão → retirement com o mesmo payload. Perfis API-only,
+API+frontend e API+frontend+worker permanecem byte-semanticamente compatíveis.
+Não são necessários novo pipeline, novo driver, novo framework ou exceção ED74.
