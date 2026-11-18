@@ -9,7 +9,7 @@ import {
 } from "./channelAccountSecretCrypto.js";
 
 type UpsertTenantChannelAccountParams = {
-  prisma: PrismaClient;
+  prisma: PrismaClient | Prisma.TransactionClient;
   tenantKey: string;
   account: TenantChannelAccount;
 };
@@ -23,6 +23,31 @@ type ReplaceTenantChannelAccountsParams = {
 type ExistingChannelAccountRuntimeState = {
   metadata: Prisma.JsonValue | null;
   status: string | null;
+};
+
+export type MetaWabaSubscriptionState =
+  | "not_attempted"
+  | "subscribed"
+  | "subscription_failed";
+
+type MetaWhatsappAccountRow = {
+  id: string;
+  clientId: string;
+  channelAccountId: string;
+  displayName: string | null;
+  externalBusinessId: string | null;
+  metadata: Prisma.JsonValue | null;
+  enabled: boolean;
+  automationEnabled: boolean;
+  runtimeEnabled: boolean;
+  inboundPersistenceEnabled: boolean;
+  outboundEnabled: boolean;
+  aiEnabled: boolean;
+  handoffEnabled: boolean;
+  status: string;
+  tokenStatus: string;
+  aliases: Array<{ alias: string }>;
+  client: { clientKey: string };
 };
 
 function getEncryptionKey() {
@@ -237,6 +262,145 @@ export async function upsertTenantChannelAccountToDb(params: UpsertTenantChannel
   }
 
   return upserted;
+}
+
+function preservedMetadata(value: Prisma.JsonValue | null | undefined) {
+  return isRecord(value) ? { ...value } : {};
+}
+
+/**
+ * Materializes the authenticated Meta identity without granting operational
+ * capabilities. Existing capabilities belong to the tenant configuration and
+ * are preserved byte-semantically for the same identity. A superseded identity
+ * is retained as historical evidence, but is made non-operational.
+ *
+ * Callers must invoke this inside the same database transaction that publishes
+ * TenantMetaConfig and WaPhoneNumber.
+ */
+export async function materializeMetaWhatsappChannelAccount(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  tenantKey: string;
+  clientId: string;
+  phoneNumberId: string;
+  previousPhoneNumberId?: string | null;
+  wabaId?: string | null;
+  displayName?: string | null;
+  businessTokenStored: boolean;
+  subscriptionState: MetaWabaSubscriptionState;
+}) {
+  const phoneNumberId = params.phoneNumberId.trim();
+  if (!phoneNumberId) throw new Error("meta_channel_account_phone_number_id_missing");
+
+  const identityMatches = await params.prisma.channelAccount.findMany({
+    where: {
+      channel: "whatsapp",
+      provider: "meta",
+      OR: [
+        { channelAccountId: phoneNumberId },
+        { aliases: { some: { alias: phoneNumberId } } },
+      ],
+    },
+    include: {
+      aliases: { select: { alias: true } },
+      client: { select: { clientKey: true } },
+    },
+  }) as MetaWhatsappAccountRow[];
+  const foreignMatch = identityMatches.find((account) => account.clientId !== params.clientId);
+  if (foreignMatch) {
+    throw new Error(`meta_channel_account_identity_conflict:${foreignMatch.client.clientKey}`);
+  }
+  const aliasConflict = identityMatches.find(
+    (account) =>
+      account.clientId === params.clientId &&
+      account.channelAccountId !== phoneNumberId &&
+      account.aliases.some((alias) => alias.alias === phoneNumberId)
+  );
+  if (aliasConflict) throw new Error("meta_channel_account_alias_conflict");
+
+  const existing = identityMatches.find(
+    (account) => account.clientId === params.clientId && account.channelAccountId === phoneNumberId
+  ) ?? null;
+  const subscriptionReady = params.subscriptionState === "subscribed";
+  const existingMetadata = preservedMetadata(existing?.metadata);
+  const status = existing
+    ? params.subscriptionState === "subscription_failed"
+      ? "pending"
+      : existing.status
+    : "pending";
+
+  const account: TenantChannelAccount = {
+    id: existing?.id ?? `${params.tenantKey}-meta-whatsapp-${phoneNumberId}`,
+    tenantKey: params.tenantKey,
+    channel: "whatsapp",
+    provider: "meta",
+    displayName: params.displayName?.trim() || existing?.displayName || "WhatsApp Meta",
+    channelAccountId: phoneNumberId,
+    externalAccountIds: existing?.aliases.map((alias) => alias.alias) ?? [],
+    externalBusinessId: params.wabaId?.trim() || existing?.externalBusinessId || undefined,
+    metadata: {
+      ...existingMetadata,
+      metaIdentityState: subscriptionReady ? "authenticated" : "pending_dependencies",
+      wabaSubscriptionState: params.subscriptionState,
+    } as TenantChannelAccount["metadata"],
+    enabled: existing?.enabled ?? false,
+    automationEnabled: existing?.automationEnabled ?? false,
+    runtimeEnabled: existing?.runtimeEnabled ?? false,
+    inboundPersistenceEnabled: existing?.inboundPersistenceEnabled ?? false,
+    outboundEnabled: existing?.outboundEnabled ?? false,
+    aiEnabled: existing?.aiEnabled ?? false,
+    handoffEnabled: existing?.handoffEnabled ?? false,
+    status: status as TenantChannelAccount["status"],
+    tokenStatus: existing?.tokenStatus as TenantChannelAccount["tokenStatus"] ??
+      (params.businessTokenStored ? "configured" : "missing"),
+  };
+  const upserted = await upsertTenantChannelAccountToDb({
+    prisma: params.prisma,
+    tenantKey: params.tenantKey,
+    account,
+  });
+
+  const previousPhoneNumberId = params.previousPhoneNumberId?.trim();
+  if (previousPhoneNumberId && previousPhoneNumberId !== phoneNumberId) {
+    const previous = await params.prisma.channelAccount.findFirst({
+      where: {
+        clientId: params.clientId,
+        provider: "meta",
+        channel: "whatsapp",
+        OR: [
+          { channelAccountId: previousPhoneNumberId },
+          { aliases: { some: { alias: previousPhoneNumberId } } },
+        ],
+      },
+      select: { id: true, metadata: true },
+    });
+    if (previous) {
+      await params.prisma.channelAccount.update({
+        where: { id: previous.id },
+        data: {
+          enabled: false,
+          automationEnabled: false,
+          runtimeEnabled: false,
+          inboundPersistenceEnabled: false,
+          outboundEnabled: false,
+          aiEnabled: false,
+          handoffEnabled: false,
+          status: "disabled",
+          metadata: {
+            ...preservedMetadata(previous.metadata),
+            metaIdentityState: "historical",
+            supersededByPhoneNumberId: phoneNumberId,
+          },
+        },
+      });
+    }
+  }
+
+  return {
+    accountId: upserted.id,
+    action: existing ? ("existing" as const) : ("created" as const),
+    status,
+    operationallyEnabled: account.enabled && account.runtimeEnabled && account.inboundPersistenceEnabled && status === "connected",
+  };
 }
 
 export async function replaceTenantChannelAccountsInDb(params: ReplaceTenantChannelAccountsParams) {

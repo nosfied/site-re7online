@@ -842,6 +842,7 @@ export type MetaInboundReadiness = {
     channelAccountId: string;
     displayName: string | null;
     identityLinked: boolean;
+    bindingState: "ACTIVE" | "HISTORICAL" | "PENDING_BINDING";
     connected: boolean;
     permissions: {
       enabled: boolean;

@@ -699,7 +699,9 @@ export default function TenantChannelsPage() {
   const metaOperationalCard = getMetaOperationalCard(webSessionStatus);
   const webOperationalCard = getWebOperationalCard(webSessionStatus);
   const incidentBanners = getIncidentBanners(webSessionStatus);
-  const unlinkedMetaIdentities = metaInboundReadiness?.accounts.filter((account) => !account.identityLinked) ?? [];
+  const unlinkedMetaIdentities = metaInboundReadiness?.accounts.filter(
+    (account) => account.bindingState === "PENDING_BINDING"
+  ) ?? [];
 
   const showToast = useCallback((tone: ToastTone, title: string, message?: string) => {
     setToast({ tone, title, message });
@@ -1986,15 +1988,23 @@ export default function TenantChannelsPage() {
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold uppercase tracking-wide text-white/55">1. Identidade vinculada</p>
                         <StatusBadge
-                          label={metaReadinessAccount?.identityLinked ? "Vinculada" : "Não vinculada"}
-                          tone={metaReadinessAccount?.identityLinked ? "success" : "warning"}
+                          label={
+                            metaReadinessAccount?.bindingState === "ACTIVE"
+                              ? "Ativa"
+                              : metaReadinessAccount?.bindingState === "HISTORICAL"
+                                ? "Histórica"
+                                : "Vínculo pendente"
+                          }
+                          tone={metaReadinessAccount?.bindingState === "ACTIVE" ? "success" : "warning"}
                         />
                       </div>
                       <p className="mt-2 text-xs text-white/65">
                         {metaReadinessAccount
-                          ? metaReadinessAccount.identityLinked
-                            ? "ChannelAccount whatsapp/meta corresponde a uma identidade Meta conhecida do tenant."
-                            : "A conta existe, mas seu ID ou alias não corresponde às identidades Meta conhecidas do tenant."
+                          ? metaReadinessAccount.bindingState === "ACTIVE"
+                            ? "ChannelAccount whatsapp/meta corresponde à identidade Meta atual e possui os gates inbound exigidos."
+                            : metaReadinessAccount.bindingState === "HISTORICAL"
+                              ? "Identidade preservada como histórico, sem vínculo operacional vigente."
+                              : "A identidade Meta atual ainda aguarda ChannelAccount e gates operacionais obrigatórios."
                           : "Salve esta conta antes de validar o binding."}
                       </p>
                     </div>

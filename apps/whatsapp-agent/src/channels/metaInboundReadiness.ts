@@ -21,6 +21,7 @@ export type MetaInboundReadinessAccount = {
   channelAccountId: string;
   displayName: string | null;
   identityLinked: boolean;
+  bindingState: "ACTIVE" | "HISTORICAL" | "PENDING_BINDING";
   connected: boolean;
   permissions: {
     enabled: boolean;
@@ -93,9 +94,15 @@ export async function readMetaInboundReadiness(params: {
       ...account.aliases.map((item) => item.alias),
     ].filter(isNonEmptyString))),
   }));
+  const currentMetaBinding = metaConfig?.phoneNumberId ?? null;
+  const historicalMetaBindings = Array.from(new Set(
+    phoneNumbers
+      .map((item) => item.phoneNumberId)
+      .filter((binding) => binding !== currentMetaBinding)
+  ));
   const knownMetaBindings = Array.from(new Set([
-    ...phoneNumbers.map((item) => item.phoneNumberId),
-    metaConfig?.phoneNumberId,
+    currentMetaBinding,
+    ...historicalMetaBindings,
   ].filter(isNonEmptyString)));
   const entries: Array<{
     account: typeof accounts[number] | null;
@@ -187,14 +194,28 @@ export async function readMetaInboundReadiness(params: {
         })
       : null;
 
-    const identityLinked = Boolean(
-      account && bindingIds.some((bindingId) => knownMetaBindings.includes(bindingId))
+    const matchesCurrentIdentity = Boolean(
+      currentMetaBinding && bindingIds.includes(currentMetaBinding)
     );
+    const identityLinked = Boolean(account && matchesCurrentIdentity);
+    const operationalBinding = Boolean(
+      identityLinked &&
+      account?.enabled &&
+      account.runtimeEnabled &&
+      account.inboundPersistenceEnabled &&
+      account.status === "connected"
+    );
+    const bindingState = operationalBinding
+      ? "ACTIVE"
+      : matchesCurrentIdentity
+        ? "PENDING_BINDING"
+        : "HISTORICAL";
     readinessAccounts.push({
       accountId: account?.id ?? null,
       channelAccountId: entry.channelAccountId,
       displayName: account?.displayName ?? null,
       identityLinked,
+      bindingState,
       connected: Boolean(account?.enabled && account.status === "connected"),
       permissions: {
         enabled: account?.enabled ?? false,
