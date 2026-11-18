@@ -18,7 +18,11 @@ Expõe somente
 
 Antes de `disposable-builder-lifecycle.py open`, o chamador autentica `PATH`,
 `command -v node/npm`, Node `v20.20.0`, npm `10.8.2` e a mesma resolução em
-subprocessos. Descobrir Node divergente dentro do produtor consome a tentativa.
+subprocessos. O `open` também exige a política versionada
+`release-assets/disposable-builder-root-policy.v1.json`: novas raízes ficam em
+filesystem local persistente, fora de `/tmp`, `/var/tmp`, `/run` e `/dev/shm`, e
+o binding de mount/política é gravado no lifecycle para retomada após reboot.
+Descobrir Node ou armazenamento divergente antes do produtor não consome build.
 
 O produtor executa `npm ci`, Prisma generate e cada build exatamente uma vez;
 preserva o BUILD_ID produzido e materializa `api-runtime`, `frontend-runtime` e,

@@ -735,8 +735,8 @@ releases instaladas, os retornos e as gerações históricas precisam ser disjun
 
 | Estado/evento | Condição e efeito |
 | --- | --- |
-| `OPEN / ALLOCATION_STARTED` | Contrato, custódia, capacidade e locks autenticados; registro durável anterior à primeira alocação na raiz |
-| `OPEN / ROOT_ALLOCATED` | Raiz e sete subraízes exclusivas criadas e identificadas por device/inode, owner e modo |
+| `OPEN / ALLOCATION_STARTED` | Contrato, custódia, capacidade, política versionada de armazenamento e locks autenticados; raiz em filesystem persistente fora de prefixos sujeitos a limpeza de boot; registro durável anterior à primeira alocação |
+| `OPEN / ROOT_ALLOCATED` | Raiz e sete subraízes exclusivas criadas e identificadas por device/inode, owner e modo; binding de política, mount e filesystem preservado para retomada |
 | `EXPORTED / AUTHORITY_EXPORTED` | Autoridade necessária copiada e reaberta por hash fora da raiz; sucesso exige pacote, manifesto, índice, contrato e lifecycle, falha exige evidência própria e proíbe pacote parcial |
 | `SEALED_FOR_EXPLICIT_AUTHORIZATION` | Inventário físico, observação de processos e comandos exatos selados; ainda sem retirada |
 | `RETENTION_DEBT` | Alocação, exportação ou retirada interrompida; raiz/evidências permanecem classificadas e nenhuma repetição é automática |
@@ -746,6 +746,14 @@ O produtor aceita o cache npm e o temporário isolados somente como um par fecha
 sob a mesma raiz do worktree. A extração segura normaliza diretórios indexados para
 o modo canônico `0755`; isso corrige a variação causada por `umask 0002` sem relaxar
 a comparação de arquivos, symlinks, modos ou hashes do índice.
+
+Novas aberturas autenticam
+`scripts/release-assets/disposable-builder-root-policy.v1.json` por SHA-256 e
+negam raízes em `/tmp`, `/var/tmp`, `/run`, `/dev/shm`, `tmpfs` ou `ramfs` antes
+de criar locks, lifecycle ou diretórios. A política preserva raízes sob `/home`,
+`/opt/re7online/builders` ou `/srv/re7online/builders` até retirement explícito.
+Gerações históricas já abertas sem esse binding continuam retomáveis somente pelo
+contrato histórico; essa compatibilidade não autoriza uma nova abertura legada.
 
 O fechamento reabre os artefatos exportados, recaptura `/proc`, inventário e
 identidades sob as duas travas e exige que a intenção contenha exatamente o
