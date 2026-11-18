@@ -54,8 +54,9 @@ transferência, instalação, deploy, PM2, retirement ou limpeza.
 
 ## E. Lacunas técnicas reais
 
-1. A admissão ainda não chama integralmente o mesmo validador puro de estado
-   operacional consumido pelo retirement, inclusive fingerprint PM2.
+1. A admissão ainda não aplica integralmente as mesmas regras estruturais de
+   estado operacional consumidas pelo retirement, inclusive fingerprint PM2;
+   hoje essas regras permanecem misturadas a verificações físicas.
 2. Subárvores mutáveis de runtime continuam em perfis literais por geração; falta
    um contrato reutilizável, enumerado e autenticado. Isso é melhoria não
    bloqueante para os perfis já comprovados.
@@ -67,8 +68,9 @@ transferência, instalação, deploy, PM2, retirement ou limpeza.
 ## F. Plano único de conclusão
 
 1. Preservar a proteção durável integrada no PR #417 sem reabrir seu desenho.
-2. Fazer a admissão chamar o validador puro existente do retirement antes de
-   publicar, mantendo os perfis fechados.
+2. Extrair a camada estrutural compartilhável e fazer a admissão chamá-la sobre
+   a projeção exata antes de publicar, mantendo os perfis fechados; o retirement
+   conserva separadamente todas as verificações físicas.
 3. Ensaiar em isolamento a mesma autoridade operacional passando por admissão e
    retirement, com negativas idênticas por schema, identidade, root policy e PM2.
 4. Homologar API-only, API+frontend e API+frontend+worker sem alterar seus bytes
