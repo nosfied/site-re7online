@@ -90,6 +90,7 @@ test("readiness validates one real Meta inbound selected by the human timeline",
     runtimeEnabled: true,
     inboundPersistenceEnabled: true,
   });
+  assert.equal(readiness.accounts[0]?.bindingState, "ACTIVE");
   assert.deepEqual(readiness.accounts[0]?.inboundValidation, {
     validated: true,
     persistedOnce: true,
@@ -114,6 +115,7 @@ test("known Meta identity without ChannelAccount remains visibly unlinked", asyn
   assert.equal(readiness.accounts.length, 1);
   assert.equal(readiness.accounts[0]?.accountId, null);
   assert.equal(readiness.accounts[0]?.identityLinked, false);
+  assert.equal(readiness.accounts[0]?.bindingState, "PENDING_BINDING");
   assert.equal(readiness.accounts[0]?.connected, false);
   assert.equal(readiness.accounts[0]?.inboundValidation.validated, false);
 });
@@ -126,8 +128,33 @@ test("ChannelAccount without a known tenant Meta identity remains unlinked", asy
   });
   const account = readiness.accounts.find((item) => item.accountId === "account-1");
   assert.equal(account?.identityLinked, false);
+  assert.equal(account?.bindingState, "HISTORICAL");
   assert.equal(account?.connected, true);
   assert.equal(account?.inboundValidation.validated, false);
+});
+
+test("historical WaPhoneNumber is separated from the current pending binding", async () => {
+  const prisma = fakePrisma() as unknown as {
+    channelAccount: { findMany: () => Promise<unknown[]> };
+    waPhoneNumber: { findMany: () => Promise<Array<{ phoneNumberId: string }>> };
+  };
+  prisma.channelAccount.findMany = async () => [];
+  prisma.waPhoneNumber.findMany = async () => [
+    { phoneNumberId: "meta-phone-old" },
+    { phoneNumberId: "meta-phone-1" },
+  ];
+  const readiness = await readMetaInboundReadiness({
+    prisma: prisma as unknown as PrismaClient,
+    clientId: "tenant-1",
+    hasCanonicalTenantSource: true,
+  });
+  assert.deepEqual(
+    readiness.accounts.map((item) => [item.channelAccountId, item.bindingState]),
+    [
+      ["meta-phone-1", "PENDING_BINDING"],
+      ["meta-phone-old", "HISTORICAL"],
+    ]
+  );
 });
 
 test("persistence uniqueness is checked for the same human message used by the timeline", async () => {

@@ -713,7 +713,9 @@ import {
 } from "../channels/channelAccountDbFirst.js";
 import {
   listTenantChannelAccountsFromDb,
+  materializeMetaWhatsappChannelAccount,
   replaceTenantChannelAccountsInDb,
+  type MetaWabaSubscriptionState,
 } from "../channels/channelAccountPersistence.js";
 import { channelLatencyNow, createChannelLatencyProfiler, type ChannelLatencyProfiler } from "../channels/channelLatencyProfiler.js";
 import {
@@ -24004,6 +24006,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         const previousMetaConfig = await prisma.tenantMetaConfig.findUnique({
           where: { clientId: client.id },
           select: {
+            businessToken: true,
             businessId: true,
             businessPortfolioId: true,
             wabaId: true,
@@ -24111,26 +24114,51 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           rawPayload,
         });
 
-        await prisma.tenantMetaConfig.upsert({
-          where: { clientId: client.id },
-          update: {
-            businessToken: exchange.businessToken ?? undefined,
-            businessId: finalBusinessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
-            businessPortfolioId:
-              finalBusinessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
-            wabaId: finalWabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
-            phoneNumberId: finalPhoneNumberId ?? undefined,
-            rawPayload: rawPayload as Prisma.InputJsonValue,
-          },
-          create: {
-            clientId: client.id,
-            businessToken: exchange.businessToken ?? undefined,
-            businessId: finalBusinessId ?? undefined,
-            businessPortfolioId: finalBusinessPortfolioId ?? undefined,
-            wabaId: finalWabaId ?? undefined,
-            phoneNumberId: finalPhoneNumberId ?? undefined,
-            rawPayload: rawPayload as Prisma.InputJsonValue,
-          },
+        let phoneMappingAction: "created" | "existing" | null = null;
+        let channelAccountAction: "created" | "existing" | null = null;
+        await prisma.$transaction(async (tx) => {
+          await tx.tenantMetaConfig.upsert({
+            where: { clientId: client.id },
+            update: {
+              businessToken: exchange.businessToken ?? undefined,
+              businessId: finalBusinessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+              businessPortfolioId:
+                finalBusinessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+              wabaId: finalWabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+              phoneNumberId: finalPhoneNumberId ?? undefined,
+              rawPayload: rawPayload as Prisma.InputJsonValue,
+            },
+            create: {
+              clientId: client.id,
+              businessToken: exchange.businessToken ?? undefined,
+              businessId: finalBusinessId ?? undefined,
+              businessPortfolioId: finalBusinessPortfolioId ?? undefined,
+              wabaId: finalWabaId ?? undefined,
+              phoneNumberId: finalPhoneNumberId ?? undefined,
+              rawPayload: rawPayload as Prisma.InputJsonValue,
+            },
+          });
+          if (finalPhoneNumberId) {
+            const syncResult = await syncTenantPhoneNumberMapping({
+              prisma: tx,
+              clientId: client.id,
+              phoneNumberId: finalPhoneNumberId,
+              displayPhoneNumber,
+            });
+            phoneMappingAction = syncResult.action;
+            const materialized = await materializeMetaWhatsappChannelAccount({
+              prisma: tx,
+              tenantKey: tenantId,
+              clientId: client.id,
+              phoneNumberId: finalPhoneNumberId,
+              previousPhoneNumberId: previousMetaConfig?.phoneNumberId,
+              wabaId: finalWabaId,
+              displayName: displayPhoneNumber,
+              businessTokenStored: Boolean(exchange.businessToken ?? previousMetaConfig?.businessToken),
+              subscriptionState: "not_attempted",
+            });
+            channelAccountAction = materialized.action;
+          }
         });
         const metaIdentityAfterUpsert = await resolveOperationalMetaWhatsappIdentity({
           prisma,
@@ -24147,16 +24175,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           source: "embedded_signup",
         });
 
-        let phoneMappingAction: "created" | "existing" | null = null;
         let tenantUpdate: SavedTenantPatch | undefined;
 
         if (finalPhoneNumberId) {
-          const syncResult = await syncTenantPhoneNumberMapping({
-            clientId: client.id,
-            phoneNumberId: finalPhoneNumberId,
-            displayPhoneNumber,
-          });
-          phoneMappingAction = syncResult.action;
           if (tenant) {
             tenantUpdate = await saveTenantPatch(tenantId, {
               metaPhoneNumberId: finalPhoneNumberId,
@@ -24171,6 +24192,21 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           wabaId: finalWabaId,
           businessToken: exchange.businessToken,
         });
+        if (finalPhoneNumberId) {
+          await prisma.$transaction(async (tx) => {
+            await materializeMetaWhatsappChannelAccount({
+              prisma: tx,
+              tenantKey: tenantId,
+              clientId: client.id,
+              phoneNumberId: finalPhoneNumberId,
+              previousPhoneNumberId: previousMetaConfig?.phoneNumberId,
+              wabaId: finalWabaId,
+              displayName: displayPhoneNumber,
+              businessTokenStored: Boolean(exchange.businessToken ?? previousMetaConfig?.businessToken),
+              subscriptionState: channelAccountSubscriptionState(wabaSubscription),
+            });
+          });
+        }
 
         logger.info({
           event: "onboarding.exchange.success",
@@ -24184,6 +24220,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           businessTokenStored: Boolean(exchange.businessToken),
           partialMetaConfig: Boolean(exchange.businessToken) && !finalWabaId,
           phoneMappingAction,
+          channelAccountAction,
           fieldsChanged: tenantUpdate?.fieldsChanged ?? [],
           wabaSubscription,
         });
@@ -24232,7 +24269,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           return;
         }
 
-        if ((error as Error).message.includes("already mapped")) {
+        if (
+          (error as Error).message.includes("already mapped") ||
+          (error as Error).message.startsWith("meta_channel_account_identity_conflict") ||
+          (error as Error).message === "meta_channel_account_alias_conflict"
+        ) {
           json(res, 409, httpError("phone_number_conflict", (error as Error).message));
           return;
         }
@@ -24353,19 +24394,6 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         const displayPhoneNumber = extractTenantDisplayPhoneFromRawPayload({
           enrich: enriched.rawPayload,
         });
-        if (displayPhoneNumber) {
-          await syncTenantPhoneNumberMapping({
-            clientId: client.id,
-            phoneNumberId: requestedPhoneNumberId,
-            displayPhoneNumber,
-          });
-          if (tenant) {
-            await saveTenantPatch(tenantId, {
-              metaPhoneNumberId: requestedPhoneNumberId,
-              displayPhoneNumber,
-            });
-          }
-        }
         const wabaSubscription = await trySubscribeMetaWabaToApp({
           tenantId,
           clientKey: client.clientKey,
@@ -24380,30 +24408,55 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             ? (tenantMetaConfig.rawPayload as Record<string, unknown>)
             : {};
 
-        await prisma.tenantMetaConfig.update({
-          where: { clientId: client.id },
-          data: {
-            rawPayload: {
-              ...previousRawPayload,
-              source:
-                typeof previousRawPayload.source === "string" && previousRawPayload.source.trim()
-                  ? previousRawPayload.source
-                  : "phone_registration",
-              publicWhatsappIdentity:
-                buildMetaPublicWhatsappIdentityPayload(displayPhoneNumber) ??
-                previousRawPayload.publicWhatsappIdentity ??
-                null,
-              phoneRegistration: {
-                success: registration.success,
-                registeredAt: new Date().toISOString(),
-                phoneNumberId: requestedPhoneNumberId,
-                rawPayload: sanitizeMetaOnboardingStoredPayload(registration.rawPayload),
-              },
-              phoneRegistrationEnrich: sanitizeMetaOnboardingStoredPayload(enriched.rawPayload),
-              wabaSubscription,
-            } as Prisma.InputJsonValue,
-          },
+        await prisma.$transaction(async (tx) => {
+          await syncTenantPhoneNumberMapping({
+            prisma: tx,
+            clientId: client.id,
+            phoneNumberId: requestedPhoneNumberId,
+            displayPhoneNumber,
+          });
+          await tx.tenantMetaConfig.update({
+            where: { clientId: client.id },
+            data: {
+              rawPayload: {
+                ...previousRawPayload,
+                source:
+                  typeof previousRawPayload.source === "string" && previousRawPayload.source.trim()
+                    ? previousRawPayload.source
+                    : "phone_registration",
+                publicWhatsappIdentity:
+                  buildMetaPublicWhatsappIdentityPayload(displayPhoneNumber) ??
+                  previousRawPayload.publicWhatsappIdentity ??
+                  null,
+                phoneRegistration: {
+                  success: registration.success,
+                  registeredAt: new Date().toISOString(),
+                  phoneNumberId: requestedPhoneNumberId,
+                  rawPayload: sanitizeMetaOnboardingStoredPayload(registration.rawPayload),
+                },
+                phoneRegistrationEnrich: sanitizeMetaOnboardingStoredPayload(enriched.rawPayload),
+                wabaSubscription,
+              } as Prisma.InputJsonValue,
+            },
+          });
+          await materializeMetaWhatsappChannelAccount({
+            prisma: tx,
+            tenantKey: tenantId,
+            clientId: client.id,
+            phoneNumberId: requestedPhoneNumberId,
+            previousPhoneNumberId: tenantMetaConfig?.phoneNumberId,
+            wabaId: normalizeOptionalString(tenantMetaConfig?.wabaId),
+            displayName: displayPhoneNumber,
+            businessTokenStored: true,
+            subscriptionState: channelAccountSubscriptionState(wabaSubscription),
+          });
         });
+        if (displayPhoneNumber && tenant) {
+          await saveTenantPatch(tenantId, {
+            metaPhoneNumberId: requestedPhoneNumberId,
+            displayPhoneNumber,
+          });
+        }
 
         logger.info({
           event: "onboarding.phone_registration.success",
@@ -24558,31 +24611,46 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
               : null,
         };
 
-        const syncResult = await syncTenantPhoneNumberMapping({
-          clientId: client.id,
-          phoneNumberId,
-          displayPhoneNumber,
-        });
-
-        await prisma.tenantMetaConfig.upsert({
-          where: { clientId: client.id },
-          update: {
-            businessId: businessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
-            businessPortfolioId:
-              businessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
-            wabaId: wabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
-            phoneNumberId,
-            rawPayload: rawPayload as Prisma.InputJsonValue,
-          },
-          create: {
+        const materialization = await prisma.$transaction(async (tx) => {
+          const syncResult = await syncTenantPhoneNumberMapping({
+            prisma: tx,
             clientId: client.id,
-            businessId: businessId ?? undefined,
-            businessPortfolioId: businessPortfolioId ?? undefined,
-            wabaId: wabaId ?? undefined,
             phoneNumberId,
-            rawPayload: rawPayload as Prisma.InputJsonValue,
-          },
+            displayPhoneNumber,
+          });
+          await tx.tenantMetaConfig.upsert({
+            where: { clientId: client.id },
+            update: {
+              businessId: businessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+              businessPortfolioId:
+                businessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+              wabaId: wabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+              phoneNumberId,
+              rawPayload: rawPayload as Prisma.InputJsonValue,
+            },
+            create: {
+              clientId: client.id,
+              businessId: businessId ?? undefined,
+              businessPortfolioId: businessPortfolioId ?? undefined,
+              wabaId: wabaId ?? undefined,
+              phoneNumberId,
+              rawPayload: rawPayload as Prisma.InputJsonValue,
+            },
+          });
+          const materialized = await materializeMetaWhatsappChannelAccount({
+            prisma: tx,
+            tenantKey: tenantId,
+            clientId: client.id,
+            phoneNumberId,
+            previousPhoneNumberId: previousMetaConfig?.phoneNumberId,
+            wabaId,
+            displayName: displayPhoneNumber,
+            businessTokenStored: Boolean(businessToken),
+            subscriptionState: "not_attempted",
+          });
+          return { syncResult, channelAccountAction: materialized.action };
         });
+        const { syncResult, channelAccountAction } = materialization;
         const metaIdentityAfterUpsert = await resolveOperationalMetaWhatsappIdentity({
           prisma,
           clientId: client.id,
@@ -24611,6 +24679,19 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           wabaId,
           businessToken,
         });
+        await prisma.$transaction(async (tx) => {
+          await materializeMetaWhatsappChannelAccount({
+            prisma: tx,
+            tenantKey: tenantId,
+            clientId: client.id,
+            phoneNumberId,
+            previousPhoneNumberId: previousMetaConfig?.phoneNumberId,
+            wabaId,
+            displayName: displayPhoneNumber,
+            businessTokenStored: Boolean(businessToken),
+            subscriptionState: channelAccountSubscriptionState(wabaSubscription),
+          });
+        });
 
         logger.info({
           event: "onboarding.manual_bind.success",
@@ -24622,6 +24703,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           businessId,
           businessPortfolioId,
           phoneMappingAction: syncResult.action,
+          channelAccountAction,
           fieldsChanged: tenantUpdate?.fieldsChanged ?? [],
           wabaSubscription,
         });
@@ -24652,7 +24734,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           requestId,
           message: (error as Error).message,
         });
-        if ((error as Error).message.includes("already mapped")) {
+        if (
+          (error as Error).message.includes("already mapped") ||
+          (error as Error).message.startsWith("meta_channel_account_identity_conflict") ||
+          (error as Error).message === "meta_channel_account_alias_conflict"
+        ) {
           json(res, 409, httpError("phone_number_conflict", (error as Error).message));
           return;
         }
@@ -29687,12 +29773,21 @@ async function saveTenantPatch(tenantId: string, body: Record<string, unknown>):
 }
 
 async function syncTenantPhoneNumberMapping(params: {
+  prisma?: Prisma.TransactionClient | ReturnType<typeof getPrisma>;
   clientId: string;
   phoneNumberId: string;
   displayPhoneNumber?: string | null;
-}) {
-  const prisma = getPrisma();
+}): Promise<{ action: "created" | "existing" }> {
+  if (!params.prisma) {
+    return getPrisma().$transaction((tx) =>
+      syncTenantPhoneNumberMapping({ ...params, prisma: tx })
+    );
+  }
+  const prisma = params.prisma;
   const display = params.displayPhoneNumber?.trim() || params.phoneNumberId;
+  await prisma.$queryRaw(
+    Prisma.sql`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`wa-phone:${params.phoneNumberId}`}))`
+  );
   const existingPhone = await prisma.waPhoneNumber.findUnique({
     where: { phoneNumberId: params.phoneNumberId },
     include: {
@@ -29703,14 +29798,34 @@ async function syncTenantPhoneNumberMapping(params: {
   });
 
   if (!existingPhone) {
-    await prisma.waPhoneNumber.create({
-      data: {
-        clientId: params.clientId,
-        phoneNumberId: params.phoneNumberId,
-        display,
-      },
-    });
-    return { action: "created" as const };
+    try {
+      await prisma.waPhoneNumber.create({
+        data: {
+          clientId: params.clientId,
+          phoneNumberId: params.phoneNumberId,
+          display,
+        },
+      });
+      return { action: "created" as const };
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+        throw error;
+      }
+      const concurrentPhone = await prisma.waPhoneNumber.findUnique({
+        where: { phoneNumberId: params.phoneNumberId },
+        include: { client: { select: { clientKey: true } } },
+      });
+      if (!concurrentPhone || concurrentPhone.clientId !== params.clientId) {
+        throw new Error(
+          `phoneNumberId ${params.phoneNumberId} already mapped to ${concurrentPhone?.client?.clientKey ?? concurrentPhone?.clientId ?? "unknown"}`
+        );
+      }
+      await prisma.waPhoneNumber.update({
+        where: { phoneNumberId: params.phoneNumberId },
+        data: { display },
+      });
+      return { action: "existing" as const };
+    }
   }
 
   if (existingPhone.clientId !== params.clientId) {
@@ -30189,6 +30304,14 @@ type WabaSubscriptionStatus =
   | { attempted: false; reason: "missing_waba_or_token" }
   | { attempted: true; ok: true; success: boolean }
   | { attempted: true; ok: false; status: number | null; message: string };
+
+function channelAccountSubscriptionState(status: WabaSubscriptionStatus): MetaWabaSubscriptionState {
+  return status.attempted && status.ok && status.success
+    ? "subscribed"
+    : status.attempted
+      ? "subscription_failed"
+      : "not_attempted";
+}
 
 async function trySubscribeMetaWabaToApp(params: {
   tenantId: string;

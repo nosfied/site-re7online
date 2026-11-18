@@ -6301,6 +6301,13 @@ test("admin hybrid tenant validates Meta inbound while its Web Session is discon
       display: "+55 11 90000-0000",
     },
   });
+  await prisma.tenantMetaConfig.create({
+    data: {
+      clientId,
+      phoneNumberId,
+      rawPayload: { source: "unit_test_readiness" },
+    },
+  });
   await prisma.tenantOperationalConfig.upsert({
     where: { clientId },
     create: { clientId, config: { supportChannel: { mode: "human" } } },
@@ -6930,12 +6937,212 @@ test("admin onboarding manual bind supports db-only clients", async () => {
   assert.equal(phoneNumber?.clientId, client.id);
   assert.equal(phoneNumber?.display, "55 84 9***-0000");
 
+  const safeAccount = await prisma.channelAccount.findUniqueOrThrow({
+    where: {
+      clientId_provider_channel_channelAccountId: {
+        clientId: client.id,
+        provider: "meta",
+        channel: "whatsapp",
+        channelAccountId: `${prefix}-phone-db-only`,
+      },
+    },
+  });
+  assert.deepEqual(
+    {
+      enabled: safeAccount.enabled,
+      automationEnabled: safeAccount.automationEnabled,
+      runtimeEnabled: safeAccount.runtimeEnabled,
+      inboundPersistenceEnabled: safeAccount.inboundPersistenceEnabled,
+      outboundEnabled: safeAccount.outboundEnabled,
+      aiEnabled: safeAccount.aiEnabled,
+      handoffEnabled: safeAccount.handoffEnabled,
+      status: safeAccount.status,
+    },
+    {
+      enabled: false,
+      automationEnabled: false,
+      runtimeEnabled: false,
+      inboundPersistenceEnabled: false,
+      outboundEnabled: false,
+      aiEnabled: false,
+      handoffEnabled: false,
+      status: "pending",
+    }
+  );
+
+  await prisma.channelAccount.update({
+    where: { id: safeAccount.id },
+    data: {
+      enabled: true,
+      automationEnabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: false,
+      aiEnabled: true,
+      handoffEnabled: false,
+      status: "connected",
+    },
+  });
+  const repeated = await requestSuperadmin(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: `${prefix}-phone-db-only`,
+      displayPhoneNumber: "55 84 9***-0000",
+      wabaId: `${prefix}-waba-db-only`,
+      businessId: `${prefix}-business-db-only`,
+      businessPortfolioId: `${prefix}-portfolio-db-only`,
+    }
+  );
+  assert.equal(repeated.status, 200, JSON.stringify(repeated.body));
+  const preserved = await prisma.channelAccount.findUniqueOrThrow({ where: { id: safeAccount.id } });
+  assert.deepEqual(
+    {
+      enabled: preserved.enabled,
+      automationEnabled: preserved.automationEnabled,
+      runtimeEnabled: preserved.runtimeEnabled,
+      inboundPersistenceEnabled: preserved.inboundPersistenceEnabled,
+      outboundEnabled: preserved.outboundEnabled,
+      aiEnabled: preserved.aiEnabled,
+      handoffEnabled: preserved.handoffEnabled,
+      status: preserved.status,
+    },
+    {
+      enabled: true,
+      automationEnabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: false,
+      aiEnabled: true,
+      handoffEnabled: false,
+      status: "connected",
+    }
+  );
+
   const detail = await requestSuperadmin<{
     tenant: { metaPhoneNumberId: string; displayPhoneNumber?: string };
   }>("GET", `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}`);
   assert.equal(detail.status, 200);
   assert.equal(detail.body.tenant.metaPhoneNumberId, `${prefix}-phone-db-only`);
   assert.equal(detail.body.tenant.displayPhoneNumber, "55 84 9***-0000");
+});
+
+test("admin Meta bind is idempotent under concurrent callbacks and preserves superseded identity", async () => {
+  const tenantKey = `${prefix}-meta-concurrent-reconnect`;
+  const client = await prisma.client.create({
+    data: { clientKey: tenantKey, name: "Meta Concurrent Tenant", profile: "business", features: {} },
+    select: { id: true },
+  });
+  const firstPhone = `${prefix}-meta-concurrent-old`;
+  const nextPhone = `${prefix}-meta-concurrent-new`;
+  const callbackBody = {
+    phoneNumberId: firstPhone,
+    displayPhoneNumber: "+55 84 90000-1000",
+    wabaId: `${prefix}-meta-concurrent-waba`,
+  };
+  const callbacks = await Promise.all([
+    requestSuperadmin("POST", `/admin/tenants/${encodeURIComponent(tenantKey)}/onboarding/manual-bind`, callbackBody),
+    requestSuperadmin("POST", `/admin/tenants/${encodeURIComponent(tenantKey)}/onboarding/manual-bind`, callbackBody),
+  ]);
+  assert.deepEqual(callbacks.map((item) => item.status), [200, 200]);
+  assert.equal(await prisma.waPhoneNumber.count({ where: { phoneNumberId: firstPhone } }), 1);
+  assert.equal(await prisma.channelAccount.count({
+    where: { clientId: client.id, channel: "whatsapp", provider: "meta", channelAccountId: firstPhone },
+  }), 1);
+  const firstAccount = await prisma.channelAccount.findUniqueOrThrow({
+    where: {
+      clientId_provider_channel_channelAccountId: {
+        clientId: client.id,
+        provider: "meta",
+        channel: "whatsapp",
+        channelAccountId: firstPhone,
+      },
+    },
+    select: { id: true },
+  });
+  await prisma.channelAccount.update({
+    where: { id: firstAccount.id },
+    data: { channelAccountId: `${firstPhone}-historical-record` },
+  });
+  await prisma.channelAccountAlias.create({
+    data: { channelAccountId: firstAccount.id, alias: firstPhone, aliasType: "externalAccountId" },
+  });
+
+  const switched = await requestSuperadmin(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: nextPhone,
+      displayPhoneNumber: "+55 84 90000-2000",
+      wabaId: `${prefix}-meta-concurrent-waba`,
+      replaceExistingMetaIdentity: true,
+    }
+  );
+  assert.equal(switched.status, 200, JSON.stringify(switched.body));
+  const [historical, current] = await Promise.all([
+    prisma.channelAccount.findFirstOrThrow({
+      where: { id: firstAccount.id },
+    }),
+    prisma.channelAccount.findUniqueOrThrow({
+      where: { clientId_provider_channel_channelAccountId: { clientId: client.id, provider: "meta", channel: "whatsapp", channelAccountId: nextPhone } },
+    }),
+  ]);
+  assert.equal(historical.status, "disabled");
+  assert.equal(historical.enabled, false);
+  assert.equal(historical.runtimeEnabled, false);
+  assert.equal(historical.inboundPersistenceEnabled, false);
+  assert.equal((historical.metadata as Record<string, unknown>).metaIdentityState, "historical");
+  assert.equal(current.status, "pending");
+  assert.equal(current.enabled, false);
+});
+
+test("failed WABA subscription keeps Meta identity recoverable but not operational", async (t) => {
+  const tenantKey = `${prefix}-meta-subscription-failure`;
+  const phoneNumberId = `${prefix}-meta-subscription-phone`;
+  const client = await prisma.client.create({
+    data: { clientKey: tenantKey, name: "Meta Subscription Failure", profile: "business", features: {} },
+    select: { id: true },
+  });
+  await prisma.tenantMetaConfig.create({
+    data: {
+      clientId: client.id,
+      businessToken: `${prefix}-subscription-token`,
+      rawPayload: { source: "unit_test_subscription_failure" },
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.hostname === "graph.facebook.com" && url.pathname.endsWith("/subscribed_apps")) {
+      return new Response(JSON.stringify({ error: { message: "subscription unavailable" } }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const response = await requestSuperadmin<{ success: boolean; warning: string }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/onboarding/manual-bind`,
+    {
+      phoneNumberId,
+      displayPhoneNumber: "+55 84 90000-3000",
+      wabaId: `${prefix}-meta-subscription-waba`,
+    }
+  );
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.success, true);
+  assert.match(response.body.warning, /inscricao do app para webhooks falhou/i);
+  const account = await prisma.channelAccount.findUniqueOrThrow({
+    where: { clientId_provider_channel_channelAccountId: { clientId: client.id, provider: "meta", channel: "whatsapp", channelAccountId: phoneNumberId } },
+  });
+  assert.equal(account.status, "pending");
+  assert.equal(account.enabled, false);
+  assert.equal(account.runtimeEnabled, false);
+  assert.equal(account.inboundPersistenceEnabled, false);
+  assert.equal((account.metadata as Record<string, unknown>).wabaSubscriptionState, "subscription_failed");
 });
 
 test("admin onboarding manual bind rejects phone conflicts without partial meta config", async () => {
@@ -6985,6 +7192,33 @@ test("admin onboarding manual bind rejects phone conflicts without partial meta 
     select: { phoneNumberId: true, wabaId: true, businessId: true, businessPortfolioId: true },
   });
   assert.equal(targetMetaConfig, null);
+});
+
+test("admin onboarding rejects cross-tenant ChannelAccount alias without partial writes", async () => {
+  const ownerKey = `${prefix}-meta-alias-owner`;
+  const targetKey = `${prefix}-meta-alias-target`;
+  const phoneNumberId = `${prefix}-meta-alias-phone`;
+  const [owner, target] = await Promise.all([
+    prisma.client.create({ data: { clientKey: ownerKey, name: "Alias Owner", profile: "business", features: {} }, select: { id: true } }),
+    prisma.client.create({ data: { clientKey: targetKey, name: "Alias Target", profile: "business", features: {} }, select: { id: true } }),
+  ]);
+  const ownerAccount = await prisma.channelAccount.create({
+    data: { clientId: owner.id, channel: "whatsapp", provider: "meta", channelAccountId: `${prefix}-owner-primary` },
+    select: { id: true },
+  });
+  await prisma.channelAccountAlias.create({
+    data: { channelAccountId: ownerAccount.id, alias: phoneNumberId, aliasType: "externalAccountId" },
+  });
+
+  const response = await requestSuperadmin(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(targetKey)}/onboarding/manual-bind`,
+    { phoneNumberId, displayPhoneNumber: "+55 84 90000-4000" }
+  );
+  assert.equal(response.status, 409, JSON.stringify(response.body));
+  assert.equal(await prisma.tenantMetaConfig.count({ where: { clientId: target.id } }), 0);
+  assert.equal(await prisma.waPhoneNumber.count({ where: { clientId: target.id } }), 0);
+  assert.equal(await prisma.channelAccount.count({ where: { clientId: target.id } }), 0);
 });
 
 test("admin embedded signup audit events are tenant scoped and reject raw secrets", async () => {
@@ -7445,6 +7679,25 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
     });
     assert.equal(phoneNumber?.clientId, client.id);
     assert.equal(phoneNumber?.display, "+55 84 9459-6848");
+    const channelAccount = await prisma.channelAccount.findUniqueOrThrow({
+      where: {
+        clientId_provider_channel_channelAccountId: {
+          clientId: client.id,
+          provider: "meta",
+          channel: "whatsapp",
+          channelAccountId: `${prefix}-phone-display`,
+        },
+      },
+    });
+    assert.equal(channelAccount.status, "pending");
+    assert.equal(channelAccount.enabled, false);
+    assert.equal(channelAccount.runtimeEnabled, false);
+    assert.equal(channelAccount.inboundPersistenceEnabled, false);
+    assert.equal(channelAccount.tokenStatus, "configured");
+    assert.equal(
+      (channelAccount.metadata as Record<string, unknown>).wabaSubscriptionState,
+      "subscribed"
+    );
 
     const repeat = await requestSuperadmin<{ success: boolean }>(
       "POST",
@@ -7466,6 +7719,17 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
     assert.equal(
       await prisma.waPhoneNumber.count({
         where: { clientId: client.id, phoneNumberId: `${prefix}-phone-display` },
+      }),
+      1
+    );
+    assert.equal(
+      await prisma.channelAccount.count({
+        where: {
+          clientId: client.id,
+          provider: "meta",
+          channel: "whatsapp",
+          channelAccountId: `${prefix}-phone-display`,
+        },
       }),
       1
     );

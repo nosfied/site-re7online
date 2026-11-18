@@ -52,13 +52,25 @@ resposta com predicado nominal tenant-scoped; ela nunca seleciona outro tenant.
 
 ## Prontidão no Console Interno
 
+O Embedded Signup, o vínculo/revínculo manual e o registro do telefone
+materializam a identidade atual também em `ChannelAccount whatsapp/meta`. A
+publicação DB-first de `TenantMetaConfig`, `WaPhoneNumber` e `ChannelAccount` é
+tenant-scoped e transacional; a assinatura externa da WABA permanece uma
+fronteira distribuída observável. Conta nova nasce `pending`, com os sete gates
+booleanos desligados. Revínculo da mesma identidade preserva exatamente esses
+sete gates. Troca de número mantém a conta anterior como histórico desabilitado,
+sem apagar evidência nem reativá-la a partir de `WaPhoneNumber`. Falha ou ausência
+da assinatura WABA nunca promove a conta a estado operacional.
+
 `Console Interno → Tenant → Canais → WhatsApp/Meta` apresenta três verificações
 independentes por identidade Meta:
 
-1. **Identidade vinculada** exige uma `ChannelAccount` `whatsapp/meta` cujo
-   `channelAccountId` ou alias corresponda a uma identidade Meta conhecida do
-   tenant (`WaPhoneNumber` ou `TenantMetaConfig`) e mostra separadamente se seu
-   estado é `connected`;
+1. **Identidade vinculada** classifica `ACTIVE` somente quando a identidade atual
+   de `TenantMetaConfig` possui `ChannelAccount` compatível, conectado e com os
+   gates inbound exigidos; `PENDING_BINDING` identifica a identidade atual ainda
+   sem conta ou dependência operacional; `HISTORICAL` identifica números e contas
+   preservados que não são a identidade atual. Registros históricos de
+   `WaPhoneNumber` não entram na lista de pendências atuais;
 2. **Persistência configurada** lê `enabled`, `runtimeEnabled`,
    `inboundPersistenceEnabled` e a presença de `baseConfig` em
    `TenantOperationalConfig`. Quando somente `baseConfig` estiver ausente e a
