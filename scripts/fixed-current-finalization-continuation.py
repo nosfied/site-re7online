@@ -236,7 +236,7 @@ def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
 def _validate_cache_successor_refresh(
     prior: dict[str, Any], current: dict[str, Any]
 ) -> None:
-    """Authenticate a new driver against an unchanged ED74 cache authority.
+    """Authenticate a new driver against an unchanged closed cache authority.
 
     Only the successor checkout and script digest may change; the release,
     original binding, inventory and historical journal authority remain sealed.
@@ -252,18 +252,23 @@ def _validate_cache_successor_refresh(
         new = json.loads(new_raw)
     except json.JSONDecodeError as error:
         raise Denied("request_recovery_cache_manifest") from error
+    release = old.get("releaseId") if isinstance(old, dict) else None
+    journal_authority = {
+        ED74_RUNTIME_CACHE_RELEASE: "acceptanceJournal",
+        META_DBFIRST_RUNTIME_CACHE_RELEASE: "negativeJournal",
+    }.get(release)
+    expected = {
+        "schemaVersion", "kind", "releaseId", "targetCommit",
+        "transactionRoot", "indexSha256", "manifestSha256",
+        "retirementIntentSha256", "originalControlPlane",
+        "continuationControlPlane", "continuationDriverSha256",
+        "acceptanceSha256", "lockSha256", "cacheEntries",
+    }
+    if journal_authority is not None:
+        expected.add(journal_authority)
     if (not isinstance(old, dict) or not isinstance(new, dict) or
-            old.get("releaseId") != ED74_RUNTIME_CACHE_RELEASE or
-            new.get("releaseId") != ED74_RUNTIME_CACHE_RELEASE or
-            set(old) != set(new) or
-            set(old) != {
-                "schemaVersion", "kind", "releaseId", "targetCommit",
-                "transactionRoot", "indexSha256", "manifestSha256",
-                "retirementIntentSha256", "originalControlPlane",
-                "continuationControlPlane", "continuationDriverSha256",
-                "acceptanceJournal", "acceptanceSha256", "lockSha256",
-                "cacheEntries",
-            }):
+            journal_authority is None or new.get("releaseId") != release or
+            set(old) != set(new) or set(old) != expected):
         raise Denied("request_recovery_cache_scope")
     stable = set(old) - {"continuationControlPlane", "continuationDriverSha256"}
     if (any(old[key] != new[key] for key in stable) or

@@ -405,6 +405,94 @@ class ContinuationTests(unittest.TestCase):
                 CONTINUATION.load_request(
                     self.fixture.request_path, digest(self.fixture.request_path))
 
+    def test_meta_dbfirst_postsave_refresh_preserves_negative_authority(self):
+        _, old_manifest_path = self.fixture.ed74_pre_finalize_request()
+        old_manifest = json.loads(old_manifest_path.read_text())
+        old_manifest["negativeJournal"] = old_manifest.pop("acceptanceJournal")
+        private_json(old_manifest_path, old_manifest)
+        old_argv = self.fixture.request["finalizeArgv"]
+        sha_position = old_argv.index("--runtime-cache-reconciliation-sha256")
+        old_argv[sha_position + 1] = digest(old_manifest_path)
+        prior = self.fixture.root / "meta-dbfirst-prior.private.json"
+        private_json(prior, self.fixture.request)
+
+        evidence = {}
+        for name, content in (
+            ("stdout", ""), ("stderr", "DEPLOY_DENY:final_dump_field:api:logs\n"),
+            ("exit", "2\n"),
+        ):
+            path = self.fixture.tx / f"fixed-current-finalize-continuation-attempt-02.{name}.private.txt"
+            path.write_text(content); path.chmod(0o600)
+            evidence[name] = {"path": str(path), "sha256": digest(path)}
+        journal = self.fixture.tx / "transaction.v1.private.json"
+        private_json(journal, {
+            "state": "FAILED", "recoveryAction": "finalize", "saveCount": 1,
+        })
+
+        driver = Path(self.fixture.request["driver"])
+        repo = driver.parent.parent
+        driver.write_text("# meta db-first post-save successor\n")
+        subprocess.run(["git", "-C", str(repo), "add", "scripts/converta-deploy.py"],
+                       check=True)
+        subprocess.run([
+            "git", "-C", str(repo), "-c", "user.name=Fixture", "-c",
+            "user.email=fixture@example.invalid", "commit", "-qm", "post-save successor",
+        ], check=True)
+        driver.chmod(0o600)
+        successor = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True,
+            text=True, capture_output=True,
+        ).stdout.strip()
+        new_manifest_path = self.fixture.root / "meta-dbfirst-cache-successor.private.json"
+        new_manifest = dict(old_manifest)
+        new_manifest["continuationControlPlane"] = successor
+        new_manifest["continuationDriverSha256"] = digest(driver)
+        private_json(new_manifest_path, new_manifest)
+        current_argv = list(old_argv)
+        current_argv[current_argv.index("--runtime-cache-reconciliation") + 1] = str(
+            new_manifest_path)
+        current_argv[current_argv.index("--runtime-cache-reconciliation-sha256") + 1] = digest(
+            new_manifest_path)
+        current = {
+            "schemaVersion": 1, "action": "finalize_continuation", "attemptOrdinal": 3,
+            "lockPath": str(self.fixture.lock), "transactionRoot": str(self.fixture.tx),
+            "driver": str(driver), "driverSha256": digest(driver),
+            "finalizeArgv": current_argv,
+            "evidenceOutputs": {
+                name: str(self.fixture.tx / f"fixed-current-finalize-continuation-attempt-03.{name}.private.txt")
+                for name in ("stdout", "stderr", "exit")
+            },
+            "recovery": {
+                "priorRequest": str(prior), "priorRequestSha256": digest(prior),
+                "negativeJournal": str(journal), "negativeJournalSha256": digest(journal),
+                "priorEvidence": evidence,
+            },
+        }
+        target = old_manifest["targetCommit"]
+        intent = old_manifest["retirementIntentSha256"]
+        with patch.multiple(
+            CONTINUATION,
+            META_DBFIRST_RUNTIME_CACHE_RELEASE="immutable-test",
+            META_DBFIRST_RUNTIME_CACHE_TARGET=target,
+            META_DBFIRST_RUNTIME_CACHE_TRANSACTION=self.fixture.tx,
+            META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256=intent,
+        ):
+            CONTINUATION._validate_cache_successor_refresh(self.fixture.request, current)
+
+        modified = dict(new_manifest)
+        modified["negativeJournal"] = {"path": str(journal), "sha256": "0" * 64}
+        private_json(new_manifest_path, modified)
+        current_argv[current_argv.index("--runtime-cache-reconciliation-sha256") + 1] = digest(
+            new_manifest_path)
+        with patch.multiple(
+            CONTINUATION,
+            META_DBFIRST_RUNTIME_CACHE_RELEASE="immutable-test",
+            META_DBFIRST_RUNTIME_CACHE_TARGET=target,
+            META_DBFIRST_RUNTIME_CACHE_TRANSACTION=self.fixture.tx,
+            META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256=intent,
+        ), self.assertRaisesRegex(CONTINUATION.Denied, "request_recovery_cache_successor"):
+            CONTINUATION._validate_cache_successor_refresh(self.fixture.request, current)
+
     def test_ed74_pre_finalize_request_authenticates_successor_checkout(self):
         constants, _ = self.fixture.ed74_pre_finalize_request()
         with patch.multiple(CONTINUATION, **constants):

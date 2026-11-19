@@ -744,6 +744,19 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
             ):
                 self.assertEqual(continuation.load_request(
                     fixture.output, digest(fixture.output)), produced03)
+            attempt02_stderr = fixture.deploy.transaction / (
+                "fixed-current-finalize-continuation-attempt-02.stderr.private.txt")
+            attempt02_stderr.write_text("DEPLOY_DENY:final_dump_field:api:logs\n")
+            attempt02_stderr.chmod(0o600)
+            loaded_input = producer.load_request(fixture.input, digest(fixture.input))
+            with patch.object(producer, "META_DBFIRST_RELEASE", fixture.deploy.candidate):
+                _, meta03 = producer.derive_failed_finalize_continuation(loaded_input)
+                self.assertEqual(meta03["attemptOrdinal"], 3)
+                attempt02_stderr.write_text("DEPLOY_DENY:unrelated_failure\n")
+                attempt02_stderr.chmod(0o600)
+                with self.assertRaisesRegex(
+                        producer.Denied, "continuation_prior_failure_evidence"):
+                    producer.derive_failed_finalize_continuation(loaded_input)
             self.assertEqual(fixture.run().returncode, 2)
             self.assertEqual(journal_path.read_bytes(), journal_before)
         finally:

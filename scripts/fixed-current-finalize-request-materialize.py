@@ -625,9 +625,10 @@ def derive_failed_finalize_continuation(
     binding = journal.get("binding")
     if not isinstance(binding, dict):
         raise Denied("continuation_journal_binding")
+    meta_dbfirst_profile = binding.get("release") == META_DBFIRST_RELEASE
     initial_meta_dbfirst_cache = (
         prior_action == "finalize" and
-        binding.get("release") == META_DBFIRST_RELEASE and
+        meta_dbfirst_profile and
         "--runtime-cache-reconciliation" not in prior.get("finalizeArgv", []) and
         "--runtime-cache-reconciliation-sha256" not in prior.get("finalizeArgv", [])
     )
@@ -639,7 +640,9 @@ def derive_failed_finalize_continuation(
                               b"control_plane_succession_script:deploy")
     elif prior_action == "finalize_continuation":
         expected_keys = base_keys | {"attemptOrdinal", "evidenceOutputs", "recovery"}
-        # ED74 post-save continuation is the direct ordinal-02 successor.
+        # A post-save continuation is the direct ordinal-02 successor.  ED74
+        # retains its exact historical predicate; 41D admits only the closed
+        # final-dump identity family emitted after the durable save checkpoint.
         if prior.get("attemptOrdinal") != 2:
             raise Denied("continuation_prior_ordinal")
         ordinal, required_save = 3, 1
@@ -688,7 +691,15 @@ def derive_failed_finalize_continuation(
         evidence[name] = {"path": str(path), "sha256": sha256(raw)}
     stderr, _ = stable_regular(Path(evidence["stderr"]["path"]), modes={0o600})
     exit_bytes, _ = stable_regular(Path(evidence["exit"]["path"]), modes={0o600})
-    if exit_bytes != b"2\n" or evidence_predicate not in stderr:
+    if meta_dbfirst_profile and ordinal == 3:
+        evidence_matches = stderr in {
+            b"DEPLOY_DENY:final_dump_field:api:logs\n",
+            b"DEPLOY_DENY:final_dump_field:frontend:logs\n",
+            b"DEPLOY_DENY:final_dump_field:worker:logs\n",
+        }
+    else:
+        evidence_matches = evidence_predicate in stderr
+    if exit_bytes != b"2\n" or not evidence_matches:
         raise Denied("continuation_prior_failure_evidence")
 
     driver = Path(request["driver"])
