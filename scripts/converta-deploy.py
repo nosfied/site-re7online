@@ -132,6 +132,20 @@ RUNTIME_CACHE_ED74_ACCEPTANCE_JOURNAL_SHA256 = (
 )
 RUNTIME_CACHE_ED74_ACCEPTANCE_SHA256 = "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
 RUNTIME_CACHE_ED74_LOCK_SHA256 = "973215dd06be1517ff14e00b85bceb91dc7698f906fc589b86aab98d49e8b582"
+RUNTIME_CACHE_41D_RELEASE = "immutable-41d70b53-external-20261118T214122Z"
+RUNTIME_CACHE_41D_TARGET = "41d70b5368bc413ea34ee517b79351d7b8cd526b"
+RUNTIME_CACHE_41D_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-41d70b53-external-20261118T214122Z-api-frontend-41d70b53-v2-once"
+)
+RUNTIME_CACHE_41D_INDEX_SHA256 = "f99c00bf7724dd581e34a4fccae4b4fd47ae32c596af20b2fad187b390eaf14c"
+RUNTIME_CACHE_41D_MANIFEST_SHA256 = "3d0a9c69de53e39d3ee9d8df389d1640615988a80354f421a5dfe7732932b5cc"
+RUNTIME_CACHE_41D_INTENT_SHA256 = "5fb229f2390fd3fcdcfdd0efe7cb0c69b87df8721bec39568e9ffe46249ea287"
+RUNTIME_CACHE_41D_NEGATIVE_JOURNAL_SHA256 = (
+    "263114a6abed7b66e6ee298fc773f81825f1eb682515a20c0721d62275d9ed8e"
+)
+RUNTIME_CACHE_41D_ACCEPTANCE_SHA256 = "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
+RUNTIME_CACHE_41D_LOCK_SHA256 = "235780dd913299a349c61ba55cb0006818de9743cd47418246dde0f643fa5368"
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -1137,6 +1151,20 @@ class Driver:
                 "allowedImageExtensions": {"webp", "png", "jpeg"},
                 "journalAuthority": "acceptance",
             },
+            RUNTIME_CACHE_41D_RELEASE: {
+                "target": RUNTIME_CACHE_41D_TARGET,
+                "transaction": RUNTIME_CACHE_41D_TRANSACTION,
+                "indexSha256": RUNTIME_CACHE_41D_INDEX_SHA256,
+                "manifestSha256": RUNTIME_CACHE_41D_MANIFEST_SHA256,
+                "intentSha256": RUNTIME_CACHE_41D_INTENT_SHA256,
+                "negativeJournalSha256": RUNTIME_CACHE_41D_NEGATIVE_JOURNAL_SHA256,
+                "acceptanceSha256": RUNTIME_CACHE_41D_ACCEPTANCE_SHA256,
+                "lockSha256": RUNTIME_CACHE_41D_LOCK_SHA256,
+                "extras": None,
+                "volatileCachePolicy": "META_DBFIRST_41D_NEXT_IMAGE_CACHE_V1",
+                "allowedImageExtensions": {"webp", "png", "jpeg"},
+                "journalAuthority": "negative",
+            },
         }
         profile = profiles.get(self.inputs.release)
         if (profile is None or self.inputs.target != profile["target"] or
@@ -1236,7 +1264,8 @@ class Driver:
             deny("runtime_cache_reconciliation_entries")
         expected_extras = profile["extras"]
         if profile.get("volatileCachePolicy") in {
-                "FA10_NEXT_IMAGE_CACHE_V1", "ED74_NEXT_IMAGE_CACHE_V1"}:
+                "FA10_NEXT_IMAGE_CACHE_V1", "ED74_NEXT_IMAGE_CACHE_V1",
+                "META_DBFIRST_41D_NEXT_IMAGE_CACHE_V1"}:
             bases = {
                 "frontend-runtime/.next/cache",
                 "frontend-runtime/.next/cache/images",

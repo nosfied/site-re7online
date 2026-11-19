@@ -34,6 +34,8 @@ deploy_tests = module("finalize_materializer_deploy_fixture",
                       ROOT / "scripts/ci/test-converta-deploy.py")
 continuation = module("finalize_materializer_consumer",
                       ROOT / "scripts/fixed-current-finalization-continuation.py")
+producer = module("finalize_materializer_producer",
+                  ROOT / "scripts/fixed-current-finalize-request-materialize.py")
 
 
 def digest(path: Path) -> str:
@@ -194,6 +196,195 @@ class ProducerFixture:
 
 
 class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
+    def test_meta_dbfirst_failed_initial_finalize_derives_cache_and_finishes_once(self) -> None:
+        fixture = ProducerFixture(self, "api_frontend")
+        try:
+            self.assertEqual(fixture.run().returncode, 0)
+            prior = fixture.custody / "meta-dbfirst-prior-finalize.private.json"
+            prior.write_bytes(fixture.output.read_bytes()); prior.chmod(0o600)
+
+            release_root = fixture.deploy.releases / fixture.deploy.candidate
+            (release_root / "index.sha256").chmod(0o644)
+            (release_root / "manifest.json").chmod(0o644)
+            cache_root = release_root / "frontend-runtime/.next/cache"
+            leaf_dir = cache_root / "images" / "MetaDbfirstCacheKey123456789012345"
+            leaf_dir.mkdir(parents=True)
+            for directory in (cache_root, cache_root / "images", leaf_dir):
+                directory.chmod(0o755)
+            leaf = leaf_dir / "14400.meta-dbfirst-runtime-cache-value.webp"
+            leaf.write_bytes(b"meta-dbfirst-runtime-cache"); leaf.chmod(0o644)
+
+            journal_path = fixture.deploy.transaction / "transaction.v1.private.json"
+            journal = json.loads(journal_path.read_text())
+            journal.update(state="FAILED", recoveryAction="finalize", saveCount=0,
+                           deployedMarkerCreated=False)
+            private_json(journal_path, journal)
+            evidence = {
+                "stdout": "",
+                "stderr": "DEPLOY_DENY:runtime_cache_reconciliation_binding\n",
+                "exit": "2\n",
+            }
+            for name, content in evidence.items():
+                path = fixture.deploy.transaction / (
+                    f"fixed-current-finalize-continuation.{name}.private.txt")
+                path.write_text(content); path.chmod(0o600)
+
+            fixture.driver.write_text(fixture.driver.read_text() +
+                                      "\n# meta db-first cache continuation\n")
+            subprocess.run(["git", "-C", str(fixture.repo), "add",
+                            "scripts/converta-deploy.py"], check=True)
+            subprocess.run([
+                "git", "-C", str(fixture.repo), "-c", "user.name=Fixture",
+                "-c", "user.email=fixture@example.invalid", "commit", "-qm",
+                "meta db-first cache successor",
+            ], check=True)
+
+            cache_output = fixture.custody / "meta-dbfirst-cache.private.json"
+            negative_output = fixture.custody / "meta-dbfirst-negative-journal.private.json"
+            fixture.output = fixture.custody / "meta-dbfirst-continuation.private.json"
+            fixture.value = {
+                "schemaVersion": 1,
+                "action": "materialize_fixed_current_finalize_continuation",
+                "transactionRoot": str(fixture.deploy.transaction),
+                "transactionJournal": str(journal_path),
+                "transactionJournalSha256": digest(journal_path),
+                "priorRequest": str(prior), "priorRequestSha256": digest(prior),
+                "lockPath": str(fixture.deploy.lock),
+                "lockSha256": digest(fixture.deploy.lock),
+                "driver": str(fixture.driver), "driverSha256": digest(fixture.driver),
+                "wrapper": str(fixture.wrapper), "wrapperSha256": digest(fixture.wrapper),
+                "cacheManifestOutput": str(cache_output),
+                "negativeJournalOutput": str(negative_output),
+                "finalizeRequestOutput": str(fixture.output),
+            }
+            private_json(fixture.input, fixture.value)
+            retirement = fixture.deploy.retirement
+            assert retirement is not None
+            patches = {
+                "RELEASES_ROOT": fixture.deploy.releases,
+                "META_DBFIRST_RELEASE": fixture.deploy.candidate,
+                "META_DBFIRST_TARGET": fixture.deploy.target,
+                "META_DBFIRST_ORIGINAL_CONTROL_PLANE": fixture.original_head,
+                "META_DBFIRST_TRANSACTION": fixture.deploy.transaction,
+                "META_DBFIRST_INDEX_SHA256": digest(release_root / "index.sha256"),
+                "META_DBFIRST_MANIFEST_SHA256": digest(release_root / "manifest.json"),
+                "META_DBFIRST_INTENT_SHA256": retirement.intent_sha256,
+                "META_DBFIRST_NEGATIVE_JOURNAL_SHA256": digest(journal_path),
+                "META_DBFIRST_ACCEPTANCE_SHA256": digest(
+                    fixture.deploy.transaction / "acceptance.private.txt"),
+                "META_DBFIRST_LOCK_SHA256": digest(fixture.deploy.lock),
+            }
+            before = journal_path.read_bytes()
+            with patch.multiple(producer, **patches):
+                loaded = producer.load_request(fixture.input, digest(fixture.input))
+                wrong = dict(patches, META_DBFIRST_LOCK_SHA256="0" * 64)
+                with patch.multiple(producer, **wrong), self.assertRaisesRegex(
+                        producer.Denied, "continuation_meta_dbfirst_scope"):
+                    producer.derive_failed_finalize_continuation(loaded)
+                result = producer.publish_failed_finalize_continuation(loaded)
+            self.assertEqual(result["result"],
+                             "FIXED_CURRENT_FINALIZE_CONTINUATION_REQUEST_MATERIALIZED")
+            self.assertEqual(negative_output.read_bytes(), before)
+            self.assertEqual(result["negativeJournalAuthority"]["sha256"], digest(journal_path))
+            self.assertEqual(journal_path.read_bytes(), before)
+            produced = json.loads(fixture.output.read_text())
+            self.assertEqual(produced["attemptOrdinal"], 2)
+            manifest = json.loads(cache_output.read_text())
+            self.assertEqual(manifest["negativeJournal"]["sha256"], digest(journal_path))
+            self.assertEqual(manifest["negativeJournal"]["path"], str(negative_output))
+            self.assertEqual(len(manifest["cacheEntries"]), 4)
+            self.assertEqual({item["type"] for item in manifest["cacheEntries"]},
+                             {"directory", "file"})
+            with patch.multiple(
+                continuation,
+                META_DBFIRST_RUNTIME_CACHE_RELEASE=fixture.deploy.candidate,
+                META_DBFIRST_RUNTIME_CACHE_TARGET=fixture.deploy.target,
+                META_DBFIRST_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
+                META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+            ):
+                request = continuation.load_request(fixture.output, digest(fixture.output))
+
+            worker_before = fixture.deploy.host.rows["re7-whatsapp-web-worker"].copy()
+            fixture.deploy.inputs = replace(
+                fixture.deploy.inputs, runtime_cache_reconciliation=cache_output,
+                runtime_cache_reconciliation_sha256=digest(cache_output))
+            fixture.deploy.host.control_plane = fixture.head()
+            fixture.deploy.driver = fixture.deploy._driver(fixture.repo)
+            lock_fd = continuation.acquire_lock(fixture.deploy.lock)
+            save_before = fixture.deploy.host.save_calls
+
+            def real_driver(argv, **kwargs):
+                previous = os.environ.get(continuation.LOCK_ENV)
+                os.environ[continuation.LOCK_ENV] = kwargs["env"][continuation.LOCK_ENV]
+                try:
+                    fixture.deploy.driver.finalize()
+                finally:
+                    if previous is None:
+                        os.environ.pop(continuation.LOCK_ENV, None)
+                    else:
+                        os.environ[continuation.LOCK_ENV] = previous
+                return subprocess.CompletedProcess(argv, 0)
+
+            driver_patches = {
+                "RUNTIME_CACHE_41D_RELEASE": fixture.deploy.candidate,
+                "RUNTIME_CACHE_41D_TARGET": fixture.deploy.target,
+                "RUNTIME_CACHE_41D_TRANSACTION": fixture.deploy.transaction,
+                "RUNTIME_CACHE_41D_INDEX_SHA256": digest(release_root / "index.sha256"),
+                "RUNTIME_CACHE_41D_MANIFEST_SHA256": digest(release_root / "manifest.json"),
+                "RUNTIME_CACHE_41D_INTENT_SHA256": retirement.intent_sha256,
+                "RUNTIME_CACHE_41D_NEGATIVE_JOURNAL_SHA256": digest(journal_path),
+                "RUNTIME_CACHE_41D_ACCEPTANCE_SHA256": digest(
+                    fixture.deploy.transaction / "acceptance.private.txt"),
+                "RUNTIME_CACHE_41D_LOCK_SHA256": digest(fixture.deploy.lock),
+            }
+            try:
+                with patch.object(deploy_tests.deploy, "__file__", str(fixture.driver)), \
+                        patch.multiple(deploy_tests.deploy, **driver_patches), \
+                        patch.multiple(
+                            continuation,
+                            META_DBFIRST_RUNTIME_CACHE_RELEASE=fixture.deploy.candidate,
+                            META_DBFIRST_RUNTIME_CACHE_TARGET=fixture.deploy.target,
+                            META_DBFIRST_RUNTIME_CACHE_TRANSACTION=fixture.deploy.transaction,
+                            META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256=retirement.intent_sha256,
+                        ):
+                    self.assertEqual(continuation.run(request, lock_fd, runner=real_driver), 0)
+                    continuation.release_terminal_lock(request, lock_fd)
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN); os.close(lock_fd)
+            self.assertEqual(fixture.deploy.host.save_calls, save_before + 1)
+            self.assertEqual(fixture.deploy.driver._journal_read()["saveCount"], 1)
+            self.assertEqual(fixture.deploy.host.rows["re7-whatsapp-web-worker"], worker_before)
+            self.assertFalse(fixture.deploy.lock.exists())
+        finally:
+            fixture.close()
+
+    def test_meta_dbfirst_cache_inventory_rejects_symlink_mode_and_unknown_path(self) -> None:
+        for variant in ("symlink", "mode", "unknown"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temporary:
+                releases = Path(temporary); release = releases / "candidate"
+                cache = release / "frontend-runtime/.next/cache"
+                leaf_dir = cache / "images" / "MetaDbfirstCacheKey123456789012345"
+                leaf_dir.mkdir(parents=True)
+                for directory in (release, cache, cache / "images", leaf_dir):
+                    directory.chmod(0o755)
+                (release / "index.sha256").write_text("index\n")
+                (release / "manifest.json").write_text("{}\n")
+                leaf = leaf_dir / "14400.meta-dbfirst-runtime-cache-value.webp"
+                leaf.write_bytes(b"cache"); leaf.chmod(0o644)
+                if variant == "symlink":
+                    (leaf_dir / "linked-cache.webp").symlink_to(leaf)
+                elif variant == "mode":
+                    leaf.chmod(0o664)
+                else:
+                    extra = cache / "unknown.txt"; extra.write_text("unknown")
+                    extra.chmod(0o644)
+                with patch.multiple(
+                    producer, RELEASES_ROOT=releases, META_DBFIRST_RELEASE="candidate",
+                    META_DBFIRST_INDEX_SHA256=digest(release / "index.sha256"),
+                    META_DBFIRST_MANIFEST_SHA256=digest(release / "manifest.json"),
+                ), self.assertRaises(producer.Denied):
+                    producer.meta_dbfirst_cache_inventory()
+
     def test_profiles_derive_exact_scope_and_consumer_accepts_request(self) -> None:
         for profile, expected in (
             ("api", "api"), ("api_frontend", "api,frontend"),
@@ -553,6 +744,19 @@ class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
             ):
                 self.assertEqual(continuation.load_request(
                     fixture.output, digest(fixture.output)), produced03)
+            attempt02_stderr = fixture.deploy.transaction / (
+                "fixed-current-finalize-continuation-attempt-02.stderr.private.txt")
+            attempt02_stderr.write_text("DEPLOY_DENY:final_dump_field:api:logs\n")
+            attempt02_stderr.chmod(0o600)
+            loaded_input = producer.load_request(fixture.input, digest(fixture.input))
+            with patch.object(producer, "META_DBFIRST_RELEASE", fixture.deploy.candidate):
+                _, meta03 = producer.derive_failed_finalize_continuation(loaded_input)
+                self.assertEqual(meta03["attemptOrdinal"], 3)
+                attempt02_stderr.write_text("DEPLOY_DENY:unrelated_failure\n")
+                attempt02_stderr.chmod(0o600)
+                with self.assertRaisesRegex(
+                        producer.Denied, "continuation_prior_failure_evidence"):
+                    producer.derive_failed_finalize_continuation(loaded_input)
             self.assertEqual(fixture.run().returncode, 2)
             self.assertEqual(journal_path.read_bytes(), journal_before)
         finally:

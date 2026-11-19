@@ -43,6 +43,15 @@ ED74_RUNTIME_CACHE_TRANSACTION = Path(
     "preflight-4e55c9d9-v2/transaction"
 )
 ED74_RUNTIME_CACHE_INTENT_SHA256 = "250a535c4c756a7fcc087b39a722d5237e04a1150b6720c6b8337cb98d7f5496"
+META_DBFIRST_RUNTIME_CACHE_RELEASE = "immutable-41d70b53-external-20261118T214122Z"
+META_DBFIRST_RUNTIME_CACHE_TARGET = "41d70b5368bc413ea34ee517b79351d7b8cd526b"
+META_DBFIRST_RUNTIME_CACHE_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-41d70b53-external-20261118T214122Z-api-frontend-41d70b53-v2-once"
+)
+META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256 = (
+    "5fb229f2390fd3fcdcfdd0efe7cb0c69b87df8721bec39568e9ffe46249ea287"
+)
 RUNTIME_CACHE_RECONCILIATION_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
 
 
@@ -158,6 +167,12 @@ def _runtime_cache_successor(value: dict[str, Any], argv: list[str]) -> tuple[st
             "intentSha256": ED74_RUNTIME_CACHE_INTENT_SHA256,
             "journalAuthority": "acceptanceJournal",
         },
+        META_DBFIRST_RUNTIME_CACHE_RELEASE: {
+            "target": META_DBFIRST_RUNTIME_CACHE_TARGET,
+            "transaction": META_DBFIRST_RUNTIME_CACHE_TRANSACTION,
+            "intentSha256": META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256,
+            "journalAuthority": "negativeJournal",
+        },
     }
     profile = profiles.get(manifest.get("releaseId")) if isinstance(manifest, dict) else None
     required = common | ({profile["journalAuthority"]} if profile is not None else set())
@@ -221,7 +236,7 @@ def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
 def _validate_cache_successor_refresh(
     prior: dict[str, Any], current: dict[str, Any]
 ) -> None:
-    """Authenticate a new driver against an unchanged ED74 cache authority.
+    """Authenticate a new driver against an unchanged closed cache authority.
 
     Only the successor checkout and script digest may change; the release,
     original binding, inventory and historical journal authority remain sealed.
@@ -237,18 +252,23 @@ def _validate_cache_successor_refresh(
         new = json.loads(new_raw)
     except json.JSONDecodeError as error:
         raise Denied("request_recovery_cache_manifest") from error
+    release = old.get("releaseId") if isinstance(old, dict) else None
+    journal_authority = {
+        ED74_RUNTIME_CACHE_RELEASE: "acceptanceJournal",
+        META_DBFIRST_RUNTIME_CACHE_RELEASE: "negativeJournal",
+    }.get(release)
+    expected = {
+        "schemaVersion", "kind", "releaseId", "targetCommit",
+        "transactionRoot", "indexSha256", "manifestSha256",
+        "retirementIntentSha256", "originalControlPlane",
+        "continuationControlPlane", "continuationDriverSha256",
+        "acceptanceSha256", "lockSha256", "cacheEntries",
+    }
+    if journal_authority is not None:
+        expected.add(journal_authority)
     if (not isinstance(old, dict) or not isinstance(new, dict) or
-            old.get("releaseId") != ED74_RUNTIME_CACHE_RELEASE or
-            new.get("releaseId") != ED74_RUNTIME_CACHE_RELEASE or
-            set(old) != set(new) or
-            set(old) != {
-                "schemaVersion", "kind", "releaseId", "targetCommit",
-                "transactionRoot", "indexSha256", "manifestSha256",
-                "retirementIntentSha256", "originalControlPlane",
-                "continuationControlPlane", "continuationDriverSha256",
-                "acceptanceJournal", "acceptanceSha256", "lockSha256",
-                "cacheEntries",
-            }):
+            journal_authority is None or new.get("releaseId") != release or
+            set(old) != set(new) or set(old) != expected):
         raise Denied("request_recovery_cache_scope")
     stable = set(old) - {"continuationControlPlane", "continuationDriverSha256"}
     if (any(old[key] != new[key] for key in stable) or
