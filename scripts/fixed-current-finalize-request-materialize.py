@@ -25,6 +25,22 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 ACCEPTANCE = "ACEITE TÉCNICO PASS\n".encode("utf-8")
 PROFILES = (["api"], ["api", "frontend"], ["api", "frontend", "worker"])
 RUNTIME_CACHE_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
+RELEASES_ROOT = Path("/opt/re7online/releases")
+META_DBFIRST_RELEASE = "immutable-41d70b53-external-20261118T214122Z"
+META_DBFIRST_TARGET = "41d70b5368bc413ea34ee517b79351d7b8cd526b"
+META_DBFIRST_ORIGINAL_CONTROL_PLANE = "41d70b5368bc413ea34ee517b79351d7b8cd526b"
+META_DBFIRST_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-41d70b53-external-20261118T214122Z-api-frontend-41d70b53-v2-once"
+)
+META_DBFIRST_INDEX_SHA256 = "f99c00bf7724dd581e34a4fccae4b4fd47ae32c596af20b2fad187b390eaf14c"
+META_DBFIRST_MANIFEST_SHA256 = "3d0a9c69de53e39d3ee9d8df389d1640615988a80354f421a5dfe7732932b5cc"
+META_DBFIRST_INTENT_SHA256 = "5fb229f2390fd3fcdcfdd0efe7cb0c69b87df8721bec39568e9ffe46249ea287"
+META_DBFIRST_NEGATIVE_JOURNAL_SHA256 = (
+    "263114a6abed7b66e6ee298fc773f81825f1eb682515a20c0721d62275d9ed8e"
+)
+META_DBFIRST_ACCEPTANCE_SHA256 = "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
+META_DBFIRST_LOCK_SHA256 = "235780dd913299a349c61ba55cb0006818de9743cd47418246dde0f643fa5368"
 
 
 class Denied(RuntimeError):
@@ -99,12 +115,19 @@ def load_request(path: Path, expected: str) -> dict[str, Any]:
             "wrapper", "wrapperSha256", "cacheManifestOutput",
             "finalizeRequestOutput",
         }
-        if set(value) != required_continuation or value.get("schemaVersion") != 1:
+        allowed_continuation = (
+            required_continuation,
+            required_continuation | {"negativeJournalOutput"},
+        )
+        if set(value) not in allowed_continuation or value.get("schemaVersion") != 1:
             raise Denied("continuation_request_schema")
         for name in ("transactionRoot", "transactionJournal", "priorRequest",
                      "lockPath", "driver", "wrapper", "cacheManifestOutput",
                      "finalizeRequestOutput"):
             absolute(value.get(name), f"continuation_request_path:{name}")
+        if "negativeJournalOutput" in value:
+            absolute(value.get("negativeJournalOutput"),
+                     "continuation_request_path:negativeJournalOutput")
         for name in ("transactionJournalSha256", "priorRequestSha256", "lockSha256",
                      "driverSha256", "wrapperSha256"):
             if not SHA256.fullmatch(str(value.get(name, ""))):
@@ -403,6 +426,48 @@ def publish(request: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def publish_raw(output: Path, raw: bytes) -> dict[str, Any]:
+    parent = output.parent
+    try:
+        parent_info = parent.lstat()
+    except OSError as error:
+        raise Denied("output_parent") from error
+    if (parent.is_symlink() or not parent.is_dir() or
+            (parent_info.st_uid, parent_info.st_gid, stat.S_IMODE(parent_info.st_mode)) !=
+            (os.geteuid(), os.getegid(), 0o700)):
+        raise Denied("output_parent_identity")
+    try:
+        fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                     getattr(os, "O_NOFOLLOW", 0), 0o600)
+    except OSError as error:
+        raise Denied("negative_journal_output") from error
+    try:
+        opened = os.fstat(fd)
+        if (not stat.S_ISREG(opened.st_mode) or
+                (opened.st_uid, opened.st_gid, stat.S_IMODE(opened.st_mode)) !=
+                (os.geteuid(), os.getegid(), 0o600)):
+            raise Denied("negative_journal_output_identity")
+        written = 0
+        while written < len(raw):
+            written += os.write(fd, raw[written:])
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY |
+                        getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    readback, info = stable_regular(output, modes={0o600})
+    if readback != raw:
+        raise Denied("negative_journal_readback")
+    return {
+        "path": str(output), "sha256": sha256(readback), "size": len(readback),
+        "device": info.st_dev, "inode": info.st_ino, "mode": "0600",
+    }
+
+
 
 def continuation_argument(argv: list[str], flag: str) -> str:
     if argv.count(flag) != 1:
@@ -411,6 +476,118 @@ def continuation_argument(argv: list[str], flag: str) -> str:
     if index + 1 >= len(argv):
         raise Denied(f"continuation_prior_argv:{flag}")
     return argv[index + 1]
+
+
+def meta_dbfirst_cache_inventory() -> list[dict[str, Any]]:
+    release_root = RELEASES_ROOT / META_DBFIRST_RELEASE
+    cache_root = release_root / "frontend-runtime/.next/cache"
+    images_root = cache_root / "images"
+    try:
+        release_info = release_root.lstat()
+        cache_info = cache_root.lstat()
+        images_info = images_root.lstat()
+    except OSError as error:
+        raise Denied("continuation_cache_root") from error
+    if (release_root.is_symlink() or cache_root.is_symlink() or images_root.is_symlink() or
+            not release_root.is_dir() or not cache_root.is_dir() or not images_root.is_dir() or
+            (release_info.st_uid, release_info.st_gid) != (os.geteuid(), os.getegid()) or
+            any((info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) !=
+                (os.geteuid(), os.getegid(), 0o755)
+                for info in (cache_info, images_info))):
+        raise Denied("continuation_cache_root_identity")
+    bound_regular(release_root / "index.sha256", META_DBFIRST_INDEX_SHA256,
+                  modes={0o644})
+    bound_regular(release_root / "manifest.json", META_DBFIRST_MANIFEST_SHA256,
+                  modes={0o644})
+    paths = [cache_root, *sorted(cache_root.rglob("*"),
+                                 key=lambda item: item.relative_to(release_root).as_posix())]
+    if not 2 <= len(paths) <= 256:
+        raise Denied("continuation_cache_inventory")
+    entries: list[dict[str, Any]] = []
+    directory_identities: dict[Path, tuple[int, int, int, int, int]] = {}
+    for path in paths:
+        relative = path.relative_to(release_root).as_posix()
+        try:
+            info = path.lstat()
+        except OSError as error:
+            raise Denied("continuation_cache_entry") from error
+        if stat.S_ISLNK(info.st_mode):
+            raise Denied("continuation_cache_symlink")
+        item: dict[str, Any] = {"path": relative, "mode": stat.S_IMODE(info.st_mode)}
+        parts = relative.split("/")
+        if stat.S_ISDIR(info.st_mode):
+            if (item["mode"] != 0o755 or relative not in {
+                    "frontend-runtime/.next/cache", "frontend-runtime/.next/cache/images"} and
+                    (len(parts) != 5 or parts[:4] !=
+                     ["frontend-runtime", ".next", "cache", "images"] or
+                     not re.fullmatch(r"[A-Za-z0-9_-]{20,96}", parts[4]))):
+                raise Denied("continuation_cache_directory")
+            item["type"] = "directory"
+            directory_identities[path] = (
+                info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        elif stat.S_ISREG(info.st_mode):
+            if (item["mode"] != 0o644 or len(parts) != 6 or parts[:4] !=
+                    ["frontend-runtime", ".next", "cache", "images"] or
+                    not re.fullmatch(r"[A-Za-z0-9_-]{20,96}", parts[4]) or
+                    not re.fullmatch(
+                        r"[A-Za-z0-9._-]{20,240}\.(?:webp|png|jpeg)", parts[5])):
+                raise Denied("continuation_cache_file")
+            raw, stable = stable_regular(path, modes={0o644})
+            if stable.st_size > 10 * 1024 * 1024:
+                raise Denied("continuation_cache_file_size")
+            item.update(type="file", size=stable.st_size, sha256=sha256(raw))
+        else:
+            raise Denied("continuation_cache_entry_type")
+        entries.append(item)
+    for path, identity in directory_identities.items():
+        current = path.lstat()
+        observed = (current.st_dev, current.st_ino, current.st_size,
+                    current.st_mtime_ns, current.st_ctime_ns)
+        if observed != identity:
+            raise Denied("continuation_cache_changed")
+    return entries
+
+
+def meta_dbfirst_cache_manifest(
+    request: dict[str, Any], journal: dict[str, Any], binding: dict[str, Any],
+    original: list[str], successor_head: str,
+) -> dict[str, Any]:
+    if (binding.get("release") != META_DBFIRST_RELEASE or
+            binding.get("target") != META_DBFIRST_TARGET or
+            binding.get("controlPlane") != META_DBFIRST_ORIGINAL_CONTROL_PLANE or
+            Path(request["transactionRoot"]) != META_DBFIRST_TRANSACTION or
+            request["transactionJournalSha256"] != META_DBFIRST_NEGATIVE_JOURNAL_SHA256 or
+            request["lockSha256"] != META_DBFIRST_LOCK_SHA256 or
+            continuation_argument(original, "--generation-retirement-intent-sha256") !=
+            META_DBFIRST_INTENT_SHA256 or
+            any(flag in original for flag in (
+                "--runtime-cache-reconciliation",
+                "--runtime-cache-reconciliation-sha256"))):
+        raise Denied("continuation_meta_dbfirst_scope")
+    negative_journal_output = absolute(
+        request.get("negativeJournalOutput"), "continuation_negative_journal_output")
+    acceptance = META_DBFIRST_TRANSACTION / "acceptance.private.txt"
+    bound_regular(acceptance, META_DBFIRST_ACCEPTANCE_SHA256, modes={0o600})
+    return {
+        "schemaVersion": 1,
+        "kind": RUNTIME_CACHE_KIND,
+        "releaseId": META_DBFIRST_RELEASE,
+        "targetCommit": META_DBFIRST_TARGET,
+        "transactionRoot": str(META_DBFIRST_TRANSACTION),
+        "indexSha256": META_DBFIRST_INDEX_SHA256,
+        "manifestSha256": META_DBFIRST_MANIFEST_SHA256,
+        "retirementIntentSha256": META_DBFIRST_INTENT_SHA256,
+        "originalControlPlane": binding["controlPlane"],
+        "continuationControlPlane": successor_head,
+        "continuationDriverSha256": request["driverSha256"],
+        "negativeJournal": {
+            "path": str(negative_journal_output),
+            "sha256": request["transactionJournalSha256"],
+        },
+        "acceptanceSha256": META_DBFIRST_ACCEPTANCE_SHA256,
+        "lockSha256": META_DBFIRST_LOCK_SHA256,
+        "cacheEntries": meta_dbfirst_cache_inventory(),
+    }
 
 
 def derive_failed_finalize_continuation(
@@ -445,10 +622,21 @@ def derive_failed_finalize_continuation(
         "schemaVersion", "action", "lockPath", "transactionRoot",
         "driver", "driverSha256", "finalizeArgv",
     }
+    binding = journal.get("binding")
+    if not isinstance(binding, dict):
+        raise Denied("continuation_journal_binding")
+    initial_meta_dbfirst_cache = (
+        prior_action == "finalize" and
+        binding.get("release") == META_DBFIRST_RELEASE and
+        "--runtime-cache-reconciliation" not in prior.get("finalizeArgv", []) and
+        "--runtime-cache-reconciliation-sha256" not in prior.get("finalizeArgv", [])
+    )
     if prior_action == "finalize":
         expected_keys = base_keys
         ordinal, required_save = 2, 0
-        evidence_predicate = b"control_plane_succession_script:deploy"
+        evidence_predicate = (b"runtime_cache_reconciliation_binding"
+                              if initial_meta_dbfirst_cache else
+                              b"control_plane_succession_script:deploy")
     elif prior_action == "finalize_continuation":
         expected_keys = base_keys | {"attemptOrdinal", "evidenceOutputs", "recovery"}
         # ED74 post-save continuation is the direct ordinal-02 successor.
@@ -475,9 +663,6 @@ def derive_failed_finalize_continuation(
     if (not isinstance(original, list) or len(original) < 5 or
             original[:4] != ["/usr/bin/python3", "-B", prior["driver"], "finalize"]):
         raise Denied("continuation_prior_argv")
-    binding = journal.get("binding")
-    if not isinstance(binding, dict):
-        raise Denied("continuation_journal_binding")
     expected = {
         "--release": binding.get("release"),
         "--target": binding.get("target"),
@@ -506,20 +691,6 @@ def derive_failed_finalize_continuation(
     if exit_bytes != b"2\n" or evidence_predicate not in stderr:
         raise Denied("continuation_prior_failure_evidence")
 
-    old_cache_path = Path(continuation_argument(
-        original, "--runtime-cache-reconciliation"))
-    old_cache_sha = continuation_argument(
-        original, "--runtime-cache-reconciliation-sha256")
-    historic = json_object(bound_regular(
-        old_cache_path, old_cache_sha, modes={0o600}), old_cache_path.name)
-    if (historic.get("kind") != RUNTIME_CACHE_KIND or
-            historic.get("releaseId") != binding.get("release") or
-            historic.get("targetCommit") != binding.get("target") or
-            historic.get("transactionRoot") != str(root) or
-            historic.get("originalControlPlane") != binding.get("controlPlane") or
-            historic.get("continuationDriverSha256") != prior.get("driverSha256")):
-        raise Denied("continuation_original_cache_scope")
-
     driver = Path(request["driver"])
     wrapper = Path(request["wrapper"])
     bound_regular(driver, request["driverSha256"], modes={0o500, 0o600})
@@ -534,16 +705,49 @@ def derive_failed_finalize_continuation(
     head = result.stdout.strip()
     authenticate_checkout(
         driver, request["driverSha256"], wrapper, request["wrapperSha256"], head)
-    if (head == historic.get("continuationControlPlane") or
-            request["driverSha256"] == prior["driverSha256"]):
-        raise Denied("continuation_successor_not_changed")
-    new_cache = dict(historic)
-    new_cache["continuationControlPlane"] = head
-    new_cache["continuationDriverSha256"] = request["driverSha256"]
+    if initial_meta_dbfirst_cache:
+        if (head == binding.get("controlPlane") or
+                request["driverSha256"] == prior["driverSha256"]):
+            raise Denied("continuation_successor_not_changed")
+        historic_driver = subprocess.run(
+            ["git", "-C", str(repo), "show",
+             f"{binding['controlPlane']}:scripts/converta-deploy.py"],
+            capture_output=True, check=False,
+        )
+        if (historic_driver.returncode or
+                sha256(historic_driver.stdout) != prior["driverSha256"]):
+            raise Denied("continuation_original_driver")
+        new_cache = meta_dbfirst_cache_manifest(request, journal, binding, original, head)
+        old_cache_path = None
+    else:
+        old_cache_path = Path(continuation_argument(
+            original, "--runtime-cache-reconciliation"))
+        old_cache_sha = continuation_argument(
+            original, "--runtime-cache-reconciliation-sha256")
+        historic = json_object(bound_regular(
+            old_cache_path, old_cache_sha, modes={0o600}), old_cache_path.name)
+        if (historic.get("kind") != RUNTIME_CACHE_KIND or
+                historic.get("releaseId") != binding.get("release") or
+                historic.get("targetCommit") != binding.get("target") or
+                historic.get("transactionRoot") != str(root) or
+                historic.get("originalControlPlane") != binding.get("controlPlane") or
+                historic.get("continuationDriverSha256") != prior.get("driverSha256")):
+            raise Denied("continuation_original_cache_scope")
+        if (head == historic.get("continuationControlPlane") or
+                request["driverSha256"] == prior["driverSha256"]):
+            raise Denied("continuation_successor_not_changed")
+        new_cache = dict(historic)
+        new_cache["continuationControlPlane"] = head
+        new_cache["continuationDriverSha256"] = request["driverSha256"]
     cache_output = Path(request["cacheManifestOutput"])
     request_output = Path(request["finalizeRequestOutput"])
+    negative_output = (Path(request["negativeJournalOutput"])
+                       if initial_meta_dbfirst_cache else None)
     if (cache_output == request_output or
-            cache_output == old_cache_path or
+            (old_cache_path is not None and cache_output == old_cache_path) or
+            (negative_output is not None and
+             (negative_output in {cache_output, request_output} or
+              negative_output.parent != request_output.parent)) or
             cache_output.parent != request_output.parent):
         raise Denied("continuation_output_scope")
     cache_raw = (
@@ -551,10 +755,16 @@ def derive_failed_finalize_continuation(
     ).encode()
     argv = list(original)
     argv[2] = str(driver)
-    cache_index = argv.index("--runtime-cache-reconciliation")
-    cache_sha_index = argv.index("--runtime-cache-reconciliation-sha256")
-    argv[cache_index + 1] = str(cache_output)
-    argv[cache_sha_index + 1] = sha256(cache_raw)
+    if initial_meta_dbfirst_cache:
+        argv.extend([
+            "--runtime-cache-reconciliation", str(cache_output),
+            "--runtime-cache-reconciliation-sha256", sha256(cache_raw),
+        ])
+    else:
+        cache_index = argv.index("--runtime-cache-reconciliation")
+        cache_sha_index = argv.index("--runtime-cache-reconciliation-sha256")
+        argv[cache_index + 1] = str(cache_output)
+        argv[cache_sha_index + 1] = sha256(cache_raw)
     outputs = {
         name: str(root / f"fixed-current-finalize-continuation-attempt-{ordinal:02d}.{name}.private.txt")
         for name in ("stdout", "stderr", "exit")
@@ -578,15 +788,24 @@ def derive_failed_finalize_continuation(
 
 def publish_failed_finalize_continuation(request: dict[str, Any]) -> dict[str, Any]:
     cache, next_request = derive_failed_finalize_continuation(request)
-    # Both writes are exclusive and immutable. If the second fails, preserve
-    # the first artifact as forensic evidence, never overwrite or retry.
+    journal_receipt = None
+    if "negativeJournalOutput" in request:
+        raw = bound_regular(
+            Path(request["transactionJournal"]), request["transactionJournalSha256"],
+            modes={0o600})
+        journal_receipt = publish_raw(Path(request["negativeJournalOutput"]), raw)
+    # Writes are exclusive and immutable. If a later publication fails, preserve
+    # every earlier artifact as forensic evidence, never overwrite or retry.
     cache_receipt = publish(
         {"finalizeRequestOutput": request["cacheManifestOutput"]}, cache)
     output = publish(request, next_request)
-    return {
+    result = {
         "result": "FIXED_CURRENT_FINALIZE_CONTINUATION_REQUEST_MATERIALIZED",
         "request": output, "cacheReconciliation": cache_receipt,
     }
+    if journal_receipt is not None:
+        result["negativeJournalAuthority"] = journal_receipt
+    return result
 
 def main() -> int:
     parser = argparse.ArgumentParser()

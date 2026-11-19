@@ -43,6 +43,15 @@ ED74_RUNTIME_CACHE_TRANSACTION = Path(
     "preflight-4e55c9d9-v2/transaction"
 )
 ED74_RUNTIME_CACHE_INTENT_SHA256 = "250a535c4c756a7fcc087b39a722d5237e04a1150b6720c6b8337cb98d7f5496"
+META_DBFIRST_RUNTIME_CACHE_RELEASE = "immutable-41d70b53-external-20261118T214122Z"
+META_DBFIRST_RUNTIME_CACHE_TARGET = "41d70b5368bc413ea34ee517b79351d7b8cd526b"
+META_DBFIRST_RUNTIME_CACHE_TRANSACTION = Path(
+    "/opt/re7online/backups/converta-persistent/deploy-transactions/"
+    "immutable-41d70b53-external-20261118T214122Z-api-frontend-41d70b53-v2-once"
+)
+META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256 = (
+    "5fb229f2390fd3fcdcfdd0efe7cb0c69b87df8721bec39568e9ffe46249ea287"
+)
 RUNTIME_CACHE_RECONCILIATION_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
 
 
@@ -157,6 +166,12 @@ def _runtime_cache_successor(value: dict[str, Any], argv: list[str]) -> tuple[st
             "transaction": ED74_RUNTIME_CACHE_TRANSACTION,
             "intentSha256": ED74_RUNTIME_CACHE_INTENT_SHA256,
             "journalAuthority": "acceptanceJournal",
+        },
+        META_DBFIRST_RUNTIME_CACHE_RELEASE: {
+            "target": META_DBFIRST_RUNTIME_CACHE_TARGET,
+            "transaction": META_DBFIRST_RUNTIME_CACHE_TRANSACTION,
+            "intentSha256": META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256,
+            "journalAuthority": "negativeJournal",
         },
     }
     profile = profiles.get(manifest.get("releaseId")) if isinstance(manifest, dict) else None
