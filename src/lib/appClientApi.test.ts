@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   fetchAppConversation,
+  anonymizeAppPrivacySubject,
   fetchAppAgentAvailability,
   fetchAppCompletedServiceReport,
   fetchAppSatisfactionPolicy,
@@ -9,6 +10,7 @@ import {
   fetchAppUsers,
   exportAppCompletedServiceReportCsv,
   formatAppWhatsappIdentityDisplay,
+  getAppPrivacySubjectAnonymizationFeedback,
   heartbeatAppAgentAvailability,
   loadAppSession,
   loadPendingAppCampaignDraftCreation,
@@ -22,6 +24,57 @@ import {
   type AppApiError,
   type AppSession,
 } from "./appClientApi";
+
+const privacyAdminSession: AppSession = {
+  baseUrl: "https://app.example.test",
+  token: "privacy-token",
+  user: {
+    id: "privacy-admin",
+    name: "Privacy Admin",
+    email: "privacy@example.test",
+    clientId: "tenant-privacy",
+    role: "ADMIN",
+  },
+  features: {} as AppSession["features"],
+  profile: "business",
+};
+
+function privacyPreview() {
+  return {
+    ok: true as const,
+    subject: {
+      contactId: "contact-a",
+      leadId: "lead-a",
+      leadIds: ["lead-a"],
+      alreadyAnonymized: false,
+      operationalStatus: "active" as const,
+      privacyStatus: "identifiable" as const,
+      displayName: "Titular",
+      phoneDisplay: "********",
+    },
+    counts: {
+      contacts: 1,
+      leads: 1,
+      contactChannelIdentities: 3,
+      conversations: 2,
+      runtimeStates: 2,
+      leadNotes: 0,
+      inboundMessages: 1,
+      outboundMessages: 1,
+      events: 10,
+      consentRecords: 0,
+      optOutEvents: 0,
+      campaignRelationships: 2,
+    },
+    actions: [],
+    fieldsToAnonymize: [],
+    historicalObjectsPreserved: [],
+  };
+}
+
+function jsonResponse(status: number, payload: unknown): Response {
+  return { ok: status >= 200 && status < 300, status, json: async () => payload } as Response;
+}
 
 function createMemoryStorage() {
   const items = new Map<string, string>();
@@ -257,6 +310,182 @@ test("fetchAppUsers supports persisted status filters", async () => {
     calls.map((url) => `${new URL(url).pathname}${new URL(url).search}`),
     ["/app/users", "/app/users", "/app/users?status=active", "/app/users?status=inactive"]
   );
+});
+
+test("subject anonymization accepts only HTTP 200 with verified cleanup as terminal success", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody: string | null = null;
+  Object.assign(globalThis, {
+    fetch: async (_url: string | URL, init?: RequestInit) => {
+      requestBody = typeof init?.body === "string" ? init.body : null;
+      return jsonResponse(200, {
+        ok: true,
+        preview: privacyPreview(),
+        anonymized: { conversations: 2 },
+        cleanup: { state: "verified", keyCount: 2 },
+      });
+    },
+  });
+  try {
+    const result = await anonymizeAppPrivacySubject(
+      privacyAdminSession,
+      { contactId: "contact-a", leadId: "lead-a" },
+      "ANONIMIZAR TITULAR"
+    );
+    assert.equal(result.outcome, "verified");
+    assert.deepEqual(getAppPrivacySubjectAnonymizationFeedback(result), {
+      kind: "verified",
+      message: "Titular anonimizado",
+      clearSubject: true,
+    });
+    assert.equal(requestBody, JSON.stringify({ confirmation: "ANONIMIZAR TITULAR" }));
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+});
+
+test("subject anonymization preserves committed HTTP 202 as explicit runtime cleanup pending", async () => {
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async () => jsonResponse(202, {
+      ok: false,
+      error: "runtime_cleanup_pending",
+      committed: true,
+      preview: privacyPreview(),
+      anonymized: { conversations: 2 },
+      cleanup: { state: "pending", keyCount: 2 },
+    }),
+  });
+  try {
+    const result = await anonymizeAppPrivacySubject(
+      privacyAdminSession,
+      { contactId: "contact-a" },
+      "ANONIMIZAR TITULAR"
+    );
+    assert.equal(result.outcome, "runtime_cleanup_pending");
+    assert.equal(result.committed, true);
+    assert.deepEqual(getAppPrivacySubjectAnonymizationFeedback(result), {
+      kind: "runtime_cleanup_pending",
+      message: "Anonimização confirmada. Limpeza de runtime pendente.",
+      clearSubject: false,
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+});
+
+test("subject anonymization rejects inconsistent successful 2xx payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  const inconsistent = [
+    jsonResponse(200, { ok: true, preview: privacyPreview(), cleanup: { state: "pending", keyCount: 2 } }),
+    jsonResponse(202, { ok: false, error: "runtime_cleanup_pending", committed: false,
+      preview: privacyPreview(), cleanup: { state: "pending", keyCount: 2 } }),
+    jsonResponse(202, { ok: true, preview: privacyPreview(), cleanup: { state: "verified", keyCount: 2 } }),
+  ];
+  try {
+    for (const response of inconsistent) {
+      Object.assign(globalThis, { fetch: async () => response });
+      await assert.rejects(
+        anonymizeAppPrivacySubject(privacyAdminSession, { contactId: "contact-a" }, "ANONIMIZAR TITULAR"),
+        (error: AppApiError) => error.errorCode === "privacy_result_inconclusive"
+      );
+    }
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+});
+
+test("subject anonymization treats malformed 2xx JSON as an inconclusive result", async () => {
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => { throw new SyntaxError("invalid JSON"); },
+    } as Response),
+  });
+  try {
+    await assert.rejects(
+      anonymizeAppPrivacySubject(privacyAdminSession, { contactId: "contact-a" }, "ANONIMIZAR TITULAR"),
+      (error: AppApiError) => error.status === 0 && error.errorCode === "privacy_result_inconclusive"
+    );
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+});
+
+test("subject anonymization exposes each HTTP 409 denial without retry", async () => {
+  const originalFetch = globalThis.fetch;
+  const errors = [
+    "concurrent_subject_change",
+    "storage_profile_unproven",
+    "privacy_cleanup_encryption_key_unavailable",
+  ];
+  let calls = 0;
+  try {
+    for (const errorCode of errors) {
+      Object.assign(globalThis, {
+        fetch: async () => {
+          calls += 1;
+          return jsonResponse(409, { ok: false, error: errorCode, message: errorCode });
+        },
+      });
+      await assert.rejects(
+        anonymizeAppPrivacySubject(privacyAdminSession, { contactId: "contact-a" }, "ANONIMIZAR TITULAR"),
+        (error: AppApiError) => error.status === 409 && error.errorCode === errorCode
+      );
+    }
+    assert.equal(calls, errors.length);
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+});
+
+test("subject anonymization treats network failure as commit-unknown and never retries", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  Object.assign(globalThis, {
+    fetch: async () => {
+      calls += 1;
+      throw new Error("network unavailable");
+    },
+  });
+  try {
+    await assert.rejects(
+      anonymizeAppPrivacySubject(privacyAdminSession, { contactId: "contact-a" }, "ANONIMIZAR TITULAR"),
+      (error: AppApiError) => error.status === 0 && error.errorCode === "network_error"
+    );
+    assert.equal(calls, 1);
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+});
+
+test("subject cleanup recovery remains pending until a later verified receipt", async () => {
+  const originalFetch = globalThis.fetch;
+  const responses = [
+    jsonResponse(202, { ok: false, error: "runtime_cleanup_pending", committed: true,
+      preview: privacyPreview(), cleanup: { state: "pending", keyCount: 2 } }),
+    jsonResponse(200, { ok: true, alreadyAnonymized: true,
+      preview: { ...privacyPreview(), subject: { ...privacyPreview().subject, alreadyAnonymized: true,
+        operationalStatus: "excluded", privacyStatus: "anonymized" } },
+      cleanup: { state: "verified", keyCount: 2 } }),
+  ];
+  let calls = 0;
+  Object.assign(globalThis, { fetch: async () => responses[calls++] });
+  try {
+    const pending = await anonymizeAppPrivacySubject(
+      privacyAdminSession, { contactId: "contact-a" }, "ANONIMIZAR TITULAR"
+    );
+    assert.equal(pending.outcome, "runtime_cleanup_pending");
+    const verified = await anonymizeAppPrivacySubject(
+      privacyAdminSession, { contactId: "contact-a" }, "ANONIMIZAR TITULAR"
+    );
+    assert.equal(verified.outcome, "verified");
+    assert.equal(calls, 2);
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
 });
 
 test("inbox action telemetry uses the existing app inbox event endpoint", async () => {
