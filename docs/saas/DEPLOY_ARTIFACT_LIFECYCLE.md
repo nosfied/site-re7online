@@ -1,8 +1,30 @@
 # Ciclo de vida dos artefatos de implantação
 
-## Reconciliação ED74 — 17/11/2026
+## Release 41D e primeiro fechamento produtivo durável — 20/11/2026
 
-ED74 está ativa e aceita nos três componentes, com save e marker comprovados.
+A geração `immutable-41d70b53-external-20261118T214122Z` comprovou em produção
+o percurso integrado dos PRs #417–#420: raiz durável, build/export únicos,
+transferência, instalação, ativação API+frontend com worker ED74 preservado,
+aceite, finalize/save único e closure do builder. O terminal do builder é
+`SANITIZED/CLOSURE_RECORDED`, receipt `d81cbd04…0294`, journal
+`a6c1d141…57a0`, lifecycle `0b35f450…5c69`, raiz/worktree/registro Git ausentes
+e custódia preservada. A recuperação atribuível selada foi 2.509.905.920 B.
+
+Esse sucesso não transforma automaticamente a retenção da VPS em terminal. O
+receipt local `84aa8224…1ca7` teve zero comandos e o staging de 154.820.608 B/24
+inodes permanece `EVIDENCE_REQUIRED/RETAIN`; portanto o deploy é
+`DEPLOYED_RETENTION_INCOMPLETE`. Sucesso funcional, closure do builder e
+retenção VPS são três autoridades distintas.
+
+O reboot local posterior comprovou persistência de custódia e autoridades já
+terminais, mas não comprova retomada de uma geração aberta através de reboot.
+Essa prova permanece futura e não autoriza repetir a geração 41D.
+
+## Reconciliação histórica ED74 — fotografia de 17/11/2026
+
+Na fotografia de 17/11, ED74 estava ativa e aceita nos três componentes, com
+save e marker comprovados. Após a 41D, permanece ativa somente no worker e como
+rollback protegido de API/frontend; a classificação de seu builder não muda.
 O retirement da VPS tinha zero caminhos e zero comandos. A raiz descartável do
 builder ficou fisicamente ausente fora do executor canônico, a custódia foi
 preservada e o registro Git órfão foi regularizado. O estado é

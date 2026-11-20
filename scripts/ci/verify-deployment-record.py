@@ -959,6 +959,118 @@ def verify_api_only_fixed_current_sanitized(record_path: Path, record: dict) -> 
     print("DEPLOYMENT_RECORD_OK: API-only Tendencia release deployed and sanitized")
 
 
+def verify_fixed_current_retention_incomplete(record_path: Path,
+                                              record: dict) -> None:
+    require(record.get("schemaVersion") == 1, "fixed-current incomplete schema")
+    require(record.get("recordType") ==
+            "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+            "fixed-current incomplete record type")
+    require(record.get("status") == "DEPLOYED_RETENTION_INCOMPLETE",
+            "fixed-current incomplete status")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "sensitive identifier key in fixed-current incomplete record")
+
+    release = record.get("release", {})
+    release_id = release.get("id", "")
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))) and
+            bool(re.fullmatch(r"[0-9a-f]{40}", release.get("tree", ""))),
+            "fixed-current incomplete Git identity")
+    require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", release_id)),
+            "fixed-current incomplete release")
+    for field in ("packageSha256", "manifestSha256", "indexSha256",
+                  "apiEntrypointSha256", "transferReceiptSha256",
+                  "installationReceiptSha256"):
+        require(bool(SHA256.fullmatch(release.get(field, ""))),
+                f"fixed-current incomplete {field}")
+    require(release.get("indexEntries") == 34384 and
+            release.get("buildCount") == 1 and
+            release.get("uploadCount") == 1 and
+            release.get("installCount") == 1 and
+            release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
+            bool(release.get("buildId")),
+            "fixed-current incomplete release contract")
+
+    selection = record.get("selection", {})
+    require(selection.get("components") == ["api", "frontend"] and
+            selection.get("apiReleaseId") == release_id and
+            selection.get("frontendReleaseId") == release_id and
+            selection.get("workerPreserved") is True and
+            selection.get("workerReleaseId") != release_id and
+            set(selection.get("immediateRollbackReleases", {})) ==
+            {"api", "frontend", "worker"},
+            "fixed-current incomplete selection and rollback")
+    worker = record.get("runtime", {}).get("worker", {})
+    require(worker.get("releaseId") == selection.get("workerReleaseId") and
+            worker.get("preserved") is True and worker.get("changed") is False and
+            bool(SHA256.fullmatch(worker.get("entrySha256", ""))),
+            "fixed-current incomplete worker preservation")
+
+    acceptance = record.get("acceptance", {})
+    require(acceptance.get("technical") == "PASS" and
+            acceptance.get("human") == "PASS_5_OF_5" and
+            bool(SHA256.fullmatch(acceptance.get("sha256", ""))),
+            "fixed-current incomplete acceptance")
+    finalization = record.get("finalization", {})
+    require(finalization.get("state") == "DEPLOYED_RETENTION_INCOMPLETE" and
+            finalization.get("pm2SaveCount") == 1 and
+            finalization.get("lockReleased") is True and
+            all(bool(SHA256.fullmatch(finalization.get(field, "")))
+                for field in ("journalSha256", "dumpSha256", "markerSha256")) and
+            all(bool(re.fullmatch(r"[0-9a-f]{40}",
+                                  finalization.get(field, "")))
+                for field in ("controlPlaneOriginal", "controlPlaneSuccessor")),
+            "fixed-current incomplete finalization")
+
+    retirement = record.get("retirement", {})
+    staging = retirement.get("staging", {})
+    require(retirement.get("state") == "DEPLOYED_RETENTION_INCOMPLETE" and
+            bool(SHA256.fullmatch(retirement.get("receiptSha256", ""))) and
+            retirement.get("approvedPaths") == [] and
+            retirement.get("commandsAttempted") == 0 and
+            retirement.get("commandsCompleted") == 0 and
+            retirement.get("remainingLocalDerivedArtifacts") == 1 and
+            Path(staging.get("path", "")).is_absolute() and
+            staging.get("classification") == "EVIDENCE_REQUIRED_RETAIN" and
+            positive_int(staging.get("bytes")) and positive_int(staging.get("inodes")),
+            "fixed-current incomplete VPS retention")
+
+    builder = record.get("builder", {})
+    require(builder.get("state") == "SANITIZED_CLOSURE_RECORDED" and
+            builder.get("rootAbsent") is True and
+            builder.get("gitWorktreeRegistrationAbsent") is True and
+            builder.get("custodyPreserved") is True and
+            builder.get("commandsCompleted") == 2 and
+            all(bool(SHA256.fullmatch(builder.get(field, "")))
+                for field in ("exportReceiptSha256", "terminalReceiptSha256",
+                              "journalSha256", "lifecycleSha256")) and
+            positive_int(builder.get("retiredRootBytes")) and
+            positive_int(builder.get("retiredRootInodes")) and
+            positive_int(builder.get("attributedRecoverySealedBytes")) and
+            positive_int(builder.get("globalFreeBytesDeltaObserved")),
+            "fixed-current incomplete builder terminal closure")
+
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(),
+            "active fixed-current incomplete record")
+    production = state.get("production", {})
+    require(production.get("status") == "DEPLOYED_RETENTION_INCOMPLETE" and
+            production.get("releaseId") == release_id and
+            production.get("targetCommit") == release.get("target") and
+            production.get("api", {}).get("selectedReleaseId") == release_id and
+            production.get("frontend", {}).get("selectedReleaseId") == release_id and
+            production.get("frontend", {}).get("buildId") == release.get("buildId") and
+            production.get("worker", {}).get("selectedReleaseId") ==
+            selection.get("workerReleaseId") and
+            production.get("worker", {}).get("preserved") is True and
+            production.get("pm2", {}).get("dumpSha256") ==
+            finalization.get("dumpSha256") and
+            production.get("currentMarkerSha256") ==
+            finalization.get("markerSha256"),
+            "active fixed-current incomplete topology")
+    print("DEPLOYMENT_RECORD_OK: 41D fixed-current release is deployed, builder is terminal, and VPS retention remains explicit")
+
+
 def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
     require(record.get("schemaVersion") == 1, "fixed-current schema")
     require(record.get("recordType") ==
@@ -1229,7 +1341,10 @@ def main() -> None:
     if (record.get("schemaVersion") == 1 and
             record.get("recordType") ==
             "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT"):
-        verify_fixed_current_sanitized(record_path, record)
+        if record.get("status") == "DEPLOYED_RETENTION_INCOMPLETE":
+            verify_fixed_current_retention_incomplete(record_path, record)
+        else:
+            verify_fixed_current_sanitized(record_path, record)
         return
 
     if (record.get("schemaVersion") == 1 and

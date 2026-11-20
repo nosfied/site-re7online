@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_RETENTION_INCOMPLETE",
+  "result": "META_DBFIRST_41D_ACTIVE_ACCEPTED_BUILDER_SANITIZED_VPS_STAGING_RETAINED",
+  "observedDate": "2026-11-20",
+  "release": {
+    "id": "immutable-41d70b53-external-20261118T214122Z",
+    "path": "/opt/re7online/releases/immutable-41d70b53-external-20261118T214122Z",
+    "target": "41d70b5368bc413ea34ee517b79351d7b8cd526b",
+    "tree": "b524f008d7034121beb09ea805cdafd0a3c6328c",
+    "buildId": "xj_9UjisQqYxu-19xA1TT",
+    "packageSha256": "7ab3938242ef85e2832e68b7c692438502f475c3af0ca4fa1c39bd2192ba499a",
+    "manifestSha256": "3d0a9c69de53e39d3ee9d8df389d1640615988a80354f421a5dfe7732932b5cc",
+    "indexSha256": "f99c00bf7724dd581e34a4fccae4b4fd47ae32c596af20b2fad187b390eaf14c",
+    "indexEntries": 34384,
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "buildCount": 1,
+    "uploadCount": 1,
+    "installCount": 1,
+    "transferReceiptSha256": "c71ef8897e6546b266e0931f587a0e2b062ab60b66bd176093e7548e13d47d81",
+    "installationReceiptSha256": "a4492ffb26ceb6fc65fb4c7452047810056b1a7add299ef9d14a10324b8f946f"
+  },
+  "selection": {
+    "components": ["api", "frontend"],
+    "apiReleaseId": "immutable-41d70b53-external-20261118T214122Z",
+    "frontendReleaseId": "immutable-41d70b53-external-20261118T214122Z",
+    "workerPreserved": true,
+    "workerReleaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "immediateRollbackReleases": {
+      "api": "immutable-ed74c483-external-20261115T162015Z",
+      "frontend": "immutable-ed74c483-external-20261115T162015Z",
+      "worker": "immutable-ed74c483-external-20261115T162015Z"
+    }
+  },
+  "runtime": {
+    "worker": {
+      "releaseId": "immutable-ed74c483-external-20261115T162015Z",
+      "target": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+      "entrySha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
+      "preserved": true,
+      "changed": false
+    }
+  },
+  "acceptance": {
+    "technical": "PASS",
+    "human": "PASS_5_OF_5",
+    "sha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
+  },
+  "finalization": {
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "journalSha256": "c2aa10bac483e32c949fbfafc9b09043d3d5767f46a9fdeabd2131c8e5e2ab0b",
+    "pm2SaveCount": 1,
+    "dumpSha256": "02402c127c328f088a36d2663b547297f0f4a337a5324ce63611d58236e43ade",
+    "markerSha256": "f54a57ea87829d2db3ab844627b111cdbb851456ba7407e812fe0d6939256b32",
+    "lockReleased": true,
+    "controlPlaneOriginal": "41d70b5368bc413ea34ee517b79351d7b8cd526b",
+    "controlPlaneSuccessor": "01eeb9fa1915f2b27eb5247ce02c53394ca26b5f"
+  },
+  "retirement": {
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "receiptSha256": "84aa82247eb5f15d94553cd2f743a67edc16dda3b34fdc08913e4e9d99fa1ca7",
+    "approvedPaths": [],
+    "commandsAttempted": 0,
+    "commandsCompleted": 0,
+    "remainingLocalDerivedArtifacts": 1,
+    "staging": {
+      "path": "/opt/re7online/backups/converta-persistent/preparations/external-package-41d70b53-install-v1",
+      "classification": "EVIDENCE_REQUIRED_RETAIN",
+      "bytes": 154820608,
+      "inodes": 24
+    }
+  },
+  "builder": {
+    "exportReceiptSha256": "a88154a516f3a923bf8e605dcadaaa5648182145f9e7c756cd781c206bd7ce61",
+    "state": "SANITIZED_CLOSURE_RECORDED",
+    "terminalReceiptSha256": "d81cbd0430aaecb822fabe8e5d95b071beb06a82b16652457e4edc18e0640294",
+    "journalSha256": "a6c1d14188142340e2eb27d05ad811689607c2bbac9f8f444636108d0e9577a0",
+    "lifecycleSha256": "0b35f450f948e8377caf00fd08e17bad526cb8f7c93a2b96fb20aa7ebd565c69",
+    "rootAbsent": true,
+    "gitWorktreeRegistrationAbsent": true,
+    "custodyPreserved": true,
+    "commandsCompleted": 2,
+    "retiredRootBytes": 2509336576,
+    "retiredRootInodes": 75661,
+    "attributedRecoverySealedBytes": 2509905920,
+    "globalFreeBytesDeltaObserved": 2505949184
+  },
+  "metaDbFirst": {
+    "pullRequest": 422,
+    "implementationState": "DEPLOYED_ACCEPTED",
+    "existingAccountsAutomaticallyRepaired": false,
+    "demoConverta": "REPAIR_QUALIFIED_OWNER_WRITE_AUTHORIZATION_REQUIRED",
+    "syerRodrigues": "REPAIR_BLOCKED_BY_CANONICAL_BASE_CONFIG_AUTHORITY",
+    "historical6306": "HISTORICAL_RESIDUE_RECONCILIATION_NOT_EXECUTED"
+  },
+  "postReboot": {
+    "observedDate": "2026-11-20",
+    "localRootAbsent": true,
+    "localCustodyPreserved": true,
+    "gitWorktreeRegistrationAbsent": true,
+    "productionApiFrontendReleaseConfirmed": true,
+    "productionWorkerReleaseConfirmed": true,
+    "pm2DumpReadbackConfirmed": true,
+    "openGenerationResumeAcrossRebootProven": false,
+    "helperLiveByteReadback": "REQUIRES_INTERACTIVE_ADMIN_AUTHENTICATION_NOT_REPEATED_BY_DOCUMENTATION_TASK"
+  },
+  "evidence": {
+    "source": "AUTHENTICATED_PRIVATE_AUTHORITIES_AND_DIRECTED_READ_ONLY_POST_REBOOT_OBSERVATION",
+    "productionMutationPerformedByThisRecord": false,
+    "historicalEvidenceRecreated": false
+  }
+}

@@ -1,5 +1,58 @@
 # Estado canônico do Converta
 
+## 41D ativa e finalizada; builder encerrado; retenção VPS incompleta — 20/11/2026
+
+**DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER
+SANITIZED/CLOSURE_RECORDED.** Esta entrada prevalece para o estado corrente. API
+e frontend selecionam
+`immutable-41d70b53-external-20261118T214122Z`, target
+`41d70b5368bc413ea34ee517b79351d7b8cd526b`, árvore
+`b524f008d7034121beb09ea805cdafd0a3c6328c` e BUILD_ID
+`xj_9UjisQqYxu-19xA1TT`. O worker permanece na ED74
+`immutable-ed74c483-external-20261115T162015Z`; a ED74 também é o rollback
+imediato protegido de API e frontend.
+
+A correção Meta DB-first do PR #422 foi aceita 5/5 e finalizada pela continuação
+de cache do PR #423. O único `pm2 save` produziu dump
+`02402c127c328f088a36d2663b547297f0f4a337a5324ce63611d58236e43ade`,
+marker `DEPLOYED`
+`f54a57ea87829d2db3ab844627b111cdbb851456ba7407e812fe0d6939256b32`
+e journal terminal
+`c2aa10bac483e32c949fbfafc9b09043d3d5767f46a9fdeabd2131c8e5e2ab0b`.
+
+O builder durável 41D concluiu canonicamente `SANITIZED/CLOSURE_RECORDED`:
+receipt `d81cbd0430aaecb822fabe8e5d95b071beb06a82b16652457e4edc18e0640294`,
+journal `a6c1d14188142340e2eb27d05ad811689607c2bbac9f8f444636108d0e9577a0`
+e lifecycle `0b35f450f948e8377caf00fd08e17bad526cb8f7c93a2b96fb20aa7ebd565c69`.
+Raiz, worktree e registro Git estão ausentes; custódia preservada. A recuperação
+atribuível selada é 2.509.905.920 B; a variação global observada foi
++2.505.949.184 B e não substitui o valor atribuído pelo receipt.
+
+A retenção VPS continua incompleta: receipt
+`84aa82247eb5f15d94553cd2f743a67edc16dda3b34fdc08913e4e9d99fa1ca7`
+com zero comandos. O staging
+`/opt/re7online/backups/converta-persistent/preparations/external-package-41d70b53-install-v1`
+ocupa 154.820.608 B/24 inodes e permanece
+`EVIDENCE_REQUIRED / RETAIN`. Não declarar `DEPLOYED_SANITIZED` nem retirar esse
+staging sem outra autoridade. O registro verificável vigente é
+[META_DBFIRST_41D70B53_2026-11-20_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json](releases/META_DBFIRST_41D70B53_2026-11-20_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json).
+
+Após o reboot local de 20/11, foram reconfirmados por leitura: branch remota no
+control plane `01eeb9fa1915f2b27eb5247ce02c53394ca26b5f`, custódia e hashes
+terminais 41D, ausência da raiz e do registro Git, API/frontend 41D, worker ED74,
+dump PM2 e health API/PostgreSQL. Isso comprova persistência de autoridades
+encerradas, não retomada de uma geração aberta durante reboot. O helper
+privilegiado permanece vinculado ao receipt de instalação; seu readback vivo
+`0500` exige autenticação administrativa e não foi repetido nesta tarefa
+documental.
+
+Pendências funcionais, sem mutação nesta reconciliação: `demo-converta` está
+`REPAIR_QUALIFIED / OWNER_WRITE_AUTHORIZATION_REQUIRED`; `syer-rodrigues` está
+`REPAIR_BLOCKED_BY_CANONICAL_BASE_CONFIG_AUTHORITY`; o caso 6306 permanece
+resíduo histórico, com reconciliação ainda não executada. A ordem é: revisão e
+eventual reparo dirigido da demo → autoridade explícita de `baseConfig` para
+syer → somente depois avaliar reconciliação 6306.
+
 ## Builder externo durável homologado sinteticamente — 18/11/2026
 
 **EXTERNAL_BUILDER_STANDARD_INTEGRATED / SYNTHETIC_CLOSURE_VERIFIED.** Os PRs
@@ -12,18 +65,21 @@ terminou `SANITIZED/CLOSURE_RECORDED`; journal `efbd0a0a…020a`, receipt
 preservada e locks livres.
 
 Esta prova não altera produção nem reclassifica a ausência externa da ED74.
-Continuam pendentes apenas reboot real entre `open`/retomada, primeira release
-produtiva usando conjuntamente #417–#420 e replay checks não efetivamente
-invocados na homologação real. Detalhes e limites estão na
+41D comprovou a primeira release produtiva usando conjuntamente #417–#420.
+Continuam pendentes apenas reboot real entre `open`/retomada de uma geração
+aberta e replay checks não efetivamente invocados na homologação real. Detalhes
+e limites estão na
 [consolidação definitiva](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md).
 
-## ED74 ativa, aceita e finalizada com retenção incompleta — 17/11/2026
+## ED74 histórica em API/frontend; ativa no worker e protegida como rollback — 17/11/2026
 
 **DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER ROOT EXTERNALLY
-ABSENT.** Esta entrada prevalece para o estado corrente. A release
+ABSENT.** Esta entrada é a fotografia terminal de 17/11 e foi superada pela 41D
+para API/frontend. A release
 `immutable-ed74c483-external-20261115T162015Z`, target
-`ed74c483b35c6cfebbdaa1a0a16e233101c46dd4`, está selecionada em API, frontend
-e worker; o frontend mantém BUILD_ID `DL7flKybPJUYQKtRLSuch`. O aceite humano
+`ed74c483b35c6cfebbdaa1a0a16e233101c46dd4`, permanece selecionada no worker e
+protegida como rollback imediato de API/frontend; seu frontend histórico tem
+BUILD_ID `DL7flKybPJUYQKtRLSuch`. O aceite humano
 5/5 e o aceite técnico `1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a`
 foram materializados. A continuação ordinal concluiu o único `pm2 save`; o dump
 é `04674bf54bb55d86db9494d8475b8835163329f0872d53be5f535a6b1f66cc20`, o

@@ -184,7 +184,8 @@ elif record.get("recordType") == "API_ONLY_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLO
                 "API-only external-builder retention debt")
 elif record.get("recordType") == "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
     require(record["schemaVersion"] == 1, "fixed-current record schema")
-    require(record["status"] == "DEPLOYED_SANITIZED", "fixed-current terminal state")
+    require(record["status"] in ("DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"),
+            "fixed-current terminal state")
     require(production["targetCommit"] == record["release"]["target"], "target")
     require(production["releaseId"] == record["release"]["id"], "release")
     require(production["api"]["entrySha256"] ==
@@ -203,11 +204,32 @@ elif record.get("recordType") == "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_D
             "NOT_APPLICABLE_NO_SCHEMA_CHANGE", "no-schema-change deployment")
     require(production["pm2"]["dumpSha256"] ==
             record["finalization"]["dumpSha256"], "PM2 identity")
-    require(record["retirement"]["state"] == "DEPLOYED_SANITIZED" and
-            record["retirement"]["remainingDerivedArtifacts"] == 0 and
-            record["retirement"]["commandsCompleted"] ==
-            record["retirement"]["commandsAttempted"] == 3,
-            "generation retirement")
+    require(record["finalization"]["pm2SaveCount"] == 1 and
+            record["finalization"]["lockReleased"] is True,
+            "fixed-current finalization")
+    if record["status"] == "DEPLOYED_SANITIZED":
+        require(record["retirement"]["state"] == "DEPLOYED_SANITIZED" and
+                record["retirement"]["remainingDerivedArtifacts"] == 0 and
+                record["retirement"]["commandsCompleted"] ==
+                record["retirement"]["commandsAttempted"] == 3,
+                "generation retirement")
+    else:
+        retirement = record["retirement"]
+        builder = record["builder"]
+        require(retirement["state"] == "DEPLOYED_RETENTION_INCOMPLETE" and
+                retirement["approvedPaths"] == [] and
+                retirement["commandsCompleted"] ==
+                retirement["commandsAttempted"] == 0 and
+                retirement["remainingLocalDerivedArtifacts"] == 1 and
+                retirement["staging"]["classification"] == "EVIDENCE_REQUIRED_RETAIN",
+                "fixed-current retained VPS evidence")
+        require(builder["state"] == "SANITIZED_CLOSURE_RECORDED" and
+                builder["rootAbsent"] is True and
+                builder["gitWorktreeRegistrationAbsent"] is True and
+                builder["custodyPreserved"] is True and
+                builder["commandsCompleted"] == 2 and
+                bool(SHA.fullmatch(builder["terminalReceiptSha256"])),
+                "fixed-current durable builder closure")
 elif record.get("recordType") == "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT":
     require(record["schemaVersion"] == 1, "frontend record schema")
     require(production["targetCommit"] == record["release"]["target"], "target")

@@ -1,5 +1,28 @@
 # WhatsApp Meta tenant runtime DB-first
 
+## Estado produtivo e reparações preexistentes — 20/11/2026
+
+O PR #422 está implantado na release API/frontend
+`immutable-41d70b53-external-20261118T214122Z`; o PR #423 concluiu a continuação
+de finalize sem alterar o contrato funcional. Novos Embedded Signup, callback e
+manual bind materializam `TenantMetaConfig`, `WaPhoneNumber` e `ChannelAccount`
+conforme este documento. O deploy não reparou registros preexistentes.
+
+Leitura dirigida confirmou duas identidades atuais sem `ChannelAccount
+whatsapp/meta`: `demo-converta` possui `baseConfig` DB-first e está
+`REPAIR_QUALIFIED / OWNER_WRITE_AUTHORIZATION_REQUIRED`; eventual conta nasce
+`pending` com os sete gates falsos, sem chamada Meta e sem tocar Web Session ou
+binding histórico. `syer-rodrigues` permanece
+`REPAIR_BLOCKED_BY_CANONICAL_BASE_CONFIG_AUTHORITY`: `baseConfig` ausente,
+runtime sem fonte `tenants.json` canônica e readiness
+`json_fallback/canMaterialize=false`. Arquivo de checkout histórico não é
+autoridade para preencher configuração.
+
+A sequência é deliberadamente separada: (1) revisão/autorização da transação
+serializável da demo; (2) autoridade explícita de `baseConfig` para syer e nova
+readiness; (3) somente depois avaliar o resíduo histórico 6306. Não executar
+reconexão, assinatura WABA, ativação de gates ou mensagens para produzir prova.
+
 ## Incidente de 22/10 e autoridade
 
 O incidente de 22/10 teve uma causa de configuração, não de resolução de tenant.
