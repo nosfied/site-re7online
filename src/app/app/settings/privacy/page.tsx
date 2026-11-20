@@ -15,6 +15,7 @@ import {
   deleteAppConversationData,
   executeAppRetention,
   fetchAppRetentionConfig,
+  getAppPrivacySubjectAnonymizationFeedback,
   loadAppSession,
   previewAppPrivacySubject,
   resolveAppPrivacySubjectFromCrmLead,
@@ -33,6 +34,18 @@ function normalizePrivacyError(error: AppApiError, fallback: string) {
   if (error.errorCode === "subject_not_found") return "Titular não encontrado nesta organização.";
   if (error.errorCode === "ambiguous_subject_identity") return "Identidade ambígua. A operação foi bloqueada.";
   if (error.errorCode === "confirmation_required") return "Confirmação inválida.";
+  if (error.errorCode === "concurrent_subject_change") {
+    return "A anonimização não foi concluída porque o titular mudou durante a operação. Atualize a prévia antes de decidir novamente.";
+  }
+  if (error.errorCode === "storage_profile_unproven") {
+    return "A anonimização não foi concluída porque o armazenamento seguro não pôde ser comprovado.";
+  }
+  if (error.errorCode === "privacy_cleanup_encryption_key_unavailable") {
+    return "A anonimização não foi concluída porque a proteção da limpeza de runtime não está disponível.";
+  }
+  if (error.errorCode === "privacy_result_inconclusive" || error.status === 0) {
+    return "Não foi possível confirmar o resultado da operação. Não repita a anonimização sem verificar o estado do titular.";
+  }
   if (error.errorCode === "conversation_not_found" || error.status === 404) {
     return "Conversa não encontrada nesta organização.";
   }
@@ -68,6 +81,8 @@ export default function AppPrivacySettingsPage() {
   const [subjectLeadId, setSubjectLeadId] = useState("");
   const [subjectFromShortcut, setSubjectFromShortcut] = useState(false);
   const [subjectPreview, setSubjectPreview] = useState<AppPrivacySubjectPreview | null>(null);
+  const [subjectCleanupPending, setSubjectCleanupPending] = useState(false);
+  const [subjectResultInconclusive, setSubjectResultInconclusive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -278,15 +293,25 @@ export default function AppPrivacySettingsPage() {
   };
 
   const selectSubjectContact = (contact: AppCrmContactItem) => {
+    if (subjectCleanupPending || subjectResultInconclusive) {
+      setError("Resolva o estado pendente desta operação antes de selecionar outro titular.");
+      return;
+    }
     if (!contact.contactId && !contact.leadId) return;
     setSubjectContactId(contact.contactId ?? "");
     setSubjectLeadId(contact.leadId);
     setSelectedSubjectLabel(buildSubjectDisplayLabel(contact));
     setSubjectPreview(null);
+    setSubjectCleanupPending(false);
+    setSubjectResultInconclusive(false);
   };
 
   const handleSubjectSearch = async () => {
     if (!session) return;
+    if (subjectCleanupPending || subjectResultInconclusive) {
+      setError("Resolva o estado pendente desta operação antes de buscar outro titular.");
+      return;
+    }
     const query = subjectSearch.trim();
     if (!query) {
       setError("Informe nome, telefone ou referência para buscar o titular.");
@@ -386,6 +411,10 @@ export default function AppPrivacySettingsPage() {
   }, [previewingSubject, session, subjectContactId, subjectFromShortcut, subjectLeadId, subjectPreview]);
 
   const openSubjectModal = () => {
+    if (subjectResultInconclusive) {
+      setError("Verifique administrativamente o estado do titular antes de continuar.");
+      return;
+    }
     if (previewingSubject) {
       setError("Aguarde a preparação do titular.");
       return;
@@ -411,9 +440,18 @@ export default function AppPrivacySettingsPage() {
         setError("Selecione um titular antes de anonimizar.");
         return;
       }
-      await anonymizeAppPrivacySubject(session, target, subjectConfirmation);
+      const result = await anonymizeAppPrivacySubject(session, target, subjectConfirmation);
+      const feedback = getAppPrivacySubjectAnonymizationFeedback(result);
       setSubjectModalOpen(false);
       setSubjectConfirmation("");
+      if (feedback.kind === "runtime_cleanup_pending") {
+        setSubjectCleanupPending(true);
+        setSubjectResultInconclusive(false);
+        setSuccess(null);
+        return;
+      }
+      setSubjectCleanupPending(false);
+      setSubjectResultInconclusive(false);
       setSubjectSearch("");
       setSubjectResults([]);
       setSubjectContactId("");
@@ -421,12 +459,18 @@ export default function AppPrivacySettingsPage() {
       setSelectedSubjectLabel("");
       setSubjectFromShortcut(false);
       setSubjectPreview(null);
-      setSuccess("Titular anonimizado. O formulário foi limpo para uma nova operação.");
+      setSuccess(feedback.message);
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
+      }
+      if (typed.errorCode === "privacy_result_inconclusive" || typed.status === 0) {
+        setSubjectResultInconclusive(true);
+      }
+      if (typed.errorCode === "concurrent_subject_change") {
+        setSubjectPreview(null);
       }
       setError(normalizePrivacyError(typed, "Não foi possível anonimizar o titular."));
     } finally {
@@ -465,6 +509,7 @@ export default function AppPrivacySettingsPage() {
                 id="subject-search"
                 value={subjectSearch}
                 onChange={(event) => setSubjectSearch(event.target.value)}
+                disabled={subjectCleanupPending || subjectResultInconclusive}
                 placeholder="Nome, telefone ou referência"
                 className="theme-select mt-2 w-full rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-re7-sky/40 min-[1441px]:rounded-xl min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
               />
@@ -473,7 +518,7 @@ export default function AppPrivacySettingsPage() {
               <button
                 type="button"
                 onClick={handleSubjectSearch}
-                disabled={loading || searchingSubject || previewingSubject || anonymizingSubject}
+                disabled={loading || searchingSubject || previewingSubject || anonymizingSubject || subjectCleanupPending || subjectResultInconclusive}
                 className="theme-nav-link rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 min-[1441px]:px-4 min-[1441px]:py-2 min-[1441px]:text-sm"
               >
                 {searchingSubject ? "Buscando..." : "Buscar"}
@@ -487,6 +532,7 @@ export default function AppPrivacySettingsPage() {
                   key={`${contact.leadId}:${contact.contactId}`}
                   type="button"
                   onClick={() => selectSubjectContact(contact)}
+                  disabled={subjectCleanupPending || subjectResultInconclusive}
                   className="theme-row-surface flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-xs transition hover:border-re7-sky/40 min-[1441px]:text-sm"
                 >
                   <span>
@@ -519,16 +565,36 @@ export default function AppPrivacySettingsPage() {
               <button
                 type="button"
                 onClick={openSubjectModal}
-                disabled={(!subjectContactId && !subjectLeadId) || !subjectPreview || previewingSubject || anonymizingSubject}
+                disabled={(!subjectContactId && !subjectLeadId) || !subjectPreview || previewingSubject || anonymizingSubject || subjectResultInconclusive}
                 className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 min-[1441px]:px-4 min-[1441px]:py-2 min-[1441px]:text-sm"
               >
-                {previewingSubject ? "Preparando..." : "Anonimizar titular"}
+                {previewingSubject
+                  ? "Preparando..."
+                  : subjectCleanupPending || subjectPreview?.subject.alreadyAnonymized
+                    ? "Retomar limpeza pendente"
+                    : "Anonimizar titular"}
               </button>
             </div>
           </div>
         </div>
         {subjectContactId || subjectLeadId ? (
           <div className="border-t border-white/10 p-3 min-[1441px]:p-4">
+            {subjectCleanupPending ? (
+              <div className="theme-soft-warning-panel mb-3 rounded-xl border p-3" role="status">
+                <p className="text-sm font-semibold">Anonimização confirmada. Limpeza de runtime pendente.</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  Os dados já foram confirmados no banco. Use somente a retomada de limpeza; não inicie uma nova anonimização.
+                </p>
+              </div>
+            ) : null}
+            {subjectResultInconclusive ? (
+              <div className="theme-soft-danger-panel mb-3 rounded-xl border p-3" role="alert">
+                <p className="text-sm font-semibold">Resultado da operação inconclusivo.</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  Não repita a anonimização. Verifique administrativamente o estado do titular antes de continuar.
+                </p>
+              </div>
+            ) : null}
             <div className="theme-surface-strong rounded-xl border p-3">
               <p className="text-sm font-semibold">Resumo da anonimização</p>
               <p className="theme-muted mt-2 text-sm leading-relaxed">
@@ -779,13 +845,19 @@ export default function AppPrivacySettingsPage() {
         <div className="theme-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center px-4 backdrop-blur-sm">
           <div className="theme-surface-strong w-full max-w-lg rounded-2xl border border-red-700 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">Anonimizar titular</h2>
+              <h2 className="text-lg font-semibold">
+                {subjectCleanupPending || subjectPreview.subject.alreadyAnonymized
+                  ? "Retomar limpeza pendente"
+                  : "Anonimizar titular"}
+              </h2>
               <span className="theme-soft-danger-badge rounded-full border px-2 py-0.5 text-[11px] font-semibold">
                 Irreversivel
               </span>
             </div>
             <p className="theme-muted mt-3 text-sm leading-relaxed">
-              Esta ação remove ou anonimiza os dados pessoais vinculados a este titular. O histórico operacional necessário poderá ser preservado sem permitir a identificação direta do titular.
+              {subjectCleanupPending || subjectPreview.subject.alreadyAnonymized
+                ? "Esta ação retoma somente a limpeza de runtime já registrada. Ela não inicia uma nova anonimização."
+                : "Esta ação remove ou anonimiza os dados pessoais vinculados a este titular. O histórico operacional necessário poderá ser preservado sem permitir a identificação direta do titular."}
             </p>
             <div className="theme-surface mt-3 rounded-xl border px-3 py-2 text-sm">
               Titular selecionado: {selectedSubjectLabel || "contato selecionado"}
@@ -815,7 +887,13 @@ export default function AppPrivacySettingsPage() {
                 disabled={anonymizingSubject || subjectConfirmation !== "ANONIMIZAR TITULAR"}
                 className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {anonymizingSubject ? "Anonimizando..." : "Confirmar anonimização"}
+                {anonymizingSubject
+                  ? subjectCleanupPending || subjectPreview.subject.alreadyAnonymized
+                    ? "Retomando limpeza..."
+                    : "Anonimizando..."
+                  : subjectCleanupPending || subjectPreview.subject.alreadyAnonymized
+                    ? "Confirmar retomada da limpeza"
+                    : "Confirmar anonimização"}
               </button>
             </div>
           </div>

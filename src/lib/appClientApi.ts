@@ -2473,11 +2473,24 @@ export function getAppSessionRemainingMs(session: AppSession | null, now = new D
   return expiresAt.getTime() - now.getTime();
 }
 
+type AppJsonResponse<T> = { status: number; payload: T };
+type AppJsonRequestInit = RequestInit & { timeoutMs?: number; includeResponseMetadata?: boolean };
+
 async function requestAppJson<T>(
   session: AppSession,
   path: string,
-  init?: RequestInit & { timeoutMs?: number }
-): Promise<T> {
+  init: AppJsonRequestInit & { includeResponseMetadata: true }
+): Promise<AppJsonResponse<T>>;
+async function requestAppJson<T>(
+  session: AppSession,
+  path: string,
+  init?: AppJsonRequestInit
+): Promise<T>;
+async function requestAppJson<T>(
+  session: AppSession,
+  path: string,
+  init?: AppJsonRequestInit
+): Promise<T | AppJsonResponse<T>> {
   const currentSession = getCurrentStoredSessionForRequest(session);
   const baseUrl = normalizeBaseUrl(currentSession.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
   const token = currentSession.token.trim();
@@ -2490,7 +2503,7 @@ async function requestAppJson<T>(
 
   const controller = new AbortController();
   const timeoutMs = typeof init?.timeoutMs === "number" ? init.timeoutMs : 10000;
-  const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  const { timeoutMs: _timeoutMs, includeResponseMetadata = false, ...requestInit } = init ?? {};
   let didTimeout = false;
   const timeout = globalThis.setTimeout(() => {
     didTimeout = true;
@@ -2592,7 +2605,8 @@ async function requestAppJson<T>(
     throw error;
   }
 
-  return (await res.json()) as T;
+  const payload = (await res.json()) as T;
+  return includeResponseMetadata ? { status: res.status, payload } : payload;
 }
 
 async function requestAppText(
@@ -4691,6 +4705,97 @@ export type AppPrivacySubjectTarget =
   | { contactId: string; leadId?: string | null }
   | { contactId?: string | null; leadId: string };
 
+export type AppPrivacySubjectCleanup = {
+  state: "pending" | "verified";
+  keyCount: number;
+};
+
+export type AppPrivacySubjectAnonymizationResult =
+  | {
+      outcome: "verified";
+      status: 200;
+      ok: true;
+      preview: AppPrivacySubjectPreview;
+      cleanup: AppPrivacySubjectCleanup & { state: "verified" };
+      anonymized?: Record<string, number>;
+      alreadyAnonymized?: true;
+    }
+  | {
+      outcome: "runtime_cleanup_pending";
+      status: 202;
+      ok: false;
+      error: "runtime_cleanup_pending";
+      committed: true;
+      preview: AppPrivacySubjectPreview;
+      cleanup: AppPrivacySubjectCleanup & { state: "pending" };
+      anonymized?: Record<string, number>;
+    };
+
+export type AppPrivacySubjectAnonymizationFeedback =
+  | { kind: "verified"; message: "Titular anonimizado"; clearSubject: true }
+  | {
+      kind: "runtime_cleanup_pending";
+      message: "Anonimização confirmada. Limpeza de runtime pendente.";
+      clearSubject: false;
+    };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isPrivacySubjectPreview(value: unknown): value is AppPrivacySubjectPreview {
+  if (!isRecord(value) || value.ok !== true || !isRecord(value.subject) || !isRecord(value.counts)) return false;
+  const subject = value.subject;
+  const counts = value.counts;
+  if (subject.contactId !== null && typeof subject.contactId !== "string") return false;
+  if (subject.leadId !== null && typeof subject.leadId !== "string") return false;
+  if (!Array.isArray(subject.leadIds) || !subject.leadIds.every((item) => typeof item === "string")) return false;
+  if (typeof subject.alreadyAnonymized !== "boolean") return false;
+  if (subject.displayName !== null && typeof subject.displayName !== "string") return false;
+  if (subject.phoneDisplay !== null && typeof subject.phoneDisplay !== "string") return false;
+  if (!["active", "excluded"].includes(String(subject.operationalStatus))) return false;
+  if (!["identifiable", "anonymized"].includes(String(subject.privacyStatus))) return false;
+  const countFields = [
+    "contacts", "leads", "contactChannelIdentities", "conversations", "runtimeStates", "leadNotes",
+    "inboundMessages", "outboundMessages", "events", "consentRecords", "optOutEvents", "campaignRelationships",
+  ];
+  if (!countFields.every((field) => Number.isInteger(counts[field]) && Number(counts[field]) >= 0)) return false;
+  if (!Array.isArray(value.actions) || !value.actions.every((action) =>
+    isRecord(action) && typeof action.entity === "string" && Number.isInteger(action.count)
+      && Number(action.count) >= 0 && typeof action.action === "string")) return false;
+  return [value.fieldsToAnonymize, value.historicalObjectsPreserved]
+    .every((items) => Array.isArray(items) && items.every((item) => typeof item === "string"));
+}
+
+function isPrivacySubjectCleanup(value: unknown, state: AppPrivacySubjectCleanup["state"]): value is AppPrivacySubjectCleanup {
+  return isRecord(value) && value.state === state && Number.isInteger(value.keyCount) && Number(value.keyCount) >= 0;
+}
+
+function privacySubjectInconclusive(status: number, payload: unknown) {
+  const error = new Error("Resultado inconclusivo da anonimização. Não repita a operação sem verificar o estado do titular.") as AppApiError;
+  error.status = status;
+  error.errorCode = "privacy_result_inconclusive";
+  error.payload = payload;
+  return error;
+}
+
+function isOptionalAnonymizedCounts(value: unknown) {
+  return value === undefined || (isRecord(value)
+    && Object.values(value).every((count) => Number.isInteger(count) && Number(count) >= 0));
+}
+
+export function getAppPrivacySubjectAnonymizationFeedback(
+  result: AppPrivacySubjectAnonymizationResult
+): AppPrivacySubjectAnonymizationFeedback {
+  return result.outcome === "verified"
+    ? { kind: "verified", message: "Titular anonimizado", clearSubject: true }
+    : {
+        kind: "runtime_cleanup_pending",
+        message: "Anonimização confirmada. Limpeza de runtime pendente.",
+        clearSubject: false,
+      };
+}
+
 function buildAppPrivacySubjectPath(target: AppPrivacySubjectTarget, action: "preview" | "anonymize") {
   if (target.contactId) return `/app/privacy/subjects/${encodeURIComponent(target.contactId)}/${action}`;
   if (!target.leadId) throw new Error("privacy_subject_target_required");
@@ -4736,11 +4841,42 @@ export async function anonymizeAppPrivacySubject(
   session: AppSession,
   target: AppPrivacySubjectTarget,
   confirmation: string
-): Promise<{ ok: true; preview: AppPrivacySubjectPreview; anonymized?: Record<string, number>; alreadyAnonymized?: true }> {
-  return requestAppJson(session, buildAppPrivacySubjectPath(target, "anonymize"), {
-    method: "POST",
-    body: JSON.stringify({ confirmation }),
-  });
+): Promise<AppPrivacySubjectAnonymizationResult> {
+  let response: AppJsonResponse<unknown>;
+  try {
+    response = await requestAppJson<unknown>(session, buildAppPrivacySubjectPath(target, "anonymize"), {
+      method: "POST",
+      body: JSON.stringify({ confirmation }),
+      includeResponseMetadata: true,
+    });
+  } catch (error) {
+    if (isRecord(error) && typeof error.status === "number") throw error;
+    throw privacySubjectInconclusive(0, null);
+  }
+  const payload = response.payload;
+  if (response.status === 200 && isRecord(payload) && payload.ok === true
+    && payload.error === undefined && (payload.alreadyAnonymized === undefined || payload.alreadyAnonymized === true)
+    && isOptionalAnonymizedCounts(payload.anonymized)
+    && isPrivacySubjectPreview(payload.preview) && isPrivacySubjectCleanup(payload.cleanup, "verified")) {
+    return {
+      ...payload,
+      outcome: "verified",
+      status: 200,
+      cleanup: payload.cleanup,
+    } as AppPrivacySubjectAnonymizationResult;
+  }
+  if (response.status === 202 && isRecord(payload) && payload.ok === false
+    && payload.error === "runtime_cleanup_pending" && payload.committed === true
+    && payload.alreadyAnonymized === undefined && isOptionalAnonymizedCounts(payload.anonymized)
+    && isPrivacySubjectPreview(payload.preview) && isPrivacySubjectCleanup(payload.cleanup, "pending")) {
+    return {
+      ...payload,
+      outcome: "runtime_cleanup_pending",
+      status: 202,
+      cleanup: payload.cleanup,
+    } as AppPrivacySubjectAnonymizationResult;
+  }
+  throw privacySubjectInconclusive(response.status, payload);
 }
 
 export async function fetchAppCrmSettings(session: AppSession): Promise<AppCrmSettingsResponse> {
