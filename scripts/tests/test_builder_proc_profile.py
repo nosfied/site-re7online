@@ -381,6 +381,51 @@ class DurableDisposableBuilderProcProfile(DisposableBuilderProcProfile):
     def collect(self):
         return observer.collect_disposable_durable(observer.canonical(self.request))
 
+    def authority_record(self, path):
+        info = path.stat()
+        return {"path": str(path), "sha256": observer.digest(path.read_bytes()),
+                "device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
+                "gid": info.st_gid, "mode": f"0{info.st_mode & 0o777:03o}",
+                "size": info.st_size}
+
+    def bind_noncanonical_continuation(self):
+        contract_raw = (observer.json.dumps(
+            self.contract, sort_keys=True, indent=2) + "\n").encode()
+        contract_path = self.custody / "contract.private.json"
+        contract_path.write_bytes(contract_raw); contract_path.chmod(0o600)
+        self.lifecycle.update(contractSha256=observer.digest(contract_raw), outcome="FAILED")
+        receipt = {"schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_EXPORT",
+                   "generationId": self.contract["generationId"], "outcome": "FAILED",
+                   "contractSha256": observer.digest(contract_raw),
+                   "requestSha256": "3" * 64, "artifacts": []}
+        receipt_path = self.custody / "disposable-builder.export-receipt.private.json"
+        receipt_path.write_bytes(observer.canonical(receipt)); receipt_path.chmod(0o600)
+        self.lifecycle["exportReceiptSha256"] = observer.digest(receipt_path.read_bytes())
+        lifecycle_path = self.custody / "disposable-builder.lifecycle.private.json"
+        lifecycle_path.write_bytes(observer.canonical(self.lifecycle)); lifecycle_path.chmod(0o600)
+        self.request.update(
+            contractSha256=observer.digest(contract_raw), contract=contract_raw.decode(),
+            lifecycleSha256=observer.digest(lifecycle_path.read_bytes()),
+            lifecycle=lifecycle_path.read_text(),
+        )
+        continuation = {
+            "schemaVersion": 1, "kind": observer.AUTHORITY_CONTINUATION_KIND,
+            "state": "SEALED_FOR_PRIVILEGED_OBSERVER",
+            "generationId": self.contract["generationId"],
+            "targetCommit": self.contract["targetCommit"],
+            "historicalContract": self.authority_record(contract_path),
+            "canonicalProjectionSha256": observer.digest(observer.canonical(self.contract)),
+            "lifecycle": self.authority_record(lifecycle_path),
+            "exportReceipt": self.authority_record(receipt_path),
+            "observerCommand": observer.DURABLE_DISPOSABLE_COMMAND,
+            "automaticSubstitution": False,
+        }
+        continuation_path = self.custody / "disposable-builder.authority-continuation.private.json"
+        continuation_path.write_bytes(observer.canonical(continuation)); continuation_path.chmod(0o600)
+        self.request["authorityContinuation"] = continuation_path.read_text()
+        self.request["authorityContinuationAuthority"] = self.authority_record(continuation_path)
+        return continuation
+
     def test_valid_request_is_bound_to_durable_policy_and_real_locks(self):
         result = self.collect()
         self.assertEqual(result["generationId"], self.contract["generationId"])
@@ -388,6 +433,43 @@ class DurableDisposableBuilderProcProfile(DisposableBuilderProcProfile):
         self.assertEqual(
             [(item["device"], item["inode"]) for item in result["locks"]],
             [(item["device"], item["inode"]) for item in self.request["locks"]])
+
+    def test_noncanonical_contract_requires_and_authenticates_explicit_continuation(self):
+        self.bind_noncanonical_continuation()
+        result = self.collect()
+        self.assertEqual(result["contractSha256"], self.request["contractSha256"])
+        del self.request["authorityContinuation"]
+        del self.request["authorityContinuationAuthority"]
+        with self.assertRaisesRegex(observer.Refused,
+                                    "DURABLE_DISPOSABLE_CONTINUATION_REQUIRED"):
+            self.collect()
+
+    def test_continuation_denies_projection_physical_authority_and_cross_receipt(self):
+        original = self.bind_noncanonical_continuation()
+        variants = (
+            ("canonicalProjectionSha256", "f" * 64, "DURABLE_DISPOSABLE_CONTINUATION"),
+            ("generationId", "immutable-foreign", "DURABLE_DISPOSABLE_CONTINUATION"),
+        )
+        for key, value, predicate in variants:
+            with self.subTest(key=key):
+                changed = copy.deepcopy(original); changed[key] = value
+                changed_raw = observer.canonical(changed)
+                path = Path(self.request["authorityContinuationAuthority"]["path"])
+                path.write_bytes(changed_raw); path.chmod(0o600)
+                self.request["authorityContinuation"] = changed_raw.decode()
+                self.request["authorityContinuationAuthority"] = self.authority_record(path)
+                with self.assertRaisesRegex(observer.Refused, predicate):
+                    self.collect()
+        changed = copy.deepcopy(original)
+        changed["historicalContract"]["inode"] += 1
+        changed_raw = observer.canonical(changed)
+        path = Path(self.request["authorityContinuationAuthority"]["path"])
+        path.write_bytes(changed_raw); path.chmod(0o600)
+        self.request["authorityContinuation"] = changed_raw.decode()
+        self.request["authorityContinuationAuthority"] = self.authority_record(path)
+        with self.assertRaisesRegex(observer.Refused,
+                                    "DURABLE_DISPOSABLE_CONTINUATION_CONTRACT"):
+            self.collect()
 
     def test_unknown_policy_generation_and_root_scope_are_denied(self):
         variants = (

@@ -24,6 +24,18 @@ filesystem local persistente, fora de `/tmp`, `/var/tmp`, `/run` e `/dev/shm`, e
 o binding de mount/política é gravado no lifecycle para retomada após reboot.
 Descobrir Node ou armazenamento divergente antes do produtor não consome build.
 
+Os dois argumentos chamados `--root-policy` não são intercambiáveis. O `open`
+recebe a política durável versionada acima; `converta-release.py build` recebe
+um `deploy-artifact-roots.private.json` por geração, com `schemaVersion=1` e
+`canonicalRoots`. O contrato do lifecycle deve ser publicado em JSON canônico
+antes do primeiro `open`. Uma autoridade histórica já exportada como `FAILED`
+com bytes não canônicos somente pode seguir por
+`materialize-authority-continuation`: o manifesto exclusivo vincula os bytes
+originais, a projeção canônica, lifecycle, export receipt e identidades físicas.
+Ele não reescreve o contrato nem admite contratos novos não canônicos. O helper
+durável sucessor conserva o mesmo comando sudo fechado e continua negando
+referências, writers, identidades ou hashes divergentes.
+
 O produtor executa `npm ci`, Prisma generate e cada build exatamente uma vez;
 preserva o BUILD_ID produzido e materializa `api-runtime`, `frontend-runtime` e,
 no perfil 3/3, `worker-runtime`, além de `manifest.json` e `index.sha256`. Exige

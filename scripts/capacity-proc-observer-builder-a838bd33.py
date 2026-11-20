@@ -130,6 +130,8 @@ DURABLE_CONTRACT_KEYS = {
 DURABLE_ROOT_KEYS = {
     "worktrees", "outputs", "releases", "staging", "cache", "temporary", "auxiliary",
 }
+AUTHORITY_CONTINUATION_KIND = "DISPOSABLE_BUILDER_AUTHORITY_CONTINUATION_V1"
+AUTHORITY_RECORD_KEYS = {"path", "sha256", "device", "inode", "uid", "gid", "mode", "size"}
 
 
 class Refused(RuntimeError):
@@ -157,6 +159,39 @@ def identity(info: os.stat_result) -> dict[str, Any]:
         "size": info.st_size, "mtimeNs": info.st_mtime_ns,
         "ctimeNs": info.st_ctime_ns,
     }
+
+
+def authority_file(value: Any, custody: Path, predicate: str) -> bytes:
+    if (not isinstance(value, dict) or set(value) != AUTHORITY_RECORD_KEYS or
+            value.get("mode") != "0600"):
+        refuse(predicate)
+    path = _closed_absolute_path(value.get("path"), predicate)
+    if path.parent != custody or not isinstance(value.get("sha256"), str):
+        refuse(predicate)
+    try:
+        before = path.lstat()
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            opened = os.fstat(descriptor); chunks: list[bytes] = []
+            while chunk := os.read(descriptor, 1024 * 1024):
+                chunks.append(chunk)
+            after = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        current = path.lstat()
+    except OSError:
+        refuse(predicate)
+    raw = b"".join(chunks)
+    projection = lambda item: (item.st_dev, item.st_ino, item.st_uid, item.st_gid,
+                               item.st_mode, item.st_size, item.st_mtime_ns, item.st_ctime_ns)
+    expected = (value["device"], value["inode"], value["uid"], value["gid"],
+                stat.S_IFREG | 0o600, value["size"])
+    if (len({projection(item) for item in (before, opened, after, current)}) != 1 or
+            path.is_symlink() or not stat.S_ISREG(current.st_mode) or
+            (current.st_dev, current.st_ino, current.st_uid, current.st_gid,
+             current.st_mode, current.st_size) != expected or digest(raw) != value["sha256"]):
+        refuse(predicate)
+    return raw
 
 
 def process_stat(proc: Path) -> tuple[str, int, int]:
@@ -812,7 +847,13 @@ def durable_disposable_request(raw: bytes) -> dict[str, Any]:
         "contractSha256", "lifecycleSha256", "contract", "lifecycle", "nonce",
         "consumer", "root", "worktree", "locks", "maxAgeSeconds",
     }
-    if (not isinstance(value, dict) or set(value) != expected_fields or canonical(value) != raw or
+    actual_fields = set(value) if isinstance(value, dict) else set()
+    continuation_present = "authorityContinuation" in actual_fields
+    continuation_fields = {"authorityContinuation", "authorityContinuationAuthority"}
+    if (not isinstance(value, dict) or
+            actual_fields != expected_fields | (continuation_fields
+                                                 if continuation_present else set()) or
+            canonical(value) != raw or
             value.get("schemaVersion") != 1 or
             value.get("kind") != "DISPOSABLE_BUILDER_PROC_REQUEST" or
             value.get("phase") not in {"PREPARE", "EXECUTE"} or
@@ -834,8 +875,8 @@ def durable_disposable_request(raw: bytes) -> dict[str, Any]:
         lifecycle = json.loads(lifecycle_raw)
     except (AttributeError, UnicodeEncodeError, json.JSONDecodeError):
         refuse("DURABLE_DISPOSABLE_AUTHORITY")
-    if (canonical(contract) != contract_raw or canonical(lifecycle) != lifecycle_raw or
-            digest(contract_raw) != value.get("contractSha256") or
+    canonical_contract = canonical(contract)
+    if (canonical(lifecycle) != lifecycle_raw or digest(contract_raw) != value.get("contractSha256") or
             digest(lifecycle_raw) != value.get("lifecycleSha256")):
         refuse("DURABLE_DISPOSABLE_AUTHORITY")
     if (not isinstance(contract, dict) or set(contract) != DURABLE_CONTRACT_KEYS or
@@ -847,6 +888,57 @@ def durable_disposable_request(raw: bytes) -> dict[str, Any]:
     root = _closed_absolute_path(contract.get("disposableRoot"), "DURABLE_DISPOSABLE_ROOT")
     custody = _closed_absolute_path(contract.get("custodyRoot"), "DURABLE_DISPOSABLE_CUSTODY")
     repository = _closed_absolute_path(contract.get("repository"), "DURABLE_DISPOSABLE_REPOSITORY")
+    if contract_raw == canonical_contract:
+        if continuation_present:
+            refuse("DURABLE_DISPOSABLE_CONTINUATION_UNEXPECTED")
+    else:
+        if not continuation_present:
+            refuse("DURABLE_DISPOSABLE_CONTINUATION_REQUIRED")
+        try:
+            continuation_raw = value["authorityContinuation"].encode()
+            continuation = json.loads(continuation_raw)
+        except (AttributeError, UnicodeEncodeError, json.JSONDecodeError):
+            refuse("DURABLE_DISPOSABLE_CONTINUATION")
+        required = {"schemaVersion", "kind", "state", "generationId", "targetCommit",
+                    "historicalContract", "canonicalProjectionSha256", "lifecycle",
+                    "exportReceipt", "observerCommand", "automaticSubstitution"}
+        if (not isinstance(continuation, dict) or set(continuation) != required or
+                canonical(continuation) != continuation_raw or
+                continuation.get("schemaVersion") != 1 or
+                continuation.get("kind") != AUTHORITY_CONTINUATION_KIND or
+                continuation.get("state") != "SEALED_FOR_PRIVILEGED_OBSERVER" or
+                continuation.get("generationId") != generation or
+                continuation.get("targetCommit") != target or
+                continuation.get("canonicalProjectionSha256") != digest(canonical_contract) or
+                continuation.get("observerCommand") != DURABLE_DISPOSABLE_COMMAND or
+                continuation.get("automaticSubstitution") is not False):
+            refuse("DURABLE_DISPOSABLE_CONTINUATION")
+        sealed_raw = authority_file(
+            value.get("authorityContinuationAuthority"), custody,
+            "DURABLE_DISPOSABLE_CONTINUATION_SEAL")
+        if sealed_raw != continuation_raw:
+            refuse("DURABLE_DISPOSABLE_CONTINUATION_SEAL")
+        historical_raw = authority_file(
+            continuation.get("historicalContract"), custody,
+            "DURABLE_DISPOSABLE_CONTINUATION_CONTRACT")
+        observed_lifecycle_raw = authority_file(
+            continuation.get("lifecycle"), custody,
+            "DURABLE_DISPOSABLE_CONTINUATION_LIFECYCLE")
+        receipt_raw = authority_file(
+            continuation.get("exportReceipt"), custody,
+            "DURABLE_DISPOSABLE_CONTINUATION_EXPORT")
+        if historical_raw != contract_raw or observed_lifecycle_raw != lifecycle_raw:
+            refuse("DURABLE_DISPOSABLE_CONTINUATION_AUTHORITY")
+        try:
+            receipt = json.loads(receipt_raw)
+        except json.JSONDecodeError:
+            refuse("DURABLE_DISPOSABLE_CONTINUATION_EXPORT")
+        if (canonical(receipt) != receipt_raw or receipt.get("generationId") != generation or
+                receipt.get("contractSha256") != digest(contract_raw) or
+                receipt.get("outcome") != "FAILED" or
+                lifecycle.get("exportReceiptSha256") != digest(receipt_raw) or
+                lifecycle.get("outcome") != "FAILED"):
+            refuse("DURABLE_DISPOSABLE_CONTINUATION_EXPORT")
     root_storage = lifecycle.get("rootStorage")
     if (not isinstance(root_storage, dict) or
             root_storage.get("policySha256") != DURABLE_ROOT_POLICY_SHA256 or
