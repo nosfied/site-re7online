@@ -4601,8 +4601,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         confirmation: typeof body.confirmation === "string" ? body.confirmation : "",
       });
       if (!result.ok) {
-        const status = result.error === "confirmation_required" ? 400 : 404;
-        json(res, status, { error: result.error, message: status === 400 ? "Confirmação inválida." : "Titular não encontrado nesta organização." });
+        const status = result.error === "confirmation_required" ? 400
+          : result.error === "runtime_cleanup_pending" ? 202
+          : ["concurrent_subject_change", "storage_profile_unproven", "privacy_cleanup_encryption_key_unavailable"].includes(result.error) ? 409
+          : 404;
+        const message = status === 400 ? "Confirmação inválida."
+          : status === 202 ? "Anonimização confirmada; limpeza de runtime pendente de recuperação segura."
+          : status === 409 ? "A operação foi bloqueada por mudança concorrente ou precondição de armazenamento."
+          : "Titular não encontrado nesta organização.";
+        json(res, status, { ...result, error: result.error, message });
         return;
       }
       json(res, 200, result);

@@ -243,6 +243,16 @@ jobs:
           node --import tsx --test
           src/crm/crmWhatsappIdentity.test.ts
           src/crm/crmContactUpsert.test.ts
+      - name: Privacy subject anonymization concurrency and durable cleanup
+        env:
+          STORAGE_MODE: postgres
+          CONV_STATE_READ_SOURCE: postgres
+          CHANNEL_ACCOUNT_SECRET_KEY: synthetic-privacy-cleanup-ci-key
+          APP_AUTH_SECRET: synthetic-privacy-campaign-seed-ci-key
+        run: >-
+          node --import tsx --test
+          src/privacy/privacyRetentionService.test.ts
+          src/privacy/privacyRetentionService.postgres.test.ts
       - name: CRM cursor filters, RBAC and tenant isolation routes
         run: node --import tsx --test src/http/crmCapabilityRoutes.test.ts
       - name: Inbox remote search, protocol, race and tenant isolation
