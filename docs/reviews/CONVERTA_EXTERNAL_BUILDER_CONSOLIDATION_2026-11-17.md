@@ -67,9 +67,10 @@ sintético, não build nem deploy produtivo.
 | Sintético real | raiz durável, observação privilegiada, negativa por processo, prepare/execute e receipt terminal | reboot real ou primeira geração produtiva sob #417–#420 |
 | Integrado/testado | paridade P00-D, interrupção/retomada e os três perfis fechados | que todo replay possível foi exercitado no host real |
 
-Pendências nominais: (1) reboot real entre `open` e retomada; (2) primeira release
-produtiva usando conjuntamente #417–#420; (3) replay checks não efetivamente
-invocados na homologação sintética real.
+Pendências nominais após a 41D: (1) reboot real entre `open` e retomada de uma
+geração aberta; (2) replay checks não efetivamente invocados na homologação
+sintética real. A primeira release produtiva conjunta #417–#420 deixou de ser
+pendência.
 
 ## Sequência e handoff
 
@@ -86,7 +87,16 @@ Ausência física sem journal/receipt continua `ROOT_EXTERNALLY_ABSENT`.
 
 ## Estado definitivo
 
-`EXTERNAL_BUILDER_STANDARD_INTEGRATED / SYNTHETIC_CLOSURE_VERIFIED`.
+`EXTERNAL_BUILDER_STANDARD_INTEGRATED / PRODUCTIVE_41D_CLOSURE_VERIFIED`.
 
-A infraestrutura deixa de ser frente de desenvolvimento. As três provas pendentes
-acompanham a próxima atualização autorizada e não justificam novo pipeline.
+A geração produtiva `immutable-41d70b53-external-20261118T214122Z` reutilizou o
+padrão integrado: package `7ab39382…99a`, export `a88154a5…e61`, builder
+`SANITIZED/CLOSURE_RECORDED` com receipt `d81cbd04…0294`, journal
+`a6c1d141…57a0`, lifecycle `0b35f450…5c69`, dois efeitos e custódia preservada.
+API/frontend 41D foram aceitos e finalizados, com worker ED74 preservado. A
+retenção VPS continua separadamente incompleta porque o staging autenticado foi
+classificado `EVIDENCE_REQUIRED/RETAIN`; isso não reabre o builder.
+
+A infraestrutura deixa de ser frente de desenvolvimento. As duas provas
+pendentes acompanham uma próxima atualização autorizada e não justificam novo
+pipeline.

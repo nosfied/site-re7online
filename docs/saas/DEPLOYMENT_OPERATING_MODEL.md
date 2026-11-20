@@ -1,29 +1,32 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / ED74 ATIVA / BUILDER EXTERNO DURÁVEL HOMOLOGADO SINTETICAMENTE**
+**Status: CANÔNICO / API+FRONTEND 41D / WORKER ED74 / BUILDER DURÁVEL PRODUTIVO COM CLOSURE**
 
 Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação.
 A única instrução executável permanece o [runbook](DEPLOY_RUNBOOK.md). O estado
-produtivo reconciliado em 17/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md)
+produtivo reconciliado em 20/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md)
 e no registro ativo
-[INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json](releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json),
+[META_DBFIRST_41D70B53_2026-11-20_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json](releases/META_DBFIRST_41D70B53_2026-11-20_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json),
 com recibos e limites de inferência em
 [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md).
 
-**Fotografia de fechamento, sem nova coleta:** ED74 está selecionada nos três
-componentes, BUILD_ID `DL7flKybPJUYQKtRLSuch`, com um `pm2 save`, marker
-`DEPLOYED` e lock liberado. O retirement da VPS tinha zero comandos. A raiz do
-builder ficou externamente ausente sem receipt canônico; por isso a conclusão é
-`DEPLOYED_RETENTION_INCOMPLETE`, com custódia preservada e capacidade não
-atribuída, e não `DEPLOYED_SANITIZED`.
+**Fotografia de fechamento, sem nova coleta:** API/frontend 41D e worker ED74
+estão selecionados; BUILD_ID `xj_9UjisQqYxu-19xA1TT`, um `pm2 save`, marker
+`DEPLOYED` e lock liberado. O builder 41D encerrou
+`SANITIZED/CLOSURE_RECORDED` com receipt legítimo. O retirement da VPS teve zero
+comandos, mas o staging autenticado permanece `EVIDENCE_REQUIRED/RETAIN`; por
+isso o deploy continua `DEPLOYED_RETENTION_INCOMPLETE`, não
+`DEPLOYED_SANITIZED`.
 
 **Fechamento do padrão em 18/11/2026:** os PRs #417–#420 integraram política de
 raiz durável, schema compartilhado admissão→retirement e observador privilegiado
 durável. Uma geração sintética real percorreu `open`, export, negativa por
 referência ativa, `prepare`, autorização e `execute` até receipt terminal, sem
-efeito produtivo. Isso homologa o lifecycle sintético; reboot real e a primeira
-release produtiva conjunta permanecem provas futuras, não lacunas de arquitetura.
+efeito produtivo. A 41D comprovou depois a primeira release produtiva conjunta e
+seu fechamento real. Continua aberta apenas a prova de reboot com geração ainda
+aberta e retomada, além de replay real não exercitado; não são lacunas de
+arquitetura.
 
 **Incidente histórico 3/3 de 15/11/2026:** a primeira tentativa de promover `ed74c483` terminou em
 rollback canônico verificado. API/frontend `fa10f4f5` e worker `e2e7f17a` foram

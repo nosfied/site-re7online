@@ -19,6 +19,25 @@ capacidade. Ordem vigente, sem apagar o histórico abaixo:
 
 Fonte e evidências: [matriz final](reviews/CONVERTA_PROJECT_AUDIT_AND_BACKLOG_READINESS_2026-11-14.md).
 
+## Continuidade funcional após a release 41D — 20/11/2026
+
+API/frontend 41D estão implantados, aceitos e finalizados; worker ED74 preservado;
+builder 41D `SANITIZED/CLOSURE_RECORDED`. A retenção do staging VPS permanece
+`EVIDENCE_REQUIRED/RETAIN` e não bloqueia a continuidade funcional.
+
+Ordem fechada das próximas intervenções, cada uma com autorização própria:
+
+1. `demo-converta`: revisar e autorizar uma única materialização tenant-scoped da
+   identidade Meta atual, conta `pending` e sete gates falsos; zero chamada Meta,
+   zero alteração de Web Session e zero reconciliação 6306;
+2. `syer-rodrigues`: obter autoridade explícita para `baseConfig`; enquanto
+   `json_fallback/canMaterialize=false`, manter a pendência e não inferir a partir
+   de arquivos históricos;
+3. UFRN 6306: somente após validar a reparação Meta, revisar o resíduo histórico
+   de duas conversas/protocolos; não fabricar inbound nem apagar evidências.
+
+Não reabrir build, deploy, builder, P00-D ou staging para executar esta ordem.
+
 > [!IMPORTANT]
 > Sequência operacional revisada em 26/10: [mapa vigente](saas/PRODUCT_MAP_CURRENT_2026-10-19.md).
 > IMAGE/VIDEO homologados; campanhas abertas na geração 41 conforme relato.

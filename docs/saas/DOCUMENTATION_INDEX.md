@@ -11,9 +11,10 @@
 
 - [Consolidação definitiva do builder externo (17–18/11/2026)](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md) — precedentes A838/FA10/ED74, PRs #375–#420, PR #415 draft histórico e closure sintética durável real.
 - [Padrão preferencial de build externo e ledger VPS + builder (13/11/2026)](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md) — **começar aqui** para capacidade, histórico já retirado, categorias preservadas, dívidas, geração falha, restrições e futura automação; não autoriza exclusões.
-- [Registro ativo ED74](releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json) — API, frontend e worker ativos; aceite/finalização comprovados e ausência externa do builder explicitamente distinta de sanitização canônica.
+- [Registro ativo 41D Meta DB-first](releases/META_DBFIRST_41D70B53_2026-11-20_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json) — API/frontend 41D ativos e aceitos; worker ED74 preservado; builder durável encerrado canonicamente e staging VPS retido como evidência.
+- [Registro histórico ED74](releases/INBOX_ED74C483_2026-11-17_DEPLOYED_RETENTION_INCOMPLETE.json) — fotografia anterior 3/3; hoje autentica o worker ativo e o rollback de API/frontend, sem converter a ausência externa de seu builder em sanitização canônica.
 - [Registro terminal de fa10f4f5: deploy + closure do builder](releases/INBOX_FA10F4F5_2026-11-13_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json) — precedente histórico de closure canônica; não substitui os receipts privados.
-- [Estado canônico atualizado](CURRENT_STATE.md) e [snapshot verificável](CURRENT_STATE.json) — ED74 3/3 ativa em `DEPLOYED_RETENTION_INCOMPLETE`; retornos FA10/E2E preservados.
+- [Estado canônico atualizado](CURRENT_STATE.md) e [snapshot verificável](CURRENT_STATE.json) — API/frontend 41D, worker/rollback ED74, builder 41D `SANITIZED/CLOSURE_RECORDED` e retenção VPS incompleta.
 - [Inventário VPS de 24/10](VPS_CAPACITY_AUDIT_2026-10-24.md), [inventário de 26/10](VPS_CAPACITY_AUDIT_2026-10-26.md) e [política com receipts P00](CAPACITY_RECOVERY_POLICY.md) — **históricos reaproveitáveis**, lotes terminais irrepetíveis. Não reiniciar coleta massiva; qualificar apenas delta de candidatos pendentes.
 
 ## Estado ativo
