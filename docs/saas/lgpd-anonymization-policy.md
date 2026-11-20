@@ -48,6 +48,9 @@ Soft delete sem `anonymizedAt` e diferente de anonimizacao. Registros apenas rem
 
 ## Regras tecnicas
 
+- A anonimizacao por titular adquire o lock hibrido da identidade canonica, reabre o grafo dentro de transacao `Serializable` e compara identidades, versoes, `updatedAt` e cardinalidades antes de qualquer efeito. Drift ou atividade concorrente resulta em negativa integral, sem retry automatico.
+- A minimizacao no PostgreSQL e a intencao de limpeza do RuntimeStorage fazem parte do mesmo commit. A intencao duravel guarda somente chaves cifradas e hashes autenticados; o resultado permanece `runtime_cleanup_pending` ate que remocao idempotente e readback comprovem ausencia. Uma nova invocacao pode retomar apenas essa limpeza, sem repetir a anonimizacao.
+- Enquanto a limpeza do RuntimeStorage estiver pendente, a operacao por titular exige `STORAGE_MODE=postgres` e `CONV_STATE_READ_SOURCE=postgres`, impedindo leitura ou reidratacao por shadow JSON antigo.
 - Inbound multicanal deve verificar identidade anonimizada antes de persistir mensagem ou atualizar conversa.
 - Upserts nao devem sobrescrever dados minimizados com nome, telefone, perfil, CRM, fila ou historico antigo.
 - APIs publicas e read models externos devem filtrar `deletedAt = null` e `anonymizedAt = null` explicitamente.

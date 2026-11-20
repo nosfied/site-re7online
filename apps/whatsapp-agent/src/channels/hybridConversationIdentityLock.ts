@@ -16,7 +16,11 @@ export async function withHybridConversationIdentityLock<T>(
   prisma: PrismaClient,
   input: { clientId: string; waId: string },
   work: (tx: Prisma.TransactionClient) => Promise<T>,
-  options: { maxWaitMs?: number; timeoutMs?: number } = {}
+  options: {
+    maxWaitMs?: number;
+    timeoutMs?: number;
+    isolationLevel?: Prisma.TransactionIsolationLevel;
+  } = {}
 ): Promise<T> {
   const key = hybridConversationIdentityLockKey(input);
   const maxWaitMs = options.maxWaitMs ?? 15000;
@@ -26,5 +30,9 @@ export async function withHybridConversationIdentityLock<T>(
     await tx.$queryRaw(Prisma.sql`SELECT set_config('lock_timeout', ${`${lockWaitMs}ms`}, true)`);
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
     return work(tx);
-  }, { maxWait: maxWaitMs, timeout: timeoutMs });
+  }, {
+    maxWait: maxWaitMs,
+    timeout: timeoutMs,
+    ...(options.isolationLevel ? { isolationLevel: options.isolationLevel } : {}),
+  });
 }

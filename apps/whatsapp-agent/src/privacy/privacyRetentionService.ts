@@ -1,6 +1,6 @@
 import { inspectRetentionCandidate, retainConversation, retentionConversationSelect } from "./conversationRetention.js";
 import { ConversationOperationalStatus, Prisma } from "@prisma/client";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { env, normalizeWaId } from "../config/env.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
@@ -14,17 +14,26 @@ import {
   readPrivateCampaignSeedFields,
   removeCampaignSeedSubjectReferences,
 } from "../campaigns/campaignSeedPrivacy.js";
+import { withHybridConversationIdentityLock } from "../channels/hybridConversationIdentityLock.js";
+import {
+  decryptChannelAccountSecret,
+  encryptChannelAccountSecret,
+  getChannelAccountSecretKey,
+} from "../channels/channelAccountSecretCrypto.js";
+
+export const DATA_SUBJECT_ANONYMIZED_EVENT = "privacy.subject.anonymized";
+export const DATA_SUBJECT_RUNTIME_CLEANUP_EVENT = "privacy.subject.runtime_cleanup";
 
 export const IMMUTABLE_PRIVACY_AUDIT_EVENTS = [
   "conversation.deleted",
   "conversation.anonymized",
   "retention.executed",
   "conversation.reactivated_after_retention",
+  DATA_SUBJECT_RUNTIME_CLEANUP_EVENT,
 ] as const;
 
 export type PrivacyRetentionAction = "conversation_delete" | "conversation_anonymize" | "retention";
 
-export const DATA_SUBJECT_ANONYMIZED_EVENT = "privacy.subject.anonymized";
 export const ANONYMIZED_SUBJECT_NAME = "Usuario Anonimizado";
 export const ANONYMIZED_LEAD_NOTE_BODY = "[nota anonimizada]";
 
@@ -40,6 +49,7 @@ export type PrivacyConversationTarget = {
   legacyWaId?: string | null;
   deletedAt?: Date | null;
   anonymizedAt?: Date | null;
+  updatedAt?: Date;
 };
 
 type PrismaClientLike = ReturnType<typeof getPrisma>;
@@ -58,6 +68,7 @@ type DataSubjectGraph = {
     externalUserRef?: string | null;
     legacyWaId?: string | null;
     operationallyExcludedAt?: Date | null;
+    updatedAt: Date;
   } | null;
   subjectLead: {
     id: string;
@@ -69,15 +80,16 @@ type DataSubjectGraph = {
     externalUserRef?: string | null;
     legacyWaId?: string | null;
     contactChannelIdentityId?: string | null;
+    updatedAt: Date;
   } | null;
   contactIds: string[];
   identityKeys: string[];
   externalUserHashes: string[];
-  identities: Array<{ id: string; contactId: string | null }>;
-  leads: Array<{ id: string }>;
+  identities: Array<{ id: string; contactId: string | null; updatedAt: Date }>;
+  leads: Array<{ id: string; updatedAt: Date }>;
   leadNotes: Array<{ id: string }>;
   conversations: Array<PrivacyConversationTarget>;
-  runtimeStates: Array<{ id: string }>;
+  runtimeStates: Array<{ id: string; version: number; updatedAt: Date }>;
   inboundMessages: number;
   outboundMessages: number;
   events: number;
@@ -86,6 +98,20 @@ type DataSubjectGraph = {
   campaignSeedEvents: number;
   campaignOutboundMessages: number;
 };
+
+type RuntimeCleanupPayload = {
+  schemaVersion: 1;
+  state: "pending" | "verified";
+  subjectId: string;
+  keyCiphertext: string | null;
+  keyHashes: string[];
+  keyCount: number;
+  attempts: number;
+  verifiedAt: string | null;
+  lastFailure: string | null;
+};
+
+class SubjectAnonymizationDenied extends Error {}
 
 export type DataSubjectPrivacyPreview = {
   ok: true;
@@ -386,7 +412,7 @@ function eventPayloadRecipientReferencesSubject(payloadJson: unknown, identityKe
 }
 
 async function countCampaignSeedSubjectRelationships(
-  prisma: PrismaClientLike,
+  prisma: PrismaExecutor,
   params: { clientId: string; leadIds: string[]; identityKeys: string[] }
 ) {
   if (params.leadIds.length === 0 && params.identityKeys.length === 0) return 0;
@@ -467,7 +493,7 @@ export async function getOrCreateRetentionConfig(prisma: PrismaClientLike, clien
 }
 
 async function resolveDataSubjectGraph(
-  prisma: PrismaClientLike,
+  prisma: PrismaExecutor,
   params: { clientId: string; contactId?: string | null; leadId?: string | null }
 ): Promise<DataSubjectGraph | null> {
   const contactSelect = {
@@ -481,6 +507,7 @@ async function resolveDataSubjectGraph(
     externalUserRef: true,
     legacyWaId: true,
     operationallyExcludedAt: true,
+    updatedAt: true,
   } as const;
   const leadSelect = {
     id: true,
@@ -492,6 +519,7 @@ async function resolveDataSubjectGraph(
     externalUserRef: true,
     legacyWaId: true,
     contactChannelIdentityId: true,
+    updatedAt: true,
   } as const;
   let contact = params.contactId
     ? await prisma.contact.findFirst({
@@ -528,10 +556,10 @@ async function resolveDataSubjectGraph(
     ...(seedIdentityKeys.length > 0 ? [{ legacyWaId: { in: seedIdentityKeys } }] : []),
     ...(externalUserHashes.length > 0 ? [{ externalUserHash: { in: externalUserHashes } }] : []),
   ];
-  const identities = identityFilters.length
+  let identities = identityFilters.length
     ? await prisma.contactChannelIdentity.findMany({
         where: { clientId: params.clientId, OR: identityFilters },
-        select: { id: true, contactId: true },
+        select: { id: true, contactId: true, updatedAt: true },
       })
     : [];
   const identityContactIds = uniqueStrings(identities.map((identity) => identity.contactId));
@@ -546,6 +574,10 @@ async function resolveDataSubjectGraph(
       select: contactSelect,
     });
     if (!contact) throw new Error("ambiguous_subject_identity");
+    identities = await prisma.contactChannelIdentity.findMany({
+      where: { clientId: params.clientId, OR: [{ contactId: contact.id }, ...identityFilters] },
+      select: { id: true, contactId: true, updatedAt: true },
+    });
   }
   const identityKeys = buildPrivacyIdentityKeys([
     ...seedIdentityKeys,
@@ -564,7 +596,7 @@ async function resolveDataSubjectGraph(
         ...(identityIds.length > 0 ? [{ contactChannelIdentityId: { in: identityIds } }] : []),
       ],
     },
-    select: { id: true },
+    select: { id: true, updatedAt: true },
   });
   const leadIds = leads.map((lead) => lead.id);
   const [leadNotes, conversations, runtimeStates, inboundMessages, outboundMessages, events, consentRecords, optOutEvents, campaignSeedEvents] =
@@ -592,6 +624,7 @@ async function resolveDataSubjectGraph(
           legacyWaId: true,
           deletedAt: true,
           anonymizedAt: true,
+          updatedAt: true,
         },
       }),
       prisma.conversationRuntimeState.findMany({
@@ -602,7 +635,7 @@ async function resolveDataSubjectGraph(
             ...(externalUserHashes.length > 0 ? [{ externalUserHash: { in: externalUserHashes } }] : []),
           ],
         },
-        select: { id: true },
+        select: { id: true, version: true, updatedAt: true },
       }),
       prisma.inboundMessage.count({
         where: {
@@ -730,6 +763,146 @@ function buildDataSubjectPreview(graph: DataSubjectGraph): DataSubjectPrivacyPre
   };
 }
 
+function timestamp(value: Date | null | undefined) {
+  return value instanceof Date ? value.toISOString() : null;
+}
+
+function dataSubjectGraphFingerprint(graph: DataSubjectGraph) {
+  const stable = {
+    subjectId: graph.subjectId,
+    contact: graph.contact ? [graph.contact.id, timestamp(graph.contact.updatedAt)] : null,
+    subjectLead: graph.subjectLead ? [graph.subjectLead.id, timestamp(graph.subjectLead.updatedAt)] : null,
+    contactIds: [...graph.contactIds].sort(),
+    identityKeys: [...graph.identityKeys].sort(),
+    externalUserHashes: [...graph.externalUserHashes].sort(),
+    identities: graph.identities.map((item) => [item.id, item.contactId, timestamp(item.updatedAt)]).sort(),
+    leads: graph.leads.map((item) => [item.id, timestamp(item.updatedAt)]).sort(),
+    leadNotes: graph.leadNotes.map((item) => item.id).sort(),
+    conversations: graph.conversations.map((item) => [item.id, timestamp(item.updatedAt), timestamp(item.anonymizedAt)]).sort(),
+    runtimeStates: graph.runtimeStates.map((item) => [item.id, item.version, timestamp(item.updatedAt)]).sort(),
+    counts: {
+      inboundMessages: graph.inboundMessages,
+      outboundMessages: graph.outboundMessages,
+      events: graph.events,
+      consentRecords: graph.consentRecords,
+      optOutEvents: graph.optOutEvents,
+      campaignSeedEvents: graph.campaignSeedEvents,
+      campaignOutboundMessages: graph.campaignOutboundMessages,
+    },
+  };
+  return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
+}
+
+function runtimeCleanupKeyHash(value: string) {
+  const key = getChannelAccountSecretKey();
+  if (!key) throw new SubjectAnonymizationDenied("privacy_cleanup_encryption_key_unavailable");
+  return createHmac("sha256", key).update("privacy-runtime-cleanup\0").update(value).digest("hex");
+}
+
+function buildRuntimeCleanupPayload(subjectId: string, keys: string[]): RuntimeCleanupPayload {
+  const uniqueKeys = uniqueStrings(keys);
+  const keyCiphertext = encryptChannelAccountSecret(JSON.stringify({ version: 1, keys: uniqueKeys }));
+  if (!keyCiphertext) throw new SubjectAnonymizationDenied("privacy_cleanup_encryption_key_unavailable");
+  return {
+    schemaVersion: 1,
+    state: "pending",
+    subjectId,
+    keyCiphertext,
+    keyHashes: uniqueKeys.map(runtimeCleanupKeyHash).sort(),
+    keyCount: uniqueKeys.length,
+    attempts: 0,
+    verifiedAt: null,
+    lastFailure: null,
+  };
+}
+
+function parseRuntimeCleanupPayload(value: unknown): RuntimeCleanupPayload | null {
+  const payload = getJsonRecord(value);
+  if (payload.schemaVersion !== 1 || !["pending", "verified"].includes(String(payload.state))) return null;
+  if (typeof payload.subjectId !== "string" || !Array.isArray(payload.keyHashes)) return null;
+  return payload as RuntimeCleanupPayload;
+}
+
+function decryptRuntimeCleanupKeys(payload: RuntimeCleanupPayload) {
+  if (!payload.keyCiphertext) return payload.state === "verified" ? [] : null;
+  const decrypted = decryptChannelAccountSecret(payload.keyCiphertext);
+  if (!decrypted) return null;
+  try {
+    const parsed = JSON.parse(decrypted) as { version?: unknown; keys?: unknown };
+    const keys = Array.isArray(parsed.keys) ? uniqueStrings(parsed.keys.map((value) => String(value ?? ""))) : [];
+    if (parsed.version !== 1 || keys.length !== payload.keyCount) return null;
+    if (JSON.stringify(keys.map(runtimeCleanupKeyHash).sort()) !== JSON.stringify([...payload.keyHashes].sort())) return null;
+    return keys;
+  } catch {
+    return null;
+  }
+}
+
+async function executePendingRuntimeCleanup(
+  prisma: PrismaExecutor,
+  event: { id: string; payloadJson: unknown },
+  clientKey: string,
+) {
+  const payload = parseRuntimeCleanupPayload(event.payloadJson);
+  if (!payload) throw new SubjectAnonymizationDenied("privacy_cleanup_receipt_invalid");
+  if (payload.state === "verified") return { state: "verified" as const, keyCount: payload.keyCount };
+  const keys = decryptRuntimeCleanupKeys(payload);
+  if (!keys) throw new SubjectAnonymizationDenied("privacy_cleanup_receipt_invalid");
+  try {
+    for (const waId of keys) {
+      await runtimeStorage.deleteConversation(waId, clientKey);
+      if (await runtimeStorage.getConversation(waId, clientKey)) {
+        throw new Error("runtime_cleanup_readback_failed");
+      }
+    }
+  } catch (error) {
+    const pending: RuntimeCleanupPayload = {
+      ...payload,
+      attempts: payload.attempts + 1,
+      lastFailure: "runtime_cleanup_failed",
+    };
+    await prisma.event.update({ where: { id: event.id }, data: { payloadJson: pending as Prisma.InputJsonValue } });
+    logger.error({ event: "privacy.runtime_cleanup_pending", cleanupEventId: event.id, keyCount: payload.keyCount,
+      message: (error as Error).message });
+    return { state: "pending" as const, keyCount: payload.keyCount };
+  }
+  const verified: RuntimeCleanupPayload = {
+    ...payload,
+    state: "verified",
+    keyCiphertext: null,
+    attempts: payload.attempts + 1,
+    verifiedAt: new Date().toISOString(),
+    lastFailure: null,
+  };
+  await prisma.event.update({ where: { id: event.id }, data: { payloadJson: verified as Prisma.InputJsonValue } });
+  return { state: "verified" as const, keyCount: payload.keyCount };
+}
+
+async function findSubjectRuntimeCleanup(prisma: PrismaExecutor, clientId: string, subjectId: string) {
+  return prisma.event.findFirst({
+    where: { clientId, eventName: DATA_SUBJECT_RUNTIME_CLEANUP_EVENT, waId: buildAnonymizedSubjectWaId(subjectId) },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, payloadJson: true },
+  });
+}
+
+function subjectIdentityLockSeed(graph: DataSubjectGraph) {
+  return graph.identityKeys.find((value) => normalizeWaIdDigits(value).length >= 8)
+    ?? graph.contact?.waId
+    ?? graph.subjectLead?.waIdCanonical
+    ?? graph.subjectLead?.waId
+    ?? graph.subjectId;
+}
+
+function subjectConcurrencyDenial(error: unknown) {
+  if (error instanceof SubjectAnonymizationDenied) return error.message;
+  if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2034", "P2010", "P2028"].includes(error.code)) {
+    const sqlState = String(error.meta?.code ?? "");
+    if (error.code !== "P2010" || ["40001", "40P01", "55P03"].includes(sqlState)) return "concurrent_subject_change";
+  }
+  return null;
+}
+
 export async function previewDataSubjectAnonymization(
   prisma: PrismaClientLike,
   params: { clientId: string; contactId?: string | null; leadId?: string | null }
@@ -755,11 +928,19 @@ export async function anonymizeDataSubject(
   if (params.confirmation !== "ANONIMIZAR TITULAR") {
     return { ok: false as const, error: "confirmation_required" as const };
   }
-  const graph = await resolveDataSubjectGraph(prisma, params);
-  if (!graph) return { ok: false as const, error: "subject_not_found" as const };
-  const preview = buildDataSubjectPreview(graph);
+  const initialGraph = await resolveDataSubjectGraph(prisma, params);
+  if (!initialGraph) return { ok: false as const, error: "subject_not_found" as const };
+  const preview = buildDataSubjectPreview(initialGraph);
   if (params.dryRun) return { ok: true as const, preview, dryRun: true as const };
   if (preview.subject.alreadyAnonymized) {
+    const pendingCleanup = await findSubjectRuntimeCleanup(prisma, params.clientId, initialGraph.subjectId);
+    if (pendingCleanup) {
+      const cleanup = await executePendingRuntimeCleanup(prisma, pendingCleanup, params.clientKey);
+      if (cleanup.state === "pending") {
+        return { ok: false as const, error: "runtime_cleanup_pending" as const, committed: true as const, preview, cleanup };
+      }
+      return { ok: true as const, alreadyAnonymized: true as const, preview, cleanup };
+    }
     await persistPrivacyAuditEvent(prisma, {
       clientId: params.clientId,
       requestId: `${params.requestId}:${DATA_SUBJECT_ANONYMIZED_EVENT}:noop`,
@@ -770,121 +951,146 @@ export async function anonymizeDataSubject(
         action: DATA_SUBJECT_ANONYMIZED_EVENT,
         details: {
           result: "already_anonymized",
-          contactId: graph.contact?.id ?? null,
-          leadId: graph.subjectLead?.id ?? null,
+          contactId: initialGraph.contact?.id ?? null,
+          leadId: initialGraph.subjectLead?.id ?? null,
           counts: preview.counts,
         },
       }) as Prisma.InputJsonValue,
     });
     return { ok: true as const, alreadyAnonymized: true as const, preview };
   }
+  if (env.STORAGE_MODE !== "postgres" || env.CONV_STATE_READ_SOURCE !== "postgres") {
+    return { ok: false as const, error: "storage_profile_unproven" as const };
+  }
+  if (!getChannelAccountSecretKey()) {
+    return { ok: false as const, error: "privacy_cleanup_encryption_key_unavailable" as const };
+  }
 
-  const anonymizedWaId = buildAnonymizedSubjectWaId(graph.subjectId);
-  const anonymizedExternalUserHash = buildAnonymizedSubjectExternalUserHash(graph.subjectId);
-  const identityIds = graph.identities.map((identity) => identity.id);
-  const leadIds = graph.leads.map((lead) => lead.id);
-  const leadNoteIds = graph.leadNotes.map((note) => note.id);
-  const transactionResult = await prisma.$transaction(async (tx) => {
-    const now = new Date();
-    const runtimeCleanupKeys: string[] = [];
-    let anonymizedConversations = 0;
-    for (const conversation of graph.conversations) {
-      if (conversation.anonymizedAt) continue;
-      const conversationResult = await anonymizeConversationPrivacyDataInTransaction(tx, {
-        clientId: params.clientId,
-        clientKey: params.clientKey,
-        conversation,
-        userId: params.actorId,
-        requestId: `${params.requestId}:conversation:${conversation.id}`,
-      });
-      anonymizedConversations += conversationResult.anonymized.conversation;
-      runtimeCleanupKeys.push(...conversationResult.runtimeCleanupKeys);
-    }
-
-    const subjectResult = await anonymizeSubjectIdentityData(tx, {
-      clientId: params.clientId,
-      contactIds: graph.contactIds,
-      identityIds,
-      leadIds,
-      leadNoteIds,
-      waIds: graph.identityKeys,
-      externalUserHashes: graph.externalUserHashes,
-      anonymizedWaId,
-      anonymizedExternalUserHash,
-      now,
-      eventConversationId: null,
-      eventReason: "privacy_subject_anonymized",
-    });
-    const campaignUnlinking = await unlinkCampaignRelationshipSubjectReferences(tx, {
-      clientId: params.clientId,
-      leadIds,
-      identityKeys: graph.identityKeys,
-    });
-    const inboundMessages = await tx.inboundMessage.updateMany({
-      where: {
-        clientId: params.clientId,
-        OR: [
-          ...(graph.identityKeys.length > 0 ? [{ waId: { in: graph.identityKeys } }, { waIdCanonical: { in: graph.identityKeys } }] : []),
-          ...(graph.externalUserHashes.length > 0 ? [{ externalUserHash: { in: graph.externalUserHashes } }] : []),
-        ],
+  const initialFingerprint = dataSubjectGraphFingerprint(initialGraph);
+  let transactionResult: { resultCounts: Record<string, number>; cleanupEvent: { id: string; payloadJson: unknown } };
+  try {
+    transactionResult = await withHybridConversationIdentityLock(
+      prisma,
+      { clientId: params.clientId, waId: subjectIdentityLockSeed(initialGraph) },
+      async (tx) => {
+        const graph = await resolveDataSubjectGraph(tx, params);
+        if (!graph || dataSubjectGraphFingerprint(graph) !== initialFingerprint) {
+          throw new SubjectAnonymizationDenied("concurrent_subject_change");
+        }
+        if (buildDataSubjectPreview(graph).subject.alreadyAnonymized) {
+          throw new SubjectAnonymizationDenied("concurrent_subject_change");
+        }
+        const anonymizedWaId = buildAnonymizedSubjectWaId(graph.subjectId);
+        const anonymizedExternalUserHash = buildAnonymizedSubjectExternalUserHash(graph.subjectId);
+        const identityIds = graph.identities.map((identity) => identity.id);
+        const leadIds = graph.leads.map((lead) => lead.id);
+        const leadNoteIds = graph.leadNotes.map((note) => note.id);
+        const now = new Date();
+        const runtimeCleanupKeys: string[] = [];
+        let anonymizedConversations = 0;
+        let anonymizedRuntimeStates = 0;
+        let anonymizedInboundMessages = 0;
+        let anonymizedOutboundMessages = 0;
+        let anonymizedEvents = 0;
+        for (const conversation of graph.conversations) {
+          if (conversation.anonymizedAt) continue;
+          const conversationResult = await anonymizeConversationPrivacyDataInTransaction(tx, {
+            clientId: params.clientId, clientKey: params.clientKey, conversation,
+            userId: params.actorId, requestId: `${params.requestId}:conversation:${conversation.id}`,
+          });
+          if (conversationResult.anonymized.conversation !== 1) {
+            throw new SubjectAnonymizationDenied("concurrent_subject_change");
+          }
+          anonymizedConversations += conversationResult.anonymized.conversation;
+          anonymizedRuntimeStates += conversationResult.anonymized.runtimeStates;
+          anonymizedInboundMessages += conversationResult.anonymized.inboundMessages;
+          anonymizedOutboundMessages += conversationResult.anonymized.outboundMessages;
+          anonymizedEvents += conversationResult.anonymized.events;
+          runtimeCleanupKeys.push(...conversationResult.runtimeCleanupKeys);
+        }
+        const subjectResult = await anonymizeSubjectIdentityData(tx, {
+          clientId: params.clientId, contactIds: graph.contactIds, identityIds, leadIds, leadNoteIds,
+          waIds: graph.identityKeys, externalUserHashes: graph.externalUserHashes,
+          anonymizedWaId, anonymizedExternalUserHash, now, eventConversationId: null,
+          eventReason: "privacy_subject_anonymized",
+        });
+        if (subjectResult.contacts.count !== graph.contactIds.length
+          || subjectResult.contactChannelIdentities.count !== identityIds.length
+          || subjectResult.leads.count !== leadIds.length
+          || subjectResult.leadNotes.count !== leadNoteIds.length) {
+          throw new SubjectAnonymizationDenied("concurrent_subject_change");
+        }
+        const campaignUnlinking = await unlinkCampaignRelationshipSubjectReferences(tx, {
+          clientId: params.clientId, leadIds, identityKeys: graph.identityKeys,
+        });
+        const inboundMessages = await tx.inboundMessage.updateMany({
+          where: { clientId: params.clientId, OR: [
+            ...(graph.identityKeys.length > 0 ? [{ waId: { in: graph.identityKeys } }, { waIdCanonical: { in: graph.identityKeys } }] : []),
+            ...(graph.externalUserHashes.length > 0 ? [{ externalUserHash: { in: graph.externalUserHashes } }] : []),
+          ] },
+          data: { waId: anonymizedWaId, waIdCanonical: anonymizedWaId, externalUserHash: null,
+            externalUserRef: null, externalMessageId: null, legacyWaId: null,
+            bodyText: "[mensagem anonimizada]", rawPayload: Prisma.JsonNull },
+        });
+        if (anonymizedInboundMessages + inboundMessages.count !== graph.inboundMessages) {
+          throw new SubjectAnonymizationDenied("concurrent_subject_change");
+        }
+        const resultCounts = {
+          contacts: subjectResult.contacts.count,
+          contactChannelIdentities: subjectResult.contactChannelIdentities.count,
+          leads: subjectResult.leads.count,
+          leadNotes: subjectResult.leadNotes.count,
+          outboundMessages: anonymizedOutboundMessages + subjectResult.outboundMessages.count,
+          inboundMessages: anonymizedInboundMessages + inboundMessages.count,
+          events: anonymizedEvents + subjectResult.events.count,
+          conversations: anonymizedConversations,
+          runtimeStates: anonymizedRuntimeStates,
+          campaignSeedEvents: campaignUnlinking.campaignSeedEvents,
+          campaignSeedLeadIdsRemoved: campaignUnlinking.seedLeadIdsRemoved,
+          campaignSeedRecipientsRemoved: campaignUnlinking.seedRecipientsRemoved,
+          campaignRecipientRefsRemoved: campaignUnlinking.recipientRefsRemoved,
+          campaignSeedComponentsRemoved: campaignUnlinking.seedComponentsRemoved,
+          campaignImportBlockedEvents: campaignUnlinking.importBlockedEvents,
+        };
+        const cleanupPayload = buildRuntimeCleanupPayload(graph.subjectId,
+          [...runtimeCleanupKeys, ...graph.identityKeys, anonymizedWaId]);
+        const cleanupEvent = await tx.event.create({
+          data: { clientId: params.clientId, waId: anonymizedWaId, waIdCanonical: anonymizedWaId,
+            requestId: `${params.requestId}:${DATA_SUBJECT_RUNTIME_CLEANUP_EVENT}`,
+            eventName: DATA_SUBJECT_RUNTIME_CLEANUP_EVENT,
+            payloadJson: cleanupPayload as Prisma.InputJsonValue },
+          select: { id: true, payloadJson: true },
+        });
+        await tx.event.create({
+          data: { clientId: params.clientId, requestId: `${params.requestId}:${DATA_SUBJECT_ANONYMIZED_EVENT}`,
+            eventName: DATA_SUBJECT_ANONYMIZED_EVENT,
+            payloadJson: { userId: params.actorId, clientId: params.clientId,
+              contactId: graph.contact?.id ?? null, leadId: graph.subjectLead?.id ?? null,
+              leadIds, identityIds, timestamp: new Date().toISOString(), result: "anonymized_cleanup_pending",
+              cleanupEventId: cleanupEvent.id, counts: resultCounts } },
+        });
+        return { resultCounts, cleanupEvent };
       },
-      data: {
-        waId: anonymizedWaId,
-        waIdCanonical: anonymizedWaId,
-        externalUserHash: null,
-        externalUserRef: null,
-        externalMessageId: null,
-        legacyWaId: null,
-        bodyText: "[mensagem anonimizada]",
-        rawPayload: Prisma.JsonNull,
-      },
-    });
-
-    const resultCounts = {
-      contacts: subjectResult.contacts.count,
-      contactChannelIdentities: subjectResult.contactChannelIdentities.count,
-      leads: subjectResult.leads.count,
-      leadNotes: subjectResult.leadNotes.count,
-      outboundMessages: subjectResult.outboundMessages.count,
-      inboundMessages: inboundMessages.count,
-      events: subjectResult.events.count,
-      conversations: anonymizedConversations,
-      campaignSeedEvents: campaignUnlinking.campaignSeedEvents,
-      campaignSeedLeadIdsRemoved: campaignUnlinking.seedLeadIdsRemoved,
-      campaignSeedRecipientsRemoved: campaignUnlinking.seedRecipientsRemoved,
-      campaignRecipientRefsRemoved: campaignUnlinking.recipientRefsRemoved,
-      campaignSeedComponentsRemoved: campaignUnlinking.seedComponentsRemoved,
-      campaignImportBlockedEvents: campaignUnlinking.importBlockedEvents,
-    };
-    await tx.event.create({
-      data: {
-        clientId: params.clientId,
-        requestId: `${params.requestId}:${DATA_SUBJECT_ANONYMIZED_EVENT}`,
-        eventName: DATA_SUBJECT_ANONYMIZED_EVENT,
-        payloadJson: {
-          userId: params.actorId,
-          clientId: params.clientId,
-          contactId: graph.contact?.id ?? null,
-          leadId: graph.subjectLead?.id ?? null,
-          leadIds,
-          identityIds,
-          timestamp: new Date().toISOString(),
-          result: "anonymized",
-          counts: resultCounts,
-        },
-      },
-    });
-    return { resultCounts, runtimeCleanupKeys: [...runtimeCleanupKeys, ...graph.identityKeys, anonymizedWaId] };
-  });
-  await clearRuntimePrivacyIdentities(transactionResult.runtimeCleanupKeys, params.clientKey, params.requestId);
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWaitMs: 1000, timeoutMs: 15000 },
+    );
+  } catch (error) {
+    const denial = subjectConcurrencyDenial(error);
+    if (denial) return { ok: false as const, error: denial };
+    throw error;
+  }
+  const cleanup = await executePendingRuntimeCleanup(prisma, transactionResult.cleanupEvent, params.clientKey);
+  if (cleanup.state === "pending") {
+    return { ok: false as const, error: "runtime_cleanup_pending" as const, committed: true as const,
+      preview, anonymized: transactionResult.resultCounts, cleanup };
+  }
   logger.info({
     event: DATA_SUBJECT_ANONYMIZED_EVENT,
     clientId: params.clientId,
-    contactId: graph.contact?.id ?? null,
-    leadId: graph.subjectLead?.id ?? null,
+    contactId: initialGraph.contact?.id ?? null,
+    leadId: initialGraph.subjectLead?.id ?? null,
     counts: transactionResult.resultCounts,
   });
-  return { ok: true as const, preview, anonymized: transactionResult.resultCounts };
+  return { ok: true as const, preview, anonymized: transactionResult.resultCounts, cleanup };
 }
 
 export async function findPrivacyConversationTarget(
@@ -1158,7 +1364,11 @@ async function anonymizeConversationPrivacyDataInTransaction(
   });
 
   const conversation = await prisma.conversation.updateMany({
-    where: { clientId: params.clientId, id: target.id },
+    where: {
+      clientId: params.clientId,
+      id: target.id,
+      ...(target.updatedAt ? { updatedAt: target.updatedAt } : {}),
+    },
     data: {
       waId: anonymizedWaId,
       waIdCanonical: anonymizedWaId,
