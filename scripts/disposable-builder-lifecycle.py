@@ -48,9 +48,11 @@ PRIVILEGED_OBSERVER_COMMAND = "collect-disposable-builder-fa10f4f5"
 PRIVILEGED_INSTALLER_SHA256 = "a39a3e2c9106baf9a1e19be1ab569528288ac4285e3423d59874484473feb9c1"
 PRIVILEGED_OBSERVER_SHA256 = "f154dcfebc3d767cbb319dc2c30cf2b125c178401af3775c4dea93969d1d4003"
 DURABLE_PRIVILEGED_OBSERVER_COMMAND = "collect-disposable-builder-durable-v1"
-DURABLE_PRIVILEGED_OBSERVER_SHA256 = "32c6d63def172e39787afc2969a092a113e265c3dba8c444f5ad77882354c71f"
-DURABLE_PRIVILEGED_INSTALLER_SHA256 = "57402b87750b9071fed781cbca66c4bdcbb675bb19d2ab919f2fed4e61dc1842"
-DURABLE_PRIVILEGED_INSTALLATION_KIND = "DISPOSABLE_BUILDER_DURABLE_PROC_V1_INSTALLATION"
+# Updated after the successor helper and installer are finalized. Keeping the
+# command literal means the installed sudoers rule does not broaden.
+DURABLE_PRIVILEGED_OBSERVER_SHA256 = "d20eb96455af1ecec274f43035acc9d983ee3533fb780bd018a39531fafbda72"
+DURABLE_PRIVILEGED_INSTALLER_SHA256 = "e8c3c62d3a9f208390837df295b11ad72dd59b3fafb30c5469e107330b7d72e0"
+DURABLE_PRIVILEGED_INSTALLATION_KIND = "DISPOSABLE_BUILDER_DURABLE_PROC_V2_INSTALLATION"
 DURABLE_ROOT_POLICY_SHA256 = "405d613026ce4b65c665f6bd9bdc07d14abc562489460d0417a96878307f4f8c"
 DURABLE_ROOT_CLASS = "DURABLE_LOCAL_EXPLICIT_LIFECYCLE_RETIREMENT"
 DURABLE_ROOT_RETENTION = "PRESERVE_ACROSS_BOOT_UNTIL_EXPLICIT_LIFECYCLE_RETIREMENT"
@@ -148,6 +150,14 @@ def stable_file_hash(path: Path, expected: str, predicate: str,
             predicate + "_changed")
     require(calculated.hexdigest() == expected, predicate + "_hash")
     return after
+
+
+def file_authority(path: Path, expected: str, predicate: str,
+                   *, mode: int = 0o600) -> dict[str, Any]:
+    info = stable_file_hash(path, expected, predicate, mode=mode)
+    return {"path": str(path), "sha256": expected, "device": info.st_dev,
+            "inode": info.st_ino, "uid": info.st_uid, "gid": info.st_gid,
+            "mode": f"0{stat.S_IMODE(info.st_mode):03o}", "size": info.st_size}
 
 
 def calculate_stable_hash(path: Path, predicate: str) -> str:
@@ -522,6 +532,10 @@ def open_generation(args: argparse.Namespace) -> dict[str, Any]:
     lifecycle_file = lifecycle_path(contract)
     root_storage = None
     if not lifecycle_file.exists() and not lifecycle_file.is_symlink():
+        # New generations must publish the same canonical bytes later consumed
+        # by the privileged observer. Historical exported authorities remain
+        # readable and use an explicit continuation instead.
+        require(raw == canonical(contract), "disposable_contract_canonical")
         # The producer has a closed physical contract for the isolated npm
         # cache.  Enforce it before creating locks, lifecycle state, or any
         # directory below the disposable root.  Existing generations retain
@@ -971,6 +985,13 @@ def privileged_process_observation(args: argparse.Namespace, contract: dict[str,
         "root": lifecycle["rootIdentity"], "worktree": contract["worktreePath"],
         "locks": _lock_binding(contract, descriptors), "maxAgeSeconds": maximum,
     }
+    continuation = load_authority_continuation(
+        args, contract, contract_raw, lifecycle, lifecycle_raw)
+    if continuation is not None:
+        request["authorityContinuation"] = continuation[1].decode()
+        request["authorityContinuationAuthority"] = file_authority(
+            args.authority_continuation, digest(continuation[1]),
+            "disposable_authority_continuation")
     request_raw = canonical(request)
     command = ["/usr/bin/sudo", "-n", "--", "/usr/bin/python3", "-I", "-B", "-E", "-s",
                str(observer), command_name]
@@ -1030,6 +1051,101 @@ def validate_export_receipt(contract: dict[str, Any], expected: str) -> dict[str
         stable_file_hash(Path(item["path"]), item["sha256"],
                          "disposable_exported_artifact", mode=0o600)
     return receipt
+
+
+AUTHORITY_CONTINUATION_KIND = "DISPOSABLE_BUILDER_AUTHORITY_CONTINUATION_V1"
+AUTHORITY_CONTINUATION_NAME = "disposable-builder.authority-continuation.private.json"
+AUTHORITY_RECORD_KEYS = {"path", "sha256", "device", "inode", "uid", "gid", "mode", "size"}
+
+
+def authority_continuation_path(contract: dict[str, Any]) -> Path:
+    return Path(contract["custodyRoot"]) / AUTHORITY_CONTINUATION_NAME
+
+
+def materialize_authority_continuation(args: argparse.Namespace) -> dict[str, Any]:
+    """Seal an explicit bridge for an already-exported non-canonical contract."""
+    contract, contract_raw = contract_from_args(args)
+    lifecycle, lifecycle_raw = read_lifecycle(contract, args.lifecycle_sha256)
+    canonical_contract = canonical(contract)
+    require(contract_raw != canonical_contract, "disposable_authority_continuation_not_required")
+    require(lifecycle.get("contractSha256") == digest(contract_raw) and
+            lifecycle.get("state") == "EXPORTED" and
+            lifecycle.get("event") == "AUTHORITY_EXPORTED" and
+            lifecycle.get("outcome") == "FAILED" and
+            is_digest(lifecycle.get("exportReceiptSha256")),
+            "disposable_authority_continuation_lifecycle")
+    receipt_path = Path(contract["custodyRoot"]) / "disposable-builder.export-receipt.private.json"
+    receipt = validate_export_receipt(contract, lifecycle["exportReceiptSha256"])
+    require(receipt.get("outcome") == "FAILED" and
+            receipt.get("contractSha256") == digest(contract_raw),
+            "disposable_authority_continuation_export")
+    value = {
+        "schemaVersion": 1, "kind": AUTHORITY_CONTINUATION_KIND,
+        "state": "SEALED_FOR_PRIVILEGED_OBSERVER",
+        "generationId": contract["generationId"], "targetCommit": contract["targetCommit"],
+        "historicalContract": file_authority(
+            args.contract, digest(contract_raw), "disposable_authority_contract"),
+        "canonicalProjectionSha256": digest(canonical_contract),
+        "lifecycle": file_authority(
+            lifecycle_path(contract), digest(lifecycle_raw), "disposable_authority_lifecycle"),
+        "exportReceipt": file_authority(
+            receipt_path, lifecycle["exportReceiptSha256"], "disposable_authority_export"),
+        "observerCommand": DURABLE_PRIVILEGED_OBSERVER_COMMAND,
+        "automaticSubstitution": False,
+    }
+    raw = canonical(value); output = authority_continuation_path(contract)
+    if output.exists() or output.is_symlink():
+        stable_bytes(output, digest(raw), "disposable_authority_continuation", mode=0o600)
+    else:
+        exclusive_bytes(output, raw, "disposable_authority_continuation")
+    return {"state": value["state"], "authorityContinuationSha256": digest(raw),
+            "historicalContractSha256": digest(contract_raw),
+            "canonicalProjectionSha256": digest(canonical_contract)}
+
+
+def load_authority_continuation(args: argparse.Namespace, contract: dict[str, Any],
+                                contract_raw: bytes, lifecycle: dict[str, Any],
+                                lifecycle_raw: bytes) -> tuple[dict[str, Any], bytes] | None:
+    path = getattr(args, "authority_continuation", None)
+    expected = getattr(args, "authority_continuation_sha256", None)
+    canonical_contract = canonical(contract)
+    if contract_raw == canonical_contract:
+        require(path is None and expected is None,
+                "disposable_authority_continuation_unexpected")
+        return None
+    require(path == authority_continuation_path(contract) and is_digest(expected),
+            "disposable_authority_continuation_required")
+    value, raw = stable_json(path, expected, "disposable_authority_continuation")
+    required = {"schemaVersion", "kind", "state", "generationId", "targetCommit",
+                "historicalContract", "canonicalProjectionSha256", "lifecycle",
+                "exportReceipt", "observerCommand", "automaticSubstitution"}
+    require(set(value) == required and value.get("schemaVersion") == 1 and
+            value.get("kind") == AUTHORITY_CONTINUATION_KIND and
+            value.get("state") == "SEALED_FOR_PRIVILEGED_OBSERVER" and
+            value.get("generationId") == contract["generationId"] and
+            value.get("targetCommit") == contract["targetCommit"] and
+            value.get("canonicalProjectionSha256") == digest(canonical_contract) and
+            value.get("observerCommand") == DURABLE_PRIVILEGED_OBSERVER_COMMAND and
+            value.get("automaticSubstitution") is False,
+            "disposable_authority_continuation_schema")
+    bindings = (
+        ("historicalContract", args.contract, digest(contract_raw)),
+        ("lifecycle", lifecycle_path(contract), digest(lifecycle_raw)),
+        ("exportReceipt", Path(contract["custodyRoot"]) /
+         "disposable-builder.export-receipt.private.json", lifecycle.get("exportReceiptSha256")),
+    )
+    for key, authority_path, authority_sha in bindings:
+        item = value.get(key)
+        require(isinstance(item, dict) and set(item) == AUTHORITY_RECORD_KEYS and
+                item.get("path") == str(authority_path) and item.get("sha256") == authority_sha,
+                "disposable_authority_continuation_binding")
+        require(file_authority(authority_path, authority_sha,
+                               "disposable_authority_continuation_binding") == item,
+                "disposable_authority_continuation_binding")
+    require(lifecycle.get("contractSha256") == digest(contract_raw) and
+            lifecycle.get("state") == "EXPORTED" and lifecycle.get("outcome") == "FAILED",
+            "disposable_authority_continuation_lifecycle")
+    return value, raw
 
 
 def prepare(args: argparse.Namespace) -> dict[str, Any]:
@@ -1647,7 +1763,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     sub = result.add_subparsers(dest="command", required=True)
-    for name in ("open", "export", "prepare", "execute", "prepare-residue", "execute-residue"):
+    for name in ("open", "export", "materialize-authority-continuation", "prepare", "execute",
+                 "prepare-residue", "execute-residue"):
         command = sub.add_parser(name)
         command.add_argument("--contract", type=Path, required=True)
         command.add_argument("--contract-sha256", required=True)
@@ -1670,6 +1787,8 @@ def parser() -> argparse.ArgumentParser:
             command.add_argument("--process-observer-sha256")
             command.add_argument("--process-observer-installation-report", type=Path)
             command.add_argument("--process-observer-installation-report-sha256")
+            command.add_argument("--authority-continuation", type=Path)
+            command.add_argument("--authority-continuation-sha256")
     return result
 
 
@@ -1678,6 +1797,8 @@ def main() -> int:
     try:
         value = (open_generation(args) if args.command == "open" else
                  export_generation(args) if args.command == "export" else
+                 materialize_authority_continuation(args)
+                 if args.command == "materialize-authority-continuation" else
                  prepare(args) if args.command == "prepare" else
                  execute(args) if args.command == "execute" else
                  prepare_residue(args) if args.command == "prepare-residue" else

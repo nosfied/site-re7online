@@ -192,6 +192,15 @@ class DisposableLifecycleTests(unittest.TestCase):
         self.lifecycle_sha = result["lifecycleSha256"]
         return result
 
+    def make_historical_noncanonical_contract(self) -> None:
+        raw = (json.dumps(self.contract, sort_keys=True, indent=2) + "\n").encode()
+        self.contract_path.write_bytes(raw); self.contract_path.chmod(0o600)
+        self.contract_sha = sha(raw)
+        lifecycle_path = self.custody / "disposable-builder.lifecycle.private.json"
+        lifecycle = json.loads(lifecycle_path.read_bytes())
+        lifecycle["contractSha256"] = self.contract_sha
+        self.lifecycle_sha = write(lifecycle_path, lifecycle)
+
     def prepare(self) -> dict:
         with patch.object(MODULE, "process_observation", return_value={
                 "complete": True, "references": [], "writers": [], "failures": []}):
@@ -299,6 +308,29 @@ class DisposableLifecycleTests(unittest.TestCase):
     def test_new_generation_requires_canonical_npm_cache_before_allocation(self) -> None:
         self.assert_new_cache_root_denied("cache")
         self.assert_new_cache_root_denied("alternate-cache")
+
+    def test_new_generation_denies_noncanonical_contract_before_allocation(self) -> None:
+        root = self.base / "noncanonical-root"
+        custody = self.base / "noncanonical-custody"; custody.mkdir(mode=0o700)
+        contract = json.loads(json.dumps(self.contract))
+        contract["generationId"] += "-noncanonical"
+        contract["disposableRoot"] = str(root); contract["custodyRoot"] = str(custody)
+        contract["roots"] = {key: str(root / Path(value).name)
+                             for key, value in contract["roots"].items()}
+        contract["worktreePath"] = str(Path(contract["roots"]["worktrees"]) / "source")
+        contract["locks"] = {"lifecycle": str(custody / "lifecycle.lock"),
+                             "writer": str(custody / "writer.lock")}
+        path = custody / "contract.private.json"
+        raw = (json.dumps(contract, sort_keys=True, indent=2) + "\n").encode()
+        path.write_bytes(raw); path.chmod(0o600)
+        args = type("Args", (), {"contract": path, "contract_sha256": sha(raw),
+                                  "lifecycle_sha256": None,
+                                  "root_policy": self.root_policy,
+                                  "root_policy_sha256": self.root_policy_sha})()
+        with self.assertRaisesRegex(MODULE.Denied, "disposable_contract_canonical"):
+            MODULE.open_generation(args)
+        self.assertFalse(root.exists())
+        self.assertEqual([item.name for item in custody.iterdir()], [path.name])
 
     def test_new_generation_denies_boot_cleaned_tmp_root_before_allocation(self) -> None:
         with tempfile.TemporaryDirectory(prefix="disposable-boot-cleaned-") as directory:
@@ -481,6 +513,7 @@ class DisposableLifecycleTests(unittest.TestCase):
         self.assertIs(MODULE.validate_contract(historical), historical)
 
     def test_canonical_cache_root_is_accepted_by_real_producer(self) -> None:
+        self.assertEqual(self.contract_path.read_bytes(), MODULE.canonical(self.contract))
         roots = self.contract["roots"]
         physical = {
             "repository": self.repository,
@@ -507,6 +540,13 @@ class DisposableLifecycleTests(unittest.TestCase):
         })()
         authenticated = PRODUCER.validate_build_paths(args)
         self.assertEqual(authenticated["worktrees"], Path(roots["worktrees"]))
+        lifecycle_policy = self.custody / "lifecycle-root-policy.private.json"
+        lifecycle_policy.write_bytes(self.root_policy.read_bytes()); lifecycle_policy.chmod(0o600)
+        args.root_policy = lifecycle_policy
+        args.root_policy_sha256 = sha(lifecycle_policy.read_bytes())
+        with self.assertRaisesRegex(PRODUCER.Denied, "root_policy_schema"):
+            PRODUCER.validate_build_paths(args)
+        self.assertFalse(args.output.exists())
 
     def test_bytecode_residue_is_reconciled_then_normal_lifecycle_closes(self) -> None:
         historical = []
@@ -1175,6 +1215,63 @@ class DisposableLifecycleTests(unittest.TestCase):
             "disposable-builder.lifecycle.private.json").read_bytes())["event"],
             "CLOSURE_RECORDED")
         self.assertTrue((self.custody / "disposable-builder.terminal-receipt.private.json").is_file())
+
+    def test_noncanonical_failed_authority_requires_explicit_continuation_and_closes(self) -> None:
+        self.durable_profile.stop()
+        self.make_historical_noncanonical_contract()
+        historical_raw = self.contract_path.read_bytes()
+        self.export_failure()
+        patches, observations, report = self.privileged_context(durable=True)
+        observer_args = {
+            "process_observer": MODULE.PRIVILEGED_OBSERVER_PATH,
+            "process_observer_sha256": MODULE.DURABLE_PRIVILEGED_OBSERVER_SHA256,
+            "process_observer_installation_report": report,
+            "process_observer_installation_report_sha256": sha(report.read_bytes()),
+        }
+        with patches[0], patches[1], self.assertRaisesRegex(
+                MODULE.Denied, "disposable_authority_continuation_required"):
+            MODULE.prepare(self.args(**observer_args))
+        self.assertFalse((self.custody / "disposable-builder.intent.private.json").exists())
+
+        sealed = MODULE.materialize_authority_continuation(self.args())
+        continuation = self.custody / MODULE.AUTHORITY_CONTINUATION_NAME
+        continuation_sha = sealed["authorityContinuationSha256"]
+        observer_args.update(authority_continuation=continuation,
+                             authority_continuation_sha256=continuation_sha)
+        with patches[0], patches[1]:
+            prepared = MODULE.prepare(self.args(**observer_args))
+            authorization, auth_sha = self.authorize(prepared["intentSha256"])
+            result = MODULE.execute(self.args(
+                **observer_args,
+                intent=self.custody / "disposable-builder.intent.private.json",
+                intent_sha256=prepared["intentSha256"], authorization=authorization,
+                authorization_sha256=auth_sha))
+        self.assertEqual(result["state"], "SANITIZED")
+        self.assertEqual([item["phase"] for item in observations], ["PREPARE", "EXECUTE"])
+        self.assertTrue(all("authorityContinuation" in item for item in observations))
+        self.assertEqual(self.contract_path.read_bytes(), historical_raw)
+        self.assertEqual(sealed["historicalContractSha256"], sha(historical_raw))
+
+    def test_authority_continuation_rejects_projection_or_cross_authority(self) -> None:
+        self.make_historical_noncanonical_contract(); self.export_failure()
+        sealed = MODULE.materialize_authority_continuation(self.args())
+        path = self.custody / MODULE.AUTHORITY_CONTINUATION_NAME
+        original = json.loads(path.read_bytes())
+        for key, value in (("canonicalProjectionSha256", "f" * 64),
+                           ("generationId", "immutable-foreign")):
+            with self.subTest(key=key):
+                changed = json.loads(json.dumps(original)); changed[key] = value
+                path.write_bytes(MODULE.canonical(changed)); path.chmod(0o600)
+                with self.assertRaisesRegex(MODULE.Denied,
+                                            "disposable_authority_continuation_schema"):
+                    MODULE.load_authority_continuation(
+                        self.args(authority_continuation=path,
+                                  authority_continuation_sha256=sha(path.read_bytes())),
+                        self.contract, self.contract_path.read_bytes(),
+                        json.loads((self.custody /
+                            "disposable-builder.lifecycle.private.json").read_bytes()),
+                        (self.custody / "disposable-builder.lifecycle.private.json").read_bytes())
+        self.assertTrue(isinstance(sealed["authorityContinuationSha256"], str))
 
     def test_durable_profile_requires_successor_and_denies_reference_before_effect(self) -> None:
         self.durable_profile.stop()
