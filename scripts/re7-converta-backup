@@ -18,6 +18,10 @@ SUPPORT_ROOT="${SUPPORT_ATTACHMENT_ROOT:-/opt/re7online/content/support-attachme
 WEB_SESSION_MEDIA_ROOT="${WEB_SESSION_MEDIA_ROOT:-/opt/re7online/content/web-session-media}"
 OFFSITE_STATUS="not_configured"
 BACKUP_ALERT_HELPER="${BACKUP_ALERT_HELPER:-/usr/local/sbin/re7-converta-backup-alert}"
+PROTECTED_SNAPSHOT_ID="20260812T011558Z"
+PROTECTED_OBSERVER="/usr/local/libexec/re7online/backup-retention-protected-observer.py"
+PROTECTED_OBSERVER_SHA256="08ef7300267bc8c3049b01f662fecc830f2ac372f1fd35638e449f6401bce79c"
+CANONICAL_BACKUP_ROOT="/opt/re7online/backups/converta-persistent"
 
 umask 027
 mkdir -p "${SNAPSHOT_ROOT}" "${LOG_DIR}"
@@ -189,6 +193,54 @@ mark_keep() {
   done
 }
 
+protected_snapshot_attestation() {
+  local observer_output
+  if [[ -n "${BACKUP_RETENTION_PROTECTED_OBSERVER_TEST_COMMAND:-}" ]]; then
+    if [[ "${BACKUP_ROOT}" == "${CANONICAL_BACKUP_ROOT}" ]]; then
+      return 90
+    fi
+    observer_output="$("${BACKUP_RETENTION_PROTECTED_OBSERVER_TEST_COMMAND}")" || return
+  else
+    observer_output="$(/usr/bin/sudo -n /usr/bin/python3 -I -B -E -s \
+      "${PROTECTED_OBSERVER}" verify-v1)" || return
+  fi
+  /usr/bin/python3 -c '
+import json, re, sys
+try:
+    value = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+required = {"schemaVersion", "kind", "state", "decision", "reason", "snapshotId",
+            "path", "contractPath", "contractSha256", "authorityVersion",
+            "manifestSha256", "checksumsSha256", "integrity", "identity", "mechanism"}
+if set(value) != required:
+    raise SystemExit(2)
+if (value["schemaVersion"], value["kind"], value["state"], value["decision"],
+    value["reason"], value["snapshotId"], value["integrity"]) != (
+    1, "CONVERTA_BACKUP_RETENTION_PROTECTION_ATTESTATION", "VERIFIED",
+    "RETAIN_REQUIRED", "UNIQUE_TRAINING_CONTENT_ONLY_COPY", "20260812T011558Z",
+    "SHA256SUMS_PASS"):
+    raise SystemExit(3)
+if value["path"] != "/opt/re7online/backups/converta-persistent/snapshots/20260812T011558Z":
+    raise SystemExit(4)
+if value["contractPath"] != "/etc/re7online/backup-retention-protected.v1.json":
+    raise SystemExit(5)
+if any(not isinstance(value[key], str) or not re.fullmatch(r"[0-9a-f]{64}", value[key])
+       for key in ("contractSha256", "manifestSha256", "checksumsSha256")):
+    raise SystemExit(6)
+identity = value["identity"]
+if not isinstance(identity, dict) or not {"device", "inode", "uid", "gid", "mode", "nlink"} <= set(identity):
+    raise SystemExit(7)
+mechanism = value["mechanism"]
+if (not isinstance(mechanism, dict) or mechanism.get("path") !=
+    "/usr/local/libexec/re7online/backup-retention-protected-observer.py" or
+    mechanism.get("sha256") != sys.argv[1] or
+    (mechanism.get("uid"), mechanism.get("gid"), mechanism.get("mode")) != (0, 0, "0500")):
+    raise SystemExit(8)
+print(value["contractSha256"], value["manifestSha256"], value["checksumsSha256"], sep="\t")
+' "${PROTECTED_OBSERVER_SHA256}" <<<"${observer_output}"
+}
+
 current_phase="retention"
 rm -f "${BACKUP_ROOT}"/.keep-* 2>/dev/null || true
 retention_markers_active=1
@@ -203,6 +255,16 @@ for snap in "${snapshots[@]}"; do
   if ! ls "${BACKUP_ROOT}"/.keep-*"${snap}" >/dev/null 2>&1; then
     candidate="${SNAPSHOT_ROOT}/${snap}"
     candidate_identity="$(stat -Lc 'dev=%d ino=%i uid=%u gid=%g mode=%a nlink=%h' "${candidate}")"
+    if [[ "${snap}" == "${PROTECTED_SNAPSHOT_ID}" ]]; then
+      if protected_fields="$(protected_snapshot_attestation)"; then
+        IFS=$'\t' read -r protected_contract_sha protected_manifest_sha protected_checksums_sha <<<"${protected_fields}"
+        log "retention_preserved snapshot=${snap} decision=RETAIN_REQUIRED reason=UNIQUE_TRAINING_CONTENT_ONLY_COPY contract_sha256=${protected_contract_sha} manifest_sha256=${protected_manifest_sha} checksums_sha256=${protected_checksums_sha}"
+        continue
+      fi
+      retention_failures+=("${snap}")
+      log "retention_failed snapshot=${snap} reason=protected_authority_unavailable ${candidate_identity}"
+      continue
+    fi
     blocked_directory=""
     if [[ ! -r "${candidate}" || ! -x "${candidate}" || ! -w "${SNAPSHOT_ROOT}" || ! -x "${SNAPSHOT_ROOT}" ]]; then
       blocked_directory="${candidate}"

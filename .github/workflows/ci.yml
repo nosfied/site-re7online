@@ -48,6 +48,8 @@ jobs:
         run: bash scripts/test-deploy-impact-matrix.sh
       - name: Validate composite backup retention terminal behavior
         run: bash scripts/test-re7-converta-backup-retention.sh
+      - name: Validate authenticated protected backup retention observer
+        run: python3 -m unittest -v scripts/ci/test-backup-retention-protected-observer.py
       - name: Validate PM2 definition namespace boundary
         run: python3 -m unittest -v scripts/ci/test-pm2-definition-control.py
       - name: Validate canonical PM2 binding materialization

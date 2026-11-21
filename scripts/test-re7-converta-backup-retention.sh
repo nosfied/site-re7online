@@ -51,6 +51,12 @@ printf '%s\n' "\$*" >> "${ROOT}/alert-calls"
 SH
 chmod 0755 "${BIN}/docker" "${BIN}/rsync" "${BIN}/stat" "${BIN}/alert-helper"
 
+cat > "${BIN}/protected-observer" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' '{"authorityVersion":"P1-20261121","checksumsSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","contractPath":"/etc/re7online/backup-retention-protected.v1.json","contractSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"RETAIN_REQUIRED","identity":{"device":64769,"gid":0,"inode":788249,"mode":"0750","nlink":4,"uid":0},"integrity":"SHA256SUMS_PASS","kind":"CONVERTA_BACKUP_RETENTION_PROTECTION_ATTESTATION","manifestSha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","mechanism":{"device":1,"gid":0,"inode":2,"mode":"0500","path":"/usr/local/libexec/re7online/backup-retention-protected-observer.py","sha256":"08ef7300267bc8c3049b01f662fecc830f2ac372f1fd35638e449f6401bce79c","uid":0},"path":"/opt/re7online/backups/converta-persistent/snapshots/20260812T011558Z","reason":"UNIQUE_TRAINING_CONTENT_ONLY_COPY","schemaVersion":1,"snapshotId":"20260812T011558Z","state":"VERIFIED"}'
+SH
+chmod 0755 "${BIN}/protected-observer"
+
 run_backup() {
   env \
     PATH="${BIN}:/usr/bin:/bin" \
@@ -92,7 +98,7 @@ first_status=$?
 set -e
 [[ "${first_status}" -ne 0 ]]
 [[ -d "${blocked}" ]]
-grep -q 'retention_failed snapshot=20260812T011558Z reason=unremovable_identity' <<<"${first_output}"
+grep -q 'retention_failed snapshot=20260812T011558Z reason=protected_authority_unavailable' <<<"${first_output}"
 grep -q 'backup_terminal status=failed .* phase=retention exit_code=1' <<<"${first_output}"
 ! grep -q 'backup_success' <<<"${first_output}"
 grep -q -- '--event BACKUP_EXECUTION_FAILED .*--phase retention --exit-code 1' "${ROOT}/alert-calls"
@@ -100,15 +106,37 @@ grep -q -- '--event BACKUP_EXECUTION_FAILED .*--phase retention --exit-code 1' "
 find "${BACKUP_ROOT}/snapshots" -mindepth 1 -maxdepth 1 -type d ! -name 20260812T011558Z | grep -q .
 
 chmod 0700 "${blocked}"
+common="${BACKUP_ROOT}/snapshots/20260101T000000Z"
+mkdir -p "${common}"
+printf 'ordinary\n' > "${common}/ordinary.txt"
 sleep 1
+export BACKUP_RETENTION_PROTECTED_OBSERVER_TEST_COMMAND="${BIN}/protected-observer"
 second_output="$(run_backup 2>&1)"
-grep -q 'retention_removed snapshot=20260812T011558Z' <<<"${second_output}"
+grep -q 'retention_preserved snapshot=20260812T011558Z decision=RETAIN_REQUIRED' <<<"${second_output}"
+grep -q 'retention_removed snapshot=20260101T000000Z' <<<"${second_output}"
 grep -q 'backup_success' <<<"${second_output}"
 grep -q 'backup_terminal status=success .* phase=complete exit_code=0' <<<"${second_output}"
-[[ ! -e "${blocked}" ]]
+[[ -d "${blocked}" ]]
+[[ ! -e "${common}" ]]
 [[ -L "${BACKUP_ROOT}/latest" ]]
 latest="$(readlink -f "${BACKUP_ROOT}/latest")"
 (cd "${latest}" && sha256sum -c SHA256SUMS >/dev/null)
 ! find "${BACKUP_ROOT}" -maxdepth 1 -name '.keep-*' | grep -q .
 
-printf 'PASS retention-deny-preserved terminal-failure alert-once recovery-success checksums-valid\n'
+cat > "${BIN}/tampered-observer" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' '{"authorityVersion":"P1-20261121","checksumsSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","contractPath":"/etc/re7online/backup-retention-protected.v1.json","contractSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","decision":"RETAIN_REQUIRED","identity":{"device":64769,"gid":0,"inode":788249,"mode":"0750","nlink":4,"uid":0},"integrity":"SHA256SUMS_PASS","kind":"CONVERTA_BACKUP_RETENTION_PROTECTION_ATTESTATION","manifestSha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","mechanism":{"device":1,"gid":0,"inode":2,"mode":"0500","path":"/usr/local/libexec/re7online/backup-retention-protected-observer.py","sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","uid":0},"path":"/opt/re7online/backups/converta-persistent/snapshots/20260812T011558Z","reason":"UNIQUE_TRAINING_CONTENT_ONLY_COPY","schemaVersion":1,"snapshotId":"20260812T011558Z","state":"VERIFIED"}'
+SH
+chmod 0755 "${BIN}/tampered-observer"
+export BACKUP_RETENTION_PROTECTED_OBSERVER_TEST_COMMAND="${BIN}/tampered-observer"
+sleep 1
+set +e
+tampered_output="$(run_backup 2>&1)"
+tampered_status=$?
+set -e
+[[ "${tampered_status}" -ne 0 ]]
+grep -q 'retention_failed snapshot=20260812T011558Z reason=protected_authority_unavailable' <<<"${tampered_output}"
+! grep -q 'backup_success' <<<"${tampered_output}"
+[[ -d "${blocked}" ]]
+
+printf 'PASS retention-deny-preserved protected-authority-preserved common-removed tampered-attestation-denied terminal-coherent alert-once checksums-valid\n'
