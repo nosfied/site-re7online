@@ -194,8 +194,186 @@ class ProducerFixture:
         private_json(self.input, self.value)
         return manifest
 
+    def prepare_initial_runtime_cache(self) -> tuple[Path, Path]:
+        release_root = self.deploy.releases / self.deploy.candidate
+        (release_root / "index.sha256").chmod(0o644)
+        (release_root / "manifest.json").chmod(0o644)
+        cache = release_root / "frontend-runtime/.next/cache"
+        (cache / "images").mkdir(parents=True)
+        for directory in (cache, cache / "images"):
+            directory.chmod(0o755)
+        # Mirror the ten-entry CB3721D4 observation: two base directories,
+        # four image-key directories and four bounded webp files.
+        for ordinal, size in enumerate((10558, 11454, 3732, 4432), start=1):
+            leaf_directory = cache / "images" / (
+                f"PrivacyCacheKey{ordinal:02d}" + "A" * 24)
+            leaf_directory.mkdir(); leaf_directory.chmod(0o755)
+            leaf = leaf_directory / f"14400.privacy-runtime-cache-entry-{ordinal:02d}.webp"
+            leaf.write_bytes(bytes([ordinal]) * size)
+            leaf.chmod(0o644)
+        self.driver.write_text(self.driver.read_text() + "\n# reusable runtime cache v2\n")
+        subprocess.run(["git", "-C", str(self.repo), "add",
+                        "scripts/converta-deploy.py"], check=True)
+        subprocess.run([
+            "git", "-C", str(self.repo), "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid", "commit", "-qm",
+            "runtime cache v2 successor",
+        ], check=True)
+        cache_output = self.custody / "runtime-cache-v2.private.json"
+        journal_output = self.custody / "acceptance-journal.private.json"
+        self.value.update({
+            "driverSha256": digest(self.driver),
+            "wrapperSha256": digest(self.wrapper),
+            "cacheManifestOutput": str(cache_output),
+            "acceptanceJournalOutput": str(journal_output),
+        })
+        private_json(self.input, self.value)
+        return cache_output, journal_output
+
 
 class FixedCurrentFinalizeRequestMaterializerTests(unittest.TestCase):
+    def test_reusable_initial_cache_materializer_wrapper_driver_chain(self) -> None:
+        fixture = ProducerFixture(self, "api_frontend")
+        try:
+            cache_output, journal_output = fixture.prepare_initial_runtime_cache()
+            loaded = producer.load_request(fixture.input, digest(fixture.input))
+            with patch.object(producer, "RELEASES_ROOT", fixture.deploy.releases):
+                result = producer.publish_initial_cache_finalize(loaded)
+            self.assertEqual(result["result"], "FIXED_CURRENT_FINALIZE_REQUEST_MATERIALIZED")
+            self.assertEqual(result["cacheReconciliation"]["sha256"], digest(cache_output))
+            self.assertEqual(result["acceptanceJournalAuthority"]["sha256"],
+                             digest(journal_output))
+            manifest = json.loads(cache_output.read_text())
+            self.assertEqual(manifest["kind"],
+                             "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V2")
+            self.assertEqual(manifest["cachePolicy"], "NEXT_IMAGE_CACHE_V1")
+            self.assertEqual(len(manifest["cacheEntries"]), 10)
+            with patch.object(continuation, "RELEASES_ROOT", fixture.deploy.releases):
+                request = continuation.load_request(fixture.output, digest(fixture.output))
+            self.assertEqual(request["action"], "finalize")
+            self.assertEqual(request["finalizeArgv"].count(
+                "--runtime-cache-reconciliation"), 1)
+
+            fixture.deploy.inputs = replace(
+                fixture.deploy.inputs,
+                runtime_cache_reconciliation=cache_output,
+                runtime_cache_reconciliation_sha256=digest(cache_output),
+            )
+            fixture.deploy.host.control_plane = fixture.head()
+            fixture.deploy.driver = fixture.deploy._driver(fixture.repo)
+            worker_before = fixture.deploy.host.rows["re7-whatsapp-web-worker"].copy()
+            save_before = fixture.deploy.host.save_calls
+            lock_fd = continuation.acquire_lock(fixture.deploy.lock)
+
+            def real_driver(argv, **kwargs):
+                previous = os.environ.get(continuation.LOCK_ENV)
+                os.environ[continuation.LOCK_ENV] = kwargs["env"][continuation.LOCK_ENV]
+                try:
+                    fixture.deploy.driver.finalize()
+                finally:
+                    if previous is None:
+                        os.environ.pop(continuation.LOCK_ENV, None)
+                    else:
+                        os.environ[continuation.LOCK_ENV] = previous
+                return subprocess.CompletedProcess(argv, 0)
+
+            try:
+                with patch.object(deploy_tests.deploy, "__file__", str(fixture.driver)), \
+                        patch.object(continuation, "RELEASES_ROOT", fixture.deploy.releases):
+                    self.assertEqual(continuation.run(request, lock_fd, runner=real_driver), 0)
+                    continuation.release_terminal_lock(request, lock_fd)
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                os.close(lock_fd)
+            journal = fixture.deploy.driver._journal_read()
+            self.assertEqual(journal["saveCount"], 1)
+            self.assertIn(journal["state"], {
+                "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
+            self.assertEqual(fixture.deploy.host.save_calls, save_before + 1)
+            self.assertEqual(fixture.deploy.host.rows["re7-whatsapp-web-worker"], worker_before)
+            self.assertTrue((fixture.deploy.releases / fixture.deploy.candidate /
+                             "DEPLOYED").exists())
+            self.assertFalse(fixture.deploy.lock.exists())
+        finally:
+            fixture.close()
+
+    def test_reusable_initial_cache_denies_drift_scope_and_replay(self) -> None:
+        for variant in ("cache_sha", "outside", "hardlink", "journal", "acceptance",
+                        "cross_release", "runtime_manifest", "retirement"):
+            with self.subTest(variant=variant):
+                fixture = ProducerFixture(self, "api_frontend")
+                try:
+                    cache_output, journal_output = fixture.prepare_initial_runtime_cache()
+                    if variant == "outside":
+                        outside = (fixture.deploy.releases / fixture.deploy.candidate /
+                                   "frontend-runtime/.next/cache/outside.txt")
+                        outside.write_text("outside\n"); outside.chmod(0o644)
+                    elif variant == "hardlink":
+                        leaf = next((fixture.deploy.releases / fixture.deploy.candidate /
+                                     "frontend-runtime/.next/cache/images").glob("*/*.webp"))
+                        os.link(leaf, leaf.with_name("14400.linked-runtime-cache.webp"))
+                    elif variant == "journal":
+                        journal = json.loads((fixture.deploy.transaction /
+                                              "transaction.v1.private.json").read_text())
+                        journal["saveCount"] = 1
+                        private_json(fixture.deploy.transaction /
+                                     "transaction.v1.private.json", journal)
+                        fixture.value["transactionJournalSha256"] = digest(
+                            fixture.deploy.transaction / "transaction.v1.private.json")
+                        private_json(fixture.input, fixture.value)
+                    elif variant == "acceptance":
+                        acceptance = fixture.deploy.transaction / "acceptance.private.txt"
+                        acceptance.write_text("ACEITE INCONSISTENTE\n"); acceptance.chmod(0o600)
+                        fixture.value["acceptanceSha256"] = digest(acceptance)
+                        private_json(fixture.input, fixture.value)
+                    elif variant in {"cross_release", "runtime_manifest"}:
+                        journal_path = (fixture.deploy.transaction /
+                                        "transaction.v1.private.json")
+                        journal = json.loads(journal_path.read_text())
+                        if variant == "cross_release":
+                            journal["binding"]["release"] = "immutable-crossed-release"
+                        else:
+                            journal["binding"]["runtimeManifestSha256"] = "0" * 64
+                        private_json(journal_path, journal)
+                        fixture.value["transactionJournalSha256"] = digest(journal_path)
+                        private_json(fixture.input, fixture.value)
+                    elif variant == "retirement":
+                        journal = json.loads((fixture.deploy.transaction /
+                                              "transaction.v1.private.json").read_text())
+                        journal["binding"]["generationRetirement"]["intentSha256"] = "0" * 64
+                        private_json(fixture.deploy.transaction /
+                                     "transaction.v1.private.json", journal)
+                        fixture.value["transactionJournalSha256"] = digest(
+                            fixture.deploy.transaction / "transaction.v1.private.json")
+                        private_json(fixture.input, fixture.value)
+                    loaded = producer.load_request(fixture.input, digest(fixture.input))
+                    if variant == "cache_sha":
+                        with patch.object(producer, "RELEASES_ROOT", fixture.deploy.releases):
+                            journal_raw, manifest = producer.derive_initial_cache_manifest(loaded)
+                        producer.publish_raw(journal_output, journal_raw)
+                        manifest["cacheEntries"][-1]["sha256"] = "0" * 64
+                        producer.publish({"finalizeRequestOutput": str(cache_output)}, manifest)
+                        bound = dict(loaded)
+                        bound.pop("cacheManifestOutput"); bound.pop("acceptanceJournalOutput")
+                        bound["optionalAuthorities"] = {"runtimeCacheReconciliation": {
+                            "path": str(cache_output), "sha256": digest(cache_output)}}
+                        with self.assertRaises(producer.Denied):
+                            producer.derive(bound)
+                    else:
+                        with patch.object(producer, "RELEASES_ROOT", fixture.deploy.releases), \
+                                self.assertRaises(producer.Denied):
+                            producer.publish_initial_cache_finalize(loaded)
+                    self.assertFalse(fixture.output.exists())
+                    replay = None
+                    if cache_output.exists():
+                        with patch.object(producer, "RELEASES_ROOT", fixture.deploy.releases):
+                            with self.assertRaises(producer.Denied):
+                                producer.publish_initial_cache_finalize(loaded)
+                        replay = True
+                    self.assertIn(replay, (None, True))
+                finally:
+                    fixture.close()
+
     def test_meta_dbfirst_failed_initial_finalize_derives_cache_and_finishes_once(self) -> None:
         fixture = ProducerFixture(self, "api_frontend")
         try:
