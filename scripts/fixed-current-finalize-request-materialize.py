@@ -25,6 +25,8 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 ACCEPTANCE = "ACEITE TÉCNICO PASS\n".encode("utf-8")
 PROFILES = (["api"], ["api", "frontend"], ["api", "frontend", "worker"])
 RUNTIME_CACHE_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
+RUNTIME_CACHE_KIND_V2 = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V2"
+RUNTIME_CACHE_POLICY_V2 = "NEXT_IMAGE_CACHE_V1"
 RELEASES_ROOT = Path("/opt/re7online/releases")
 META_DBFIRST_RELEASE = "immutable-41d70b53-external-20261118T214122Z"
 META_DBFIRST_TARGET = "41d70b5368bc413ea34ee517b79351d7b8cd526b"
@@ -139,12 +141,16 @@ def load_request(path: Path, expected: str) -> dict[str, Any]:
         "lockPath", "lockSha256", "driver", "driverSha256", "wrapper",
         "wrapperSha256", "finalizeRequestOutput", "optionalAuthorities",
     }
-    if (set(value) != required or value.get("schemaVersion") != 1 or
+    initial_cache = required | {"cacheManifestOutput", "acceptanceJournalOutput"}
+    if (set(value) not in (required, initial_cache) or value.get("schemaVersion") != 1 or
             value.get("action") != "materialize_fixed_current_finalize_request"):
         raise Denied("request_schema")
     for name in ("transactionRoot", "transactionJournal", "acceptance", "lockPath",
                  "driver", "wrapper", "finalizeRequestOutput"):
         absolute(value.get(name), f"request_path:{name}")
+    for name in ("cacheManifestOutput", "acceptanceJournalOutput"):
+        if name in value:
+            absolute(value.get(name), f"request_path:{name}")
     for name in ("transactionJournalSha256", "acceptanceSha256", "lockSha256",
                  "driverSha256", "wrapperSha256"):
         if not SHA256.fullmatch(str(value.get(name, ""))):
@@ -159,6 +165,8 @@ def load_request(path: Path, expected: str) -> dict[str, Any]:
                 not Path(binding["path"]).is_absolute() or
                 not SHA256.fullmatch(str(binding.get("sha256", "")))):
             raise Denied(f"request_optional_authority:{name}")
+    if "cacheManifestOutput" in value and optional:
+        raise Denied("request_initial_cache_authorities")
     return value
 
 
@@ -273,8 +281,15 @@ def runtime_cache_head(request: dict[str, Any], journal: dict[str, Any],
         "continuationDriverSha256", "acceptanceSha256", "lockSha256", "cacheEntries",
     }
     authority_names = set(manifest) - common
-    if (manifest.get("schemaVersion") != 1 or manifest.get("kind") != RUNTIME_CACHE_KIND or
-            authority_names not in ({"acceptanceJournal"}, {"negativeJournal"})):
+    kind = manifest.get("kind")
+    if kind == RUNTIME_CACHE_KIND_V2:
+        common |= {"cachePolicy", "runtimeManifestSha256"}
+        authority_names = set(manifest) - common
+    if (manifest.get("schemaVersion") != 1 or
+            kind not in {RUNTIME_CACHE_KIND, RUNTIME_CACHE_KIND_V2} or
+            authority_names not in ({"acceptanceJournal"}, {"negativeJournal"}) or
+            (kind == RUNTIME_CACHE_KIND_V2 and
+             manifest.get("cachePolicy") != RUNTIME_CACHE_POLICY_V2)):
         raise Denied("runtime_cache_schema")
     bound = journal["binding"]
     retirement = bound["generationRetirement"]
@@ -283,6 +298,8 @@ def runtime_cache_head(request: dict[str, Any], journal: dict[str, Any],
             manifest.get("transactionRoot") != bound["transactionRoot"] or
             manifest.get("originalControlPlane") != bound["controlPlane"] or
             manifest.get("retirementIntentSha256") != retirement["intentSha256"] or
+            (kind == RUNTIME_CACHE_KIND_V2 and
+             manifest.get("runtimeManifestSha256") != bound.get("runtimeManifestSha256")) or
             manifest.get("acceptanceSha256") != acceptance_sha or
             manifest.get("lockSha256") != lock_sha or
             manifest.get("continuationDriverSha256") != request["driverSha256"] or
@@ -298,6 +315,11 @@ def runtime_cache_head(request: dict[str, Any], journal: dict[str, Any],
     authority_raw = bound_regular(Path(authority["path"]), authority["sha256"], modes={0o600})
     if json_object(authority_raw, Path(authority["path"]).name) != journal:
         raise Denied("runtime_cache_journal_authority")
+    if (kind == RUNTIME_CACHE_KIND_V2 and
+            manifest.get("cacheEntries") != next_image_cache_inventory(
+                bound["release"], manifest["indexSha256"],
+                manifest["manifestSha256"])):
+        raise Denied("runtime_cache_inventory")
     return str(manifest["continuationControlPlane"])
 
 
@@ -479,7 +501,15 @@ def continuation_argument(argv: list[str], flag: str) -> str:
 
 
 def meta_dbfirst_cache_inventory() -> list[dict[str, Any]]:
-    release_root = RELEASES_ROOT / META_DBFIRST_RELEASE
+    return next_image_cache_inventory(
+        META_DBFIRST_RELEASE, META_DBFIRST_INDEX_SHA256,
+        META_DBFIRST_MANIFEST_SHA256)
+
+
+def next_image_cache_inventory(
+        release: str, index_sha256: str, manifest_sha256: str
+) -> list[dict[str, Any]]:
+    release_root = RELEASES_ROOT / release
     cache_root = release_root / "frontend-runtime/.next/cache"
     images_root = cache_root / "images"
     try:
@@ -495,9 +525,9 @@ def meta_dbfirst_cache_inventory() -> list[dict[str, Any]]:
                 (os.geteuid(), os.getegid(), 0o755)
                 for info in (cache_info, images_info))):
         raise Denied("continuation_cache_root_identity")
-    bound_regular(release_root / "index.sha256", META_DBFIRST_INDEX_SHA256,
+    bound_regular(release_root / "index.sha256", index_sha256,
                   modes={0o644})
-    bound_regular(release_root / "manifest.json", META_DBFIRST_MANIFEST_SHA256,
+    bound_regular(release_root / "manifest.json", manifest_sha256,
                   modes={0o644})
     paths = [cache_root, *sorted(cache_root.rglob("*"),
                                  key=lambda item: item.relative_to(release_root).as_posix())]
@@ -530,7 +560,8 @@ def meta_dbfirst_cache_inventory() -> list[dict[str, Any]]:
                     ["frontend-runtime", ".next", "cache", "images"] or
                     not re.fullmatch(r"[A-Za-z0-9_-]{20,96}", parts[4]) or
                     not re.fullmatch(
-                        r"[A-Za-z0-9._-]{20,240}\.(?:webp|png|jpeg)", parts[5])):
+                        r"[A-Za-z0-9._-]{20,240}\.(?:webp|png|jpeg)", parts[5]) or
+                    info.st_nlink != 1):
                 raise Denied("continuation_cache_file")
             raw, stable = stable_regular(path, modes={0o644})
             if stable.st_size > 10 * 1024 * 1024:
@@ -546,6 +577,115 @@ def meta_dbfirst_cache_inventory() -> list[dict[str, Any]]:
         if observed != identity:
             raise Denied("continuation_cache_changed")
     return entries
+
+
+def derive_initial_cache_manifest(
+        request: dict[str, Any]
+) -> tuple[bytes, dict[str, Any]]:
+    root = Path(request["transactionRoot"])
+    authenticate_root(root)
+    journal_path = Path(request["transactionJournal"])
+    acceptance = Path(request["acceptance"])
+    lock = Path(request["lockPath"])
+    if (journal_path != root / "transaction.v1.private.json" or
+            acceptance != root / "acceptance.private.txt"):
+        raise Denied("transaction_paths")
+    journal_raw = bound_regular(
+        journal_path, request["transactionJournalSha256"], modes={0o600})
+    journal = json_object(journal_raw, journal_path.name)
+    acceptance_raw = bound_regular(
+        acceptance, request["acceptanceSha256"], modes={0o600})
+    bound_regular(lock, request["lockSha256"], modes={0o600})
+    binding = journal.get("binding")
+    if (acceptance_raw != ACCEPTANCE or not isinstance(binding, dict) or
+            binding.get("components") != ["api", "frontend"] or
+            journal.get("state") != "AWAITING_ACCEPTANCE" or
+            journal.get("saveCount") != 0 or
+            journal.get("deployedMarkerCreated") is not False or
+            journal.get("recoveryAction") is not None or
+            journal.get("lockDigest") != request["lockSha256"] or
+            binding.get("transactionRoot") != str(root) or
+            not SHA40.fullmatch(str(binding.get("target", ""))) or
+            not SHA40.fullmatch(str(binding.get("controlPlane", "")))):
+        raise Denied("initial_cache_scope")
+    retirement = binding.get("generationRetirement")
+    if (not isinstance(retirement, dict) or
+            not SHA256.fullmatch(str(retirement.get("intentSha256", "")))):
+        raise Denied("initial_cache_retirement")
+    release = binding.get("release")
+    if not isinstance(release, str) or not release:
+        raise Denied("initial_cache_release")
+    release_root = RELEASES_ROOT / release
+    index = release_root / "index.sha256"
+    manifest = release_root / "manifest.json"
+    index_raw, _ = stable_regular(index, modes={0o644})
+    manifest_raw, _ = stable_regular(manifest, modes={0o644})
+    driver = Path(request["driver"])
+    wrapper = Path(request["wrapper"])
+    bound_regular(driver, request["driverSha256"], modes={0o500, 0o600})
+    bound_regular(wrapper, request["wrapperSha256"], modes={0o500, 0o600})
+    head_result = subprocess.run(
+        ["git", "-C", str(driver.parent.parent), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=False)
+    head = head_result.stdout.strip()
+    if (head_result.returncode or not SHA40.fullmatch(head) or
+            head == binding["controlPlane"]):
+        raise Denied("initial_cache_successor")
+    authenticate_checkout(
+        driver, request["driverSha256"], wrapper, request["wrapperSha256"], head)
+    authority_output = Path(request["acceptanceJournalOutput"])
+    cache_output = Path(request["cacheManifestOutput"])
+    finalize_output = Path(request["finalizeRequestOutput"])
+    if (len({authority_output, cache_output, finalize_output}) != 3 or
+            authority_output.parent != cache_output.parent or
+            cache_output.parent != finalize_output.parent):
+        raise Denied("initial_cache_output_scope")
+    cache = {
+        "schemaVersion": 1,
+        "kind": RUNTIME_CACHE_KIND_V2,
+        "cachePolicy": RUNTIME_CACHE_POLICY_V2,
+        "releaseId": release,
+        "targetCommit": binding["target"],
+        "transactionRoot": str(root),
+        "indexSha256": sha256(index_raw),
+        "manifestSha256": sha256(manifest_raw),
+        "runtimeManifestSha256": binding["runtimeManifestSha256"],
+        "retirementIntentSha256": retirement["intentSha256"],
+        "originalControlPlane": binding["controlPlane"],
+        "continuationControlPlane": head,
+        "continuationDriverSha256": request["driverSha256"],
+        "acceptanceJournal": {
+            "path": str(authority_output),
+            "sha256": request["transactionJournalSha256"],
+        },
+        "acceptanceSha256": request["acceptanceSha256"],
+        "lockSha256": request["lockSha256"],
+        "cacheEntries": next_image_cache_inventory(
+            release, sha256(index_raw), sha256(manifest_raw)),
+    }
+    return journal_raw, cache
+
+
+def publish_initial_cache_finalize(request: dict[str, Any]) -> dict[str, Any]:
+    journal_raw, cache = derive_initial_cache_manifest(request)
+    journal_receipt = publish_raw(Path(request["acceptanceJournalOutput"]), journal_raw)
+    cache_receipt = publish(
+        {"finalizeRequestOutput": request["cacheManifestOutput"]}, cache)
+    bound_request = dict(request)
+    bound_request.pop("cacheManifestOutput")
+    bound_request.pop("acceptanceJournalOutput")
+    bound_request["optionalAuthorities"] = {
+        "runtimeCacheReconciliation": {
+            "path": cache_receipt["path"], "sha256": cache_receipt["sha256"],
+        }
+    }
+    output = publish(bound_request, derive(bound_request))
+    return {
+        "result": "FIXED_CURRENT_FINALIZE_REQUEST_MATERIALIZED",
+        "request": output,
+        "cacheReconciliation": cache_receipt,
+        "acceptanceJournalAuthority": journal_receipt,
+    }
 
 
 def meta_dbfirst_cache_manifest(
@@ -827,6 +967,8 @@ def main() -> int:
         request = load_request(args.request, args.request_sha256)
         receipt = (publish_failed_finalize_continuation(request)
                    if request["action"] == "materialize_fixed_current_finalize_continuation"
+                   else publish_initial_cache_finalize(request)
+                   if "cacheManifestOutput" in request
                    else publish(request, derive(request)))
         print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
         return 0

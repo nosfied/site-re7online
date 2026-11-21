@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -53,6 +54,11 @@ META_DBFIRST_RUNTIME_CACHE_INTENT_SHA256 = (
     "5fb229f2390fd3fcdcfdd0efe7cb0c69b87df8721bec39568e9ffe46249ea287"
 )
 RUNTIME_CACHE_RECONCILIATION_KIND = "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V1"
+RUNTIME_CACHE_RECONCILIATION_KIND_V2 = (
+    "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V2"
+)
+RUNTIME_CACHE_POLICY_V2 = "NEXT_IMAGE_CACHE_V1"
+RELEASES_ROOT = Path("/opt/re7online/releases")
 
 
 class Denied(RuntimeError):
@@ -147,6 +153,9 @@ def _runtime_cache_successor(value: dict[str, Any], argv: list[str]) -> tuple[st
         manifest = json.loads(raw)
     except json.JSONDecodeError as error:
         raise Denied("request_runtime_cache_json") from error
+    if (isinstance(manifest, dict) and
+            manifest.get("kind") == RUNTIME_CACHE_RECONCILIATION_KIND_V2):
+        return _runtime_cache_v2_successor(value, argv, manifest)
     common = {
         "schemaVersion", "kind", "releaseId", "targetCommit", "transactionRoot",
         "indexSha256", "manifestSha256", "retirementIntentSha256",
@@ -201,6 +210,134 @@ def _runtime_cache_successor(value: dict[str, Any], argv: list[str]) -> tuple[st
     return manifest["continuationControlPlane"], manifest["continuationDriverSha256"]
 
 
+def _runtime_cache_v2_successor(
+        value: dict[str, Any], argv: list[str], manifest: dict[str, Any]
+) -> tuple[str, str]:
+    required = {
+        "schemaVersion", "kind", "cachePolicy", "releaseId", "targetCommit",
+        "transactionRoot", "indexSha256", "manifestSha256",
+        "runtimeManifestSha256",
+        "retirementIntentSha256", "originalControlPlane",
+        "continuationControlPlane", "continuationDriverSha256",
+        "acceptanceJournal", "acceptanceSha256", "lockSha256", "cacheEntries",
+    }
+    release = _argv_value(argv, "--release")
+    target = _argv_value(argv, "--target")
+    transaction = Path(_argv_value(argv, "--transaction-root"))
+    original = _argv_value(argv, "--control-plane")
+    if (set(manifest) != required or manifest.get("schemaVersion") != 1 or
+            manifest.get("cachePolicy") != RUNTIME_CACHE_POLICY_V2 or
+            manifest.get("releaseId") != release or
+            manifest.get("targetCommit") != target or
+            manifest.get("transactionRoot") != str(transaction) or
+            manifest.get("originalControlPlane") != original or
+            _argv_value(argv, "--runtime-manifest-sha256") !=
+            manifest.get("runtimeManifestSha256") or
+            _argv_value(argv, "--components") != "api,frontend" or
+            _argv_value(argv, "--generation-retirement-intent-sha256") !=
+            manifest.get("retirementIntentSha256") or
+            manifest.get("continuationDriverSha256") != value.get("driverSha256") or
+            not _sha256_value(manifest.get("indexSha256")) or
+            not _sha256_value(manifest.get("manifestSha256")) or
+            not _sha256_value(manifest.get("acceptanceSha256")) or
+            not _sha256_value(manifest.get("lockSha256")) or
+            not isinstance(manifest.get("continuationControlPlane"), str) or
+            len(manifest["continuationControlPlane"]) != 40 or
+            any(character not in "0123456789abcdef"
+                for character in manifest["continuationControlPlane"])):
+        raise Denied("request_runtime_cache_scope")
+    authority = manifest.get("acceptanceJournal")
+    if not isinstance(authority, dict) or set(authority) != {"path", "sha256"}:
+        raise Denied("request_runtime_cache_journal")
+    authority_path = Path(str(authority.get("path", "")))
+    authority_raw = _bound_regular(authority_path, str(authority.get("sha256", "")))
+    try:
+        journal = json.loads(authority_raw)
+    except json.JSONDecodeError as error:
+        raise Denied("request_runtime_cache_journal") from error
+    binding = journal.get("binding") if isinstance(journal, dict) else None
+    if (not isinstance(binding, dict) or journal.get("state") != "AWAITING_ACCEPTANCE" or
+            journal.get("saveCount") != 0 or
+            journal.get("deployedMarkerCreated") is not False or
+            journal.get("recoveryAction") is not None or
+            journal.get("lockDigest") != manifest["lockSha256"] or
+            binding.get("release") != release or binding.get("target") != target or
+            binding.get("controlPlane") != original or
+            binding.get("components") != ["api", "frontend"] or
+            binding.get("transactionRoot") != str(transaction) or
+            binding.get("runtimeManifestSha256") != manifest["runtimeManifestSha256"] or
+            binding.get("runtimeManifest") != _argv_value(argv, "--runtime-manifest")):
+        raise Denied("request_runtime_cache_journal")
+    runtime_manifest = Path(_argv_value(argv, "--runtime-manifest"))
+    retirement_intent = Path(_argv_value(argv, "--generation-retirement-intent"))
+    if (sha256(stable_regular(runtime_manifest, modes={0o600})) !=
+            manifest["runtimeManifestSha256"] or
+            sha256(stable_regular(retirement_intent, modes={0o600})) !=
+            manifest["retirementIntentSha256"]):
+        raise Denied("request_runtime_cache_authority")
+    release_root = RELEASES_ROOT / release
+    for name, expected in (("index.sha256", manifest["indexSha256"]),
+                           ("manifest.json", manifest["manifestSha256"])):
+        raw = stable_regular(release_root / name, modes={0o644})
+        if sha256(raw) != expected:
+            raise Denied("request_runtime_cache_release")
+    acceptance = transaction / "acceptance.private.txt"
+    lock = Path(value["lockPath"])
+    if (sha256(stable_regular(acceptance, modes={0o600})) !=
+            manifest["acceptanceSha256"] or
+            sha256(stable_regular(lock, modes={0o600})) != manifest["lockSha256"]):
+        raise Denied("request_runtime_cache_authority")
+    observed = _runtime_cache_v2_inventory(release_root)
+    if observed != manifest.get("cacheEntries"):
+        raise Denied("request_runtime_cache_inventory")
+    return manifest["continuationControlPlane"], manifest["continuationDriverSha256"]
+
+
+def _runtime_cache_v2_inventory(release_root: Path) -> list[dict[str, Any]]:
+    cache = release_root / "frontend-runtime/.next/cache"
+    try:
+        paths = [cache, *sorted(cache.rglob("*"),
+                                key=lambda item: item.relative_to(release_root).as_posix())]
+    except OSError as error:
+        raise Denied("request_runtime_cache_inventory") from error
+    if not 2 <= len(paths) <= 256:
+        raise Denied("request_runtime_cache_inventory")
+    entries: list[dict[str, Any]] = []
+    for path in paths:
+        try:
+            info = path.lstat()
+        except OSError as error:
+            raise Denied("request_runtime_cache_inventory") from error
+        relative = path.relative_to(release_root).as_posix()
+        parts = relative.split("/")
+        if stat.S_ISLNK(info.st_mode):
+            raise Denied("request_runtime_cache_inventory")
+        if stat.S_ISDIR(info.st_mode):
+            if (stat.S_IMODE(info.st_mode) != 0o755 or relative not in {
+                    "frontend-runtime/.next/cache", "frontend-runtime/.next/cache/images"} and
+                    (len(parts) != 5 or parts[:4] !=
+                     ["frontend-runtime", ".next", "cache", "images"] or
+                     not re.fullmatch(r"[A-Za-z0-9_-]{20,96}", parts[4]))):
+                raise Denied("request_runtime_cache_inventory")
+            entries.append({"path": relative, "type": "directory", "mode": 0o755})
+        elif stat.S_ISREG(info.st_mode):
+            if (stat.S_IMODE(info.st_mode) != 0o644 or info.st_nlink != 1 or
+                    len(parts) != 6 or parts[:4] !=
+                    ["frontend-runtime", ".next", "cache", "images"] or
+                    not re.fullmatch(r"[A-Za-z0-9_-]{20,96}", parts[4]) or
+                    not re.fullmatch(
+                        r"[A-Za-z0-9._-]{20,240}\.(?:webp|png|jpeg)", parts[5])):
+                raise Denied("request_runtime_cache_inventory")
+            raw = stable_regular(path, modes={0o644})
+            if len(raw) > 10 * 1024 * 1024:
+                raise Denied("request_runtime_cache_inventory")
+            entries.append({"path": relative, "type": "file", "mode": 0o644,
+                            "size": len(raw), "sha256": sha256(raw)})
+        else:
+            raise Denied("request_runtime_cache_inventory")
+    return entries
+
+
 def _validate_checkout_driver(value: dict[str, Any], argv: list[str]) -> None:
     driver = Path(value["driver"])
     if driver.name != "converta-deploy.py" or driver.parent.name != "scripts":
@@ -253,10 +390,13 @@ def _validate_cache_successor_refresh(
     except json.JSONDecodeError as error:
         raise Denied("request_recovery_cache_manifest") from error
     release = old.get("releaseId") if isinstance(old, dict) else None
-    journal_authority = {
+    if old.get("kind") == RUNTIME_CACHE_RECONCILIATION_KIND_V2:
+        journal_authority = "acceptanceJournal"
+    else:
+        journal_authority = {
         ED74_RUNTIME_CACHE_RELEASE: "acceptanceJournal",
         META_DBFIRST_RUNTIME_CACHE_RELEASE: "negativeJournal",
-    }.get(release)
+        }.get(release)
     expected = {
         "schemaVersion", "kind", "releaseId", "targetCommit",
         "transactionRoot", "indexSha256", "manifestSha256",
@@ -266,6 +406,8 @@ def _validate_cache_successor_refresh(
     }
     if journal_authority is not None:
         expected.add(journal_authority)
+    if old.get("kind") == RUNTIME_CACHE_RECONCILIATION_KIND_V2:
+        expected |= {"cachePolicy", "runtimeManifestSha256"}
     if (not isinstance(old, dict) or not isinstance(new, dict) or
             journal_authority is None or new.get("releaseId") != release or
             set(old) != set(new) or set(old) != expected):

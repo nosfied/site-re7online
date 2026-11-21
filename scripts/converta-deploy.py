@@ -146,6 +146,10 @@ RUNTIME_CACHE_41D_NEGATIVE_JOURNAL_SHA256 = (
 )
 RUNTIME_CACHE_41D_ACCEPTANCE_SHA256 = "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a"
 RUNTIME_CACHE_41D_LOCK_SHA256 = "235780dd913299a349c61ba55cb0006818de9743cd47418246dde0f643fa5368"
+RUNTIME_CACHE_RECONCILIATION_KIND_V2 = (
+    "FIXED_CURRENT_RUNTIME_CACHE_FINALIZE_RECONCILIATION_V2"
+)
+RUNTIME_CACHE_POLICY_V2 = "NEXT_IMAGE_CACHE_V1"
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -874,15 +878,22 @@ class Driver:
                 hashlib.sha256(raw).hexdigest() != expected_sha256):
             deny("runtime_cache_reconciliation_identity")
         value = json_object(raw, path.name)
-        journal_authority = ("acceptanceJournal" if self.inputs.release ==
-                             RUNTIME_CACHE_ED74_RELEASE else "negativeJournal")
+        kind = value.get("kind")
+        if kind == RUNTIME_CACHE_RECONCILIATION_KIND_V2:
+            journal_authority = "acceptanceJournal"
+        else:
+            journal_authority = ("acceptanceJournal" if self.inputs.release ==
+                                 RUNTIME_CACHE_ED74_RELEASE else "negativeJournal")
         required = {"schemaVersion", "kind", "releaseId", "targetCommit", "transactionRoot",
                     "indexSha256", "manifestSha256", "retirementIntentSha256",
                     "originalControlPlane", "continuationControlPlane",
                     "continuationDriverSha256", journal_authority, "acceptanceSha256",
                     "lockSha256", "cacheEntries"}
+        if kind == RUNTIME_CACHE_RECONCILIATION_KIND_V2:
+            required |= {"cachePolicy", "runtimeManifestSha256"}
         if (set(value) != required or value.get("schemaVersion") != 1 or
-                value.get("kind") != RUNTIME_CACHE_RECONCILIATION_KIND):
+                kind not in {RUNTIME_CACHE_RECONCILIATION_KIND,
+                             RUNTIME_CACHE_RECONCILIATION_KIND_V2}):
             deny("runtime_cache_reconciliation_schema")
         return value
 
@@ -1111,6 +1122,9 @@ class Driver:
                                       observed_extras: dict[str, dict[str, Any]],
                                       journal: dict[str, Any]) -> dict[str, Any]:
         value = self._runtime_cache_manifest()
+        if value.get("kind") == RUNTIME_CACHE_RECONCILIATION_KIND_V2:
+            return self._runtime_cache_reconciliation_v2(
+                value, index_sha256, manifest_sha256, observed_extras, journal)
         profiles = {
             RUNTIME_CACHE_36B_RELEASE: {
                 "target": RUNTIME_CACHE_36B_TARGET,
@@ -1319,6 +1333,129 @@ class Driver:
         if observed_extras != declared:
             deny("runtime_cache_reconciliation_inventory")
         return value
+
+    def _runtime_cache_reconciliation_v2(
+            self, value: dict[str, Any], index_sha256: str, manifest_sha256: str,
+            observed_extras: dict[str, dict[str, Any]], journal: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Validate the reusable, closed Next.js image-cache contract.
+
+        Unlike the historical V1 profiles, V2 derives release identities from
+        the authenticated deployment journal.  Its policy remains closed to the
+        API+frontend profile and the Next image-cache subtree.
+        """
+        if (self.inputs.components != COMPONENTS or
+                value.get("cachePolicy") != RUNTIME_CACHE_POLICY_V2 or
+                self.inputs.retirement is None):
+            deny("runtime_cache_reconciliation_scope")
+        expected = {
+            "releaseId": self.inputs.release,
+            "targetCommit": self.inputs.target,
+            "transactionRoot": str(self.inputs.transaction_root),
+            "indexSha256": index_sha256,
+            "manifestSha256": manifest_sha256,
+            "runtimeManifestSha256": self.inputs.runtime_manifest_sha256,
+            "retirementIntentSha256": self.inputs.retirement.intent_sha256,
+            "acceptanceSha256": digest(self.acceptance),
+            "lockSha256": digest(self.lock),
+            "originalControlPlane": self.inputs.control_plane,
+        }
+        if (any(value.get(key) != expected_value
+                for key, expected_value in expected.items()) or
+                not SHA40.fullmatch(str(value.get("continuationControlPlane", ""))) or
+                not SHA256.fullmatch(str(value.get("continuationDriverSha256", "")))):
+            deny("runtime_cache_reconciliation_binding")
+        authority = value.get("acceptanceJournal")
+        if (not isinstance(authority, dict) or
+                set(authority) != {"path", "sha256"} or
+                not isinstance(authority.get("path"), str) or
+                not Path(authority["path"]).is_absolute() or
+                not SHA256.fullmatch(str(authority.get("sha256", "")))):
+            deny("runtime_cache_reconciliation_acceptance_journal")
+        authority_raw, authority_info = stable_regular_bytes(
+            Path(authority["path"]), required_mode=0o600)
+        if ((authority_info.st_uid, authority_info.st_gid) !=
+                (os.geteuid(), os.getegid()) or
+                hashlib.sha256(authority_raw).hexdigest() != authority["sha256"]):
+            deny("runtime_cache_reconciliation_acceptance_journal")
+        acceptance_journal = json_object(authority_raw, Path(authority["path"]).name)
+        if (acceptance_journal.get("state") != "AWAITING_ACCEPTANCE" or
+                acceptance_journal.get("saveCount") != 0 or
+                acceptance_journal.get("deployedMarkerCreated") is not False or
+                acceptance_journal.get("recoveryAction") is not None or
+                acceptance_journal.get("binding") != journal.get("binding") or
+                acceptance_journal.get("lockDigest") != value["lockSha256"] or
+                journal.get("state") not in {"AWAITING_ACCEPTANCE", "FINALIZING", "FAILED"} or
+                (journal.get("state") == "FAILED" and
+                 journal.get("recoveryAction") != "finalize") or
+                journal.get("saveCount") not in {0, 1} or
+                journal.get("binding") != acceptance_journal.get("binding") or
+                journal.get("lockDigest") != value["lockSha256"]):
+            deny("runtime_cache_reconciliation_state")
+        acceptance_raw, acceptance_info = stable_regular_bytes(
+            self.acceptance, required_mode=0o600)
+        if ((acceptance_info.st_uid, acceptance_info.st_gid) !=
+                (os.geteuid(), os.getegid()) or
+                hashlib.sha256(acceptance_raw).hexdigest() != value["acceptanceSha256"]):
+            deny("runtime_cache_reconciliation_acceptance")
+        lock_raw, lock_info = stable_regular_bytes(self.lock, required_mode=0o600)
+        if ((lock_info.st_uid, lock_info.st_gid) != (os.geteuid(), os.getegid()) or
+                hashlib.sha256(lock_raw).hexdigest() != value["lockSha256"]):
+            deny("runtime_cache_reconciliation_lock")
+        for item in value.get("cacheEntries", []):
+            path = self.release_root / str(item.get("path", ""))
+            try:
+                info = path.lstat()
+            except OSError:
+                deny("runtime_cache_reconciliation_entry")
+            if (stat.S_ISLNK(info.st_mode) or
+                    (item.get("type") == "file" and info.st_nlink != 1)):
+                deny("runtime_cache_reconciliation_entry")
+        self._validate_next_image_cache_entries(value.get("cacheEntries"), observed_extras)
+        return value
+
+    @staticmethod
+    def _validate_next_image_cache_entries(
+            entries: Any, observed_extras: dict[str, dict[str, Any]]) -> None:
+        if (not isinstance(entries, list) or not entries or
+                any(not isinstance(item, dict) or not isinstance(item.get("path"), str)
+                    for item in entries)):
+            deny("runtime_cache_reconciliation_entries")
+        declared = {item["path"]: item for item in entries}
+        bases = {"frontend-runtime/.next/cache",
+                 "frontend-runtime/.next/cache/images"}
+        if (len(declared) != len(entries) or not bases.issubset(declared) or
+                len(declared) > 256 or
+                any(declared[path] != {"path": path, "type": "directory", "mode": 0o755}
+                    for path in bases)):
+            deny("runtime_cache_reconciliation_entries")
+        for path, item in declared.items():
+            parts = PurePosixPath(path).parts
+            if path in bases:
+                continue
+            if (len(parts) == 5 and parts[:4] ==
+                    ("frontend-runtime", ".next", "cache", "images")):
+                if (item != {"path": path, "type": "directory", "mode": 0o755} or
+                        not re.fullmatch(r"[A-Za-z0-9_-]{20,96}", parts[4])):
+                    deny("runtime_cache_reconciliation_entries")
+                continue
+            if (len(parts) == 6 and parts[:4] ==
+                    ("frontend-runtime", ".next", "cache", "images")):
+                parent = "/".join(parts[:5])
+                if (parent not in declared or
+                        declared[parent].get("type") != "directory" or
+                        set(item) != {"path", "type", "mode", "size", "sha256"} or
+                        item.get("type") != "file" or item.get("mode") != 0o644 or
+                        not re.fullmatch(
+                            r"[A-Za-z0-9._-]{20,240}\.(?:webp|png|jpeg)", parts[5]) or
+                        not isinstance(item.get("size"), int) or
+                        not 0 <= item["size"] <= 10 * 1024 * 1024 or
+                        not SHA256.fullmatch(str(item.get("sha256", "")))):
+                    deny("runtime_cache_reconciliation_entries")
+                continue
+            deny("runtime_cache_reconciliation_entries")
+        if observed_extras != declared:
+            deny("runtime_cache_reconciliation_inventory")
 
     def _private_data_contract(self, continuation_journal: dict[str, Any] | None = None
                                ) -> tuple[dict[str, Any], dict[str, Any] | None]:
