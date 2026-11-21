@@ -63,13 +63,15 @@ capacidade. Ordem vigente, sem apagar o histórico abaixo:
 
 Fonte e evidências: [matriz final](reviews/CONVERTA_PROJECT_AUDIT_AND_BACKLOG_READINESS_2026-11-14.md).
 
-## Continuidade funcional após a release 41D — 20/11/2026
+## Fotografia histórica após a release 41D — 20/11/2026 (superada)
 
-API/frontend 41D estão implantados, aceitos e finalizados; worker ED74 preservado;
-builder 41D `SANITIZED/CLOSURE_RECORDED`. A retenção do staging VPS permanece
-`EVIDENCE_REQUIRED/RETAIN` e não bloqueia a continuidade funcional.
+**HISTÓRICO / NÃO EXECUTAR COMO PRÓXIMA ORDEM.** Em 20/11, API/frontend 41D
+estavam implantados, aceitos e finalizados; worker ED74 preservado; builder 41D
+`SANITIZED/CLOSURE_RECORDED`. A 41D foi posteriormente substituída pela CB3721D4
+em API/frontend e permanece protegida como rollback. A retenção do staging VPS
+permanece `EVIDENCE_REQUIRED/RETAIN` e não bloqueia a continuidade funcional.
 
-Ordem fechada das próximas intervenções, cada uma com autorização própria:
+A sequência abaixo registra decisões então propostas, não instruções vigentes:
 
 1. `demo-converta`: revisar e autorizar uma única materialização tenant-scoped da
    identidade Meta atual, conta `pending` e sete gates falsos; zero chamada Meta,
@@ -77,10 +79,16 @@ Ordem fechada das próximas intervenções, cada uma com autorização própria:
 2. `syer-rodrigues`: obter autoridade explícita para `baseConfig`; enquanto
    `json_fallback/canMaterialize=false`, manter a pendência e não inferir a partir
    de arquivos históricos;
-3. UFRN 6306: somente após validar a reparação Meta, revisar o resíduo histórico
-   de duas conversas/protocolos; não fabricar inbound nem apagar evidências.
+3. Caso 6306: naquele momento ainda se planejava revisar duas conversas/protocolos;
+   o titular foi posteriormente anonimizado e verificado no piloto CB3721D4.
 
-Não reabrir build, deploy, builder, P00-D ou staging para executar esta ordem.
+**Situação posterior comprovada:** Privacidade `34/34 VERIFIED`, com o piloto 6306
+e os outros 33 encerrados em 21/11/2026. A identidade Meta `pending` da demo
+e a pendência `baseConfig` de `syer-rodrigues` são assuntos independentes;
+nenhum gate Meta foi habilitado pela anonimização. Se essas frentes voltarem a
+ser tratadas, revalidar somente seu estado atual e obter autorização específica.
+Não executar a sequência histórica acima nem reabrir build, deploy, builder,
+P00-D ou staging para segui-la.
 
 > [!IMPORTANT]
 > Sequência operacional revisada em 26/10: [mapa vigente](saas/PRODUCT_MAP_CURRENT_2026-10-19.md).
