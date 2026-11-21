@@ -109,8 +109,19 @@
     "implementationState": "DEPLOYED_ACCEPTED",
     "approvedDisposableSubjects": 34,
     "approvedInventorySha256": "620833264d94ed9ce2433f4bada99ae4fd9c74702707665fe35c3e5ff269bacc",
-    "anonymizationExecuted": 0,
-    "nextStep": "OWNER_AUTHORIZED_PILOT_6306_THEN_DIRECTED_REMAINING_33"
+    "anonymizationExecuted": 34,
+    "operationState": "PRIVACY_34_OF_34_ANONYMIZED_VERIFIED",
+    "pilot6306": "VERIFIED",
+    "remainingBatch": "VERIFIED_33_OF_33",
+    "http200": 34,
+    "cleanupVerified": 34,
+    "runtimeStorageKeysVerified": 238,
+    "pendingDeniedOrInconclusive": 0,
+    "batchJournalSha256": "b461e4fa3d03cf066abfbab396262f183845228bfa955b8cbc19c6a0e137e572",
+    "custodyManifestSha256": "8d54f3e7e70810f5629e30b1bd2f55e16ab270c0cca482887167f8cb6eb83980",
+    "privateEvidenceOutsideGit": true,
+    "crossTenantAnonymizationEventsDuringBatch": 0,
+    "nextStep": "OPERATIONAL_CLOSURE_COMPLETE"
   },
   "evidence": {
     "source": "AUTHENTICATED_PRIVATE_AUTHORITIES_AND_DIRECTED_READ_ONLY_OBSERVATION",
