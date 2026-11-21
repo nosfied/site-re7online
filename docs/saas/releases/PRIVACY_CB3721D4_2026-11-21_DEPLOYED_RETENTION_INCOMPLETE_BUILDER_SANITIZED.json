@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_RETENTION_INCOMPLETE",
+  "result": "PRIVACY_CB3721D4_ACTIVE_ACCEPTED_BUILDER_SANITIZED_VPS_RETENTION_INCOMPLETE",
+  "observedDate": "2026-11-21",
+  "release": {
+    "id": "immutable-cb3721d4-external-20261120T220635Z",
+    "path": "/opt/re7online/releases/immutable-cb3721d4-external-20261120T220635Z",
+    "target": "cb3721d4db5c1c870c5c5fbdbab063a6e1c654b9",
+    "tree": "e82a394b5f0d6089edcbea9656c503c5c89b1029",
+    "buildId": "bOUQ9jqNzeIyNWBatLW6L",
+    "packageSha256": "c55bf898a4e11d79c95a5637eac6809f715559d9da0d547764a208f8c0802a68",
+    "manifestSha256": "ca36966ede51b1da037a5ac3815705abe76ed3b8c465a60d5356586edf96bad1",
+    "indexSha256": "548069e2cc77b2140a634ba9796970fffe86bd8f701d44d08a5e6b1caa9647aa",
+    "indexEntries": 34385,
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "buildCount": 1,
+    "uploadCount": 1,
+    "installCount": 1,
+    "exportReceiptSha256": "2a3e6f4da49fe9b2fce6e185a0cb25f272d1fcb4939b7b97545ff97a7367ff25",
+    "transferReceiptSha256": "d9032db8cd74ef3a2b376ed162b39809c2372c50bf9a0ac44fd70276ce5bcdad",
+    "installationReceiptSha256": "f21d56445867f70a5d0b66ab3038f7534787f46a8b9f3894916d2e2842b2c130"
+  },
+  "selection": {
+    "components": ["api", "frontend"],
+    "apiReleaseId": "immutable-cb3721d4-external-20261120T220635Z",
+    "frontendReleaseId": "immutable-cb3721d4-external-20261120T220635Z",
+    "workerPreserved": true,
+    "workerReleaseId": "immutable-ed74c483-external-20261115T162015Z",
+    "immediateRollbackReleases": {
+      "api": "immutable-41d70b53-external-20261118T214122Z",
+      "frontend": "immutable-41d70b53-external-20261118T214122Z",
+      "worker": "immutable-ed74c483-external-20261115T162015Z"
+    }
+  },
+  "runtime": {
+    "worker": {
+      "releaseId": "immutable-ed74c483-external-20261115T162015Z",
+      "target": "ed74c483b35c6cfebbdaa1a0a16e233101c46dd4",
+      "entrySha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
+      "preserved": true,
+      "changed": false
+    }
+  },
+  "acceptance": {
+    "technical": "PASS",
+    "contractQualification": "PASS_PR425_PR426",
+    "human": "PASS_5_OF_5",
+    "sha256": "1427ff7dd23e5a1059295fa400bc9f5d9def1c7d8395ff54a2cb3c47d238de7a",
+    "knownNonblockingDebt": "READ_STATE_RELEASE_LOCAL_STORAGE"
+  },
+  "finalization": {
+    "transactionId": "immutable-cb3721d4-external-20261120T220635Z-api-frontend-cb3721d4-v1-once",
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "journalSha256": "3fc712a54894df663eff4ce4cc067c83ac15d080c1b20b30d7e134fa5b062374",
+    "pm2SaveCount": 1,
+    "dumpSha256": "be3b34691773d1008e438533ef1e9c8fa0c6ff13d8d44b87fdcc025baf813082",
+    "markerSha256": "60c2e0987ce84dae0c04f7ab2008eb22cabb8b1b062f66710b7bae3937974013",
+    "lockReleased": true,
+    "controlPlaneOriginal": "01eeb9fa1915f2b27eb5247ce02c53394ca26b5f",
+    "controlPlaneSuccessor": "f847825969b400846e7f690202c0eb32339c2be4"
+  },
+  "retirement": {
+    "state": "DEPLOYED_RETENTION_INCOMPLETE",
+    "receiptSha256": "6eb40c8e7d8a6d125a9dd719eac955c31d9e51eac4e6cd4cf8829aaf5f44b84d",
+    "approvedPaths": [],
+    "commandsAttempted": 0,
+    "commandsCompleted": 0,
+    "remainingLocalDerivedArtifacts": 1,
+    "staging": {
+      "path": "/opt/re7online/backups/converta-persistent/preparations/external-package-cb3721d4-install-v1",
+      "classification": "EVIDENCE_REQUIRED_RETAIN",
+      "bytes": 154824704,
+      "inodes": 24
+    }
+  },
+  "builder": {
+    "exportReceiptSha256": "2a3e6f4da49fe9b2fce6e185a0cb25f272d1fcb4939b7b97545ff97a7367ff25",
+    "state": "SANITIZED_CLOSURE_RECORDED",
+    "terminalReceiptSha256": "a41ff8aaf0714093fd14cdbb5f968c1410d0b7a9956649e57d6d39531965b7c4",
+    "journalSha256": "9dc272969ec6860a9debdc5d28d8b47a16c81c26174781237ea3200444c69332",
+    "lifecycleSha256": "085d266a936190867b2e15849bfe605143c81f124155b44c15c5bbdec34d9501",
+    "rootAbsent": true,
+    "gitWorktreeRegistrationAbsent": true,
+    "custodyPreserved": true,
+    "commandsCompleted": 2,
+    "retiredRootBytes": 2509979648,
+    "retiredRootInodes": 75682,
+    "retiredGitMetadataBytes": 569344,
+    "retiredGitMetadataInodes": 8,
+    "attributedGrossRecoveryBytes": 2510548992,
+    "attributedRecoverySealedBytes": 2510548992,
+    "globalFreeBytesDeltaObserved": 2503200768,
+    "globalFreeInodesDeltaObserved": 75683
+  },
+  "knownOperationalDebt": {
+    "classification": "KNOWN_NONBLOCKING_DEBT",
+    "predicate": "READ_STATE_RELEASE_LOCAL_STORAGE",
+    "cause": "process.cwd()/.data/app-read-state is release-local",
+    "authenticatedCase": "demo-converta conversation suffix 7784",
+    "missingProjectedKeys": 20,
+    "historicalFilesPreserved": true,
+    "futureCorrection": "external durable tenant-scoped read-state with authenticated alias, scope, timestamp and manual-unread reconciliation"
+  },
+  "privacy": {
+    "pullRequests": [425, 426],
+    "implementationState": "DEPLOYED_ACCEPTED",
+    "approvedDisposableSubjects": 34,
+    "approvedInventorySha256": "620833264d94ed9ce2433f4bada99ae4fd9c74702707665fe35c3e5ff269bacc",
+    "anonymizationExecuted": 0,
+    "nextStep": "OWNER_AUTHORIZED_PILOT_6306_THEN_DIRECTED_REMAINING_33"
+  },
+  "evidence": {
+    "source": "AUTHENTICATED_PRIVATE_AUTHORITIES_AND_DIRECTED_READ_ONLY_OBSERVATION",
+    "productionMutationPerformedByThisRecord": false,
+    "historicalEvidenceRecreated": false
+  }
+}

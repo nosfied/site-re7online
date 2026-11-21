@@ -1,5 +1,71 @@
 # Estado canônico do Converta
 
+## CB3721D4 ativa e finalizada; builder encerrado; retenção VPS incompleta — 21/11/2026
+
+**DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER
+SANITIZED/CLOSURE_RECORDED.** API e frontend selecionam
+`immutable-cb3721d4-external-20261120T220635Z`, target
+`cb3721d4db5c1c870c5c5fbdbab063a6e1c654b9`, árvore
+`e82a394b5f0d6089edcbea9656c503c5c89b1029` e BUILD_ID
+`bOUQ9jqNzeIyNWBatLW6L`. O worker permanece na ED74; a 41D é o rollback
+imediato protegido de API/frontend.
+
+Os contratos de privacidade dos PRs #425/#426 foram aceitos 5/5. O finalize
+executou um único `pm2 save`: journal
+`3fc712a54894df663eff4ce4cc067c83ac15d080c1b20b30d7e134fa5b062374`,
+dump `be3b34691773d1008e438533ef1e9c8fa0c6ff13d8d44b87fdcc025baf813082`
+e marker `60c2e0987ce84dae0c04f7ab2008eb22cabb8b1b062f66710b7bae3937974013`.
+O retirement VPS publicou receipt
+`6eb40c8e7d8a6d125a9dd719eac955c31d9e51eac4e6cd4cf8829aaf5f44b84d`
+com zero comandos; por isso o journal histórico continua corretamente
+`DEPLOYED_RETENTION_INCOMPLETE`, sem ser reescrito como sanitizado.
+
+O builder terminou `SANITIZED/CLOSURE_RECORDED`: receipt
+`a41ff8aaf0714093fd14cdbb5f968c1410d0b7a9956649e57d6d39531965b7c4`,
+journal `9dc272969ec6860a9debdc5d28d8b47a16c81c26174781237ea3200444c69332`
+e lifecycle `085d266a936190867b2e15849bfe605143c81f124155b44c15c5bbdec34d9501`.
+Raiz, worktree e registro Git estão ausentes; custódia e os cinco artefatos
+exportados permanecem íntegros. A retirada bruta atribuível foi
+2.510.548.992 B/75.690 inodes; a variação global observada foi
++2.503.200.768 B/+75.683 inodes e não substitui o inventário selado.
+
+O staging VPS
+`/opt/re7online/backups/converta-persistent/preparations/external-package-cb3721d4-install-v1`
+permanece `EVIDENCE_REQUIRED/RETAIN`, com 154.824.704 B/24 inodes na leitura
+dirigida. Fechamento do builder, retenção VPS e estado produtivo são autoridades
+separadas. O registro vigente é
+[PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json](releases/PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json).
+
+### Retrospectiva 41D → CB3721D4
+
+As duas gerações percorreram `qualification → admission → open → build →
+verify → export → transfer → install → preflight → activate → acceptance →
+finalize → retirement → closure`, com build, instalação, ativação, aceite,
+save e retirement não repetidos. A CB reutilizou as fronteiras da 41D e tornou
+explícitas as seguintes negativas e correções:
+
+| Predicado/fronteira | Causa e consumidor real | Solução/regressão vigente |
+| --- | --- | --- |
+| `root_policy_schema` | `converta-release.py build` recebeu a política durável do lifecycle, não `canonicalRoots` | lifecycle recebe `disposable-builder-root-policy.v1.json`; produtor recebe `deploy-artifact-roots.private.json`; teste integrado do PR #427 |
+| `disposable_contract_canonical` | helper privilegiado exige bytes canônicos; contrato histórico não podia ser reserializado | continuidade autenticada preserva original e vincula projeção; novas gerações só admitem contrato canônico |
+| `args.repo.resolve(strict=True)` | `open` cria subraízes, não o checkout | materializar worktree detached antes de `validate_build_paths()` e antes do build |
+| `disposable_lock_identity`/modo privado | controles e `deploy.lock` fora do modo fechado | qualificar owner, modo `0600`, inode e SHA antes do primeiro efeito; nunca relaxar consumidor |
+| cache Next.js de runtime | o finalize precisa reconhecer `.next/cache/images` criado depois da ativação | contrato V2 `NEXT_IMAGE_CACHE_V1` do PR #428, inventário estrito e `load_request()` antes do wrapper |
+| `CONTROL_PLANE_NOT_INSTALLED` | materializador sucessor não existia na VPS | qualificar antes da ativação a rota de staging autenticado; exigir checkout sucessor somente quando desenvolvido e autorizado |
+| efeito não repetível | falha/interrupção poderia induzir nova chamada | receipts, ordinais, destinos exclusivos e journals impedem repetir build, install, activate, acceptance, save e retirement |
+
+Permanece `KNOWN_NONBLOCKING_DEBT` o predicado
+`READ_STATE_RELEASE_LOCAL_STORAGE`: `process.cwd()/.data/app-read-state` separa
+as projeções por release. O caso 7784 e 20 chaves/aliases não projetados foram
+autenticados; os arquivos 41D continuam preservados. A correção futura deve
+externalizar o read-state e reconciliar tenant, aliases, escopos, timestamps e
+`manualUnread`, sem cópia oportunista nesta release.
+
+Próxima frente funcional, ainda sem efeitos: anonimização dirigida dos 34
+titulares aprovados, inventário privado
+`620833264d94ed9ce2433f4bada99ae4fd9c74702707665fe35c3e5ff269bacc`,
+começando pelo piloto 6306 e exigindo `cleanup=verified` antes dos demais 33.
+
 ## 41D ativa e finalizada; builder encerrado; retenção VPS incompleta — 20/11/2026
 
 **DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER
