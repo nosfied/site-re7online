@@ -1,19 +1,20 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / API+FRONTEND 41D / WORKER ED74 / BUILDER DURÁVEL PRODUTIVO COM CLOSURE**
+**Status: CANÔNICO / API+FRONTEND CB3721D4 / WORKER ED74 / BUILDER DURÁVEL PRODUTIVO COM CLOSURE**
 
 Este modelo deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md),
 define a arquitetura e os princípios vigentes para sua aplicação à implantação.
 A única instrução executável permanece o [runbook](DEPLOY_RUNBOOK.md). O estado
-produtivo reconciliado em 20/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md)
+produtivo reconciliado em 21/11/2026 está em [CURRENT_STATE.md](CURRENT_STATE.md)
 e no registro ativo
-[META_DBFIRST_41D70B53_2026-11-20_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json](releases/META_DBFIRST_41D70B53_2026-11-20_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json),
+[PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json](releases/PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json),
 com recibos e limites de inferência em
 [CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md).
 
-**Fotografia de fechamento, sem nova coleta:** API/frontend 41D e worker ED74
-estão selecionados; BUILD_ID `xj_9UjisQqYxu-19xA1TT`, um `pm2 save`, marker
-`DEPLOYED` e lock liberado. O builder 41D encerrou
+**Fotografia de fechamento, sem nova coleta:** API/frontend CB3721D4 e worker
+ED74 estão selecionados; a 41D é rollback protegido; BUILD_ID
+`bOUQ9jqNzeIyNWBatLW6L`, um `pm2 save`, marker `DEPLOYED` e lock liberado. O
+builder CB3721D4 encerrou
 `SANITIZED/CLOSURE_RECORDED` com receipt legítimo. O retirement da VPS teve zero
 comandos, mas o staging autenticado permanece `EVIDENCE_REQUIRED/RETAIN`; por
 isso o deploy continua `DEPLOYED_RETENTION_INCOMPLETE`, não
@@ -24,7 +25,7 @@ raiz durável, schema compartilhado admissão→retirement e observador privileg
 durável. Uma geração sintética real percorreu `open`, export, negativa por
 referência ativa, `prepare`, autorização e `execute` até receipt terminal, sem
 efeito produtivo. A 41D comprovou depois a primeira release produtiva conjunta e
-seu fechamento real. Continua aberta apenas a prova de reboot com geração ainda
+a CB3721D4 repetiu a cadeia com closure terminal. Continua aberta apenas a prova de reboot com geração ainda
 aberta e retomada, além de replay real não exercitado; não são lacunas de
 arquitetura.
 

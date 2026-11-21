@@ -982,7 +982,7 @@ def verify_fixed_current_retention_incomplete(record_path: Path,
                   "installationReceiptSha256"):
         require(bool(SHA256.fullmatch(release.get(field, ""))),
                 f"fixed-current incomplete {field}")
-    require(release.get("indexEntries") == 34384 and
+    require(positive_int(release.get("indexEntries")) and
             release.get("buildCount") == 1 and
             release.get("uploadCount") == 1 and
             release.get("installCount") == 1 and
@@ -1068,7 +1068,7 @@ def verify_fixed_current_retention_incomplete(record_path: Path,
             production.get("currentMarkerSha256") ==
             finalization.get("markerSha256"),
             "active fixed-current incomplete topology")
-    print("DEPLOYMENT_RECORD_OK: 41D fixed-current release is deployed, builder is terminal, and VPS retention remains explicit")
+    print("DEPLOYMENT_RECORD_OK: fixed-current release is deployed, builder is terminal, and VPS retention remains explicit")
 
 
 def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:

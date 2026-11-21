@@ -1,5 +1,26 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## P1 — Persistência durável do read-state da Inbox entre releases — 21/11/2026
+
+Estado: `KNOWN_NONBLOCKING_DEBT / READ_STATE_RELEASE_LOCAL_STORAGE`.
+
+- causa comprovada: `readStateStore.ts` usa
+  `process.cwd()/.data/app-read-state`, criando armazenamento específico por
+  release da API;
+- evidência: a 41D preserva 22 chaves/aliases; a CB3721D4 projeta duas, deixando
+  20 chaves da release anterior fora da projeção ativa;
+- caso autenticado: conversa final 7784, escopo `shared`, sem `manualUnread` e
+  leitura posterior ao último inbound;
+- preservação: os arquivos da 41D continuam protegidos por
+  `PRIVATE_DATA_NEVER_RETIRE`; ausência na CB não é prova de exclusão;
+- risco: toda ativação futura da API pode perder a projeção de leitura;
+- aceite futuro: raiz durável externa à release, isolamento tenant-scoped e
+  reconciliação autenticada de aliases, escopos `shared`/`assigned`, maior
+  timestamp válido e `manualUnread`, com negativas de concorrência e replay.
+
+Não copiar ou migrar os arquivos retroativamente nem abrir correção isolada
+sem uma atualização funcional autorizada.
+
 ## Retorno ao backlog após auditoria integral — 14/11/2026
 
 Estado: `PROJECT_AUDIT_COMPLETE / BACKLOG_READY`. P00 está encerrado em
