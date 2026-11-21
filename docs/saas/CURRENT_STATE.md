@@ -86,11 +86,12 @@ Esse fechamento não altera o deploy histórico
 `EVIDENCE_REQUIRED_RETAIN`. Também permanece separada a dívida
 `READ_STATE_RELEASE_LOCAL_STORAGE / KNOWN_NONBLOCKING_DEBT`.
 
-## 41D ativa e finalizada; builder encerrado; retenção VPS incompleta — 20/11/2026
+## 41D histórica e finalizada; builder encerrado; retenção VPS incompleta — 20/11/2026
 
-**DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER
-SANITIZED/CLOSURE_RECORDED.** Esta entrada prevalece para o estado corrente. API
-e frontend selecionam
+**FOTOGRAFIA HISTÓRICA, SUPERADA PELA CB3721D4 EM API/FRONTEND.**
+`DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER
+SANITIZED/CLOSURE_RECORDED` era a situação de 20/11. Naquele momento, API
+e frontend selecionavam
 `immutable-41d70b53-external-20261118T214122Z`, target
 `41d70b5368bc413ea34ee517b79351d7b8cd526b`, árvore
 `b524f008d7034121beb09ea805cdafd0a3c6328c` e BUILD_ID
@@ -132,12 +133,13 @@ privilegiado permanece vinculado ao receipt de instalação; seu readback vivo
 `0500` exige autenticação administrativa e não foi repetido nesta tarefa
 documental.
 
-Pendências funcionais, sem mutação nesta reconciliação: `demo-converta` está
-`REPAIR_QUALIFIED / OWNER_WRITE_AUTHORIZATION_REQUIRED`; `syer-rodrigues` está
-`REPAIR_BLOCKED_BY_CANONICAL_BASE_CONFIG_AUTHORITY`; o caso 6306 permanece
-resíduo histórico, com reconciliação ainda não executada. A ordem é: revisão e
-eventual reparo dirigido da demo → autoridade explícita de `baseConfig` para
-syer → somente depois avaliar reconciliação 6306.
+**Pendências conforme fotografia de 20/11, não roteiro vigente:** a identidade
+Meta de `demo-converta` estava `REPAIR_QUALIFIED / OWNER_WRITE_AUTHORIZATION_REQUIRED`
+e `syer-rodrigues` estava `REPAIR_BLOCKED_BY_CANONICAL_BASE_CONFIG_AUTHORITY`.
+A reconciliação operacional do caso 6306 então cogitada foi superada pela
+anonimização real, `VERIFIED`, em 21/11. Não repetir essa intervenção. Qualquer
+futura reparação Meta ou de `baseConfig` exige revalidação dirigida e autorização
+própria; a conclusão da Privacidade não altera automaticamente seus gates.
 
 ## Builder externo durável homologado sinteticamente — 18/11/2026
 
