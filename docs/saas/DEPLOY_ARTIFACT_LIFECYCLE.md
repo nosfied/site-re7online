@@ -1,5 +1,13 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Fronteira entre retenção de snapshots e retirada de artefatos — 21/11/2026
+
+A proteção `RETAIN_REQUIRED` do snapshot `/opt/re7online/backups/converta-persistent/snapshots/20260812T011558Z` é uma autoridade da **rotina de backup composta**, não uma classe adicional de `generation-retirement.py`. O PR #432 (merge `5ad85d7ad0e47b500260813238503dcd4f932986`) restringe sua exceção ao caminho literal e à verificação privilegiada somente leitura de integridade/identidade. O snapshot tem conteúdo de Training único; **não é `DERIVED_STAGING`, `RELEASE_RUNTIME` nem cópia descartável**.
+
+Nenhuma limpeza normal de geração ou extraordinária P00 ganha direito a esse snapshot por estar abaixo de `backups/converta-persistent`. A raiz `snapshots` e seus arquivos não devem entrar em intenções genéricas de retirada, e o catálogo de capacidade deve distinguir snapshots de backup dos artefatos de deploy em `preparations` e `deploy-transactions`. Inventários podem classificar o snapshot como `PROTECTED_UNIQUE_BACKUP / NOT_RETIREMENT_ELIGIBLE`, sem alterar schemas ou permitir exceções nas allowlists existentes. Caso uma nova retenção seja proposta, exigir custódia offsite recuperável do único arquivo, comprovação de restauração e autorização autônoma. As retiradas P00 já encerradas permanecem `DO_NOT_REPEAT`.
+
+**Situação administrativa:** PR #432 integrado no Git, instalação do backup/observador/contrato ainda pendente de autorização e verificação produtiva neste checkpoint. Esta seção não instala, retira nem modifica a VPS.
+
 ## Release 41D e primeiro fechamento produtivo durável — 20/11/2026
 
 A geração `immutable-41d70b53-external-20261118T214122Z` comprovou em produção

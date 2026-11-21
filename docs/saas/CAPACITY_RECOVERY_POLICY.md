@@ -1,5 +1,15 @@
 # Política canônica de recuperação mínima de capacidade
 
+## Fronteira P1 de backup protegido — snapshot 20260812 (21/11/2026)
+
+A correção do backup composto integrada pelo PR #432 (merge `5ad85d7ad0e47b500260813238503dcd4f932986`) **não altera classes, allowlists, receipts, locks ou autorizações** do lifecycle e das limpezas extraordinárias P00. Seus executores permanecem restritos aos candidatos e efeitos autenticados pela respectiva intenção. O P00 28/28 é terminal (`DO_NOT_REPEAT`).
+
+O snapshot literal `/opt/re7online/backups/converta-persistent/snapshots/20260812T011558Z`, device/inode `64769:788249`, está `RETAIN_REQUIRED`: contém um arquivo de Training com hash exclusivo na auditoria de 21/11. Sua autoridade proposta é `/etc/re7online/backup-retention-protected.v1.json`, root-owned privada, verificada pelo observador somente leitura fechado do PR #432. **Essa proteção não é novo perfil de `capacity-recovery.py` nem autorização para alterar `generation-retirement.py`**. Não ampliar qualquer allowlist para esse snapshot ou para o ancestral `snapshots`.
+
+Em inventários futuros, classificar esse snapshot como `PROTECTED_UNIQUE_BACKUP / NOT_RETIREMENT_ELIGIBLE`, excluí-lo do ganho recuperável e preservar sua integridade; `UNKNOWN` também significa `PRESERVE`. Outros snapshots pertencem à retenção 7/4/3 da própria rotina de backup, sob seus controles. Resíduos extraordinários independentes continuam sujeitos ao procedimento canônico `audit → prepare → AUTHORIZE_ONCE → execute`, com custódia e restauração comprovadas; **nenhuma autorização histórica P00 pode ser reutilizada**, mesmo sob o ancestral compartilhado `/opt/re7online/backups/converta-persistent`.
+
+Na data deste registro, o PR #432 estava integrado, mas a instalação e o primeiro cron terminal ainda exigiam prova separada. Reavaliar a exceção somente com custódia externa do conteúdo exclusivo, restauração comprovada e nova autorização específica; nunca por idade, tamanho, `chmod`, `chown` ou exclusão genérica. O futuro offsite deve incluir o conteúdo único antes de qualquer proposta de retirada.
+
 ## Fechamento extraordinário P00 — recibo terminal 9/9 e método reutilizável (14/11/2026)
 
 O lote `p00-nine-private-releases-exceptional-20261114-v1` passou por custódia e restauração 9/9, autorização específica, observação `EXECUTE` completa sem referências/writers/falhas e **retirada terminal 9/9**, receipt `4c834211cf16c0b4b7418e18641bbc090c04280d8e30b7f2b2c4661969f8dc2a`, journal `f5839ac5161d4138ea42e58eac7574e1a4490c472a0fa28db828fa24f5b677a9`. Recuperação **8.897.097.728 B / 309.433 inodes**, sem efeitos extraescopo ou impacto produtivo reportado. Somado aos lotes excepcionais 5/5, 10/10, frontend 3/3 e Campaign API 1/1, o total **não duplicado desses cinco lotes** é 28 caminhos, **24.756.744.192 B / 855.823 inodes**. `TERMINAL_SANITIZED / DO_NOT_REPEAT` para todos. A classificação anterior `NO_ELIGIBLE_ECONOMIC_BATCH` foi fotografia anterior à custódia 9/9, não fundamento para reinvestigação.
