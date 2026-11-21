@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+APP_DIR="/opt/re7online/site-re7online/apps/whatsapp-agent"
+BACKUP_ROOT="${BACKUP_ROOT:-/opt/re7online/backups/converta-persistent}"
+SNAPSHOT_ROOT="${BACKUP_ROOT}/snapshots"
+LOG_DIR="${BACKUP_ROOT}/logs"
+LOCK_FILE="${BACKUP_ROOT}/backup.lock"
+MIN_FREE_MB="${MIN_FREE_MB:-1024}"
+KEEP_DAILY="${KEEP_DAILY:-7}"
+KEEP_WEEKLY="${KEEP_WEEKLY:-4}"
+KEEP_MONTHLY="${KEEP_MONTHLY:-3}"
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-wa-agent-postgres}"
+POSTGRES_DB="${POSTGRES_DB:-whatsapp_agent}"
+POSTGRES_USER="${POSTGRES_USER:-wa_agent}"
+TRAINING_ROOT="${TRAINING_CONTENT_ROOT:-/opt/re7online/content/training}"
+SUPPORT_ROOT="${SUPPORT_ATTACHMENT_ROOT:-/opt/re7online/content/support-attachments}"
+WEB_SESSION_MEDIA_ROOT="${WEB_SESSION_MEDIA_ROOT:-/opt/re7online/content/web-session-media}"
+OFFSITE_STATUS="not_configured"
+BACKUP_ALERT_HELPER="${BACKUP_ALERT_HELPER:-/usr/local/sbin/re7-converta-backup-alert}"
+
+umask 027
+mkdir -p "${SNAPSHOT_ROOT}" "${LOG_DIR}"
+LOG_FILE="${LOG_DIR}/backup.log"
+
+log() {
+  printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "${LOG_FILE}"
+}
+
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+fail() {
+  log "ERROR: $*"
+  exit 1
+}
+
+snapshot_id="$(date -u +%Y%m%dT%H%M%SZ)"
+snapshot_dir="${SNAPSHOT_ROOT}/${snapshot_id}"
+latest_link="${BACKUP_ROOT}/latest"
+current_phase="preflight"
+terminal_recorded=0
+retention_markers_active=0
+
+notify_failure() {
+  local exit_code="$1"
+  if [[ -z "${BACKUP_ALERT_HELPER}" ]]; then
+    log "backup_alert status=not_configured snapshot=${snapshot_id} phase=${current_phase}"
+    return 0
+  fi
+  if [[ -L "${BACKUP_ALERT_HELPER}" || ! -f "${BACKUP_ALERT_HELPER}" || ! -x "${BACKUP_ALERT_HELPER}" ]]; then
+    log "backup_alert status=rejected reason=invalid_file snapshot=${snapshot_id} phase=${current_phase}"
+    return 0
+  fi
+  local helper_meta helper_uid helper_gid helper_mode helper_links
+  if ! helper_meta="$(stat -Lc '%u:%g:%a:%h' "${BACKUP_ALERT_HELPER}" 2>/dev/null)"; then
+    log "backup_alert status=rejected reason=identity_unreadable snapshot=${snapshot_id} phase=${current_phase}"
+    return 0
+  fi
+  IFS=: read -r helper_uid helper_gid helper_mode helper_links <<<"${helper_meta}"
+  if [[ "${helper_uid}" != "0" || "${helper_links}" != "1" || $((8#${helper_mode} & 8#022)) -ne 0 ]]; then
+    log "backup_alert status=rejected reason=unsafe_identity snapshot=${snapshot_id} phase=${current_phase}"
+    return 0
+  fi
+  if "${BACKUP_ALERT_HELPER}" --event BACKUP_EXECUTION_FAILED --snapshot "${snapshot_id}" --phase "${current_phase}" --exit-code "${exit_code}"; then
+    log "backup_alert status=delivered snapshot=${snapshot_id} phase=${current_phase}"
+  else
+    log "backup_alert status=delivery_failed snapshot=${snapshot_id} phase=${current_phase}"
+  fi
+}
+
+on_exit() {
+  local exit_code="$?"
+  trap - EXIT
+  set +e
+  if [[ "${retention_markers_active}" -eq 1 ]]; then
+    rm -f "${BACKUP_ROOT}"/.keep-* 2>/dev/null || true
+  fi
+  if [[ "${exit_code}" -ne 0 && "${terminal_recorded}" -eq 0 ]]; then
+    log "backup_terminal status=failed snapshot=${snapshot_id} phase=${current_phase} exit_code=${exit_code}"
+    notify_failure "${exit_code}"
+  fi
+  exit "${exit_code}"
+}
+trap on_exit EXIT
+
+exec 9>"${LOCK_FILE}"
+flock -n 9 || fail "another backup is already running"
+
+free_mb="$(df -Pm "${BACKUP_ROOT}" | awk 'NR==2 {print $4}')"
+if [[ -z "${free_mb}" || "${free_mb}" -lt "${MIN_FREE_MB}" ]]; then
+  fail "insufficient disk space: free_mb=${free_mb:-unknown} min_free_mb=${MIN_FREE_MB}"
+fi
+
+command -v rsync >/dev/null || fail "rsync not found"
+command -v sha256sum >/dev/null || fail "sha256sum not found"
+command -v docker >/dev/null || fail "docker not found"
+[[ -d "${TRAINING_ROOT}" ]] || fail "training content root not found"
+[[ -d "${SUPPORT_ROOT}" ]] || fail "support attachments root not found"
+[[ -d "${WEB_SESSION_MEDIA_ROOT}" ]] || fail "web session media root not found"
+docker inspect "${POSTGRES_CONTAINER}" >/dev/null 2>&1 || fail "postgres container not found"
+
+current_phase="snapshot"
+log "backup_start snapshot=${snapshot_id}"
+mkdir -p "${snapshot_dir}/database" "${snapshot_dir}/content/training" "${snapshot_dir}/content/support-attachments" "${snapshot_dir}/content/web-session-media"
+
+latest_snapshot=""
+if [[ -L "${latest_link}" ]]; then
+  latest_snapshot="$(readlink -f "${latest_link}" || true)"
+fi
+
+log "postgres_dump_start"
+docker exec "${POSTGRES_CONTAINER}" pg_dump -U "${POSTGRES_USER}" -Fc -d "${POSTGRES_DB}" > "${snapshot_dir}/database/database.dump"
+docker exec -i "${POSTGRES_CONTAINER}" pg_restore --list < "${snapshot_dir}/database/database.dump" > "${snapshot_dir}/database/database.restore-list.txt"
+db_objects="$(awk 'BEGIN{c=0} !/^(;|$)/{c++} END{print c}' "${snapshot_dir}/database/database.restore-list.txt")"
+log "postgres_dump_validated objects=${db_objects}"
+
+rsync_args=(-a --delete)
+if [[ -n "${latest_snapshot}" && -d "${latest_snapshot}/content/training" ]]; then
+  rsync_args+=(--link-dest="${latest_snapshot}/content/training")
+fi
+log "training_snapshot_start"
+rsync "${rsync_args[@]}" "${TRAINING_ROOT}/" "${snapshot_dir}/content/training/"
+
+rsync_args=(-a --delete)
+if [[ -n "${latest_snapshot}" && -d "${latest_snapshot}/content/support-attachments" ]]; then
+  rsync_args+=(--link-dest="${latest_snapshot}/content/support-attachments")
+fi
+log "support_attachments_snapshot_start"
+rsync "${rsync_args[@]}" "${SUPPORT_ROOT}/" "${snapshot_dir}/content/support-attachments/"
+
+rsync_args=(-a --delete)
+if [[ -n "${latest_snapshot}" && -d "${latest_snapshot}/content/web-session-media" ]]; then
+  rsync_args+=(--link-dest="${latest_snapshot}/content/web-session-media")
+fi
+log "web_session_media_snapshot_start"
+rsync "${rsync_args[@]}" "${WEB_SESSION_MEDIA_ROOT}/" "${snapshot_dir}/content/web-session-media/"
+
+training_files="$(find "${snapshot_dir}/content/training" -type f | wc -l)"
+support_files="$(find "${snapshot_dir}/content/support-attachments" -type f | wc -l)"
+web_session_media_files="$(find "${snapshot_dir}/content/web-session-media" -type f | wc -l)"
+training_bytes="$(du -sb "${snapshot_dir}/content/training" | awk '{print $1}')"
+support_bytes="$(du -sb "${snapshot_dir}/content/support-attachments" | awk '{print $1}')"
+web_session_media_bytes="$(du -sb "${snapshot_dir}/content/web-session-media" | awk '{print $1}')"
+db_bytes="$(du -sb "${snapshot_dir}/database/database.dump" | awk '{print $1}')"
+
+cat > "${snapshot_dir}/manifest.json" <<JSON
+{
+  "snapshotId": "$(json_escape "${snapshot_id}")",
+  "createdAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "host": "$(json_escape "$(hostname)")",
+  "database": {
+    "container": "$(json_escape "${POSTGRES_CONTAINER}")",
+    "database": "$(json_escape "${POSTGRES_DB}")",
+    "format": "pg_dump_custom",
+    "validatedWithPgRestoreList": true,
+    "objectCount": ${db_objects},
+    "bytes": ${db_bytes}
+  },
+  "content": {
+    "training": { "files": ${training_files}, "bytes": ${training_bytes} },
+    "supportAttachments": { "files": ${support_files}, "bytes": ${support_bytes} },
+    "webSessionMedia": { "files": ${web_session_media_files}, "bytes": ${web_session_media_bytes} }
+  },
+  "retention": {
+    "daily": ${KEEP_DAILY},
+    "weekly": ${KEEP_WEEKLY},
+    "monthly": ${KEEP_MONTHLY}
+  },
+  "offsite": "${OFFSITE_STATUS}"
+}
+JSON
+
+(
+  cd "${snapshot_dir}"
+  find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+  sha256sum -c SHA256SUMS >/dev/null
+)
+
+ln -sfn "${snapshot_dir}" "${latest_link}"
+
+mark_keep() {
+  local marker="$1"
+  local limit="$2"
+  shift 2
+  printf '%s\n' "$@" | awk 'NF' | sort -r | head -n "${limit}" | while read -r snap; do
+    : > "${BACKUP_ROOT}/.keep-${marker}-${snap}"
+  done
+}
+
+current_phase="retention"
+rm -f "${BACKUP_ROOT}"/.keep-* 2>/dev/null || true
+retention_markers_active=1
+mapfile -t snapshots < <(find "${SNAPSHOT_ROOT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | grep -E '^[0-9]{8}T[0-9]{6}Z$' | sort -r)
+
+mark_keep daily "${KEEP_DAILY}" "${snapshots[@]}"
+printf '%s\n' "${snapshots[@]}" | awk '{print substr($0,1,4) "-W" strftime("%V", mktime(substr($0,1,4) " " substr($0,5,2) " " substr($0,7,2) " 00 00 00")) " " $0}' | sort -k1,1 -k2,2r | awk '!seen[$1]++ {print $2}' | sort -r | head -n "${KEEP_WEEKLY}" | while read -r snap; do : > "${BACKUP_ROOT}/.keep-weekly-${snap}"; done
+printf '%s\n' "${snapshots[@]}" | awk '{print substr($0,1,6) " " $0}' | sort -k1,1 -k2,2r | awk '!seen[$1]++ {print $2}' | sort -r | head -n "${KEEP_MONTHLY}" | while read -r snap; do : > "${BACKUP_ROOT}/.keep-monthly-${snap}"; done
+
+retention_failures=()
+for snap in "${snapshots[@]}"; do
+  if ! ls "${BACKUP_ROOT}"/.keep-*"${snap}" >/dev/null 2>&1; then
+    candidate="${SNAPSHOT_ROOT}/${snap}"
+    candidate_identity="$(stat -Lc 'dev=%d ino=%i uid=%u gid=%g mode=%a nlink=%h' "${candidate}")"
+    blocked_directory=""
+    if [[ ! -r "${candidate}" || ! -x "${candidate}" || ! -w "${SNAPSHOT_ROOT}" || ! -x "${SNAPSHOT_ROOT}" ]]; then
+      blocked_directory="${candidate}"
+    else
+      blocked_directory="$(find "${candidate}" -type d \( ! -readable -o ! -writable -o ! -executable \) -print -quit 2>/dev/null || printf '%s' "${candidate}")"
+    fi
+    if [[ -n "${blocked_directory}" ]]; then
+      retention_failures+=("${snap}")
+      log "retention_failed snapshot=${snap} reason=unremovable_identity ${candidate_identity}"
+      continue
+    fi
+    if rm -rf -- "${SNAPSHOT_ROOT}/${snap}"; then
+      log "retention_removed snapshot=${snap}"
+    else
+      retention_failures+=("${snap}")
+      log "retention_failed snapshot=${snap} reason=remove_failed ${candidate_identity}"
+    fi
+  fi
+done
+rm -f "${BACKUP_ROOT}"/.keep-* 2>/dev/null || true
+retention_markers_active=0
+
+if [[ "${#retention_failures[@]}" -ne 0 ]]; then
+  log "ERROR: retention incomplete failed_count=${#retention_failures[@]} failed_snapshots=$(IFS=,; printf '%s' "${retention_failures[*]}")"
+  exit 1
+fi
+
+current_phase="complete"
+log "backup_success snapshot=${snapshot_id} db_bytes=${db_bytes} training_files=${training_files} support_files=${support_files} web_session_media_files=${web_session_media_files} offsite=${OFFSITE_STATUS}"
+log "backup_terminal status=success snapshot=${snapshot_id} phase=complete exit_code=0"
+terminal_recorded=1
