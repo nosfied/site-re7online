@@ -1,6 +1,6 @@
 {
   "schemaVersion": 9,
-  "updatedAtUtc": "2026-11-21T13:54:43Z",
+  "updatedAtUtc": "2026-11-21T15:20:29Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
@@ -39,7 +39,16 @@
     "knownOperationalDebt": "READ_STATE_RELEASE_LOCAL_STORAGE",
     "knownOperationalDebtClassification": "KNOWN_NONBLOCKING_DEBT",
     "approvedAnonymizationSubjects": 34,
-    "anonymizationExecuted": 0,
+    "anonymizationExecuted": 34,
+    "anonymizationState": "PRIVACY_34_OF_34_ANONYMIZED_VERIFIED",
+    "anonymizationHttp200": 34,
+    "anonymizationCleanupVerified": 34,
+    "anonymizationRuntimeKeysVerified": 238,
+    "anonymizationPendingDeniedOrInconclusive": 0,
+    "anonymizationInventorySha256": "620833264d94ed9ce2433f4bada99ae4fd9c74702707665fe35c3e5ff269bacc",
+    "anonymizationBatchJournalSha256": "b461e4fa3d03cf066abfbab396262f183845228bfa955b8cbc19c6a0e137e572",
+    "anonymizationCustodyManifestSha256": "8d54f3e7e70810f5629e30b1bd2f55e16ab270c0cca482887167f8cb6eb83980",
+    "anonymizationPrivateEvidenceOutsideGit": true,
     "record": "docs/saas/releases/PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
     "productionMutationAuthorizedByThisRecord": false
   },
@@ -2339,15 +2348,15 @@
     "nextAction": "AUTHORIZE_SEPARATE_EMBEDDED_DATA_MIGRATION_AND_WHOLE_RELEASE_CUSTODY_PLAN_FOR_NINE_LITERAL_RELEASES"
   },
   "updatedAtDate": "2026-11-21",
-  "updatedAtUtcScope": "PRIVACY_CB3721D4_DEPLOYED_BUILDER_SANITIZED_VPS_RETENTION_INCOMPLETE",
+  "updatedAtUtcScope": "PRIVACY_34_OF_34_ANONYMIZED_VERIFIED_CB3721D4_DEPLOYED_BUILDER_SANITIZED_VPS_RETENTION_INCOMPLETE",
   "lastOperationalChange": {
-    "state": "PRIVACY_CB3721D4_DEPLOYED_ACCEPTED_BUILDER_SANITIZED",
-    "front": "PRIVACY_34_SUBJECT_ANONYMIZATION_OWNER_AUTHORIZATION_PENDING",
+    "state": "PRIVACY_34_OF_34_ANONYMIZED_VERIFIED",
+    "front": "PRIVACY_SUBJECT_ANONYMIZATION_OPERATIONAL_CLOSURE",
     "record": "docs/saas/releases/PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json",
     "releaseId": "immutable-cb3721d4-external-20261120T220635Z",
     "targetCommit": "cb3721d4db5c1c870c5c5fbdbab063a6e1c654b9",
     "repeatBuildInstallActivationOrRetirement": false,
-    "nextFront": "OWNER_AUTHORIZED_ANONYMIZATION_PILOT_6306_THEN_REMAINING_33"
+    "nextFront": "PRODUCT_BACKLOG_WITH_READ_STATE_DEBT_AND_VPS_STAGING_EVIDENCE_REQUIRED_RETAIN"
   },
   "currentVerifiedSnapshot20261113": {
     "status": "DEPLOYED_RETENTION_INCOMPLETE_WITH_SUCCESSFUL_BUILDER_CLOSURE",

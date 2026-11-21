@@ -1,5 +1,28 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Privacidade por titular 34/34 — encerrada em 21/11/2026
+
+Estado: `PRIVACY_34_OF_34_ANONYMIZED_VERIFIED / OPERATIONAL_CLOSURE_READY`.
+
+- inventário privado autorizado: SHA-256
+  `620833264d94ed9ce2433f4bada99ae4fd9c74702707665fe35c3e5ff269bacc`;
+- piloto 6306 `VERIFIED`; lote posterior 33/33 `VERIFIED`;
+- 34 POSTs totais, sem replay; 34 HTTP 200 e 34 cleanups `verified`;
+- 238 chaves de RuntimeStorage verificadas; zero pendências, negativas ou
+  resultados inconclusivos;
+- journal privado SHA-256
+  `b461e4fa3d03cf066abfbab396262f183845228bfa955b8cbc19c6a0e137e572`
+  e manifesto de custódia SHA-256
+  `8d54f3e7e70810f5629e30b1bd2f55e16ab270c0cca482887167f8cb6eb83980`,
+  preservados fora do Git.
+
+Não repetir anonimizações nem publicar receipts/identificadores privados. As
+únicas dívidas operacionais separadas desta frente continuam
+`READ_STATE_RELEASE_LOCAL_STORAGE / KNOWN_NONBLOCKING_DEBT` e staging VPS
+`EVIDENCE_REQUIRED_RETAIN`. O estado produtivo permanece
+`DEPLOYED_RETENTION_INCOMPLETE`; o builder permanece
+`SANITIZED/CLOSURE_RECORDED`.
+
 ## P1 — Persistência durável do read-state da Inbox entre releases — 21/11/2026
 
 Estado: `KNOWN_NONBLOCKING_DEBT / READ_STATE_RELEASE_LOCAL_STORAGE`.

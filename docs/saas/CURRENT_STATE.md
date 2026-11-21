@@ -61,10 +61,30 @@ autenticados; os arquivos 41D continuam preservados. A correção futura deve
 externalizar o read-state e reconciliar tenant, aliases, escopos, timestamps e
 `manualUnread`, sem cópia oportunista nesta release.
 
-Próxima frente funcional, ainda sem efeitos: anonimização dirigida dos 34
-titulares aprovados, inventário privado
-`620833264d94ed9ce2433f4bada99ae4fd9c74702707665fe35c3e5ff269bacc`,
-começando pelo piloto 6306 e exigindo `cleanup=verified` antes dos demais 33.
+### Privacidade por titular encerrada — 34/34 VERIFIED
+
+`PRIVACY_34_OF_34_ANONYMIZED_VERIFIED`. O inventário privado autorizado
+`620833264d94ed9ce2433f4bada99ae4fd9c74702707665fe35c3e5ff269bacc`
+foi consumido de forma dirigida no tenant `demo-converta`: piloto 6306
+`VERIFIED`, seguido pelos 33 titulares restantes em ordem determinística. Foram
+34 POSTs totais, sem replay, todos HTTP 200 com cleanup `verified`; 238 chaves
+de RuntimeStorage foram verificadas e não houve estado pendente, negado ou
+inconclusivo.
+
+O readback agregado autenticou 34 Contacts, 34 Leads, 102 ChannelIdentity e 68
+Conversations sanitizados, com os 68 RuntimeState originais ausentes após os 34
+cleanups verificados. Nenhum evento de anonimização foi observado em outro
+tenant durante o lote. O journal privado
+`b461e4fa3d03cf066abfbab396262f183845228bfa955b8cbc19c6a0e137e572`
+e o manifesto de custódia
+`8d54f3e7e70810f5629e30b1bd2f55e16ab270c0cca482887167f8cb6eb83980`
+permanecem fora do Git; receipts e identificadores privados não são publicados.
+
+Esse fechamento não altera o deploy histórico
+`DEPLOYED_RETENTION_INCOMPLETE`, o builder
+`SANITIZED/CLOSURE_RECORDED` nem o staging VPS
+`EVIDENCE_REQUIRED_RETAIN`. Também permanece separada a dívida
+`READ_STATE_RELEASE_LOCAL_STORAGE / KNOWN_NONBLOCKING_DEBT`.
 
 ## 41D ativa e finalizada; builder encerrado; retenção VPS incompleta — 20/11/2026
 
