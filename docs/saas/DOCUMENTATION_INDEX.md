@@ -9,6 +9,8 @@
 
 ## Snapshot vigente e política de não retrabalho
 
+- [Prioridades arquitetural e funcional 21/11: persistência durável e atribuição humana com setor/fila](CURRENT_STATE.md#prioridades-arquitetural-e-funcional-antes-de-retomar-p1-backup--21112026) — #436 e #437 `LOCAL VALIDATED / NOT MERGED / NOT DEPLOYED / OWNER VALIDATION PENDING`; A permanece `IMPLEMENTED_NOT_ENFORCED` no lifecycle real, B não alterou a conversa 3209; P1 segue suspensa.
+
 - [P1 backup protegido instalado, validação do cron pendente](CURRENT_STATE.md#p1--backup-composto-protegido-instalado-validação-do-cron-adiada--21112026) — receipt instalado e snapshot histórico `RETAIN_REQUIRED`; retomar somente leitura da primeira execução agendada, sem novo backup nem limpeza. Exceção e P00 estão separados pelos PRs #432/#433.
 
 - [Consolidação definitiva do builder externo (17–18/11/2026)](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md) — precedentes A838/FA10/ED74, PRs #375–#420, PR #415 draft histórico e closure sintética durável real.
