@@ -28,6 +28,7 @@ import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
+import { updateRuntimeIfUnchanged } from "../conversation/runtimeWriteFence.js";
 import { getPrisma } from "../db.js";
 import {
   getAiAssistantConfigurationStatus,
@@ -312,7 +313,7 @@ import {
   toPublicQueueAssignmentPolicy,
   type BalancedQueueAssignmentResult,
 } from "../queue/assignmentPolicy.js";
-import { resolveHumanAssignmentDestination } from "../queue/humanAssignmentDestination.js";
+import { requireHumanAssignmentRuntimeToken, resolveHumanAssignmentDestination } from "../queue/humanAssignmentDestination.js";
 
 const CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES = 3 * 1024 * 1024;
 import {
@@ -13966,57 +13967,45 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       nextState = claimedCycle.created
         ? clearSatisfactionRuntimeForNewServiceCycle(claimedCycle.state)
         : claimedCycle.state;
-      const revision = await runtimeStorage.upsertConversation(
-        nextState,
-        operationalConversation.runtimeWriteToken
-      );
-      if (operationalConversation.runtimeWriteToken && !revision) {
+      let assignmentRuntimeToken;
+      try { assignmentRuntimeToken = requireHumanAssignmentRuntimeToken(operationalConversation.runtimeWriteToken); }
+      catch {
         json(res, 409, httpError("conversation_changed", "A conversa mudou durante a atribuicao."));
         return;
       }
-      if (claimedCycle.created) {
-        await recordServiceCycleEvent({
-          prisma,
-          clientId: client.id,
-          conversationId: resolvedConversation.winner?.id ?? null,
-          waId: nextState.waId,
-          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-          requestId,
-          action: "started",
-          cycle: claimedCycle.cycle,
+      const committedRevision = await prisma.$transaction(async (transaction) => {
+        const revision = await updateRuntimeIfUnchanged({
+          prisma: transaction, clientId: client.id, waId: nextState.waId,
+          expected: assignmentRuntimeToken,
+          data: {
+            answers: nextState.answers ?? undefined,
+            mode: "HUMAN", handoffStatus: "ACTIVE", handoffActivatedAt: new Date(assignedAt),
+            assignedUserId: eligibility.user.id, assignedTo: `user:${eligibility.user.id}`,
+            assignedAt: new Date(assignedAt), departmentId: destination.departmentId,
+            queueId: destination.queueId, status: ConversationOperationalStatus.IN_PROGRESS, closedAt: null,
+          },
         });
+        if (!revision) throw new Error("human_assignment_conversation_changed");
+        const projection = await transaction.conversation.upsert({
+          where: { clientId_waId: { clientId: client.id, waId: nextState.waId } },
+          update: { departmentId: destination.departmentId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical },
+          create: { clientId: client.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, departmentId: destination.departmentId },
+          select: { id: true },
+        });
+        const runtimeRow = await transaction.conversationRuntimeState.findUniqueOrThrow({ where: { clientId_waId: { clientId: client.id, waId: nextState.waId } }, select: { id: true } });
+        await transaction.conversationAssignment.create({ data: { conversationId: runtimeRow.id, fromUserId: conversation.assignedUserId ?? null, toUserId: eligibility.user.id, assignedAt: new Date(assignedAt) } });
+        if (claimedCycle.created) await transaction.event.create({ data: { clientId: client.id, conversationId: projection.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, requestId: `${requestId}:protocol:started:${claimedCycle.cycle.cycleId}`, eventName: "conversation.protocol.started", payloadJson: { clientId: client.id, conversationId: projection.id, protocol: claimedCycle.cycle.protocol, cycleId: claimedCycle.cycle.cycleId, issuedAt: claimedCycle.cycle.issuedAt, source: claimedCycle.cycle.source } } });
+        await transaction.event.create({ data: { clientId: client.id, conversationId: projection.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, requestId: `${requestId}:conversation.assigned`, eventName: "conversation.assigned", payloadJson: { action: "conversation.assigned", userId: clientAuth.userId, clientId: client.id, clientKey: client.clientKey, conversationId: nextState.conversationKey ?? nextState.waId, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, timestamp: assignedAt, fromUserId: conversation.assignedUserId ?? null, toUserId: eligibility.user.id, assignedAt, departmentId: destination.departmentId, queueId: destination.queueId, status: nextState.status } } });
+        return revision;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((error: Error) => {
+        if (error.message === "human_assignment_conversation_changed") return null;
+        throw error;
+      });
+      if (!committedRevision) {
+        json(res, 409, httpError("conversation_changed", "A conversa mudou durante a atribuicao."));
+        return;
       }
-      await persistConversationDepartment(prisma, {
-        clientId: client.id,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        departmentId: destination.departmentId,
-      });
-      await recordConversationAssignment(prisma, {
-        clientId: client.id,
-        waId: nextState.waId,
-        fromUserId: conversation.assignedUserId ?? null,
-        toUserId: nextState.assignedUserId ?? null,
-        assignedAt,
-      });
-      await recordConversationAuditEvent(prisma, {
-        clientId: client.id,
-        clientKey: client.clientKey,
-        requestId,
-        eventName: "conversation.assigned",
-        actorUserId: clientAuth.userId,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        conversationId: nextState.conversationKey ?? nextState.waId,
-        payload: {
-          fromUserId: conversation.assignedUserId ?? null,
-          toUserId: nextState.assignedUserId ?? null,
-          assignedAt,
-          departmentId: destination.departmentId,
-          queueId: destination.queueId,
-          status: nextState.status,
-        },
-      });
+      nextState.runtimeWriteToken = committedRevision;
       logger.info({
         event: "conversation.assigned",
         requestId,
@@ -14622,12 +14611,16 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         return;
       }
       const currentDepartmentId = conversation.departmentId ?? null;
+      if (!currentDepartmentId) {
+        json(res, 409, httpError("conversation_department_required", "A conversa precisa de setor antes da transferencia."));
+        return;
+      }
       const eligibility = await assertQueueAssignmentUserEligible({
         prisma,
         clientId: client.id,
         userId: toUserId,
         departmentId: currentDepartmentId,
-        requireDepartmentMembership: false,
+        requireDepartment: true,
       });
       if (!eligibility.ok) {
         json(res, eligibility.status, {
@@ -14646,15 +14639,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             select: { id: true },
           })
         : null;
-      const queueId = currentDepartmentId
-        ? currentQueue?.id ??
-          (
-            await resolveOperationalQueueForDepartment(prisma, {
-              clientId: client.id,
-              departmentId: currentDepartmentId,
-            })
-          ).id
-        : null;
+      const queueId = currentQueue?.id ?? (await resolveOperationalQueueForDepartment(prisma, { clientId: client.id, departmentId: currentDepartmentId })).id;
       const assignedAt = new Date().toISOString();
       const nextState = {
         ...conversation,
@@ -14672,38 +14657,20 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         status: ConversationOperationalStatus.IN_PROGRESS,
         closedAt: null,
       };
-      await runtimeStorage.upsertConversation(nextState);
-      await persistConversationDepartment(prisma, {
-        clientId: client.id,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        departmentId: currentDepartmentId,
-      });
-      await recordConversationAssignment(prisma, {
-        clientId: client.id,
-        waId: nextState.waId,
-        fromUserId: conversation.assignedUserId ?? null,
-        toUserId: eligibility.user.id,
-        assignedAt,
-      });
-      await recordConversationAuditEvent(prisma, {
-        clientId: client.id,
-        clientKey: client.clientKey,
-        requestId,
-        eventName: "conversation.transferred",
-        actorUserId: clientAuth.userId,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        conversationId: nextState.conversationKey ?? nextState.waId,
-        payload: {
-          fromUserId: conversation.assignedUserId ?? null,
-          toUserId: eligibility.user.id,
-          assignedAt,
-          departmentId: currentDepartmentId,
-          queueId,
-          status: nextState.status,
-        },
-      });
+      let transferToken;
+      try { transferToken = requireHumanAssignmentRuntimeToken(conversation.runtimeWriteToken); }
+      catch { json(res, 409, httpError("conversation_changed", "A conversa mudou durante a transferencia.")); return; }
+      const transferRevision = await prisma.$transaction(async (transaction) => {
+        const revision = await updateRuntimeIfUnchanged({ prisma: transaction, clientId: client.id, waId: nextState.waId, expected: transferToken, data: { mode: "HUMAN", handoffStatus: "ACTIVE", handoffActivatedAt: new Date(nextState.handoff.activatedAt ?? assignedAt), assignedUserId: eligibility.user.id, assignedTo: `user:${eligibility.user.id}`, assignedAt: new Date(assignedAt), departmentId: currentDepartmentId, queueId, status: ConversationOperationalStatus.IN_PROGRESS, closedAt: null } });
+        if (!revision) throw new Error("human_assignment_conversation_changed");
+        const projection = await transaction.conversation.upsert({ where: { clientId_waId: { clientId: client.id, waId: nextState.waId } }, update: { departmentId: currentDepartmentId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical }, create: { clientId: client.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, departmentId: currentDepartmentId }, select: { id: true } });
+        const runtimeRow = await transaction.conversationRuntimeState.findUniqueOrThrow({ where: { clientId_waId: { clientId: client.id, waId: nextState.waId } }, select: { id: true } });
+        await transaction.conversationAssignment.create({ data: { conversationId: runtimeRow.id, fromUserId: conversation.assignedUserId ?? null, toUserId: eligibility.user.id, assignedAt: new Date(assignedAt) } });
+        await transaction.event.create({ data: { clientId: client.id, conversationId: projection.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, requestId: `${requestId}:conversation.transferred`, eventName: "conversation.transferred", payloadJson: { action: "conversation.transferred", userId: clientAuth.userId, clientId: client.id, clientKey: client.clientKey, conversationId: nextState.conversationKey ?? nextState.waId, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, timestamp: assignedAt, fromUserId: conversation.assignedUserId ?? null, toUserId: eligibility.user.id, assignedAt, departmentId: currentDepartmentId, queueId, status: nextState.status } } });
+        return revision;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((error: Error) => { if (error.message === "human_assignment_conversation_changed") return null; throw error; });
+      if (!transferRevision) { json(res, 409, httpError("conversation_changed", "A conversa mudou durante a transferencia.")); return; }
+      nextState.runtimeWriteToken = transferRevision;
       logger.info({
         event: "conversation.transferred",
         requestId,

@@ -34,8 +34,8 @@ async function user(clientId: string, role: string, name: string) {
  await prisma.appAuthSession.create({ data: { id: `${row.id}-session`, userId: row.id, clientId, expiresAt: buildAppAuthSessionExpiresAt() } });
  return row;
 }
-async function request(method: string, route: string, actor = a, body?: unknown) {
- const response = await fetch(base + route, { method, headers: { authorization: `Bearer ${issueClientAuthToken(actor, `${actor.id}-session`)}`, "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+async function request(method: string, route: string, actor = a, body?: unknown, requestId?: string) {
+ const response = await fetch(base + route, { method, headers: { authorization: `Bearer ${issueClientAuthToken(actor, `${actor.id}-session`)}`, "content-type": "application/json", ...(requestId ? { "x-request-id": requestId } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
  return { status: response.status, body: await response.json() as any };
 }
 async function fixture(owner = a, tenant = client) {
@@ -211,6 +211,18 @@ test("claim atomically resolves missing destination and preserves an explicit op
  assert.equal(externalCalls,0);
 });
 
+test("claim rolls runtime, SQL projection, assignment and events back together",async()=>{
+ const f=await bot(); const {setPrismaForTesting}=await import("../db.js");
+ const failing=prisma.$extends({query:{event:{async create({args,query}){if(args.data.eventName==="conversation.assigned")throw new Error("synthetic_projection_failure");return query(args);}}}});setPrismaForTesting(failing as any);
+ const before=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ const result=await request("POST",f.route+"/claim",supervisor,{});setPrismaForTesting(prisma);assert.equal(result.status,500);
+ const after=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ assert.equal(after.version,before.version);assert.equal(after.mode,before.mode);assert.equal(after.assignedUserId,before.assignedUserId);
+ assert.equal(await prisma.conversationAssignment.count({where:{conversationId:f.state.id}}),0);
+ assert.equal(await prisma.event.count({where:{clientId:client.id,eventName:"conversation.protocol.started",waId:f.waId}}),0);
+ assert.equal((await prisma.conversation.findUniqueOrThrow({where:{id:f.conversation.id}})).departmentId,null);
+});
+
 test("automation local media enforces history cutoff, role and revocation",async()=>{
  const f=await bot("web_session"),messageId=f.state.id+"-public-media";
  const content=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ5kAAAAASUVORK5CYII=","base64");
@@ -238,6 +250,14 @@ test("existing explicit transfer retains human lifecycle and does not depend on 
  const r=await request("POST",f.route+"/transfer",admin,{userId:b.id});assert.equal(r.status,200,JSON.stringify(r.body));
  const state=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});assert.equal(state.mode,"HUMAN");assert.equal(state.assignedUserId,b.id);assert.equal(state.status,"IN_PROGRESS");
  assert.equal(externalCalls,0);
+});
+
+test("explicit transfer without a department is denied without runtime, projection or event writes",async()=>{
+ const f=await bot(); const before=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ const result=await request("POST",f.route+"/transfer",admin,{userId:b.id});assert.equal(result.status,409);assert.equal(result.body.error.code,"conversation_department_required");
+ const after=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});assert.equal(after.version,before.version);assert.equal(after.assignedUserId,null);
+ assert.equal(await prisma.conversationAssignment.count({where:{conversationId:f.state.id}}),0);
+ assert.equal(await prisma.event.count({where:{clientId:client.id,eventName:"conversation.transferred",waId:f.waId}}),0);
 });
 
 test("audit: delayed BOT event never becomes human content after CLOSED/HUMAN, aliases or revocation",async()=>{

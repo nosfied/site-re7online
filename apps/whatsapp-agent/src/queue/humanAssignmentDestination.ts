@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import type { RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
 import { findDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
 import {
   OperationalQueueUnavailableError,
@@ -6,6 +7,11 @@ import {
 } from "../departments/operationalQueue.js";
 
 type PrismaLike = PrismaClient | Prisma.TransactionClient;
+
+export function requireHumanAssignmentRuntimeToken(token: RuntimeWriteToken | undefined): RuntimeWriteToken {
+  if (!token) throw new Error("human_assignment_runtime_token_required");
+  return token;
+}
 
 export type HumanAssignmentDestination = {
   departmentId: string;

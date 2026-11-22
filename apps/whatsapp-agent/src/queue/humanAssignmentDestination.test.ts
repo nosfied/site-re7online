@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { OperationalQueueUnavailableError } from "../departments/operationalQueue.js";
-import { resolveHumanAssignmentDestination } from "./humanAssignmentDestination.js";
+import { requireHumanAssignmentRuntimeToken, resolveHumanAssignmentDestination } from "./humanAssignmentDestination.js";
 
 type Department = {
   id: string; clientId: string; name: string; slug: string; isActive: boolean;
@@ -25,6 +25,12 @@ const tendenciaDefault: Department = {
   operationalQueue: { id: "queue-tendencia-geral", name: "Atendimento interno",
     clientId: "tendencia-modas", departmentId: "dept-tendencia-geral" },
 };
+
+test("assignment denies a missing concurrency token before persistence", () => {
+  assert.throws(() => requireHumanAssignmentRuntimeToken(undefined), /human_assignment_runtime_token_required/);
+  const token = { clientId: "tenant", waId: "wa" } as never;
+  assert.equal(requireHumanAssignmentRuntimeToken(token), token);
+});
 
 test("Tendencia BOT without destination resolves the tenant default operational queue", async () => {
   assert.deepEqual(await resolveHumanAssignmentDestination(prismaFixture([tendenciaDefault]), {

@@ -52,6 +52,7 @@ import {
   type ConversationFilter,
 } from "@/lib/inboxConversationFilters";
 import { isInboxFreeformWindowOpen } from "@/lib/inboxWindow";
+import { hasExplicitHumanTransferDestination } from "@/lib/inboxTransferDestination";
 import {
   INBOX_CONVERSATION_SEARCH_DEBOUNCE_MS,
   InboxConversationQueryRegistry,
@@ -5340,7 +5341,8 @@ export default function AppInboxPage() {
   const canTransferSelectedConversation = useMemo(
     () =>
       Boolean(selectedConversationWaId) &&
-      canSessionTransferConversation(session, selectedConversation),
+      canSessionTransferConversation(session, selectedConversation) &&
+      hasExplicitHumanTransferDestination(selectedConversation),
     [selectedConversation, selectedConversationWaId, session]
   );
 
