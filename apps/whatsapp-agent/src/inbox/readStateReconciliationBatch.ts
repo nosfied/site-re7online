@@ -78,6 +78,8 @@ export async function reconcileInboxReadStateManifest(manifestPath: string, expe
     if (receiptRaw.toString("utf8") !== canonical(receipt) || receipt.schemaVersion !== 1 || receipt.kind !== RECEIPT_KIND || receipt.operationId !== manifest.operationId || receipt.manifestSha256 !== manifestSha256 || receipt.inventorySha256 !== inventorySha256 || receipt.state !== "VERIFIED" || !Array.isArray(receipt.entries) || receipt.entries.length !== manifest.entries.length) throw new Error("reconciliation_batch_receipt_conflict");
     for (const entry of manifest.entries) {
       await authenticateEntryRequest(entry);
+      const replay = await reconcileInboxReadStateRequest(entry.requestPath, entry.requestSha256);
+      if (replay.state !== "REPLAY_VERIFIED") throw new Error("reconciliation_batch_destination_unverified");
       const verified = receipt.entries.find((item: any) => item.tenantId === entry.tenantId && JSON.stringify(item.scope) === JSON.stringify(entry.scope) && item.destinationPath === entry.destinationPath && item.requestSha256 === entry.requestSha256 && item.receiptPath === entry.receiptPath && item.anonymizationAuthoritySha256 === entry.anonymizationAuthoritySha256 && JSON.stringify(item.sourceAuthorities) === JSON.stringify(entry.sourceAuthorities));
       if (!verified || !/^[a-f0-9]{64}$/.test(verified.receiptSha256)) throw new Error("reconciliation_batch_receipt_conflict");
       const individualRaw = await readPrivate(entry.receiptPath); if (sha256(individualRaw) !== verified.receiptSha256) throw new Error("reconciliation_batch_individual_receipt_drift");
@@ -92,6 +94,10 @@ export async function reconcileInboxReadStateManifest(manifestPath: string, expe
     if (receipt.schemaVersion !== 2 || receipt.kind !== "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2" || receipt.state !== "VERIFIED" || receipt.tenantId !== entry.tenantId || JSON.stringify(receipt.scope) !== JSON.stringify(entry.scope) || receipt.destinationPath !== entry.destinationPath || receipt.requestSha256 !== entry.requestSha256) throw new Error("reconciliation_batch_individual_receipt_semantics");
     verified.push({ tenantId: entry.tenantId, scope: entry.scope, destinationPath: entry.destinationPath, requestSha256: entry.requestSha256, receiptPath: entry.receiptPath, receiptSha256: sha256(receiptRaw), sourceAuthorities: entry.sourceAuthorities, anonymizationAuthoritySha256: entry.anonymizationAuthoritySha256 });
     await afterEntry?.(index);
+  }
+  for (const entry of manifest.entries) {
+    const replay = await reconcileInboxReadStateRequest(entry.requestPath, entry.requestSha256);
+    if (replay.state !== "REPLAY_VERIFIED") throw new Error("reconciliation_batch_destination_unverified");
   }
   const receipt = { schemaVersion: 1, kind: RECEIPT_KIND, operationId: manifest.operationId, manifestSha256, inventorySha256, state: "VERIFIED", entries: verified };
   const payload = canonical(receipt);

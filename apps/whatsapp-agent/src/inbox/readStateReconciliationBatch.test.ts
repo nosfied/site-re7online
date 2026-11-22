@@ -60,7 +60,27 @@ test("aggregate replay denies tampered aggregate and individual receipts", async
   await assert.rejects(reconcileInboxReadStateManifest(aggregate.manifestPath, hash(aggregate.manifestRaw)), /receipt_conflict/);await fs.rm(aggregate.root, { recursive: true, force: true });
   const individual = await fixture();await reconcileInboxReadStateManifest(individual.manifestPath, hash(individual.manifestRaw));
   await fs.writeFile(individual.manifest.entries[0].receiptPath, canonical({ state: "VERIFIED", forged: true }), { mode: 0o600 });
-  await assert.rejects(reconcileInboxReadStateManifest(individual.manifestPath, hash(individual.manifestRaw)), /individual_receipt_drift/);await fs.rm(individual.root, { recursive: true, force: true });
+  await assert.rejects(reconcileInboxReadStateManifest(individual.manifestPath, hash(individual.manifestRaw)), /(receipt_conflict|individual_receipt_drift)/);await fs.rm(individual.root, { recursive: true, force: true });
+});
+
+test("aggregate publication and replay deny destination drift after individual receipts", async () => {
+  const beforePublication = await fixture();
+  await assert.rejects(reconcileInboxReadStateManifest(beforePublication.manifestPath, hash(beforePublication.manifestRaw), async (index) => {
+    if (index === beforePublication.manifest.entries.length - 1) await fs.writeFile(beforePublication.manifest.entries[0].destinationPath, "{}\n", { mode: 0o600 });
+  }), /receipt_destination_drift/);
+  await assert.rejects(fs.lstat(beforePublication.manifest.aggregateReceiptPath), { code: "ENOENT" });await fs.rm(beforePublication.root, { recursive: true, force: true });
+
+  const replay = await fixture();await reconcileInboxReadStateManifest(replay.manifestPath, hash(replay.manifestRaw));
+  await fs.writeFile(replay.manifest.entries[0].destinationPath, "{}\n", { mode: 0o600 });
+  await assert.rejects(reconcileInboxReadStateManifest(replay.manifestPath, hash(replay.manifestRaw)), /receipt_destination_drift/);await fs.rm(replay.root, { recursive: true, force: true });
+});
+
+test("approved manifest hash rejects a self-published inventory expansion", async () => {
+  const f = await fixture();const approvedManifestSha256 = hash(f.manifestRaw);
+  const expanded = { ...f.inventory, destinations: [...f.inventory.destinations, { ...f.inventory.destinations[0], tenantId: "tenant-injected", destinationPath: path.join(f.root, "persistent", "tenant-injected", "shared.json") }] };
+  const inventoryRaw = canonical(expanded);await fs.writeFile(f.inventoryPath, inventoryRaw, { mode: 0o600 });
+  const manifestRaw = canonical({ ...f.manifest, inventoryAuthority: { path: f.inventoryPath, sha256: hash(inventoryRaw) } });await fs.writeFile(f.manifestPath, manifestRaw, { mode: 0o600 });
+  await assert.rejects(reconcileInboxReadStateManifest(f.manifestPath, approvedManifestSha256), /manifest_sha256/);await fs.rm(f.root, { recursive: true, force: true });
 });
 
 test("authorized inventory omission denies the batch before reconciliation", async () => {
