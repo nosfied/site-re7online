@@ -9,6 +9,8 @@
 
 ## Snapshot vigente e política de não retrabalho
 
+- [P1 backup protegido instalado, validação do cron pendente](CURRENT_STATE.md#p1--backup-composto-protegido-instalado-validação-do-cron-adiada--21112026) — receipt instalado e snapshot histórico `RETAIN_REQUIRED`; retomar somente leitura da primeira execução agendada, sem novo backup nem limpeza. Exceção e P00 estão separados pelos PRs #432/#433.
+
 - [Consolidação definitiva do builder externo (17–18/11/2026)](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md) — precedentes A838/FA10/ED74, PRs #375–#420, PR #415 draft histórico e closure sintética durável real.
 - [Padrão preferencial de build externo e ledger VPS + builder (13/11/2026)](CAPACITY_INVENTORY_AND_EXTERNAL_RELEASE_STANDARD_2026-11-13.md) — **começar aqui** para capacidade, histórico já retirado, categorias preservadas, dívidas, geração falha, restrições e futura automação; não autoriza exclusões.
 - [Registro ativo CB3721D4 Privacidade](releases/PRIVACY_CB3721D4_2026-11-21_DEPLOYED_RETENTION_INCOMPLETE_BUILDER_SANITIZED.json) — API/frontend CB ativos e aceitos; worker ED74 preservado; rollback 41D protegido; builder encerrado canonicamente e retenção VPS separada.
