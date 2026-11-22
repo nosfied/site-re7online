@@ -1,5 +1,14 @@
 # Operational Queue Domain Design - 2026-09-17
 
+## Atribuição humana concluída — invariante local validado em 21/11/2026
+
+O contrato dirigido está em
+[HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_2026-11-21.md](HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_2026-11-21.md).
+Claim/assign não pode produzir atendente sem departamento e fila: destino
+explícito válido prevalece; na ausência, usa-se o padrão operacional ativo do
+mesmo tenant. O runtime persiste o conjunto por CAS e falha fechado antes dos
+eventos. Isto corrige o incidente 3209 e não reabre o histórico 3009.
+
 Status: CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
 
 Implementation was prepared from canonical HEAD `45726ef9154e8904e87189573b3c2ea7faa258bb`

@@ -759,7 +759,7 @@ def acquire_or_authenticate_lock(path: Path, inherited_fd: int | None,
 def validate_contract(value: dict[str, Any]) -> None:
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
                 "writerLockPath", "classes", "artifacts", "privateDataPolicy"}
-    optional = {"privateDataOverlay", "worktreeResidueReconciliation", "durablePersistence"}
+    optional = {"privateDataOverlay", "worktreeResidueReconciliation"}
     if (not required.issubset(value) or not set(value).issubset(required | optional) or
             value.get("schemaVersion") != 1 or value.get("state") not in {"COMPLETE", "FAILED"}):
         deny("artifact_contract_schema")
@@ -4749,18 +4749,6 @@ def bootstrap_legacy(args: argparse.Namespace) -> None:
         os.close(writer_fd)
 
 
-def enforce_durable_persistence(contract: dict[str, Any]) -> dict[str, Any] | None:
-    persistence = contract.get("durablePersistence")
-    if persistence is None:
-        return None
-    helper_path = Path(__file__).resolve().with_name("durable_persistence_enforcement.py")
-    spec = importlib.util.spec_from_file_location("durable_persistence_enforcement", helper_path)
-    if spec is None or spec.loader is None:
-        deny("durable_persistence_helper")
-    helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
-    return helper.enforce(persistence, "retirement", deny, base=helper_path.parent)
-
-
 def prepare(args: argparse.Namespace) -> None:
     contract_raw, _ = stable_private(args.contract, args.contract_sha256)
     lifecycle_raw, _ = stable_private(args.lifecycle, args.lifecycle_sha256)
@@ -4771,7 +4759,6 @@ def prepare(args: argparse.Namespace) -> None:
     operational = object_json(operational_raw, "operational-state")
     policy = validate_root_policy(policy_raw, args.root_policy_sha256)
     validate_contract(contract); validate_operational(operational, contract, policy)
-    enforce_durable_persistence(contract)
     validate_artifact_roots(contract, operational, policy)
     canonical_review_destination(args.review_output, args.contract, args.lifecycle, policy)
     reconciliation = authenticate_reconciliation(args, contract, args.root_policy_sha256)

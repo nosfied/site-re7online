@@ -1,5 +1,15 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## P0 — atribuição humana exige setor e fila — local validado
+
+Estado: `CONVERTA_HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_LOCAL_VALIDATED /
+OWNER_REVIEW_REQUIRED`. O handler claim/assign agora resolve destino explícito
+ou padrão operacional tenant-scoped, exige membership/capacidade e persiste em transação serializável com CAS o conjunto atendente+departamento+fila+status+modo+handoff, projeções e eventos. Destino inválido
+ou concorrência negam antes de eventos. Sem migration nem alteração de worker; o frontend foi ajustado para ocultar a transferência quando o destino é inválido.
+Detalhes: [contrato funcional](saas/HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_2026-11-21.md).
+A conversa 3209 continua inalterada e exige autorização autônoma para reparação;
+o caso 3009 permanece histórico encerrado.
+
 ## Registro histórico de prioridades arquitetural e funcional — 21/11/2026
 
 **CHECKPOINT HISTÓRICO PR #435 / NÃO É STATUS PRODUTIVO ATUAL.** Frente A (#436), arquitetural/metodológica: correção local do `READ_STATE_RELEASE_LOCAL_STORAGE`; o gate era `IMPLEMENTED_NOT_ENFORCED` naquele checkpoint; a evolução V2 consta no contrato especializado e no PR #436. Frente B (#437), funcional de produto: invariante `HUMAN_ASSIGNMENT_MISSING_DEPARTMENT_QUEUE` localmente validado. A conversa 3209 do tenant `tendencia-modas` não foi modificada. Preservar PRs e níveis de evidência independentes.

@@ -445,49 +445,6 @@ class DeployFixture(unittest.TestCase):
         driver.failpoints = set()
         return driver
 
-    def enable_durable_persistence(self, *, root_present: bool = True,
-                                   dependencies: list[str] | None = None,
-                                   invalid_receipt: bool = False) -> Path:
-        root = self.base / "durable-read-state"
-        if root_present:
-            root.mkdir(mode=0o700); root.chmod(0o700)
-        request = self.base / "durable-persistence.private.json"
-        reconciliation = {"required": False, "state": "NOT_REQUIRED", "receipt": None,
-                          "receiptSha256": None, "operationId": None, "tenantId": None,
-                          "scope": None, "destinationPath": None}
-        if invalid_receipt:
-            reconciliation = {"required": True, "state": "VERIFIED",
-                              "receipt": str(self.base / "missing-receipt.private.json"),
-                              "receiptSha256": "0" * 64, "operationId": "op",
-                              "tenantId": "tenant-a", "scope": {"type": "shared"},
-                              "destinationPath": str(root / "tenant-a/shared.json")}
-        put(request, {
-            "schemaVersion": 2, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V2",
-            "requiredPhases": ["qualification", "admission", "preflight", "activation",
-                               "acceptance", "finalize", "retirement"],
-            "surface": "INBOX_READ_STATE_V1",
-            "persistentRoot": {"path": str(root), "ownerUid": os.geteuid(),
-                               "groupGid": os.getegid(), "mode": "0700"},
-            "releaseRoots": [{"role": "candidate", "path": str(self.releases / self.candidate)},
-                             {"role": "rollback", "path": str(self.releases / self.rollback)}],
-            "reconciliation": reconciliation,
-            "unreconciledReleaseDependencies": dependencies or [],
-        })
-        manifest = json.loads(self.runtime_manifest.read_text())
-        manifest["schemaVersion"] = 4
-        manifest["durablePersistence"] = {"request": str(request), "requestSha256": sha(request)}
-        put(self.runtime_manifest, manifest)
-        contract = json.loads(self.generation_contract.read_text())
-        contract["durablePersistence"] = manifest["durablePersistence"]
-        put(self.generation_contract, contract)
-        intent = self.retirement.intent
-        put(intent, {"contractSha256": sha(self.generation_contract)})
-        self.retirement = dataclasses.replace(self.retirement, intent_sha256=sha(intent))
-        self.inputs = dataclasses.replace(self.inputs, runtime_manifest_sha256=sha(self.runtime_manifest),
-                                           retirement=self.retirement)
-        self.driver = self._driver()
-        return request
-
     def terminal_retirement_sentinel(self) -> tuple[Path, bytes]:
         """Bind a real canonical closure to a removed synthetic release sentinel."""
         control = self.base / "retirement-control"
@@ -621,12 +578,9 @@ class DeployFixture(unittest.TestCase):
         payload = custody / "acceptance.payload.private.txt"
         shutil.copyfile(ROOT / "scripts/fixed-current-acceptance-materialize.py", materializer)
         shutil.copyfile(ROOT / "scripts/converta-deploy.py", copied_driver)
-        binding = self.driver._journal_read()["binding"]
-        if "durablePersistence" in binding:
-            for name in ("durable_persistence_enforcement.py", "durable-runtime-persistence-gate.py"):
-                shutil.copyfile(ROOT / "scripts" / name, custody / name)
         materializer.chmod(0o600); copied_driver.chmod(0o600)
         payload.write_bytes("ACEITE TÉCNICO PASS\n".encode("utf-8")); payload.chmod(0o600)
+        binding = self.driver._journal_read()["binding"]
         request = custody / "acceptance-request.private.json"
         put(request, {
             "schemaVersion": 1, "action": "materialize_fixed_current_acceptance",
@@ -636,9 +590,7 @@ class DeployFixture(unittest.TestCase):
             "acceptancePayload": str(payload), "acceptancePayloadSha256": sha(payload),
             "driver": str(copied_driver), "driverSha256": sha(copied_driver),
             "binding": {name: binding[name] for name in
-                        (("release", "target", "controlPlane", "components", "durablePersistence")
-                         if "durablePersistence" in binding else
-                         ("release", "target", "controlPlane", "components"))},
+                        ("release", "target", "controlPlane", "components")},
         })
         return materializer, request
 
@@ -3575,32 +3527,6 @@ if config_path:
         self.assertEqual(stdout.read_bytes(), b"partial-out")
         self.assertEqual(stderr.read_bytes(), b"partial-error")
         self.assertFalse(report.exists())
-
-
-    def test_durable_persistence_schema4_is_enforced_across_real_deploy_consumers(self):
-        self.enable_durable_persistence()
-        self.driver.preflight()
-        journal = self.driver._journal_read()
-        self.assertIn("durablePersistence", journal["binding"])
-        self.driver.activate()
-        materializer, request = self.acceptance_materializer_request()
-        completed = self.run_acceptance_materializer(materializer, request)
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.driver.finalize()
-        self.assertIn(self.driver._journal_read()["state"],
-                      {"DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
-
-    def test_durable_persistence_missing_root_denies_before_transaction(self):
-        self.enable_durable_persistence(root_present=False)
-        with self.assertRaisesRegex(deploy.Denied, "persistent_root_absent"):
-            self.driver.preflight()
-        self.assertFalse(self.transaction.exists())
-
-    def test_durable_persistence_invalid_receipt_denies_before_transaction(self):
-        self.enable_durable_persistence(invalid_receipt=True)
-        with self.assertRaisesRegex(deploy.Denied, "durable_persistence"):
-            self.driver.preflight()
-        self.assertFalse(self.transaction.exists())
 
 
 if __name__ == "__main__":

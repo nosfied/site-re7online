@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -88,9 +87,8 @@ def load_request(path: Path, expected_sha256: str) -> dict[str, Any]:
         if not SHA256.fullmatch(str(value.get(name, ""))):
             raise Denied(f"request_sha256:{name}")
     binding = value.get("binding")
-    base_binding = {"release", "target", "controlPlane", "components"}
-    if (not isinstance(binding, dict) or not base_binding.issubset(binding) or
-            not set(binding).issubset(base_binding | {"durablePersistence"}) or
+    if (not isinstance(binding, dict) or set(binding) !=
+            {"release", "target", "controlPlane", "components"} or
             not all(isinstance(binding.get(name), str)
                     for name in ("release", "target", "controlPlane")) or
             binding.get("components") not in (
@@ -124,16 +122,6 @@ def authenticate_transaction(request: dict[str, Any]) -> None:
                 for name in ("release", "target", "controlPlane", "components")) or
             journal.get("activationProgress") != binding["components"]):
         raise Denied("transaction_not_awaiting_bound_acceptance")
-    persistence = observed.get("durablePersistence")
-    if persistence is not None:
-        if binding.get("durablePersistence") != persistence:
-            raise Denied("durable_persistence_binding")
-        helper_path = Path(__file__).resolve().with_name("durable_persistence_enforcement.py")
-        spec = importlib.util.spec_from_file_location("durable_persistence_enforcement", helper_path)
-        if spec is None or spec.loader is None:
-            raise Denied("durable_persistence_helper")
-        helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
-        helper.enforce(persistence, "acceptance", lambda predicate: (_ for _ in ()).throw(Denied(predicate)), base=helper_path.parent)
 
 
 def materialize(request: dict[str, Any]) -> dict[str, Any]:

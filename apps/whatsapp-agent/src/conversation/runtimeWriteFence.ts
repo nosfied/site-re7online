@@ -52,7 +52,7 @@ export async function updateRuntimeIfUnchanged(params: {
   clientId: string;
   waId: string;
   expected: RuntimeWriteToken;
-  data: Prisma.ConversationRuntimeStateUpdateManyMutationInput;
+  data: Prisma.ConversationRuntimeStateUncheckedUpdateManyInput;
 }): Promise<RuntimeWriteToken | null> {
   if (invalidatedTokens.has(params.expected) || params.expected.clientId !== params.clientId || params.expected.waId !== params.waId) return null;
   const rows = await params.prisma.conversationRuntimeState.updateManyAndReturn({

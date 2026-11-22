@@ -24,6 +24,10 @@
 
 ## Estado ativo
 
+- [Invariante de destino da atribuição humana](HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_2026-11-21.md)
+  — correção funcional local validada para claim/assign; reparação produtiva da
+  conversa 3209 permanece separada e não autorizada.
+
 - [Persistência durável de runtime entre releases](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md)
   — contrato local validado para read-state, reconciliação autenticada e gates
   recorrentes; ainda não implantado nem executado em dados produtivos.

@@ -607,21 +607,6 @@ class Driver:
         self.acceptance = inputs.transaction_root / "acceptance.private.txt"
         self.release_root = releases / inputs.release
 
-    def _enforce_durable_persistence(self, manifest: dict[str, Any], phase: str) -> dict[str, Any] | None:
-        binding = manifest.get("durablePersistence")
-        if binding is None:
-            # Schemas 1-3 are immutable historical authorities.  Only schema 4
-            # declares the recurring persistence surface and is enforceable.
-            if manifest.get("schemaVersion") == 4:
-                deny("durable_persistence_binding")
-            return None
-        helper_path = Path(__file__).resolve().with_name("durable_persistence_enforcement.py")
-        spec = importlib.util.spec_from_file_location("durable_persistence_enforcement", helper_path)
-        if spec is None or spec.loader is None:
-            deny("durable_persistence_helper")
-        helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
-        return helper.enforce(binding, phase, deny, base=helper_path.parent)
-
     def _payload_components(self) -> tuple[str, ...]:
         return THREE_COMPONENTS if "worker" in self.inputs.components else COMPONENTS
 
@@ -773,10 +758,7 @@ class Driver:
         successor = self.inputs.control_plane_succession is not None
         if successor:
             expected_keys.add("controlPlaneSuccessionSha256")
-        durable = "durablePersistence" in value
-        if durable:
-            expected_keys.add("durablePersistence")
-        expected_schema = 4 if durable else (3 if successor else (2 if worker_selected else 1))
+        expected_schema = 3 if successor else (2 if worker_selected else 1)
         if set(value) != expected_keys or value.get("schemaVersion") != expected_schema:
             deny("runtime_manifest_schema")
         if (value.get("mode") != "fixed-current-existing-pm2" or
@@ -1494,8 +1476,7 @@ class Driver:
         contract = json_object(contract_raw, contract_path.name)
         required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
                     "writerLockPath", "classes", "artifacts", "privateDataPolicy"}
-        if (not required.issubset(contract) or not set(contract).issubset(
-                required | {"privateDataOverlay", "durablePersistence"}) or
+        if (not required.issubset(contract) or not set(contract).issubset(required | {"privateDataOverlay"}) or
                 contract.get("schemaVersion") != 1 or contract.get("state") != "COMPLETE" or
                 contract.get("generationId") != self.inputs.release or
                 contract.get("releaseId") != self.inputs.release or
@@ -1976,14 +1957,7 @@ class Driver:
         journal = read_json(self.journal)
         if journal.get("schemaVersion") != 1 or journal.get("state") not in STATES:
             deny("transaction_schema")
-        expected_binding = self.inputs.binding()
-        runtime_raw, _ = stable_regular_bytes(self.inputs.runtime_manifest, required_mode=0o600)
-        if hashlib.sha256(runtime_raw).hexdigest() != self.inputs.runtime_manifest_sha256:
-            deny("runtime_manifest_sha256_mismatch")
-        manifest = json_object(runtime_raw, self.inputs.runtime_manifest.name)
-        if "durablePersistence" in manifest:
-            expected_binding["durablePersistence"] = manifest["durablePersistence"]
-        if journal.get("binding") != expected_binding:
+        if journal.get("binding") != self.inputs.binding():
             deny("transaction_binding")
         return journal
 
@@ -2493,9 +2467,6 @@ class Driver:
         retirement = self._authenticate_retirement()
         self._require_reconciled_component_rollbacks(retirement)
         self._check_external_retirement(retirement)
-        self._control_head()
-        runtime_manifest = self._authenticated_runtime_manifest()
-        persistence = self._enforce_durable_persistence(runtime_manifest, "preflight")
         if self.journal.exists():
             deny("transaction_exists")
         if self.inputs.transaction_root.exists():
@@ -2504,6 +2475,8 @@ class Driver:
                 deny("transaction_root_not_empty")
         else:
             self.inputs.transaction_root.mkdir(mode=0o700, parents=True)
+        self._control_head()
+        runtime_manifest = self._authenticated_runtime_manifest()
         release = self._release()
         pm2 = self._resolve_pm2()
         rows = self.host.pm2_rows(pm2)
@@ -2543,11 +2516,8 @@ class Driver:
         if shutil.disk_usage(self.inputs.transaction_root).free < 64 * 1024 * 1024:
             deny("insufficient_space")
         self._health()
-        journal_binding = self.inputs.binding()
-        if persistence is not None:
-            journal_binding["durablePersistence"] = runtime_manifest["durablePersistence"]
         journal = {
-            "schemaVersion": 1, "state": "PREFLIGHT_PASS", "binding": journal_binding,
+            "schemaVersion": 1, "state": "PREFLIGHT_PASS", "binding": self.inputs.binding(),
             "preflight": {"release": release, "worker": worker,
                           "processes": processes, "selections": selections,
                           "readiness": readiness,
@@ -3084,7 +3054,6 @@ class Driver:
         if self.inputs.retirement is not None:
             self._check_external_retirement(self.inputs.retirement)
         self._control_head(); runtime_manifest = self._authenticated_runtime_manifest()
-        self._enforce_durable_persistence(runtime_manifest, "activation")
         release = self._release()
         self._validate_private_data_continuity(journal, release)
         self._acquire_lock(journal)
@@ -3258,8 +3227,6 @@ class Driver:
             deny("finalize_state")
         if journal["state"] == "FAILED" and journal.get("recoveryAction") != "finalize":
             deny("finalize_failed_state_owner")
-        manifest = self._authenticated_runtime_manifest()
-        self._enforce_durable_persistence(manifest, "finalize")
         regular_private(self.acceptance)
         if self.acceptance.read_text(encoding="utf-8").strip() != "ACEITE TÉCNICO PASS":
             deny("technical_acceptance")

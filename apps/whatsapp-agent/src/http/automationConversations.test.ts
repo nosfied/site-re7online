@@ -34,8 +34,8 @@ async function user(clientId: string, role: string, name: string) {
  await prisma.appAuthSession.create({ data: { id: `${row.id}-session`, userId: row.id, clientId, expiresAt: buildAppAuthSessionExpiresAt() } });
  return row;
 }
-async function request(method: string, route: string, actor = a, body?: unknown) {
- const response = await fetch(base + route, { method, headers: { authorization: `Bearer ${issueClientAuthToken(actor, `${actor.id}-session`)}`, "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+async function request(method: string, route: string, actor = a, body?: unknown, requestId?: string) {
+ const response = await fetch(base + route, { method, headers: { authorization: `Bearer ${issueClientAuthToken(actor, `${actor.id}-session`)}`, "content-type": "application/json", ...(requestId ? { "x-request-id": requestId } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
  return { status: response.status, body: await response.json() as any };
 }
 async function fixture(owner = a, tenant = client) {
@@ -56,7 +56,7 @@ test.before(async () => {
  process.env.WEB_SESSION_MEDIA_ROOT = path.join(temp,"media");
  client = await prisma.client.create({ data: { clientKey: prefix, name: "Synthetic automation", features: { operationalServiceMessages: false } } });
  other = await prisma.client.create({ data: { clientKey: prefix + "-other", name: "Synthetic other" } });
- department = await prisma.department.create({ data: { clientId: client.id, name: "Atendimento", slug: "atendimento" } });
+ department = await prisma.department.create({ data: { clientId: client.id, name: "Atendimento Geral", slug: "atendimento-geral" } });
  queue = await prisma.queue.create({ data: { clientId: client.id, departmentId: department.id, name: "Synthetic queue" } });
  await prisma.department.update({ where: { id: department.id }, data: { operationalQueueId: queue.id } });
  a=await user(client.id,"AGENT","Agent-A");b=await user(client.id,"AGENT","Agent-B");supervisor=await user(client.id,"SUPERVISOR","Supervisor");admin=await user(client.id,"ADMIN","Admin");outsider=await user(other.id,"AGENT","Outsider");
@@ -82,7 +82,8 @@ globalThis.fetch = ((input: any, init: any) => {
 }) as typeof fetch;
 async function bot(provider = "meta", tenant = client) {
  const f = await fixture(a, tenant);
- await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{mode:"BOT",status:"WAITING",closedAt:null,handoffStatus:"NONE",handoffActivatedAt:null,answers:{},provider,departmentId:null,queueId:null,assignedUserId:null,assignedAt:null}});
+ const lastInboundAt=new Date(),windowExpiresAt=new Date(lastInboundAt.getTime()+60*60*1000);
+ await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{mode:"BOT",status:"WAITING",closedAt:null,handoffStatus:"NONE",handoffActivatedAt:null,answers:{},provider,departmentId:null,queueId:null,assignedUserId:null,assignedAt:null,lastInboundAt,windowIsOpen:true,windowExpiresAt}});
  await prisma.conversation.update({where:{id:f.conversation.id},data:{provider}});
  return f;
 }
@@ -191,17 +192,35 @@ test("BOT realtime is content-free manager invalidation, excludes AGENT/other te
  closeRealtimeConnectionsForClient(client.id,"test_complete");closeRealtimeConnectionsForClient(other.id,"test_complete");await enable(true);
 });
 
-test("explicit existing claim retains department authorization; eligible manager claim moves BOT into human work",async()=>{
+test("claim atomically resolves missing destination and preserves an explicit operational destination",async()=>{
+ const withoutDestination=await bot();
+ const fallbackClaim=await request("POST",withoutDestination.route+"/claim",supervisor,{});
+ assert.equal(fallbackClaim.status,200,JSON.stringify(fallbackClaim.body));
+ const fallbackState=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:withoutDestination.state.id}});
+ assert.equal(fallbackState.departmentId,department.id);assert.equal(fallbackState.queueId,queue.id);
+ assert.equal(fallbackState.mode,"HUMAN");assert.equal(fallbackState.assignedUserId,supervisor.id);
+
  const f=await bot();
- assert.equal((await request("GET",f.route,supervisor)).status,200);
- assert.equal((await request("POST",f.route+"/claim",supervisor,{})).status,403);
  await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{departmentId:department.id,queueId:queue.id}});
  const claimed=await request("POST",f.route+"/claim",supervisor,{});assert.equal(claimed.status,200,JSON.stringify(claimed.body));
  const state=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ assert.equal(state.departmentId,department.id);assert.equal(state.queueId,queue.id);
  assert.equal(state.mode,"HUMAN");assert.equal(state.handoffStatus,"ACTIVE");assert.equal(state.status,"IN_PROGRESS");assert.equal(state.assignedUserId,supervisor.id);
  assert(!(await request("GET","/app/conversations?automation=true",supervisor)).body.items.some((i:any)=>i.waId===f.waId));
  assert((await request("GET","/app/conversations",supervisor)).body.items.some((i:any)=>i.waId===f.waId));
  assert.equal(externalCalls,0);
+});
+
+test("claim rolls runtime, SQL projection, assignment and events back together",async()=>{
+ const f=await bot(); const {setPrismaForTesting}=await import("../db.js");
+ const failing=prisma.$extends({query:{event:{async create({args,query}){if(args.data.eventName==="conversation.assigned")throw new Error("synthetic_projection_failure");return query(args);}}}});setPrismaForTesting(failing as any);
+ const before=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ const result=await request("POST",f.route+"/claim",supervisor,{});setPrismaForTesting(prisma);assert.equal(result.status,500);
+ const after=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ assert.equal(after.version,before.version);assert.equal(after.mode,before.mode);assert.equal(after.assignedUserId,before.assignedUserId);
+ assert.equal(await prisma.conversationAssignment.count({where:{conversationId:f.state.id}}),0);
+ assert.equal(await prisma.event.count({where:{clientId:client.id,eventName:"conversation.protocol.started",waId:f.waId}}),0);
+ assert.equal((await prisma.conversation.findUniqueOrThrow({where:{id:f.conversation.id}})).departmentId,null);
 });
 
 test("automation local media enforces history cutoff, role and revocation",async()=>{
@@ -231,6 +250,14 @@ test("existing explicit transfer retains human lifecycle and does not depend on 
  const r=await request("POST",f.route+"/transfer",admin,{userId:b.id});assert.equal(r.status,200,JSON.stringify(r.body));
  const state=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});assert.equal(state.mode,"HUMAN");assert.equal(state.assignedUserId,b.id);assert.equal(state.status,"IN_PROGRESS");
  assert.equal(externalCalls,0);
+});
+
+test("explicit transfer without a department is denied without runtime, projection or event writes",async()=>{
+ const f=await bot(); const before=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ const result=await request("POST",f.route+"/transfer",admin,{userId:b.id});assert.equal(result.status,409);assert.equal(result.body.error.code,"conversation_department_required");
+ const after=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});assert.equal(after.version,before.version);assert.equal(after.assignedUserId,null);
+ assert.equal(await prisma.conversationAssignment.count({where:{conversationId:f.state.id}}),0);
+ assert.equal(await prisma.event.count({where:{clientId:client.id,eventName:"conversation.transferred",waId:f.waId}}),0);
 });
 
 test("audit: delayed BOT event never becomes human content after CLOSED/HUMAN, aliases or revocation",async()=>{
