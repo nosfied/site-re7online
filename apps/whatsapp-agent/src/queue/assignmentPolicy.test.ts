@@ -38,6 +38,10 @@ async function cleanup() {
   await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.userDepartmentMembership.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.user.deleteMany({ where: { clientId: { in: clientIds } } });
+  await prisma.department.updateMany({
+    where: { clientId: { in: clientIds } },
+    data: { operationalQueueId: null },
+  });
   await prisma.queue.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.department.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.conversation.deleteMany({ where: { clientId: { in: clientIds } } });
@@ -57,8 +61,8 @@ async function createClient(suffix: string): Promise<ClientFixture> {
   const department = await prisma.department.create({
     data: {
       clientId: client.id,
-      name: `Atendimento ${suffix}`,
-      slug: `atendimento-${suffix}`,
+      name: "Atendimento Geral",
+      slug: "atendimento-geral",
       isActive: true,
     },
     select: { id: true },
@@ -70,6 +74,10 @@ async function createClient(suffix: string): Promise<ClientFixture> {
       name: `Fila ${suffix}`,
     },
     select: { id: true },
+  });
+  await prisma.department.update({
+    where: { id: department.id },
+    data: { operationalQueueId: queue.id },
   });
   return { id: client.id, clientKey: client.clientKey, departmentId: department.id, queueId: queue.id };
 }
@@ -102,6 +110,10 @@ async function createRuntime(params: {
   assignedUserId?: string | null;
   status?: ConversationOperationalStatus;
 }) {
+  await prisma.department.update({
+    where: { id: params.departmentId },
+    data: { operationalQueueId: params.queueId },
+  });
   const waId = `queue:${params.suffix}`;
   const conversation = await prisma.conversation.create({
     data: {
@@ -412,7 +424,7 @@ test("no eligible agent leaves conversation unassigned and records sanitized eve
   assert.equal(JSON.stringify(payload).includes(runtime.waId), false);
 });
 
-test("department scoped round robin uses active memberships and never falls back globally without department", async () => {
+test("department scoped round robin uses active memberships and resolves the authenticated default without inventing a destination", async () => {
   const client = await createClient("membership-rr");
   const secondDepartment = await prisma.department.create({
     data: {
@@ -522,13 +534,49 @@ test("department scoped round robin uses active memberships and never falls back
     requestId: "member-missing",
     source: "test",
   });
-  assert.equal(missing.applied, false);
-  assert.equal(missing.reason, "no_eligible_agent");
-  const event = await prisma.event.findFirst({
-    where: { clientId: client.id, eventName: "queue.assignment.no_eligible_agent" },
-    orderBy: { createdAt: "desc" },
+  assert.equal(missing.applied, true);
+  const missingReloaded = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { id: missingDepartmentRuntime.runtime.id },
   });
-  assert.equal((event?.payloadJson as Record<string, unknown> | undefined)?.reason, "department_required");
+  assert.equal(missingReloaded.departmentId, client.departmentId);
+  assert.equal(missingReloaded.queueId, client.queueId);
+});
+
+test("tenant scoped automatic assignment denies atomically when no operational destination exists", async () => {
+  const client = await createClient("tenant-no-destination");
+  await createUser({ clientId: client.id, departmentId: null, suffix: "tenant-no-destination" });
+  await setPolicy(client.id, { enabled: true, mode: "round_robin", scope: "tenant", presenceMode: "IGNORE" });
+  const target = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "tenant-no-destination",
+  });
+  await prisma.department.update({
+    where: { id: client.departmentId },
+    data: { name: "Sem destino", slug: "sem-destino", isActive: false },
+  });
+  await prisma.conversationRuntimeState.update({
+    where: { id: target.runtime.id },
+    data: { departmentId: null, queueId: null },
+  });
+
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: target.conversation.id,
+    runtimeStateId: target.runtime.id,
+    waId: target.runtime.waId,
+    requestId: "tenant-no-destination",
+    source: "test",
+  });
+
+  assert.deepEqual(result, { applied: false, reason: "no_eligible_agent" });
+  const reloaded = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: target.runtime.id } });
+  assert.equal(reloaded.assignedUserId, null);
+  assert.equal(reloaded.departmentId, null);
+  assert.equal(reloaded.queueId, null);
+  assert.equal(await prisma.conversationAssignment.count({ where: { conversationId: target.runtime.id } }), 0);
 });
 
 test("requireOnline false preserves legacy assignment without availability rows", async () => {

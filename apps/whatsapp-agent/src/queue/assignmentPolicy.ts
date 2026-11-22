@@ -6,6 +6,7 @@ import {
   getUserDepartmentMemberships,
 } from "../users/departmentMemberships.js";
 import { getPresenceEligibleUserIds, type AssignmentPresenceMode } from "./agentAvailability.js";
+import { resolveHumanAssignmentDestination } from "./humanAssignmentDestination.js";
 
 export type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
 export type QueueAssignmentScope = "tenant" | "department";
@@ -353,7 +354,7 @@ export async function resolveQueueAssignmentPolicy(params: {
 }
 
 export async function assertQueueAssignmentUserEligible(params: {
-  prisma: PrismaClient;
+  prisma: PrismaLike;
   clientId: string;
   userId: string;
   departmentId?: string | null;
@@ -625,8 +626,8 @@ async function applyBalancedQueueAssignmentLocked(params: {
     }
     const assignedUserId = current?.assignedUserId ?? params.assignedUserId ?? null;
     const status = current?.status ?? params.status ?? null;
-    const departmentId = current?.departmentId ?? params.departmentId ?? null;
-    const queueId = current?.queueId ?? params.queueId ?? null;
+    const requestedDepartmentId = current?.departmentId ?? params.departmentId ?? null;
+    const requestedQueueId = current?.queueId ?? params.queueId ?? null;
 
     if (assignedUserId) return { applied: false, reason: "already_assigned" };
     if (status !== ConversationOperationalStatus.WAITING && status !== "WAITING") {
@@ -636,7 +637,14 @@ async function applyBalancedQueueAssignmentLocked(params: {
     const { policy, config } = latestPolicy;
     const assignmentMode = policy.mode === "round_robin" || policy.mode === "least_active" ? policy.mode : null;
     if (!assignmentMode) return { applied: false, reason: "manual" };
-    if (policy.scope === "department" && !departmentId) {
+    let destination;
+    try {
+      destination = await resolveHumanAssignmentDestination(params.prisma, {
+        clientId: params.clientId,
+        departmentId: requestedDepartmentId,
+        queueId: requestedQueueId,
+      });
+    } catch {
       await recordQueueAssignmentEvent({
         prisma: params.prisma,
         clientId: params.clientId,
@@ -646,14 +654,16 @@ async function applyBalancedQueueAssignmentLocked(params: {
         payload: {
           mode: assignmentMode,
           scope: policy.scope,
-          departmentId: null,
+          departmentId: sanitizeDepartmentId(requestedDepartmentId),
           eligibleCount: 0,
-          reason: "department_required",
+          reason: "operational_destination_required",
           source: params.source,
         },
       });
       return { applied: false, reason: "no_eligible_agent" };
     }
+    const departmentId = destination.departmentId;
+    const queueId = destination.queueId;
     const users =
       departmentId
         ? await getEligibleUsersForDepartmentAssignment(params.prisma, {
