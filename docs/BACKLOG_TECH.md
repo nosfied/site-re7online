@@ -1,8 +1,8 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
-## P1 — Duas correções funcionais antes de retomar backup — 21/11/2026
+## P1 — Persistência arquitetural e correção funcional antes de retomar backup — 21/11/2026
 
-**OWNER PRIORITY / LOCAL IMPLEMENTATION NOT STARTED / PRODUCTION UNCHANGED.** Prioridade 1: `READ_STATE_RELEASE_LOCAL_STORAGE`; prioridade 2: `HUMAN_ASSIGNMENT_MISSING_DEPARTMENT_QUEUE`, conversa 3209 do tenant `tendencia-modas`. Diagnósticos de leitura suficientes para iniciar implementação dirigida; não repetir levantamento geral.
+**OWNER PRIORITY / LOCAL IMPLEMENTATION NOT STARTED / PRODUCTION UNCHANGED.** Frente A, arquitetural/metodológica: `READ_STATE_RELEASE_LOCAL_STORAGE` e gates gerais de persistência durável entre releases. Frente B, funcional de produto: `HUMAN_ASSIGNMENT_MISSING_DEPARTMENT_QUEUE`, conversa 3209 do tenant `tendencia-modas`. Diagnósticos de leitura suficientes para iniciar implementações independentes; não repetir levantamento geral nem misturar os PRs.
 
 **Aceite 1:** leitura permanece marcada após restart e próxima troca de release, preservando as diferenças `shared`/`assigned`, aliases, `manualUnread`, timestamps e isolamento tenant; reconciliation sem sobrescrita ou replay; custódia durável/backup; regressões e readback. Precedente 7784 (41D→CB) já comprovado.
 
