@@ -117,13 +117,25 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
                     or manifest.get("operationId") != reconciliation["operationId"] or not isinstance(manifest.get("entries"), list)
                     or len(manifest["entries"]) != reconciliation.get("destinationCount")):
                 deny("reconciliation_manifest_semantics")
+            inventory_authority = manifest.get("inventoryAuthority")
+            if not isinstance(inventory_authority, dict) or set(inventory_authority) != {"path", "sha256"}:
+                deny("reconciliation_inventory_binding")
+            inventory = private_json(Path(str(inventory_authority.get("path", ""))), str(inventory_authority.get("sha256", "")))
+            if (inventory.get("schemaVersion") != 1 or inventory.get("kind") != "CONVERTA_INBOX_READ_STATE_AUTHORIZED_DESTINATION_INVENTORY_V1"
+                    or not isinstance(inventory.get("destinations"), list)):
+                deny("reconciliation_inventory_semantics")
             if (receipt_value.get("schemaVersion") != 1 or receipt_value.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_AGGREGATE_RECEIPT_V1"
                     or receipt_value.get("state") != "VERIFIED" or receipt_value.get("operationId") != reconciliation["operationId"]
                     or receipt_value.get("manifestSha256") != reconciliation["manifestSha256"] or not isinstance(receipt_value.get("entries"), list)
+                    or receipt_value.get("inventorySha256") != inventory_authority["sha256"]
                     or len(receipt_value["entries"]) != len(manifest["entries"])):
                 deny("reconciliation_receipt_semantics")
-            manifest_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath")) for entry in manifest["entries"] if isinstance(entry, dict)}
-            receipt_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath")) for entry in receipt_value["entries"] if isinstance(entry, dict)}
+            inventory_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in inventory["destinations"] if isinstance(entry, dict)}
+            manifest_inventory_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in manifest["entries"] if isinstance(entry, dict)}
+            if len(inventory_entries) != len(inventory["destinations"]) or inventory_entries != manifest_inventory_entries:
+                deny("reconciliation_inventory_completeness")
+            manifest_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in manifest["entries"] if isinstance(entry, dict)}
+            receipt_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in receipt_value["entries"] if isinstance(entry, dict)}
             if len(manifest_entries) != len(manifest["entries"]) or manifest_entries != receipt_entries:
                 deny("reconciliation_receipt_completeness")
             for entry in receipt_value["entries"]:
