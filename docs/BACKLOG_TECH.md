@@ -4,12 +4,22 @@
 
 Estado: `CONVERTA_HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_LOCAL_VALIDATED /
 OWNER_REVIEW_REQUIRED`. O handler claim/assign agora resolve destino explícito
-ou padrão operacional tenant-scoped, exige membership/capacidade e persiste por
-CAS o conjunto atendente+departamento+fila+status+modo+handoff. Destino inválido
-ou concorrência negam antes de eventos. Sem migration, frontend ou worker.
+ou padrão operacional tenant-scoped, exige membership/capacidade e persiste em transação serializável com CAS o conjunto atendente+departamento+fila+status+modo+handoff, projeções e eventos. Destino inválido
+ou concorrência negam antes de eventos. Sem migration nem alteração de worker; o frontend foi ajustado para ocultar a transferência quando o destino é inválido.
 Detalhes: [contrato funcional](saas/HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_2026-11-21.md).
 A conversa 3209 continua inalterada e exige autorização autônoma para reparação;
 o caso 3009 permanece histórico encerrado.
+
+## Registro histórico de prioridades arquitetural e funcional — 21/11/2026
+
+**CHECKPOINT HISTÓRICO PR #435 / NÃO É STATUS PRODUTIVO ATUAL.** Frente A (#436), arquitetural/metodológica: correção local do `READ_STATE_RELEASE_LOCAL_STORAGE`; o gate era `IMPLEMENTED_NOT_ENFORCED` naquele checkpoint; a evolução V2 consta no contrato especializado e no PR #436. Frente B (#437), funcional de produto: invariante `HUMAN_ASSIGNMENT_MISSING_DEPARTMENT_QUEUE` localmente validado. A conversa 3209 do tenant `tendencia-modas` não foi modificada. Preservar PRs e níveis de evidência independentes.
+
+**Aceite 1:** leitura permanece marcada após restart e próxima troca de release, preservando as diferenças `shared`/`assigned`, aliases, `manualUnread`, timestamps e isolamento tenant; reconciliation sem sobrescrita ou replay; custódia durável/backup; regressões e readback. Precedente 7784 (41D→CB) já comprovado.
+
+**Aceite 2:** `BOT sem setor → claim/assign HUMAN` escolhe destino ativo, existente e validado (handoff explícito → contexto válido → padrão operacional do tenant), resolvendo `Department.operationalQueueId` e fila vinculada de forma atômica; inexistência nega antes de persistir atendente; `transfer` continua exigindo setor. Exercer IA Tendência, menus CRA-PR, handoff Demo, RBAC, concorrência e não-regressão de `HUMAN/WAITING` pendente; reparar a conversa 3209 separadamente, só após autorização e verificação da fila real.
+
+**Fronteira:** PRs e testes locais não autorizam deploy; se compuser ambas as correções numa release única, provar a cadeia `producer → installer → preflight → acceptance → finalize → retirement → closure` completa antes de ativar, confrontando 41D/CB e protegendo worker ED74. Não mexer em Privacidade 34/34, Meta gates, PM2, banco produtivo ou snapshot protegido. Depois do aceite e fechamento, retomar o readback P1 do primeiro cron pós-instalação e demais objetivos offsite/alerta/restore, sem disparar execução adicional. [Estado canônico](saas/CURRENT_STATE.md#registro-histórico-de-prioridades-arquitetural-e-funcional--21112026).
+
 
 ## P1 — Retomada do backup protegido em janela futura
 
@@ -44,6 +54,17 @@ Não repetir anonimizações nem publicar receipts/identificadores privados. As
 ## P1 — Persistência durável do read-state da Inbox entre releases — 21/11/2026
 
 Estado: `KNOWN_NONBLOCKING_DEBT / READ_STATE_RELEASE_LOCAL_STORAGE`.
+
+Correção está `LOCAL_VALIDATED / CANONICALLY_ENFORCED / NOT_DEPLOYED`:
+[contrato especializado](saas/DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md), raiz
+externa fail-closed, reconciliação com CAS/journal/receipt e gate automatizado de
+qualification a retirement; os consumidores reais autenticam a autoridade
+versionada antes de admission, activation, acceptance, finalize e retirement.
+A admissão fecha o bypass de schema: geração nova com API exige V3/V2; V1/V2
+somente reabrem report histórico 41D/CB3721D4 existente, autenticado por SHA e identidade, e
+frontend-only permanece fora da superfície. Pendente
+o Owner autorizar provisionamento da raiz,
+prévia das fontes históricas e futura release; nenhuma migração ocorreu.
 
 - causa comprovada: `readStateStore.ts` usa
   `process.cwd()/.data/app-read-state`, criando armazenamento específico por
