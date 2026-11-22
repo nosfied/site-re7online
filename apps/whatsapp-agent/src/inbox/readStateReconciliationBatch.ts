@@ -80,8 +80,12 @@ export async function reconcileInboxReadStateManifest(manifestPath: string, expe
       await authenticateEntryRequest(entry);
       const replay = await reconcileInboxReadStateRequest(entry.requestPath, entry.requestSha256);
       if (replay.state !== "REPLAY_VERIFIED") throw new Error("reconciliation_batch_destination_unverified");
-      const verified = receipt.entries.find((item: any) => item.tenantId === entry.tenantId && JSON.stringify(item.scope) === JSON.stringify(entry.scope) && item.destinationPath === entry.destinationPath && item.requestSha256 === entry.requestSha256 && item.receiptPath === entry.receiptPath && item.anonymizationAuthoritySha256 === entry.anonymizationAuthoritySha256 && JSON.stringify(item.sourceAuthorities) === JSON.stringify(entry.sourceAuthorities));
-      if (!verified || !/^[a-f0-9]{64}$/.test(verified.receiptSha256)) throw new Error("reconciliation_batch_receipt_conflict");
+      const verified = receipt.entries.find((item: unknown) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+        const value = item as Record<string, unknown>;
+        return value.tenantId === entry.tenantId && JSON.stringify(value.scope) === JSON.stringify(entry.scope) && value.destinationPath === entry.destinationPath && value.requestSha256 === entry.requestSha256 && value.receiptPath === entry.receiptPath && value.anonymizationAuthoritySha256 === entry.anonymizationAuthoritySha256 && JSON.stringify(value.sourceAuthorities) === JSON.stringify(entry.sourceAuthorities);
+      }) as Record<string, unknown> | undefined;
+      if (!verified || typeof verified.receiptSha256 !== "string" || !/^[a-f0-9]{64}$/.test(verified.receiptSha256)) throw new Error("reconciliation_batch_receipt_conflict");
       const individualRaw = await readPrivate(entry.receiptPath); if (sha256(individualRaw) !== verified.receiptSha256) throw new Error("reconciliation_batch_individual_receipt_drift");
     }
     return { state: "REPLAY_VERIFIED", receiptSha256: sha256(receiptRaw) } as const;

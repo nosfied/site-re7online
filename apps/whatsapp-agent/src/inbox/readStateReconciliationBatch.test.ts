@@ -11,11 +11,14 @@ const canonical = (value: unknown) => `${JSON.stringify(sortValue(value))}\n`;
 const hash = (value: string | Buffer) => crypto.createHash("sha256").update(value).digest("hex");
 async function authority(root: string) { const info = await fs.lstat(root); return { path: root, device: info.dev, inode: info.ino, ownerUid: info.uid, groupGid: info.gid, mode: "0700" as const }; }
 
+type FixtureScope = { type: "shared" } | { type: "assigned"; assignedUserId: string };
+type FixtureEntry = { requestPath: string; requestSha256: string; tenantId: string; scope: FixtureScope; destinationPath: string; receiptPath: string; sourceAuthorities: Array<{ releaseId: string; sha256: string }>; anonymizationAuthoritySha256: string };
+
 async function fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "read-state-batch-")); const persistent = path.join(root, "persistent"), custody = path.join(root, "custody"), sources = path.join(root, "sources");
   await Promise.all([persistent, custody, sources].map((item) => fs.mkdir(item, { recursive: true, mode: 0o700 })));
   const custodyAuthority = await authority(custody), persistentAuthority = await authority(persistent), sourceAuthority = await authority(sources);
-  const entries: any[] = [];
+  const entries: FixtureEntry[] = [];
   for (const [tenantId, scope] of [["tenant-a", { type: "shared" }], ["tenant-b", { type: "assigned", assignedUserId: "user-b" }]] as const) {
     const source = path.join(sources, `${tenantId}.json`), sourceRaw = JSON.stringify({ lastReadAtByConversationKey: { alias: "2026-11-20T10:00:00.000Z", erased: "2026-11-18T10:00:00.000Z" }, manuallyUnreadByConversationKey: {} }); await fs.writeFile(source, sourceRaw, { mode: 0o600 });
     const privacy = path.join(custody, `${tenantId}-privacy.json`), privacyRaw = JSON.stringify({ schemaVersion: 1, kind: "CONVERTA_PRIVACY_ANONYMIZED_CONVERSATION_KEYS", tenantId, conversationKeys: ["erased"] }); await fs.writeFile(privacy, privacyRaw, { mode: 0o600 });
@@ -38,7 +41,7 @@ test("aggregate manifest proves every tenant/scope receipt and resumes after int
   await assert.rejects(reconcileInboxReadStateManifest(f.manifestPath, hash(f.manifestRaw), (index) => { if (index === 0 && !interrupted) { interrupted = true; throw new Error("synthetic_interruption"); } }), /synthetic_interruption/);
   const result = await reconcileInboxReadStateManifest(f.manifestPath, hash(f.manifestRaw));assert.equal(result.state, "VERIFIED");assert.equal(result.entryCount, 2);
   assert.equal((await reconcileInboxReadStateManifest(f.manifestPath, hash(f.manifestRaw))).state, "REPLAY_VERIFIED");
-  const receipt = JSON.parse(await fs.readFile(f.manifest.aggregateReceiptPath, "utf8"));assert.equal(receipt.entries.length, 2);assert(receipt.entries.every((entry: any) => entry.receiptSha256));
+  const receipt = JSON.parse(await fs.readFile(f.manifest.aggregateReceiptPath, "utf8"));assert.equal(receipt.entries.length, 2);assert(receipt.entries.every((entry: unknown) => Boolean(entry && typeof entry === "object" && "receiptSha256" in entry && (entry as { receiptSha256?: unknown }).receiptSha256)));
   await fs.rm(f.root, { recursive: true, force: true });
 });
 
