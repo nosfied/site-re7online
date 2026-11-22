@@ -14,6 +14,7 @@ from typing import Any
 
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 KIND = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V1"
+ENFORCEMENT_STATE = "IMPLEMENTED_NOT_ENFORCED"
 
 
 class Denied(RuntimeError):
@@ -70,15 +71,17 @@ def validate(request: dict[str, Any]) -> dict[str, Any]:
         deny("persistent_root_schema")
     root = Path(str(root_value.get("path", "")))
     release_values = request.get("releaseRoots")
-    if not isinstance(release_values, list) or not release_values or not all(isinstance(item, str) for item in release_values):
+    if (not isinstance(release_values, list) or {item.get("role") for item in release_values if isinstance(item, dict)} != {"candidate", "rollback"}
+            or not all(isinstance(item, dict) and set(item) == {"role", "path"} and item["role"] in {"candidate", "rollback"} for item in release_values)):
         deny("release_roots_schema")
-    release_roots = [Path(item) for item in release_values]
+    release_roots = [Path(item["path"]) for item in release_values]
     confined_outside(root, release_roots)
     if root_value.get("mode") != "0700" or not isinstance(root_value.get("ownerUid"), int) or not isinstance(root_value.get("groupGid"), int):
         deny("persistent_root_policy")
 
     reconciliation = request.get("reconciliation")
-    if not isinstance(reconciliation, dict) or set(reconciliation) != {"required", "state", "receipt", "receiptSha256"}:
+    reconciliation_keys = {"required", "state", "receipt", "receiptSha256", "operationId", "tenantId", "scope", "destinationPath"}
+    if not isinstance(reconciliation, dict) or set(reconciliation) != reconciliation_keys:
         deny("reconciliation_schema")
     required_reconciliation = reconciliation.get("required") is True
     expected_state = "VERIFIED" if required_reconciliation else "NOT_REQUIRED"
@@ -87,8 +90,11 @@ def validate(request: dict[str, Any]) -> dict[str, Any]:
     if required_reconciliation:
         receipt = Path(str(reconciliation.get("receipt", "")))
         receipt_sha = str(reconciliation.get("receiptSha256", ""))
-        private_json(receipt, receipt_sha)
-    elif reconciliation.get("receipt") is not None or reconciliation.get("receiptSha256") is not None:
+        receipt_value = private_json(receipt, receipt_sha)
+        expected = {"schemaVersion": 2, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2", "state": "VERIFIED", "operationId": reconciliation["operationId"], "tenantId": reconciliation["tenantId"], "scope": reconciliation["scope"], "destinationPath": reconciliation["destinationPath"]}
+        if any(receipt_value.get(key) != value for key, value in expected.items()):
+            deny("reconciliation_receipt_semantics")
+    elif any(reconciliation.get(key) is not None for key in reconciliation_keys - {"required", "state"}):
         deny("reconciliation_unnecessary")
 
     dependencies = request.get("unreconciledReleaseDependencies")
@@ -108,12 +114,19 @@ def validate(request: dict[str, Any]) -> dict[str, Any]:
                 info.st_uid != root_value["ownerUid"] or info.st_gid != root_value["groupGid"] or
                 stat.S_IMODE(info.st_mode) != 0o700):
             deny("persistent_root_identity")
+        for parent in [root, *root.parents]:
+            if parent == Path("/"):
+                break
+            parent_info = parent.lstat()
+            writable = stat.S_IMODE(parent_info.st_mode) & 0o022
+            if stat.S_ISLNK(parent_info.st_mode) or (writable and not parent_info.st_mode & stat.S_ISVTX):
+                deny("persistent_root_ancestor")
         observation = {"device": info.st_dev, "inode": info.st_ino, "mode": "0700",
                        "ownerUid": info.st_uid, "groupGid": info.st_gid}
     return {"schemaVersion": 1, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_REPORT",
             "result": "PASS", "phase": request["phase"], "surface": request["surface"],
             "persistentRoot": str(root), "observation": observation,
-            "reconciliation": reconciliation["state"]}
+            "reconciliation": reconciliation["state"], "enforcementState": ENFORCEMENT_STATE}
 
 
 def main() -> int:

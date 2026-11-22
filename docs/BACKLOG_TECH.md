@@ -34,10 +34,12 @@ Não repetir anonimizações nem publicar receipts/identificadores privados. As
 
 Estado: `KNOWN_NONBLOCKING_DEBT / READ_STATE_RELEASE_LOCAL_STORAGE`.
 
-Correção e metodologia recorrente estão `LOCAL_VALIDATED / NOT_DEPLOYED`:
+Correção está `LOCAL_VALIDATED / IMPLEMENTED_NOT_ENFORCED / NOT_DEPLOYED`:
 [contrato especializado](saas/DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md), raiz
 externa fail-closed, reconciliação com CAS/journal/receipt e gate automatizado de
-qualification a retirement. Pendente Owner autorizar provisionamento da raiz,
+qualification a retirement; o gate isolado ainda não é obrigatório nos
+executores reais e não constitui metodologia recorrente ENFORCED. Pendente
+integração executor-side e Owner autorizar provisionamento da raiz,
 prévia das fontes históricas e futura release; nenhuma migração ocorreu.
 
 - causa comprovada: `readStateStore.ts` usa
