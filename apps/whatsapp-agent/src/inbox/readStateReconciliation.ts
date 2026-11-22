@@ -49,7 +49,7 @@ export async function reconcileInboxReadStateRequest(requestPath: string, expect
   if (anonymization.schemaVersion !== 1 || anonymization.kind !== "CONVERTA_PRIVACY_ANONYMIZED_CONVERSATION_KEYS" || anonymization.tenantId !== request.tenantId || !Array.isArray(anonymization.conversationKeys)) throw new Error("reconciliation_anonymization_authority");
   try {
     const receiptRaw = await readRegularFile(request.receiptPath); const receipt = JSON.parse(receiptRaw.toString("utf8"));
-    if (receipt.schemaVersion !== 2 || receipt.kind !== RECEIPT_KIND || receipt.operationId !== request.operationId || receipt.requestSha256 !== requestSha256 || receipt.tenantId !== request.tenantId || JSON.stringify(receipt.scope) !== JSON.stringify(request.scope) || receipt.destinationPath !== request.destination.path || receipt.state !== "VERIFIED") throw new Error("reconciliation_receipt_conflict");
+    if (receipt.schemaVersion !== 2 || receipt.kind !== RECEIPT_KIND || receipt.operationId !== request.operationId || receipt.requestSha256 !== requestSha256 || receipt.tenantId !== request.tenantId || canonical(receipt.scope) !== canonical(request.scope) || receipt.destinationPath !== request.destination.path || receipt.state !== "VERIFIED") throw new Error("reconciliation_receipt_conflict");
     if (sha256(await readRegularFile(request.destination.path)) !== receipt.destinationSha256) throw new Error("reconciliation_receipt_destination_drift");
     return { state: "REPLAY_VERIFIED", receiptSha256: sha256(receiptRaw) } as const;
   } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }

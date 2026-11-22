@@ -95,8 +95,9 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
         deny("persistent_root_policy")
 
     reconciliation = request.get("reconciliation")
-    reconciliation_keys = {"required", "state", "receipt", "receiptSha256", "operationId", "tenantId", "scope", "destinationPath"}
-    if not isinstance(reconciliation, dict) or set(reconciliation) != reconciliation_keys:
+    individual_keys = {"required", "state", "receipt", "receiptSha256", "operationId", "tenantId", "scope", "destinationPath"}
+    aggregate_keys = {"required", "state", "receipt", "receiptSha256", "operationId", "manifest", "manifestSha256", "destinationCount"}
+    if not isinstance(reconciliation, dict) or set(reconciliation) not in (individual_keys, aggregate_keys):
         deny("reconciliation_schema")
     required_reconciliation = reconciliation.get("required") is True
     expected_state = "VERIFIED" if required_reconciliation else "NOT_REQUIRED"
@@ -106,10 +107,45 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
         receipt = Path(str(reconciliation.get("receipt", "")))
         receipt_sha = str(reconciliation.get("receiptSha256", ""))
         receipt_value = private_json(receipt, receipt_sha)
-        expected = {"schemaVersion": 2, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2", "state": "VERIFIED", "operationId": reconciliation["operationId"], "tenantId": reconciliation["tenantId"], "scope": reconciliation["scope"], "destinationPath": reconciliation["destinationPath"]}
-        if any(receipt_value.get(key) != value for key, value in expected.items()):
-            deny("reconciliation_receipt_semantics")
-    elif any(reconciliation.get(key) is not None for key in reconciliation_keys - {"required", "state"}):
+        if set(reconciliation) == individual_keys:
+            expected = {"schemaVersion": 2, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2", "state": "VERIFIED", "operationId": reconciliation["operationId"], "tenantId": reconciliation["tenantId"], "scope": reconciliation["scope"], "destinationPath": reconciliation["destinationPath"]}
+            if any(receipt_value.get(key) != value for key, value in expected.items()):
+                deny("reconciliation_receipt_semantics")
+        else:
+            manifest = private_json(Path(str(reconciliation.get("manifest", ""))), str(reconciliation.get("manifestSha256", "")))
+            if (manifest.get("schemaVersion") != 1 or manifest.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_MANIFEST_V1"
+                    or manifest.get("operationId") != reconciliation["operationId"] or not isinstance(manifest.get("entries"), list)
+                    or len(manifest["entries"]) != reconciliation.get("destinationCount")):
+                deny("reconciliation_manifest_semantics")
+            inventory_authority = manifest.get("inventoryAuthority")
+            if not isinstance(inventory_authority, dict) or set(inventory_authority) != {"path", "sha256"}:
+                deny("reconciliation_inventory_binding")
+            inventory = private_json(Path(str(inventory_authority.get("path", ""))), str(inventory_authority.get("sha256", "")))
+            if (inventory.get("schemaVersion") != 1 or inventory.get("kind") != "CONVERTA_INBOX_READ_STATE_AUTHORIZED_DESTINATION_INVENTORY_V1"
+                    or not isinstance(inventory.get("destinations"), list)):
+                deny("reconciliation_inventory_semantics")
+            if (receipt_value.get("schemaVersion") != 1 or receipt_value.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_AGGREGATE_RECEIPT_V1"
+                    or receipt_value.get("state") != "VERIFIED" or receipt_value.get("operationId") != reconciliation["operationId"]
+                    or receipt_value.get("manifestSha256") != reconciliation["manifestSha256"] or not isinstance(receipt_value.get("entries"), list)
+                    or receipt_value.get("inventorySha256") != inventory_authority["sha256"]
+                    or len(receipt_value["entries"]) != len(manifest["entries"])):
+                deny("reconciliation_receipt_semantics")
+            inventory_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in inventory["destinations"] if isinstance(entry, dict)}
+            manifest_inventory_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in manifest["entries"] if isinstance(entry, dict)}
+            if len(inventory_entries) != len(inventory["destinations"]) or inventory_entries != manifest_inventory_entries:
+                deny("reconciliation_inventory_completeness")
+            manifest_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in manifest["entries"] if isinstance(entry, dict)}
+            receipt_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in receipt_value["entries"] if isinstance(entry, dict)}
+            if len(manifest_entries) != len(manifest["entries"]) or manifest_entries != receipt_entries:
+                deny("reconciliation_receipt_completeness")
+            for entry in receipt_value["entries"]:
+                individual = private_json(Path(str(entry.get("receiptPath", ""))), str(entry.get("receiptSha256", "")))
+                if (individual.get("schemaVersion") != 2 or individual.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2"
+                        or individual.get("state") != "VERIFIED" or individual.get("tenantId") != entry.get("tenantId")
+                        or individual.get("scope") != entry.get("scope") or individual.get("destinationPath") != entry.get("destinationPath")
+                        or individual.get("requestSha256") != entry.get("requestSha256")):
+                    deny("reconciliation_individual_receipt_semantics")
+    elif any(reconciliation.get(key) is not None for key in set(reconciliation) - {"required", "state"}):
         deny("reconciliation_unnecessary")
 
     dependencies = request.get("unreconciledReleaseDependencies")
