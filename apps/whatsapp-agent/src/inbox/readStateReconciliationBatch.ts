@@ -58,7 +58,10 @@ async function authenticateInventory(manifest: Manifest) {
 async function authenticateEntryRequest(entry: Entry) {
   const raw = await readPrivate(entry.requestPath); if (sha256(raw) !== entry.requestSha256) throw new Error("reconciliation_batch_request_sha256");
   const request = JSON.parse(raw.toString("utf8"));
-  const sourceSha256 = Array.isArray(request.sources) ? request.sources.map((source: any) => source.sha256).sort() : [];
+  const sourceSha256 = Array.isArray(request.sources) ? request.sources.map((source: unknown) => {
+    if (!source || typeof source !== "object" || typeof (source as { sha256?: unknown }).sha256 !== "string") throw new Error("reconciliation_batch_request_sources");
+    return (source as { sha256: string }).sha256;
+  }).sort() : [];
   const expectedSourceSha256 = entry.sourceAuthorities.map((source) => source.sha256).sort();
   if (request.schemaVersion !== 2 || request.kind !== "CONVERTA_INBOX_READ_STATE_RECONCILIATION_V2") throw new Error("reconciliation_batch_request_schema");
   if (request.tenantId !== entry.tenantId || canonical(request.scope) !== canonical(entry.scope) || request.destination?.path !== entry.destinationPath || request.receiptPath !== entry.receiptPath) throw new Error("reconciliation_batch_request_destination");
