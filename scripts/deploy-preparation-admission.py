@@ -78,6 +78,14 @@ REQUEST_KEYS = {
 REQUEST_V2_KEYS = REQUEST_KEYS | {"preparationArtifacts", "preparationReservationRoot",
                                   "preparationProducerArtifacts"}
 REQUEST_V3_KEYS = REQUEST_V2_KEYS | {"components", "durablePersistence"}
+SEALED_LEGACY_API_AUTHORITIES = {
+    ("immutable-41d70b53-external-20261118T214122Z",
+     "immutable-41d70b53-external-20261118T214122Z",
+     "41d70b5368bc413ea34ee517b79351d7b8cd526b"),
+    ("immutable-cb3721d4-external-20261120T220635Z",
+     "immutable-cb3721d4-external-20261120T220635Z",
+     "cb3721d4db5c1c870c5c5fbdbab063a6e1c654b9"),
+}
 
 
 def canonical(value: Any) -> bytes:
@@ -425,6 +433,54 @@ def validate_request(value: Any) -> tuple[
     return sorted(set(errors)), controls, template_info, producer
 
 
+def validate_generation_boundary(value: Any, historical_report_sha256: Any) -> list[str]:
+    """Separate immutable legacy reopen from admission of a new generation.
+
+    V1/V2 predate the durable-persistence surface and therefore cannot create a
+    destination under this control plane. They remain readable only when the
+    caller binds the already materialized admission report by SHA and the
+    report is physically present at the request's exact destination.
+    """
+    if not isinstance(value, dict) or value.get("schemaVersion") not in {1, 2, 3}:
+        return []
+    if value["schemaVersion"] == 3:
+        return ([] if historical_report_sha256 is None else
+                ["request:historical_authority_unexpected"])
+    if not valid_sha(historical_report_sha256):
+        return ["request:legacy_schema_new_generation"]
+    authority_identity = (value.get("generationId"), value.get("releaseId"),
+                          value.get("targetCommit"))
+    if authority_identity not in SEALED_LEGACY_API_AUTHORITIES:
+        return ["request:legacy_authority_identity"]
+    final_root = normalized_absolute(value.get("finalRoot"))
+    if final_root is None:
+        return ["request:legacy_authority_identity"]
+    report_path = final_root / "admission-report.private.json"
+    errors: list[str] = []
+    observed = stable_regular(report_path, {0o600}, historical_report_sha256,
+                              errors, "historical_admission_report")
+    if observed is None:
+        return ["request:legacy_authority_binding", *errors]
+    try:
+        report = json.loads(observed[0])
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return ["request:legacy_authority_json"]
+    expected = {
+        "generationId": value.get("generationId"),
+        "releaseId": value.get("releaseId"),
+        "targetCommit": value.get("targetCommit"),
+    }
+    if (not isinstance(report, dict) or
+            any(report.get(key) != expected_value for key, expected_value in expected.items()) or
+            report.get("consumableMaterialized") is not True or
+            report.get("result") not in {"P00_AGGREGATE_ADMISSION_PASS",
+                                         "P00_AGGREGATE_ADMISSION_REUSED"} or
+            report.get("operationalStatePath") !=
+            str(final_root / value.get("operationalStateOutputName", ""))):
+        return ["request:legacy_authority_identity"]
+    return []
+
+
 def write_exclusive(path: Path, raw: bytes, mode: int = 0o600) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                  getattr(os, "O_NOFOLLOW", 0), mode)
@@ -762,6 +818,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--request")
     parser.add_argument("--request-sha256")
+    parser.add_argument("--historical-admission-report-sha256")
     parser.add_argument("--run-preparation", action="store_true")
     parser.add_argument("--materialized-root")
     parser.add_argument("--admission-report")
@@ -801,6 +858,8 @@ def main() -> int:
                          "consumableMaterialized": False}).decode(), end="")
         return 2
     errors, controls, template_info, producer = validate_request(value)
+    errors.extend(validate_generation_boundary(
+        value, args.historical_admission_report_sha256))
     if errors:
         print(canonical({"result": "P00_AGGREGATE_ADMISSION_DENY",
                          "errors": errors, "consumableMaterialized": False,

@@ -77,7 +77,10 @@ externalizar o read-state e reconciliar tenant, aliases, escopos, timestamps e
 Correção local preparada, `CANONICALLY_ENFORCED / NOT_DEPLOYED`: raiz externa obrigatória por
 `INBOX_READ_STATE_ROOT`, reconciliador tenant-scoped com journal/receipt e gate
 versionado de qualification a retirement, invocado pelos consumidores canônicos
-quando a geração declara a superfície durável. Nenhum arquivo histórico foi migrado;
+quando a geração declara a superfície durável. A fronteira de admissão nega V1/V2
+para materialização nova (`request:legacy_schema_new_generation`), aceitando-os
+somente como reopen de report histórico 41D/CB3721D4 selado; API nova exige V3/V2 e frontend-only
+continua sem gate indevido. Nenhum arquivo histórico foi migrado;
 a dívida só encerra após provisionamento, reconciliação autorizada, deploy e
 aceite. Ver [contrato especializado](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md).
 

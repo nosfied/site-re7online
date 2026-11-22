@@ -38,7 +38,10 @@ Correção está `LOCAL_VALIDATED / CANONICALLY_ENFORCED / NOT_DEPLOYED`:
 [contrato especializado](saas/DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md), raiz
 externa fail-closed, reconciliação com CAS/journal/receipt e gate automatizado de
 qualification a retirement; os consumidores reais autenticam a autoridade
-versionada antes de admission, activation, acceptance, finalize e retirement. Pendente
+versionada antes de admission, activation, acceptance, finalize e retirement.
+A admissão fecha o bypass de schema: geração nova com API exige V3/V2; V1/V2
+somente reabrem report histórico 41D/CB3721D4 existente, autenticado por SHA e identidade, e
+frontend-only permanece fora da superfície. Pendente
 o Owner autorizar provisionamento da raiz,
 prévia das fontes históricas e futura release; nenhuma migração ocorreu.
 

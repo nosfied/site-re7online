@@ -60,6 +60,13 @@ produtiva foi executada por esta entrega.
 qualification, admission, preflight, activation, acceptance, finalize e retirement.
 O schema 3 da admissão e o schema 4 do runtime manifest vinculam a mesma autoridade
 privada; os consumidores reais invocam o gate antes dos respectivos efeitos.
+Na fronteira de admissão, V1/V2 não podem mais materializar uma geração: só
+reabrem um destino já existente quando o operador fornece o SHA-256 explícito do
+`admission-report.private.json` selado e geração, release, target e caminho
+operacional coincidem com as autoridades imutáveis 41D/CB3721D4. O predicado
+`request:legacy_schema_new_generation` nega
+uma nova emissão antes de qualquer diretório; API nova exige V3 + autoridade V2.
+A rota V3 `frontend` continua válida sem autoridade de read-state.
 
 - **Qualification:** classifica superfície, prova raiz externa e vincula plano de
   reconciliação.
@@ -71,6 +78,6 @@ privada; os consumidores reais invocam o gate antes dos respectivos efeitos.
 - **Retirement:** nega se `unreconciledReleaseDependencies` não estiver vazio.
 
 O gate não altera receipts históricos de 41D/CB3721D4: schemas 1–3 continuam
-autenticáveis como autoridades históricas, sem receber retroativamente o estado
+autenticáveis somente como autoridades históricas previamente seladas, sem receber retroativamente o estado
 `CANONICALLY_ENFORCED`. Produção continua com a dívida conhecida até autorização
 de provisionamento, reconciliação e deploy.

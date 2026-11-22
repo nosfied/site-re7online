@@ -11,6 +11,9 @@ import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "deploy-preparation-admission.py"
+SPEC = importlib.util.spec_from_file_location("deploy_preparation_admission", SCRIPT)
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
 H = "a" * 64
 REQUIRED_CHECKS = {
     "contract", "lifecycle", "review-output", "intent-output", "commands-output",
@@ -208,14 +211,85 @@ class AdmissionTests(unittest.TestCase):
                            "sourceSha256": hashlib.sha256(private.read_bytes()).hexdigest()})
         return result
 
-    def run_request(self, value):
+    def v3_request(self, components=("api", "frontend")):
+        value = self.request()
+        value.update({
+            "schemaVersion": 3,
+            "components": list(components),
+            "finalRoot": str(self.private / ("admitted-v3-" + "-".join(components))),
+            "preparationReservationRoot": str(self.private),
+            "preparationProducerArtifacts": self.producer_artifacts(),
+            "preparationArtifacts": [{
+                "path": str(self.private / ("future-" + "-".join(components)) / "archive.tar"),
+                "scope": ",".join(components) + ":fixture", "owner": "release-owner",
+                "budgetBytes": 4096, "budgetInodes": 1,
+                "protection": "DERIVED_WITH_AUTHORITY",
+                "authority": {"path": str(self.paths["contract"]),
+                              "sha256": hashlib.sha256(
+                                  self.paths["contract"].read_bytes()).hexdigest()},
+                "terminalDisposition": "SANITIZE_AFTER_USE", "equivalenceSha256": "b" * 64,
+                "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                              "predictedBytes": 4096, "predictedInodes": 1},
+            }],
+        })
+        if "api" not in components:
+            value["durablePersistence"] = None
+            return value
+        persistent = self.base / ("durable-read-state-" + "-".join(components))
+        persistent.mkdir(mode=0o700, exist_ok=True)
+        authority = self.private / ("durable-persistence-" + "-".join(components) + ".json")
+        authority.write_text(json.dumps({
+            "schemaVersion": 2, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V2",
+            "requiredPhases": ["qualification", "admission", "preflight", "activation",
+                               "acceptance", "finalize", "retirement"],
+            "surface": "INBOX_READ_STATE_V1",
+            "persistentRoot": {"path": str(persistent), "ownerUid": os.geteuid(),
+                               "groupGid": os.getegid(), "mode": "0700"},
+            "releaseRoots": [{"role": "candidate", "path": str(self.base / "candidate")},
+                             {"role": "rollback", "path": str(self.base / "rollback")}],
+            "reconciliation": {"required": False, "state": "NOT_REQUIRED", "receipt": None,
+                               "receiptSha256": None, "operationId": None, "tenantId": None,
+                               "scope": None, "destinationPath": None},
+            "unreconciledReleaseDependencies": [],
+        }, sort_keys=True, separators=(",", ":")) + "\n")
+        authority.chmod(0o600)
+        value["durablePersistence"] = {
+            "request": str(authority),
+            "requestSha256": hashlib.sha256(authority.read_bytes()).hexdigest(),
+        }
+        return value
+
+    def seal_legacy(self, value):
+        errors, controls, template_info, producer = MODULE.validate_request(value)
+        self.assertEqual(errors, [])
+        self.assertIsNotNone(template_info)
+        MODULE.materialize(value, controls, template_info, producer)
+        report = Path(value["finalRoot"]) / "admission-report.private.json"
+        return hashlib.sha256(report.read_bytes()).hexdigest()
+
+    def bind_identity(self, value, generation, target):
+        value["generationId"] = generation
+        value["releaseId"] = generation
+        value["targetCommit"] = target
+        operational = json.loads(self.template.read_text())
+        operational.update({"generationId": generation, "releaseId": generation,
+                            "targetCommit": target})
+        self.write_template(operational)
+        value["operationalStateTemplate"]["sha256"] = hashlib.sha256(
+            self.template.read_bytes()).hexdigest()
+
+    def run_request(self, value, historical_report_sha256=None):
         request = self.private / "request.private.json"
         request.write_text(json.dumps(value))
         request.chmod(0o600)
         sha = hashlib.sha256(request.read_bytes()).hexdigest()
+        command = [sys.executable, "-B", str(SCRIPT), "--request", str(request),
+                   "--request-sha256", sha]
+        if historical_report_sha256 is not None:
+            command.extend(["--historical-admission-report-sha256",
+                            historical_report_sha256])
         result = subprocess.run(
-            [sys.executable, "-B", str(SCRIPT), "--request", str(request),
-             "--request-sha256", sha],
+            command,
             text=True, capture_output=True, check=False,
             env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
@@ -226,7 +300,7 @@ class AdmissionTests(unittest.TestCase):
         self.template.chmod(0o600)
 
     def test_valid_admission_materializes_atomic_private_control_plane(self):
-        value = self.request()
+        value = self.v3_request(("frontend",))
         result, report = self.run_request(value)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(report["result"], "P00_AGGREGATE_ADMISSION_PASS")
@@ -255,6 +329,36 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(reused["result"], "P00_AGGREGATE_ADMISSION_REUSED")
         self.assertTrue(reused["reusedExactDestination"])
 
+    def test_new_generation_cannot_select_legacy_schema_before_mutation(self):
+        for schema in (1, 2):
+            with self.subTest(schema=schema):
+                value = self.request()
+                value["finalRoot"] = str(self.private / f"legacy-bypass-v{schema}")
+                if schema == 2:
+                    value.update({
+                        "schemaVersion": 2,
+                        "preparationReservationRoot": str(self.private),
+                        "preparationProducerArtifacts": self.producer_artifacts(),
+                        "preparationArtifacts": [],
+                    })
+                result, report = self.run_request(value)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("request:legacy_schema_new_generation", report["errors"])
+                self.assertFalse(Path(value["finalRoot"]).exists())
+
+    def test_historical_authority_cannot_be_rebound_to_new_generation(self):
+        original = self.request()
+        self.bind_identity(
+            original, "immutable-41d70b53-external-20261118T214122Z",
+            "41d70b5368bc413ea34ee517b79351d7b8cd526b")
+        historical_report_sha256 = self.seal_legacy(original)
+        changed = dict(original)
+        changed["generationId"] = "immutable-new-api-generation"
+        changed["releaseId"] = "immutable-new-api-generation"
+        result, report = self.run_request(changed, historical_report_sha256)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("request:legacy_authority_identity", report["errors"])
+
     def test_v2_materializes_closed_preparation_artifact_contract(self):
         value = self.request()
         value["schemaVersion"] = 2
@@ -273,8 +377,13 @@ class AdmissionTests(unittest.TestCase):
             "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
                           "predictedBytes": 4096, "predictedInodes": 1},
         }]
-        result, report = self.run_request(value)
+        self.bind_identity(
+            value, "immutable-cb3721d4-external-20261120T220635Z",
+            "cb3721d4db5c1c870c5c5fbdbab063a6e1c654b9")
+        historical_report_sha256 = self.seal_legacy(value)
+        result, report = self.run_request(value, historical_report_sha256)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(report["result"], "P00_AGGREGATE_ADMISSION_REUSED")
         contract_path = Path(report["preparationArtifactContract"]["path"])
         self.assertEqual(hashlib.sha256(contract_path.read_bytes()).hexdigest(),
                          report["preparationArtifactContract"]["sha256"])
@@ -351,7 +460,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotIn("durablePersistenceEnforcement", report)
 
     def test_copied_generation_retirement_reviews_preparation_without_checkout(self):
-        value = self.request()
+        value = self.v3_request(("frontend",))
         value["finalRoot"] = str(self.private / "copied-retirement")
         preparation_artifacts = [{
             "path": str(self.private / "future/absent.tar"), "scope": "api:fixture",
@@ -546,7 +655,7 @@ class AdmissionTests(unittest.TestCase):
                 operational = json.loads(json.dumps(original))
                 mutate(operational)
                 self.write_template(operational)
-                value = self.request()
+                value = self.v3_request(("frontend",))
                 value["finalRoot"] = str(self.private / f"structural-deny-{ordinal}")
                 value["operationalStateTemplate"]["sha256"] = hashlib.sha256(
                     self.template.read_bytes()).hexdigest()
@@ -559,7 +668,7 @@ class AdmissionTests(unittest.TestCase):
         self.write_template(original)
 
     def test_nonidentical_existing_destination_is_never_overwritten(self):
-        value = self.request()
+        value = self.v3_request(("frontend",))
         root = Path(value["finalRoot"])
         root.mkdir(mode=0o700)
         marker = root / "owner-data"
@@ -586,7 +695,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertFalse(Path(value["finalRoot"]).exists())
 
     def test_source_bytes_remain_unchanged(self):
-        value = self.request()
+        value = self.v3_request(("frontend",))
         before = {
             item["sourcePath"]: Path(item["sourcePath"]).read_bytes()
             for item in value["controlPlaneArtifacts"]
@@ -648,7 +757,8 @@ class AdmissionTests(unittest.TestCase):
                     if item["role"] == "root-policy":
                         item["sourceSha256"] = hashlib.sha256(root_policy.read_bytes()).hexdigest()
 
-                value = self.request()
+                components = tuple(profile.split("-"))
+                value = self.v3_request(components)
                 value.update({
                     "generationId": fixture.release_id,
                     "releaseId": fixture.release_id,
