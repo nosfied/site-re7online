@@ -1,5 +1,12 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## P1 — Retomada do backup protegido em janela futura
+
+Instalação autenticada, receipt `2b394d97175dfbbeaba2045e570e45f39c2d27190241337303952b0db0626a31`. **Primeiro cron pós-instalação ainda não observado** na última verificação de 21/11/2026 às 20:32 (Fortaleza). Execução diária original: 02:40 UTC. Retomar somente por leitura, após o horário e em janela escolhida pelo Owner, sem execução manual, retry, alteração de cron, remoção do snapshot protegido ou segundo instalador. Resultado terminal de backup só pode ser afirmado com `retention_preserved`, `backup_success` e `backup_terminal`/exit comprovados. Detalhes, hashes e condições em [estado canônico](saas/CURRENT_STATE.md#p1--backup-composto-protegido-instalado-validação-do-cron-adiada--21112026).
+
+Backlog após a verificação: alerta produtivo; offsite criptografado independente; custódia recuperável de configurações/chaves; restore drill isolado com prova de restauração. Nenhum desses efeitos está autorizado por este registro. PR #433 integrado e P00 terminal `DO_NOT_REPEAT`.
+
+
 ## Privacidade por titular 34/34 — encerrada em 21/11/2026
 
 Estado: `PRIVACY_34_OF_34_ANONYMIZED_VERIFIED / OPERATIONAL_CLOSURE_READY`.

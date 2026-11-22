@@ -1,5 +1,18 @@
 # Estado canônico do Converta
 
+## P1 — Backup composto protegido instalado; validação do cron adiada — 21/11/2026
+
+**Estado confirmado: `CONVERTA_P1_BACKUP_PROTECTED_RETENTION_INSTALLED / AWAITING_SCHEDULED_JOB_VALIDATION`.** O instalador canônico do PR #432 (merge `5ad85d7ad0e47b500260813238503dcd4f932986`) publicou contrato `root:root 0600`, observador privilegiado `root:root 0500`, sudoers fechado `root:root 0440` e rotina `root:deploy 0750`. Receipt privado de instalação: `2b394d97175dfbbeaba2045e570e45f39c2d27190241337303952b0db0626a31`. Readback `visudo`/ `bash -n` PASS; atestação `VERIFIED / SHA256SUMS_PASS / RETAIN_REQUIRED`, SHA `9cc6fb53a246840217977f215c4a985eaa62172c6763e5e22e058736da810b6b`. O PR #433 (merge `24000d2b415bef92dc39a2bbdb128c8e23b3ded6`) documentou a separação entre backup protegido, lifecycle e limpeza extraordinária P00.
+
+**Ainda não foi comprovado sucesso nem falha do primeiro cron após instalação.** Última observação: 21/11 às 20:32 de Fortaleza, instalação às 19:54, cron diário `02:40 UTC` (23:40 do dia anterior em Fortaleza), backup ativo 0; snapshot mais recente `20261121T024001Z` foi produzido **antes** da instalação. Cron SHA `2e83a6778e25fe0a7edcaaea0178804ef5ce68821fe8f14da697665f7d9699fb`. Não afirmar novo snapshot sem readback. O primeiro cron elegível será 22/11/2026 02:40 UTC, correspondente a 21/11 23:40 em Fortaleza; se a retomada ocorrer mais tarde, verificar a primeira execução realmente ocorrida após a instalação, não disparar outra.
+
+Snapshot histórico `/opt/re7online/backups/converta-persistent/snapshots/20260812T011558Z`, device/inode `64769:788249`, `root:root 0750`, `nlink=4`, permanece `RETAIN_REQUIRED`: único conteúdo Training identificado. Manifesto SHA `71601150d1a7441787c4f6ff4b408087482f075195d1198ea66aaf367d272bf7`; SHA256SUMS SHA `5f9d1e7157e764500f0a5a30f006285114c6485a7915bfe460048796d18da20e`. Não retirar ou alterar; exceção literal não autoriza limpeza normal ou extraordinária de outros caminhos.
+
+**Retomada agendada por decisão do Owner para uma janela futura:** somente leitura do cron existente: confirmar execução única, snapshot, dump/ `pg_restore --list`, SHA256SUMS, `latest`, `retention_preserved`, retenção 7/4/3, um terminal com exit coerente e ausência de efeitos imprevistos. Se houver falha, parar no predicado real; nenhum backup manual, retry, restart, chmod/chown, restore ou exclusão. Os próximos trabalhos P1 (alerta produtivo, offsite criptografado, custódia de configurações/chaves e restore drill isolado) são separados e ainda não receberam autorização de implantação.
+
+**Produção preservada:** API/frontend CB3721D4, worker ED74, rollback 41D e Privacidade 34/34 VERIFIED. O staging da VPS segue `EVIDENCE_REQUIRED_RETAIN`, e o read-state `KNOWN_NONBLOCKING_DEBT`. Os históricos e receipts terminais não devem ser repetidos.
+
+
 ## CB3721D4 ativa e finalizada; builder encerrado; retenção VPS incompleta — 21/11/2026
 
 **DEPLOYED_RETENTION_INCOMPLETE / PRODUCTION HEALTHY / BUILDER
