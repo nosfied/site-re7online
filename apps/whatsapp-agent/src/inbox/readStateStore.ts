@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { withInboxReadStateWriteLock } from "./readStateFileLock.js";
 
 export type InboxReadState = {
   lastReadAtByConversationKey: Record<string, string>;
@@ -20,19 +21,62 @@ const EMPTY_READ_STATE: InboxReadState = {
   manuallyUnreadByConversationKey: {},
 };
 
-const dataDir = path.resolve(process.cwd(), ".data", "app-read-state");
-const writeQueues = new Map<string, Promise<void>>();
+const writeQueues = new Map<string, Promise<unknown>>();
 
-function sanitizePathPart(value: string) {
+export class InboxReadStateStorageError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
+export function resolveInboxReadStateRoot(options: {
+  cwd?: string;
+  nodeEnv?: string;
+  configuredRoot?: string;
+} = {}) {
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? "development";
+  const configured = (options.configuredRoot ?? process.env.INBOX_READ_STATE_ROOT ?? "").trim();
+  if (!configured) {
+    if (nodeEnv === "production") throw new InboxReadStateStorageError("inbox_read_state_root_required");
+    return path.join(cwd, ".data", "app-read-state");
+  }
+  if (!path.isAbsolute(configured)) throw new InboxReadStateStorageError("inbox_read_state_root_absolute");
+  const root = path.resolve(configured);
+  if (nodeEnv === "production" && (root === cwd || root.startsWith(`${cwd}${path.sep}`))) {
+    throw new InboxReadStateStorageError("inbox_read_state_root_release_local");
+  }
+  return root;
+}
+
+async function authenticateReadStateRoot() {
+  const root = resolveInboxReadStateRoot();
+  try {
+    const info = await fs.lstat(root);
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new InboxReadStateStorageError("inbox_read_state_root_identity");
+    }
+    if ((info.mode & 0o077) !== 0) throw new InboxReadStateStorageError("inbox_read_state_root_mode");
+    if (typeof process.getuid === "function" && info.uid !== process.getuid()) {
+      throw new InboxReadStateStorageError("inbox_read_state_root_owner");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT" || process.env.NODE_ENV === "production") throw error;
+    await fs.mkdir(root, { recursive: true, mode: 0o700 });
+  }
+  return root;
+}
+
+export function sanitizeInboxReadStatePathPart(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function getReadStateFile(clientId: string) {
-  return path.join(dataDir, sanitizePathPart(clientId), "shared.json");
+function getReadStateFile(root: string, clientId: string) {
+  return path.join(root, sanitizeInboxReadStatePathPart(clientId), "shared.json");
 }
 
-function getAssignedReadStateFile(clientId: string, assignedUserId: string) {
-  return path.join(dataDir, sanitizePathPart(clientId), "assigned", `${sanitizePathPart(assignedUserId)}.json`);
+function getAssignedReadStateFile(root: string, clientId: string, assignedUserId: string) {
+  return path.join(root, sanitizeInboxReadStatePathPart(clientId), "assigned", `${sanitizeInboxReadStatePathPart(assignedUserId)}.json`);
 }
 
 export function resolveConversationReadScope(conversation: {
@@ -42,17 +86,18 @@ export function resolveConversationReadScope(conversation: {
   return assignedUserId ? { type: "assigned", assignedUserId } : { type: "shared" };
 }
 
-function getReadStateFileForScope(clientId: string, scope: ConversationReadScope = { type: "shared" }) {
+export function getReadStateFileForScope(root: string, clientId: string, scope: ConversationReadScope = { type: "shared" }) {
   return scope.type === "assigned"
-    ? getAssignedReadStateFile(clientId, scope.assignedUserId)
-    : getReadStateFile(clientId);
+    ? getAssignedReadStateFile(root, clientId, scope.assignedUserId)
+    : getReadStateFile(root, clientId);
 }
 
 async function ensureDir(dir: string) {
-  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  await fs.chmod(dir, 0o700);
 }
 
-function enqueueWrite(targetFile: string, fn: () => Promise<void>) {
+function enqueueWrite<T>(targetFile: string, fn: () => Promise<T>) {
   const prev = writeQueues.get(targetFile) ?? Promise.resolve();
   const next = prev.catch(() => undefined).then(fn);
   writeQueues.set(targetFile, next);
@@ -67,7 +112,7 @@ function enqueueWrite(targetFile: string, fn: () => Promise<void>) {
 async function writeAtomic(targetFile: string, payload: string) {
   await ensureDir(path.dirname(targetFile));
   const tmp = `${targetFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-  await fs.writeFile(tmp, payload, "utf-8");
+  await fs.writeFile(tmp, payload, { encoding: "utf-8", mode: 0o600 });
   await fs.rename(tmp, targetFile);
 }
 
@@ -117,12 +162,14 @@ export async function getInboxReadStateForConversations(params: {
 }
 
 async function readInboxReadStateScope(clientId: string, scope: ConversationReadScope) {
-  const targetFile = getReadStateFileForScope(clientId, scope);
+  const root = await authenticateReadStateRoot();
+  const targetFile = getReadStateFileForScope(root, clientId, scope);
   try {
     const raw = await fs.readFile(targetFile, "utf-8");
     return normalizeReadState(JSON.parse(raw));
-  } catch {
-    return EMPTY_READ_STATE;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return EMPTY_READ_STATE;
+    throw error;
   }
 }
 
@@ -233,9 +280,54 @@ function projectReadStateForConversations(
   return next;
 }
 
-async function writeInboxReadState(clientId: string, _userId: string, state: InboxReadState, scope: ConversationReadScope) {
-  const targetFile = getReadStateFileForScope(clientId, scope);
-  return enqueueWrite(targetFile, () => writeAtomic(targetFile, JSON.stringify(state, null, 2)));
+async function mutateInboxReadState(
+  clientId: string,
+  scope: ConversationReadScope,
+  mutate: (current: InboxReadState) => InboxReadState
+) {
+  const root = await authenticateReadStateRoot();
+  const targetFile = getReadStateFileForScope(root, clientId, scope);
+  return enqueueWrite(targetFile, () => withInboxReadStateWriteLock(targetFile, async () => {
+    let current = EMPTY_READ_STATE;
+    try { current = normalizeReadState(JSON.parse(await fs.readFile(targetFile, "utf8"))); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    const next = mutate(current);
+    await writeAtomic(targetFile, JSON.stringify(next, null, 2));
+    return next;
+  }));
+}
+
+export type InboxReadStateReconciliation =
+  | { ok: true; state: InboxReadState }
+  | { ok: false; code: "ambiguous_manual_unread"; conversationKey: string };
+
+/** Merge preserved sources without allowing an older read marker to overwrite a newer one. */
+export function reconcileInboxReadStateSources(sources: InboxReadState[]): InboxReadStateReconciliation {
+  const keys = new Set<string>();
+  for (const source of sources) {
+    Object.keys(source.lastReadAtByConversationKey).forEach((key) => keys.add(key));
+    Object.keys(source.manuallyUnreadByConversationKey).forEach((key) => keys.add(key));
+  }
+  const state: InboxReadState = { lastReadAtByConversationKey: {}, manuallyUnreadByConversationKey: {} };
+  for (const key of Array.from(keys).sort()) {
+    const candidates = sources.map((source) => ({
+      readAt: source.lastReadAtByConversationKey[key],
+      timestamp: Date.parse(source.lastReadAtByConversationKey[key] ?? ""),
+      unread: source.manuallyUnreadByConversationKey[key] === true,
+    }));
+    const valid = candidates.filter((item) => Number.isFinite(item.timestamp));
+    const latestTimestamp = valid.length ? Math.max(...valid.map((item) => item.timestamp)) : null;
+    const latest = latestTimestamp === null ? null : valid.find((item) => item.timestamp === latestTimestamp) ?? null;
+    if (latest?.readAt) state.lastReadAtByConversationKey[key] = latest.readAt;
+    const unread = candidates.filter((item) => item.unread);
+    if (unread.some((item) => !Number.isFinite(item.timestamp)) && latestTimestamp !== null) {
+      return { ok: false, code: "ambiguous_manual_unread", conversationKey: key };
+    }
+    if (unread.some((item) => latestTimestamp === null || item.timestamp >= latestTimestamp)) {
+      state.manuallyUnreadByConversationKey[key] = true;
+    }
+  }
+  return { ok: true, state };
 }
 
 export async function markInboxConversationRead(params: {
@@ -247,21 +339,12 @@ export async function markInboxConversationRead(params: {
   scope?: ConversationReadScope;
 }) {
   const scope = params.scope ?? { type: "shared" };
-  const current = await readInboxReadStateScope(params.clientId, scope);
   const conversationKeys = normalizeConversationKeys([params.conversationKey, ...(params.conversationKeys ?? [])]);
-  const nextUnread = { ...current.manuallyUnreadByConversationKey };
-  for (const key of conversationKeys) {
-    delete nextUnread[key];
-  }
-  const nextState: InboxReadState = {
-    lastReadAtByConversationKey: {
-      ...current.lastReadAtByConversationKey,
-      ...Object.fromEntries(conversationKeys.map((key) => [key, params.activityAt])),
-    },
-    manuallyUnreadByConversationKey: nextUnread,
-  };
-  await writeInboxReadState(params.clientId, params.userId, nextState, scope);
-  return nextState;
+  return mutateInboxReadState(params.clientId, scope, (current) => {
+    const nextUnread = { ...current.manuallyUnreadByConversationKey };
+    for (const key of conversationKeys) delete nextUnread[key];
+    return { lastReadAtByConversationKey: { ...current.lastReadAtByConversationKey, ...Object.fromEntries(conversationKeys.map((key) => [key, params.activityAt])) }, manuallyUnreadByConversationKey: nextUnread };
+  });
 }
 
 export async function markInboxConversationUnread(params: {
@@ -272,17 +355,8 @@ export async function markInboxConversationUnread(params: {
   scope?: ConversationReadScope;
 }) {
   const scope = params.scope ?? { type: "shared" };
-  const current = await readInboxReadStateScope(params.clientId, scope);
   const conversationKeys = normalizeConversationKeys([params.conversationKey, ...(params.conversationKeys ?? [])]);
-  const nextState: InboxReadState = {
-    lastReadAtByConversationKey: current.lastReadAtByConversationKey,
-    manuallyUnreadByConversationKey: {
-      ...current.manuallyUnreadByConversationKey,
-      ...Object.fromEntries(conversationKeys.map((key) => [key, true])),
-    },
-  };
-  await writeInboxReadState(params.clientId, params.userId, nextState, scope);
-  return nextState;
+  return mutateInboxReadState(params.clientId, scope, (current) => ({ lastReadAtByConversationKey: current.lastReadAtByConversationKey, manuallyUnreadByConversationKey: { ...current.manuallyUnreadByConversationKey, ...Object.fromEntries(conversationKeys.map((key) => [key, true])) } }));
 }
 
 export async function markInboxConversationUnreadFromActivity(params: {
@@ -296,17 +370,5 @@ export async function markInboxConversationUnreadFromActivity(params: {
     new Set(params.conversationKeys.map((key) => key.trim()).filter(Boolean))
   );
   const scope = params.scope ?? { type: "shared" };
-  const current = await readInboxReadStateScope(params.clientId, scope);
-  const nextState: InboxReadState = {
-    lastReadAtByConversationKey: {
-      ...current.lastReadAtByConversationKey,
-      ...Object.fromEntries(conversationKeys.map((key) => [key, params.activityAt])),
-    },
-    manuallyUnreadByConversationKey: {
-      ...current.manuallyUnreadByConversationKey,
-      ...Object.fromEntries(conversationKeys.map((key) => [key, true])),
-    },
-  };
-  await writeInboxReadState(params.clientId, params.userId, nextState, scope);
-  return nextState;
+  return mutateInboxReadState(params.clientId, scope, (current) => ({ lastReadAtByConversationKey: { ...current.lastReadAtByConversationKey, ...Object.fromEntries(conversationKeys.map((key) => [key, params.activityAt])) }, manuallyUnreadByConversationKey: { ...current.manuallyUnreadByConversationKey, ...Object.fromEntries(conversationKeys.map((key) => [key, true])) } }));
 }

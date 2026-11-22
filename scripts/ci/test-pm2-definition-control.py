@@ -234,9 +234,9 @@ class DefinitionControlTests(unittest.TestCase):
         entries = fixture["entries"]
         self.assertEqual(fixture["schemaVersion"], 1)
         self.assertEqual(fixture["component"], "api")
-        self.assertEqual(len(entries), 66)
+        self.assertEqual(len(entries), 67)
         self.assertEqual([entry["key"] for entry in entries], sorted(entry["key"] for entry in entries))
-        self.assertEqual(len({entry["key"] for entry in entries}), 66)
+        self.assertEqual(len({entry["key"] for entry in entries}), 67)
         api_allowlist = CONTROL.load_repository_allowlist()["api"]
         for entry in entries:
             self.assertEqual(

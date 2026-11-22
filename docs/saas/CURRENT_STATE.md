@@ -1,8 +1,8 @@
 # Estado canônico do Converta
 
-## Prioridades arquitetural e funcional antes de retomar P1 backup — 21/11/2026
+## Registro histórico de prioridades arquitetural e funcional — 21/11/2026
 
-**OWNER PRIORITY / LOCAL VALIDATED / NOT MERGED / NOT DEPLOYED / OWNER VALIDATION PENDING / NO PRODUCTION MUTATION.** Duas frentes independentes permanecem em revisão: (1) frente A #436, arquitetural/metodológica, corrige localmente `READ_STATE_RELEASE_LOCAL_STORAGE`, mas o gate de lifecycle está explicitamente `IMPLEMENTED_NOT_ENFORCED` enquanto executores reais não o invocarem; (2) frente B #437, funcional de produto, corrige localmente `HUMAN_ASSIGNMENT_MISSING_DEPARTMENT_QUEUE`. `LOCAL VALIDATED`, `MERGED`, `DEPLOYED` e `OWNER VALIDATED` são níveis distintos; somente o primeiro foi atingido. A conversa 3209 não foi modificada. A P1 de backup permanece suspensa; **não** declarar implicitamente cron PASS nem executar backup manual.
+**CHECKPOINT HISTÓRICO PR #435, ANTERIOR AO ENFORCEMENT V2; NÃO REINTERPRETAR COMO ESTADO ATUAL.** Duas frentes independentes permanecem em revisão: (1) frente A #436, arquitetural/metodológica, corrige localmente `READ_STATE_RELEASE_LOCAL_STORAGE`, cujo gate ainda estava `IMPLEMENTED_NOT_ENFORCED` nessa fotografia anterior ao PR #436 V2; (2) frente B #437, funcional de produto, corrige localmente `HUMAN_ASSIGNMENT_MISSING_DEPARTMENT_QUEUE`. `LOCAL VALIDATED`, `MERGED`, `DEPLOYED` e `OWNER VALIDATED` são níveis distintos; esse checkpoint comprovava somente o primeiro. A conversa 3209 não foi modificada. A P1 de backup permanece suspensa; **não** declarar implicitamente cron PASS nem executar backup manual.
 
 **1 — Estado de leitura entre releases.** `apps/whatsapp-agent/src/inbox/readStateStore.ts` resolve `.data/app-read-state` a partir de `process.cwd()`. A 41D e a CB3721D4 usam CWDs físicos diferentes; os arquivos da 41D estão preservados, mas ausentes da projeção da CB. Correção a qualificar: raiz persistente externa a releases, tenant-scoped, permissões/backup explicitamente autenticados, migração/reconciliação uma única vez de `shared` e `assigned`, aliases, maior `lastReadAt` válido e `manuallyUnread` com política determinística de conflitos, travas, CAS, receipts, rollback antes de commit e verificações pós-restart e pós-troca de release. Não copiar `.data` integral nem sobrescrever o estado mais recente da CB. Sem criar estado fictício de leitura.
 
@@ -84,6 +84,16 @@ as projeções por release. O caso 7784 e 20 chaves/aliases não projetados fora
 autenticados; os arquivos 41D continuam preservados. A correção futura deve
 externalizar o read-state e reconciliar tenant, aliases, escopos, timestamps e
 `manualUnread`, sem cópia oportunista nesta release.
+
+Correção local preparada, `CANONICALLY_ENFORCED / NOT_DEPLOYED`: raiz externa obrigatória por
+`INBOX_READ_STATE_ROOT`, reconciliador tenant-scoped com journal/receipt e gate
+versionado de qualification a retirement, invocado pelos consumidores canônicos
+quando a geração declara a superfície durável. A fronteira de admissão nega V1/V2
+para materialização nova (`request:legacy_schema_new_generation`), aceitando-os
+somente como reopen de report histórico 41D/CB3721D4 selado; API nova exige V3/V2 e frontend-only
+continua sem gate indevido. Nenhum arquivo histórico foi migrado;
+a dívida só encerra após provisionamento, reconciliação autorizada, deploy e
+aceite. Ver [contrato especializado](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md).
 
 ### Privacidade por titular encerrada — 34/34 VERIFIED
 
