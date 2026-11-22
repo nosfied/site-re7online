@@ -223,6 +223,39 @@ test("claim rolls runtime, SQL projection, assignment and events back together",
  assert.equal((await prisma.conversation.findUniqueOrThrow({where:{id:f.conversation.id}})).departmentId,null);
 });
 
+test("claim denies atomically when actor membership is revoked after authorization",async()=>{
+ const f=await bot();const {setPrismaForTesting}=await import("../db.js");
+ await syncUserDepartmentMemberships(prisma,{clientId:client.id,userId:supervisor.id,departmentIds:[department.id],primaryDepartmentId:department.id});
+ let reads=0,entered!:()=>void,release!:()=>void;const reached=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r);
+ const delayed=prisma.$extends({query:{userDepartmentMembership:{async findMany({args,query}){reads++;const result=await query(args);if(reads===2){entered();await gate;}return result;}}}});
+ setPrismaForTesting(delayed as any);
+ const pending=request("POST",f.route+"/claim",supervisor,{});
+ await reached;
+ await syncUserDepartmentMemberships(prisma,{clientId:client.id,userId:supervisor.id,departmentIds:[],primaryDepartmentId:null});
+ release();const result=await pending;setPrismaForTesting(prisma);
+ assert.equal(result.status,409,JSON.stringify(result.body));
+ const state=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ assert.equal(state.version,f.state.version);assert.equal(state.assignedUserId,null);assert.equal(state.mode,"BOT");
+ assert.equal(await prisma.conversationAssignment.count({where:{conversationId:f.state.id}}),0);
+ await syncUserDepartmentMemberships(prisma,{clientId:client.id,userId:supervisor.id,departmentIds:[department.id],primaryDepartmentId:department.id});
+});
+
+test("claim denies atomically when the operational queue changes before commit",async()=>{
+ const f=await bot();const {setPrismaForTesting}=await import("../db.js");
+ const replacement=await prisma.queue.create({data:{clientId:client.id,departmentId:department.id,name:"Replacement queue"}});
+ let reads=0,entered!:()=>void,release!:()=>void;const reached=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r);
+ const delayed=prisma.$extends({query:{userDepartmentMembership:{async findMany({args,query}){reads++;const result=await query(args);if(reads===2){entered();await gate;}return result;}}}});
+ setPrismaForTesting(delayed as any);
+ const pending=request("POST",f.route+"/claim",supervisor,{});
+ await reached;await prisma.department.update({where:{id:department.id},data:{operationalQueueId:replacement.id}});
+ release();const result=await pending;setPrismaForTesting(prisma);
+ assert.equal(result.status,409,JSON.stringify(result.body));
+ const state=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ assert.equal(state.version,f.state.version);assert.equal(state.assignedUserId,null);assert.equal(state.mode,"BOT");
+ assert.equal(await prisma.conversationAssignment.count({where:{conversationId:f.state.id}}),0);
+ await prisma.department.update({where:{id:department.id},data:{operationalQueueId:queue.id}});await prisma.queue.delete({where:{id:replacement.id}});
+});
+
 test("automation local media enforces history cutoff, role and revocation",async()=>{
  const f=await bot("web_session"),messageId=f.state.id+"-public-media";
  const content=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ5kAAAAASUVORK5CYII=","base64");

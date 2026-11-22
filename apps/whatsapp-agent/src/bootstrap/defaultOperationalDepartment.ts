@@ -6,6 +6,7 @@ import {
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 
 export const DEFAULT_OPERATIONAL_DEPARTMENT_NAME = "Atendimento Geral";
+type PrismaLike = PrismaClient | Prisma.TransactionClient;
 const LEGACY_OPERATIONAL_DEPARTMENT_NAMES = new Set(["atendimento"]);
 const LEGACY_OPERATIONAL_DEPARTMENT_SLUGS = new Set(["atendimento"]);
 const LEGACY_OPERATIONAL_DEPARTMENT_NAME_PREFIX = "departamento legado";
@@ -26,7 +27,7 @@ export function isLegacyOperationalDepartment(department: {
 }
 
 export async function findDefaultOperationalDepartment(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   clientId: string
 ) {
   if (!clientId) return null;

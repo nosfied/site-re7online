@@ -33,7 +33,7 @@ export async function resolveHumanAssignmentDestination(
   const explicitQueueId = normalizeId(params.queueId);
   const defaultDepartment = explicitDepartmentId
     ? null
-    : await findDefaultOperationalDepartment(prisma as PrismaClient, params.clientId);
+    : await findDefaultOperationalDepartment(prisma, params.clientId);
   const departmentId = explicitDepartmentId ?? defaultDepartment?.id ?? null;
   if (!departmentId) throw new OperationalQueueUnavailableError();
 

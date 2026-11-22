@@ -13974,6 +13974,31 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         return;
       }
       const committedRevision = await prisma.$transaction(async (transaction) => {
+        const txDestination = await resolveHumanAssignmentDestination(transaction, {
+          clientId: client.id,
+          departmentId: operationalConversation.departmentId ?? null,
+          queueId: operationalConversation.queueId ?? null,
+        });
+        if (txDestination.departmentId !== destination.departmentId || txDestination.queueId !== destination.queueId) {
+          throw new Error("human_assignment_authority_changed");
+        }
+        await revalidateHumanAssignmentActor(transaction, {
+          clientId: client.id,
+          userId: clientAuth.userId,
+          role: clientAuth.role,
+          conversationDepartmentId: txDestination.departmentId,
+          conversationAssignedUserId: operationalConversation.assignedUserId ?? null,
+        });
+        const txEligibility = await assertQueueAssignmentUserEligible({
+          prisma: transaction,
+          clientId: client.id,
+          userId: targetUserId,
+          departmentId: txDestination.departmentId,
+          requireDepartment: true,
+        });
+        if (!txEligibility.ok || txEligibility.user.id !== eligibility.user.id) {
+          throw new Error("human_assignment_authority_changed");
+        }
         const revision = await updateRuntimeIfUnchanged({
           prisma: transaction, clientId: client.id, waId: nextState.waId,
           expected: assignmentRuntimeToken,
@@ -13998,7 +14023,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         await transaction.event.create({ data: { clientId: client.id, conversationId: projection.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, requestId: `${requestId}:conversation.assigned`, eventName: "conversation.assigned", payloadJson: { action: "conversation.assigned", userId: clientAuth.userId, clientId: client.id, clientKey: client.clientKey, conversationId: nextState.conversationKey ?? nextState.waId, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, timestamp: assignedAt, fromUserId: conversation.assignedUserId ?? null, toUserId: eligibility.user.id, assignedAt, departmentId: destination.departmentId, queueId: destination.queueId, status: nextState.status } } });
         return revision;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((error: Error) => {
-        if (error.message === "human_assignment_conversation_changed") return null;
+        if (error.message === "human_assignment_conversation_changed" || error.message === "human_assignment_authority_changed") return null;
         throw error;
       });
       if (!committedRevision) {
@@ -14661,6 +14686,31 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       try { transferToken = requireHumanAssignmentRuntimeToken(conversation.runtimeWriteToken); }
       catch { json(res, 409, httpError("conversation_changed", "A conversa mudou durante a transferencia.")); return; }
       const transferRevision = await prisma.$transaction(async (transaction) => {
+        const txDestination = await resolveHumanAssignmentDestination(transaction, {
+          clientId: client.id,
+          departmentId: currentDepartmentId,
+          queueId,
+        });
+        if (txDestination.departmentId !== currentDepartmentId || txDestination.queueId !== queueId) {
+          throw new Error("human_assignment_authority_changed");
+        }
+        await revalidateHumanAssignmentActor(transaction, {
+          clientId: client.id,
+          userId: clientAuth.userId,
+          role: clientAuth.role,
+          conversationDepartmentId: currentDepartmentId,
+          conversationAssignedUserId: conversation.assignedUserId ?? null,
+        });
+        const txEligibility = await assertQueueAssignmentUserEligible({
+          prisma: transaction,
+          clientId: client.id,
+          userId: toUserId,
+          departmentId: currentDepartmentId,
+          requireDepartment: true,
+        });
+        if (!txEligibility.ok || txEligibility.user.id !== eligibility.user.id) {
+          throw new Error("human_assignment_authority_changed");
+        }
         const revision = await updateRuntimeIfUnchanged({ prisma: transaction, clientId: client.id, waId: nextState.waId, expected: transferToken, data: { mode: "HUMAN", handoffStatus: "ACTIVE", handoffActivatedAt: new Date(nextState.handoff.activatedAt ?? assignedAt), assignedUserId: eligibility.user.id, assignedTo: `user:${eligibility.user.id}`, assignedAt: new Date(assignedAt), departmentId: currentDepartmentId, queueId, status: ConversationOperationalStatus.IN_PROGRESS, closedAt: null } });
         if (!revision) throw new Error("human_assignment_conversation_changed");
         const projection = await transaction.conversation.upsert({ where: { clientId_waId: { clientId: client.id, waId: nextState.waId } }, update: { departmentId: currentDepartmentId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical }, create: { clientId: client.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, departmentId: currentDepartmentId }, select: { id: true } });
@@ -14668,7 +14718,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         await transaction.conversationAssignment.create({ data: { conversationId: runtimeRow.id, fromUserId: conversation.assignedUserId ?? null, toUserId: eligibility.user.id, assignedAt: new Date(assignedAt) } });
         await transaction.event.create({ data: { clientId: client.id, conversationId: projection.id, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, requestId: `${requestId}:conversation.transferred`, eventName: "conversation.transferred", payloadJson: { action: "conversation.transferred", userId: clientAuth.userId, clientId: client.id, clientKey: client.clientKey, conversationId: nextState.conversationKey ?? nextState.waId, waId: nextState.waId, waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical, timestamp: assignedAt, fromUserId: conversation.assignedUserId ?? null, toUserId: eligibility.user.id, assignedAt, departmentId: currentDepartmentId, queueId, status: nextState.status } } });
         return revision;
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((error: Error) => { if (error.message === "human_assignment_conversation_changed") return null; throw error; });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((error: Error) => { if (error.message === "human_assignment_conversation_changed" || error.message === "human_assignment_authority_changed") return null; throw error; });
       if (!transferRevision) { json(res, 409, httpError("conversation_changed", "A conversa mudou durante a transferencia.")); return; }
       nextState.runtimeWriteToken = transferRevision;
       logger.info({
@@ -33835,8 +33885,10 @@ async function loadAppReportAccessScope(
   };
 }
 
+type HumanAssignmentPrisma = ReturnType<typeof getPrisma> | Prisma.TransactionClient;
+
 async function loadAppDepartmentAccess(
-  prisma: ReturnType<typeof getPrisma>,
+  prisma: HumanAssignmentPrisma,
   params: {
     clientId: string;
     userId: string;
@@ -33872,6 +33924,44 @@ async function loadAppDepartmentAccess(
     departmentId: primaryMembership?.departmentId ?? null,
     departmentIds: activeDepartmentIds,
   };
+}
+
+async function revalidateHumanAssignmentActor(
+  prisma: HumanAssignmentPrisma,
+  params: {
+    clientId: string;
+    userId: string;
+    role: string;
+    conversationDepartmentId: string;
+    conversationAssignedUserId?: string | null;
+  }
+) {
+  const [client, actor] = await Promise.all([
+    prisma.client.findFirst({
+      where: { id: params.clientId },
+      select: { id: true },
+    }),
+    prisma.user.findFirst({
+      where: { id: params.userId, clientId: params.clientId, isActive: true, role: params.role },
+      select: { id: true },
+    }),
+  ]);
+  if (!client || !actor) throw new Error("human_assignment_authority_changed");
+  const access = await loadAppDepartmentAccess(prisma, {
+    clientId: params.clientId,
+    userId: params.userId,
+    role: params.role,
+  });
+  if (!hasConversationDepartmentAccess({
+    role: params.role,
+    currentUserId: params.userId,
+    userDepartmentId: access.departmentId,
+    userDepartmentIds: access.departmentIds,
+    conversationDepartmentId: params.conversationDepartmentId,
+    conversationAssignedUserId: params.conversationAssignedUserId ?? null,
+  })) {
+    throw new Error("human_assignment_authority_changed");
+  }
 }
 
 function stripCrmHistoryFromContactsPayload<T extends {
