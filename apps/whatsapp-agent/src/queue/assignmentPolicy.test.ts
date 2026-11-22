@@ -424,7 +424,7 @@ test("no eligible agent leaves conversation unassigned and records sanitized eve
   assert.equal(JSON.stringify(payload).includes(runtime.waId), false);
 });
 
-test("department scoped round robin uses active memberships and resolves the authenticated default without inventing a destination", async () => {
+test("department scoped round robin uses active memberships and preserves the closed department boundary", async () => {
   const client = await createClient("membership-rr");
   const secondDepartment = await prisma.department.create({
     data: {
@@ -534,12 +534,25 @@ test("department scoped round robin uses active memberships and resolves the aut
     requestId: "member-missing",
     source: "test",
   });
-  assert.equal(missing.applied, true);
+  assert.equal(missing.applied, false);
+  assert.equal(missing.reason, "no_eligible_agent");
   const missingReloaded = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { id: missingDepartmentRuntime.runtime.id },
   });
-  assert.equal(missingReloaded.departmentId, client.departmentId);
-  assert.equal(missingReloaded.queueId, client.queueId);
+  assert.equal(missingReloaded.departmentId, null);
+  assert.equal(missingReloaded.queueId, null);
+  assert.equal(missingReloaded.assignedUserId, null);
+});
+
+test("unexpected destination infrastructure failures propagate instead of becoming no-eligible", async () => {
+  const client = await createClient("destination-infrastructure-failure");
+  await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "destination-infrastructure-failure" });
+  await setPolicy(client.id, { enabled: true, mode: "round_robin", scope: "tenant", presenceMode: "IGNORE" });
+  const target = await createRuntime({ clientId: client.id, departmentId: client.departmentId, queueId: client.queueId, suffix: "destination-infrastructure-failure" });
+  const failing = prisma.$extends({ query: { department: { async findFirst() { throw new Error("synthetic_database_failure"); } } } });
+  await assert.rejects(applyBalancedQueueAssignment({ prisma: failing as any, clientId: client.id, conversationId: target.conversation.id, runtimeStateId: target.runtime.id, waId: target.runtime.waId, waIdCanonical: target.runtime.waIdCanonical, departmentId: client.departmentId, queueId: client.queueId, status: target.runtime.status, assignedUserId: null, requestId: "destination-infrastructure-failure", source: "test" }), /synthetic_database_failure/);
+  const reloaded = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: target.runtime.id } });
+  assert.equal(reloaded.assignedUserId, null);assert.equal(reloaded.status, "WAITING");
 });
 
 test("tenant scoped automatic assignment denies atomically when no operational destination exists", async () => {

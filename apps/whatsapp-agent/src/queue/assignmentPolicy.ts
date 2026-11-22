@@ -7,6 +7,7 @@ import {
 } from "../users/departmentMemberships.js";
 import { getPresenceEligibleUserIds, type AssignmentPresenceMode } from "./agentAvailability.js";
 import { resolveHumanAssignmentDestination } from "./humanAssignmentDestination.js";
+import { OperationalQueueUnavailableError } from "../departments/operationalQueue.js";
 
 export type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
 export type QueueAssignmentScope = "tenant" | "department";
@@ -637,6 +638,17 @@ async function applyBalancedQueueAssignmentLocked(params: {
     const { policy, config } = latestPolicy;
     const assignmentMode = policy.mode === "round_robin" || policy.mode === "least_active" ? policy.mode : null;
     if (!assignmentMode) return { applied: false, reason: "manual" };
+    if (policy.scope === "department" && !requestedDepartmentId) {
+      await recordQueueAssignmentEvent({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        conversationId: params.conversationId,
+        requestId: `${params.requestId ?? "queue-assignment"}:no-department:${params.runtimeStateId}`,
+        eventName: "queue.assignment.no_eligible_agent",
+        payload: { mode: assignmentMode, scope: policy.scope, departmentId: null, eligibleCount: 0, reason: "department_required", source: params.source },
+      });
+      return { applied: false, reason: "no_eligible_agent" };
+    }
     let destination;
     try {
       destination = await resolveHumanAssignmentDestination(params.prisma, {
@@ -644,7 +656,8 @@ async function applyBalancedQueueAssignmentLocked(params: {
         departmentId: requestedDepartmentId,
         queueId: requestedQueueId,
       });
-    } catch {
+    } catch (error) {
+      if (!(error instanceof OperationalQueueUnavailableError)) throw error;
       await recordQueueAssignmentEvent({
         prisma: params.prisma,
         clientId: params.clientId,
