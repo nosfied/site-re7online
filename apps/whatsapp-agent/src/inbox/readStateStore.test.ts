@@ -9,6 +9,8 @@ import {
   markInboxConversationRead,
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
+  reconcileInboxReadStateSources,
+  resolveInboxReadStateRoot,
   resolveConversationReadScope,
 } from "./readStateStore.js";
 
@@ -263,4 +265,58 @@ test("read-state mutation noop detects redundant read and preserves useful updat
     }),
     false
   );
+});
+
+test("production requires an absolute durable root outside the release cwd", () => {
+  assert.throws(
+    () => resolveInboxReadStateRoot({ cwd: "/opt/re7online/releases/candidate/api-runtime", nodeEnv: "production" }),
+    /inbox_read_state_root_required/
+  );
+  assert.throws(
+    () => resolveInboxReadStateRoot({ cwd: "/opt/re7online/releases/candidate/api-runtime", nodeEnv: "production",
+      configuredRoot: ".data/app-read-state" }),
+    /inbox_read_state_root_absolute/
+  );
+  assert.throws(
+    () => resolveInboxReadStateRoot({ cwd: "/opt/re7online/releases/candidate/api-runtime", nodeEnv: "production",
+      configuredRoot: "/opt/re7online/releases/candidate/api-runtime/.data/app-read-state" }),
+    /inbox_read_state_root_release_local/
+  );
+  assert.equal(resolveInboxReadStateRoot({ cwd: "/opt/re7online/releases/candidate/api-runtime", nodeEnv: "production",
+    configuredRoot: "/opt/re7online/persistent/inbox-read-state" }), "/opt/re7online/persistent/inbox-read-state");
+});
+
+test("durable root remains stable across candidate, rollback and restart cwd changes", () => {
+  const configuredRoot = "/opt/re7online/persistent/inbox-read-state";
+  for (const cwd of [
+    "/opt/re7online/releases/current/api-runtime",
+    "/opt/re7online/releases/candidate/api-runtime",
+    "/opt/re7online/releases/rollback/api-runtime",
+  ]) {
+    assert.equal(resolveInboxReadStateRoot({ cwd, nodeEnv: "production", configuredRoot }), configuredRoot);
+  }
+});
+
+test("reconciliation keeps the newest read timestamp and effective manual unread", () => {
+  const result = reconcileInboxReadStateSources([
+    { lastReadAtByConversationKey: { alias: "2026-11-18T10:00:00.000Z" }, manuallyUnreadByConversationKey: {} },
+    { lastReadAtByConversationKey: { alias: "2026-11-20T10:00:00.000Z" }, manuallyUnreadByConversationKey: { alias: true } },
+  ]);
+  assert.deepEqual(result, { ok: true, state: {
+    lastReadAtByConversationKey: { alias: "2026-11-20T10:00:00.000Z" },
+    manuallyUnreadByConversationKey: { alias: true },
+  } });
+});
+
+test("reconciliation does not resurrect older manual unread and denies ambiguous ordering", () => {
+  assert.deepEqual(reconcileInboxReadStateSources([
+    { lastReadAtByConversationKey: { alias: "2026-11-18T10:00:00.000Z" }, manuallyUnreadByConversationKey: { alias: true } },
+    { lastReadAtByConversationKey: { alias: "2026-11-20T10:00:00.000Z" }, manuallyUnreadByConversationKey: {} },
+  ]), { ok: true, state: {
+    lastReadAtByConversationKey: { alias: "2026-11-20T10:00:00.000Z" }, manuallyUnreadByConversationKey: {},
+  } });
+  assert.deepEqual(reconcileInboxReadStateSources([
+    { lastReadAtByConversationKey: {}, manuallyUnreadByConversationKey: { alias: true } },
+    { lastReadAtByConversationKey: { alias: "2026-11-20T10:00:00.000Z" }, manuallyUnreadByConversationKey: {} },
+  ]), { ok: false, code: "ambiguous_manual_unread", conversationKey: "alias" });
 });

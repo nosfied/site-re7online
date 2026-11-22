@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -343,7 +344,7 @@ def derive(request: dict[str, Any]) -> dict[str, Any]:
     required_binding = {"release", "target", "controlPlane", "components",
                         "runtimeManifest", "transactionRoot", "runtimeManifestSha256",
                         "generationRetirement"}
-    optional_binding = {"retirementSentinelClosure", "controlPlaneSuccession"}
+    optional_binding = {"retirementSentinelClosure", "controlPlaneSuccession", "durablePersistence"}
     if (not isinstance(binding, dict) or not required_binding.issubset(binding) or
             not set(binding).issubset(required_binding | optional_binding) or
             binding.get("components") not in PROFILES or
@@ -367,6 +368,16 @@ def derive(request: dict[str, Any]) -> dict[str, Any]:
             any(component not in runtime["rollbackReleases"]
                 for component in binding["components"])):
         raise Denied("runtime_manifest_binding")
+    persistence = binding.get("durablePersistence")
+    if persistence is not None:
+        if runtime.get("durablePersistence") != persistence:
+            raise Denied("durable_persistence_binding")
+        helper_path = Path(__file__).resolve().with_name("durable_persistence_enforcement.py")
+        spec = importlib.util.spec_from_file_location("durable_persistence_enforcement", helper_path)
+        if spec is None or spec.loader is None:
+            raise Denied("durable_persistence_helper")
+        helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
+        helper.enforce(persistence, "finalize", lambda predicate: (_ for _ in ()).throw(Denied(predicate)), base=helper_path.parent)
     driver = Path(request["driver"]); wrapper = Path(request["wrapper"])
     bound_regular(driver, request["driverSha256"], modes={0o500, 0o600})
     bound_regular(wrapper, request["wrapperSha256"], modes={0o500, 0o600})

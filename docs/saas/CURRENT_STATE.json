@@ -38,6 +38,7 @@
     "builderLifecycleSha256": "085d266a936190867b2e15849bfe605143c81f124155b44c15c5bbdec34d9501",
     "knownOperationalDebt": "READ_STATE_RELEASE_LOCAL_STORAGE",
     "knownOperationalDebtClassification": "KNOWN_NONBLOCKING_DEBT",
+    "knownOperationalDebtLocalRemediation": "LOCAL_VALIDATED_CANONICALLY_ENFORCED_NOT_DEPLOYED_OWNER_REVIEW_REQUIRED",
     "approvedAnonymizationSubjects": 34,
     "anonymizationExecuted": 34,
     "anonymizationState": "PRIVACY_34_OF_34_ANONYMIZED_VERIFIED",

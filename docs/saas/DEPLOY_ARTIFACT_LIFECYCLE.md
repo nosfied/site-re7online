@@ -1,5 +1,14 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Gate de persistência operacional entre releases — local, não implantado
+
+Novas gerações devem declarar superfícies persistentes afetadas. O gate
+versionado de [persistência durável](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md)
+nega preflight sem raiz externa autenticada e nega retirement enquanto houver
+dependência não reconciliada na release. O read-state é o primeiro caso
+comprovado; outras entradas de `.data` permanecem preservadas e inconclusivas
+até classificação própria. Receipts históricos não são reinterpretados.
+
 ## Fronteira entre retenção de snapshots e retirada de artefatos — 21/11/2026
 
 A proteção `RETAIN_REQUIRED` do snapshot `/opt/re7online/backups/converta-persistent/snapshots/20260812T011558Z` é uma autoridade da **rotina de backup composta**, não uma classe adicional de `generation-retirement.py`. O PR #432 (merge `5ad85d7ad0e47b500260813238503dcd4f932986`) restringe sua exceção ao caminho literal e à verificação privilegiada somente leitura de integridade/identidade. O snapshot tem conteúdo de Training único; **não é `DERIVED_STAGING`, `RELEASE_RUNTIME` nem cópia descartável**.
