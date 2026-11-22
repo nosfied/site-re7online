@@ -22,6 +22,10 @@
 
 ## Estado ativo
 
+- [Persistência durável de runtime entre releases](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md)
+  — contrato local validado para read-state, reconciliação autenticada e gates
+  recorrentes; ainda não implantado nem executado em dados produtivos.
+
 - [Princípios fundamentais de trabalho](WORKING_PRINCIPLES.md) — autoridade superior
   para decisões: multitenancy, não retrabalho, código/estado verdade, auditoria,
   documentação, preservação do que funciona e proteção da produção viva.
