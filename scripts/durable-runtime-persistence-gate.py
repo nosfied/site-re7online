@@ -14,7 +14,10 @@ from typing import Any
 
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 KIND = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V1"
-ENFORCEMENT_STATE = "IMPLEMENTED_NOT_ENFORCED"
+KIND_V2 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V2"
+PHASES = ("qualification", "admission", "preflight", "activation", "acceptance",
+          "finalize", "retirement")
+ENFORCEMENT_STATE = "CANONICALLY_ENFORCED"
 
 
 class Denied(RuntimeError):
@@ -57,12 +60,24 @@ def confined_outside(root: Path, release_roots: list[Path]) -> None:
             deny("persistent_root_release_overlap")
 
 
-def validate(request: dict[str, Any]) -> dict[str, Any]:
-    required = {"schemaVersion", "kind", "phase", "surface", "persistentRoot", "releaseRoots",
-                "reconciliation", "unreconciledReleaseDependencies"}
-    if set(request) != required or request.get("schemaVersion") != 1 or request.get("kind") != KIND:
+def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[str, Any]:
+    common = {"schemaVersion", "kind", "surface", "persistentRoot", "releaseRoots",
+              "reconciliation", "unreconciledReleaseDependencies"}
+    legacy = request.get("schemaVersion") == 1
+    required = common | ({"phase"} if legacy else {"requiredPhases"})
+    if (set(request) != required or
+            (legacy and request.get("kind") != KIND) or
+            (not legacy and (request.get("schemaVersion") != 2 or request.get("kind") != KIND_V2))):
         deny("request_schema")
-    if request.get("phase") not in {"qualification", "preflight", "acceptance", "retirement"}:
+    if legacy:
+        declared_phases = (request.get("phase"),)
+    else:
+        phases = request.get("requiredPhases")
+        if phases != list(PHASES):
+            deny("request_phases")
+        declared_phases = tuple(phases)
+    phase = invoked_phase or declared_phases[0]
+    if phase not in PHASES or phase not in declared_phases:
         deny("request_phase")
     if request.get("surface") != "INBOX_READ_STATE_V1":
         deny("request_surface")
@@ -100,11 +115,11 @@ def validate(request: dict[str, Any]) -> dict[str, Any]:
     dependencies = request.get("unreconciledReleaseDependencies")
     if not isinstance(dependencies, list) or not all(isinstance(item, str) and item for item in dependencies):
         deny("release_dependencies_schema")
-    if request["phase"] == "retirement" and dependencies:
+    if phase == "retirement" and dependencies:
         deny("release_persistent_dependency")
 
     observation = None
-    if request["phase"] in {"preflight", "acceptance", "retirement"}:
+    if phase not in {"qualification"}:
         try:
             info = root.lstat()
             resolved = root.resolve(strict=True)
@@ -123,10 +138,12 @@ def validate(request: dict[str, Any]) -> dict[str, Any]:
                 deny("persistent_root_ancestor")
         observation = {"device": info.st_dev, "inode": info.st_ino, "mode": "0700",
                        "ownerUid": info.st_uid, "groupGid": info.st_gid}
+    enforcement = (ENFORCEMENT_STATE if not legacy and invoked_phase is not None
+                   else "LEGACY_VALIDATED_NOT_ENFORCED")
     return {"schemaVersion": 1, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_REPORT",
-            "result": "PASS", "phase": request["phase"], "surface": request["surface"],
+            "result": "PASS", "phase": phase, "surface": request["surface"],
             "persistentRoot": str(root), "observation": observation,
-            "reconciliation": reconciliation["state"], "enforcementState": ENFORCEMENT_STATE}
+            "reconciliation": reconciliation["state"], "enforcementState": enforcement}
 
 
 def main() -> int:
@@ -134,10 +151,11 @@ def main() -> int:
     parser.add_argument("command", choices=("validate",))
     parser.add_argument("--request", type=Path, required=True)
     parser.add_argument("--request-sha256", required=True)
+    parser.add_argument("--phase", choices=PHASES)
     args = parser.parse_args()
     try:
         request = private_json(args.request, args.request_sha256)
-        print(json.dumps(validate(request), sort_keys=True, separators=(",", ":")))
+        print(json.dumps(validate(request, args.phase), sort_keys=True, separators=(",", ":")))
         return 0
     except (Denied, OSError) as error:
         print(f"PERSISTENCE_GATE_DENY:{error}", file=os.sys.stderr)

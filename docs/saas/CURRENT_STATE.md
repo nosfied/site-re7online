@@ -74,10 +74,10 @@ autenticados; os arquivos 41D continuam preservados. A correção futura deve
 externalizar o read-state e reconciliar tenant, aliases, escopos, timestamps e
 `manualUnread`, sem cópia oportunista nesta release.
 
-Correção local preparada, `IMPLEMENTED_NOT_ENFORCED / NOT_DEPLOYED`: raiz externa obrigatória por
+Correção local preparada, `CANONICALLY_ENFORCED / NOT_DEPLOYED`: raiz externa obrigatória por
 `INBOX_READ_STATE_ROOT`, reconciliador tenant-scoped com journal/receipt e gate
-versionado de qualification a retirement, ainda não invocado obrigatoriamente
-pelos executores reais. Nenhum arquivo histórico foi migrado;
+versionado de qualification a retirement, invocado pelos consumidores canônicos
+quando a geração declara a superfície durável. Nenhum arquivo histórico foi migrado;
 a dívida só encerra após provisionamento, reconciliação autorizada, deploy e
 aceite. Ver [contrato especializado](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md).
 

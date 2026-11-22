@@ -1,6 +1,6 @@
 # Persistência durável de runtime entre releases
 
-**Estado:** `LOCAL_VALIDATED / IMPLEMENTED_NOT_ENFORCED / NOT_DEPLOYED / OWNER_REVIEW_REQUIRED`.
+**Estado:** `LOCAL_VALIDATED / CANONICALLY_ENFORCED / NOT_DEPLOYED / OWNER_REVIEW_REQUIRED`.
 
 Este contrato especializa o modelo de releases imutáveis. Código, pacote e cache
 continuam pertencendo à release; estado operacional necessário à continuidade
@@ -57,9 +57,9 @@ produtiva foi executada por esta entrega.
 ## Gates recorrentes
 
 `scripts/durable-runtime-persistence-gate.py` é o controle versionado isolado para
-qualification, preflight, acceptance e retirement. Nesta revisão ele permanece
-`IMPLEMENTED_NOT_ENFORCED`: os executores reais de admission/deploy/retirement
-ainda não o invocam obrigatoriamente. Um PASS isolado não é autoridade operacional.
+qualification, admission, preflight, activation, acceptance, finalize e retirement.
+O schema 3 da admissão e o schema 4 do runtime manifest vinculam a mesma autoridade
+privada; os consumidores reais invocam o gate antes dos respectivos efeitos.
 
 - **Qualification:** classifica superfície, prova raiz externa e vincula plano de
   reconciliação.
@@ -70,7 +70,7 @@ ainda não o invocam obrigatoriamente. Um PASS isolado não é autoridade operac
   aliases, scopes e isolamento.
 - **Retirement:** nega se `unreconciledReleaseDependencies` não estiver vazio.
 
-O gate não altera receipts históricos de 41D/CB3721D4. Sua integração obrigatória
-nos executores reais segue pendente; até lá não se declara metodologia recorrente
-ENFORCED. Produção continua com a dívida conhecida até autorização de
-provisionamento, reconciliação e deploy.
+O gate não altera receipts históricos de 41D/CB3721D4: schemas 1–3 continuam
+autenticáveis como autoridades históricas, sem receber retroativamente o estado
+`CANONICALLY_ENFORCED`. Produção continua com a dívida conhecida até autorização
+de provisionamento, reconciliação e deploy.

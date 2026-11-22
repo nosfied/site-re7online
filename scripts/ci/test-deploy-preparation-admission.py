@@ -287,6 +287,69 @@ class AdmissionTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(dependency.read_bytes()).hexdigest(),
                              binding["sha256"])
 
+    def test_v3_invokes_qualification_and_admission_and_copies_enforcement(self):
+        value = self.request()
+        value["schemaVersion"] = 3
+        value["components"] = ["api", "frontend"]
+        value["finalRoot"] = str(self.private / "admitted-v3")
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = self.producer_artifacts()
+        value["preparationArtifacts"] = [{
+            "path": str(self.private / "future-v3/archive.tar"), "scope": "api:fixture",
+            "owner": "release-owner", "budgetBytes": 4096, "budgetInodes": 1,
+            "protection": "DERIVED_WITH_AUTHORITY",
+            "authority": {"path": str(self.paths["contract"]),
+                          "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
+            "terminalDisposition": "SANITIZE_AFTER_USE", "equivalenceSha256": "b" * 64,
+            "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                          "predictedBytes": 4096, "predictedInodes": 1},
+        }]
+        persistent = self.base / "durable-read-state"; persistent.mkdir(mode=0o700)
+        authority = self.private / "durable-persistence.private.json"
+        authority_value = {
+            "schemaVersion": 2, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V2",
+            "requiredPhases": ["qualification", "admission", "preflight", "activation",
+                               "acceptance", "finalize", "retirement"],
+            "surface": "INBOX_READ_STATE_V1",
+            "persistentRoot": {"path": str(persistent), "ownerUid": os.geteuid(),
+                               "groupGid": os.getegid(), "mode": "0700"},
+            "releaseRoots": [{"role": "candidate", "path": str(self.base / "candidate")},
+                             {"role": "rollback", "path": str(self.base / "rollback")}],
+            "reconciliation": {"required": False, "state": "NOT_REQUIRED", "receipt": None,
+                               "receiptSha256": None, "operationId": None, "tenantId": None,
+                               "scope": None, "destinationPath": None},
+            "unreconciledReleaseDependencies": [],
+        }
+        authority.write_text(json.dumps(authority_value, sort_keys=True, separators=(",", ":")) + "\n")
+        authority.chmod(0o600)
+        value["durablePersistence"] = {"request": str(authority),
+                                         "requestSha256": hashlib.sha256(authority.read_bytes()).hexdigest()}
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(report["durablePersistenceEnforcement"], "CANONICALLY_ENFORCED")
+        for name in ("durable-runtime-persistence-gate.py", "durable_persistence_enforcement.py"):
+            self.assertTrue((Path(value["finalRoot"]) / name).is_file())
+
+    def test_v3_frontend_only_does_not_require_read_state_authority(self):
+        value = self.request(); value["schemaVersion"] = 3
+        value["components"] = ["frontend"]; value["durablePersistence"] = None
+        value["finalRoot"] = str(self.private / "admitted-v3-frontend")
+        value["preparationReservationRoot"] = str(self.private)
+        value["preparationProducerArtifacts"] = self.producer_artifacts()
+        value["preparationArtifacts"] = [{
+            "path": str(self.private / "future-frontend/archive.tar"), "scope": "frontend:fixture",
+            "owner": "release-owner", "budgetBytes": 4096, "budgetInodes": 1,
+            "protection": "DERIVED_WITH_AUTHORITY",
+            "authority": {"path": str(self.paths["contract"]),
+                          "sha256": hashlib.sha256(self.paths["contract"].read_bytes()).hexdigest()},
+            "terminalDisposition": "SANITIZE_AFTER_USE", "equivalenceSha256": "b" * 64,
+            "operation": {"name": "pack", "kind": "tar", "artifactIndex": 0,
+                          "predictedBytes": 4096, "predictedInodes": 1},
+        }]
+        result, report = self.run_request(value)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("durablePersistenceEnforcement", report)
+
     def test_copied_generation_retirement_reviews_preparation_without_checkout(self):
         value = self.request()
         value["finalRoot"] = str(self.private / "copied-retirement")

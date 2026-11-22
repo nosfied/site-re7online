@@ -77,6 +77,7 @@ REQUEST_KEYS = {
 }
 REQUEST_V2_KEYS = REQUEST_KEYS | {"preparationArtifacts", "preparationReservationRoot",
                                   "preparationProducerArtifacts"}
+REQUEST_V3_KEYS = REQUEST_V2_KEYS | {"components", "durablePersistence"}
 
 
 def canonical(value: Any) -> bytes:
@@ -334,9 +335,10 @@ def validate_request(value: Any) -> tuple[
         list[str], dict[str, tuple[Path, bytes, str]],
         tuple[Path, bytes, str] | None, dict[str, tuple[Path, bytes, str]]]:
     errors: list[str] = []
-    if not isinstance(value, dict) or value.get("schemaVersion") not in {1, 2}:
+    if not isinstance(value, dict) or value.get("schemaVersion") not in {1, 2, 3}:
         return ["request:schema"], {}, None, {}
-    expected_keys = REQUEST_KEYS if value["schemaVersion"] == 1 else REQUEST_V2_KEYS
+    expected_keys = (REQUEST_KEYS if value["schemaVersion"] == 1 else
+                     REQUEST_V2_KEYS if value["schemaVersion"] == 2 else REQUEST_V3_KEYS)
     if set(value) != expected_keys:
         return ["request:schema"], {}, None, {}
     for key in ("generationId", "releaseId", "targetCommit"):
@@ -390,7 +392,7 @@ def validate_request(value: Any) -> tuple[
             errors.append(f"check:{name}:unknown")
     validate_assertions(value.get("assertions"), errors)
     producer: dict[str, tuple[Path, bytes, str]] = {}
-    if value["schemaVersion"] == 2:
+    if value["schemaVersion"] in {2, 3}:
         try:
             preparation_lifecycle.validate_artifacts(value["preparationArtifacts"])
         except (ValueError, KeyError, TypeError) as error:
@@ -399,6 +401,27 @@ def validate_request(value: Any) -> tuple[
         if reservation_root is None or not path_is_physical(reservation_root):
             errors.append("preparationReservationRoot:identity")
         producer = validate_preparation_producer(value.get("preparationProducerArtifacts"), errors)
+    if value["schemaVersion"] == 3:
+        components = value.get("components")
+        if components not in (["frontend"], ["api"], ["api", "frontend"],
+                              ["api", "frontend", "worker"]):
+            errors.append("durablePersistence:components")
+        if components == ["frontend"]:
+            if value.get("durablePersistence") is not None:
+                errors.append("durablePersistence:unnecessary")
+            return sorted(set(errors)), controls, template_info, producer
+        helper_path = Path(__file__).resolve().with_name("durable_persistence_enforcement.py")
+        try:
+            spec = importlib.util.spec_from_file_location("durable_persistence_enforcement", helper_path)
+            if spec is None or spec.loader is None:
+                raise RuntimeError("load")
+            helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
+            helper.enforce(value.get("durablePersistence"), "qualification", deny_contract,
+                           base=helper_path.parent)
+            helper.enforce(value.get("durablePersistence"), "admission", deny_contract,
+                           base=helper_path.parent)
+        except (RuntimeError, OSError) as error:
+            errors.append(f"durablePersistence:{error}")
     return sorted(set(errors)), controls, template_info, producer
 
 
@@ -462,7 +485,7 @@ def expected_materialization(
     operational_raw = canonical(operational)
     payloads[value["operationalStateOutputName"]] = operational_raw
     preparation_contract = None
-    if value["schemaVersion"] == 2:
+    if value["schemaVersion"] in {2, 3}:
         preparation_contract = {
             "schemaVersion": 1,
             "generationId": value["generationId"],
@@ -473,6 +496,9 @@ def expected_materialization(
         payloads["preparation-artifacts.contract.private.json"] = preparation_raw
         for role, relative in PREPARATION_PRODUCER_ROLES.items():
             payloads[f"preparation-producer-root/{relative}"] = producer[role][1]
+    if value["schemaVersion"] == 3 and "api" in value["components"]:
+        for name in ("durable-runtime-persistence-gate.py", "durable_persistence_enforcement.py"):
+            payloads[name] = (Path(__file__).resolve().parent / name).read_bytes()
     report = {
         "schemaVersion": 1,
         "result": "P00_AGGREGATE_ADMISSION_PASS",
@@ -509,6 +535,9 @@ def expected_materialization(
             "path": str(final_root / "preparation-producer-root" / relative),
             "sha256": producer[role][2], "copied": True}
             for role, relative in PREPARATION_PRODUCER_ROLES.items()]
+    if value["schemaVersion"] == 3 and "api" in value["components"]:
+        report["durablePersistence"] = value["durablePersistence"]
+        report["durablePersistenceEnforcement"] = "CANONICALLY_ENFORCED"
     payloads["admission-report.private.json"] = canonical(report)
     return payloads, report
 
