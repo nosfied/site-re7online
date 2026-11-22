@@ -9,6 +9,8 @@
 
 ## Snapshot vigente e política de não retrabalho
 
+- [Reconciliação A+B do merge #438 — estado efetivo e prevenção](../reviews/CONVERTA_AB_EFFECTIVE_TREE_RECONCILIATION_2026-11-22.md) — restauração da Frente A perdida na árvore do #437, preservação integral da Frente B, nova guarda de CI e pendências produtivas, sem autorização de deploy.
+
 - [Prioridades arquitetural e funcional 21/11: persistência durável e atribuição humana com setor/fila](CURRENT_STATE.md#registro-histórico-de-prioridades-arquitetural-e-funcional--21112026) — checkpoint histórico de escopo, anterior ao enforcement V2; consultar o contrato especializado do #436 para o estado de implementação. Conversa 3209 não alterada; P1 backup segue suspensa.
 
 - [P1 backup protegido instalado, validação do cron pendente](CURRENT_STATE.md#p1--backup-composto-protegido-instalado-validação-do-cron-adiada--21112026) — receipt instalado e snapshot histórico `RETAIN_REQUIRED`; retomar somente leitura da primeira execução agendada, sem novo backup nem limpeza. Exceção e P00 estão separados pelos PRs #432/#433.

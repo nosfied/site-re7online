@@ -1,5 +1,16 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## P0 — Frentes A+B efetivamente integradas; implantação bloqueada por gates de persistência
+
+**`MERGED / EFFECTIVE_TREE_VERIFIED / NOT_DEPLOYED`.** Incidente de integração #437 (ancestral #436 presente, arquivos da Frente A ausentes) reconciliado por #438: merge `b6bfbc5b3b7375aa209ab4638558396a95efab0f`, árvore `754582eeb17ed4ff4dcecc4581c2b084eea7a7d3`, CI 4/4 PASS e guarda A+B da árvore efetiva. Não reabrir implementações locais já testadas, nem repetir merges e testes anteriores. [Relatório](reviews/CONVERTA_AB_EFFECTIVE_TREE_RECONCILIATION_2026-11-22.md).
+
+**Próximo gate da Frente A:** read-only/proposta de provisionamento de `/opt/re7online/runtime-data/inbox-read-state`; backup e restore deste novo root; autoridade de 34 anonimizações e fontes 41D/CB; reconciliação por tenant/scope com SHA/CAS/lock/receipts; compatibilidade de rollback histórico 41D; autoridade V2 admission schema 3/runtime schema 4. **Nenhum build/generation até resolver a fronteira de dados e retorno.**
+
+**Frente B:** código transacional e UI integrados, ainda não implantados; matriz Tendência/CRA-PR/Demo pronta para futura aceitação. Reparar conversa 3209 somente por intenção/autorização posterior. Perfil conjunto pretendido API+frontend, worker ED74 preservado; confirmar impacto e cadeia canônica antes do build.
+
+Backup P1 continua suspenso e documentado. Não confundir `MERGED` com `DEPLOYED` ou `OWNER VALIDATED`.
+
+
 ## P0 — atribuição humana exige setor e fila — local validado
 
 Estado: `CONVERTA_HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_LOCAL_VALIDATED /
