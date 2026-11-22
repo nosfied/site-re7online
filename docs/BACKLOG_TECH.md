@@ -1,5 +1,16 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## P0 — atribuição humana exige setor e fila — local validado
+
+Estado: `CONVERTA_HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_LOCAL_VALIDATED /
+OWNER_REVIEW_REQUIRED`. O handler claim/assign agora resolve destino explícito
+ou padrão operacional tenant-scoped, exige membership/capacidade e persiste por
+CAS o conjunto atendente+departamento+fila+status+modo+handoff. Destino inválido
+ou concorrência negam antes de eventos. Sem migration, frontend ou worker.
+Detalhes: [contrato funcional](saas/HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_2026-11-21.md).
+A conversa 3209 continua inalterada e exige autorização autônoma para reparação;
+o caso 3009 permanece histórico encerrado.
+
 ## P1 — Retomada do backup protegido em janela futura
 
 Instalação autenticada, receipt `2b394d97175dfbbeaba2045e570e45f39c2d27190241337303952b0db0626a31`. **Primeiro cron pós-instalação ainda não observado** na última verificação de 21/11/2026 às 20:32 (Fortaleza). Execução diária original: 02:40 UTC. Retomar somente por leitura, após o horário e em janela escolhida pelo Owner, sem execução manual, retry, alteração de cron, remoção do snapshot protegido ou segundo instalador. Resultado terminal de backup só pode ser afirmado com `retention_preserved`, `backup_success` e `backup_terminal`/exit comprovados. Detalhes, hashes e condições em [estado canônico](saas/CURRENT_STATE.md#p1--backup-composto-protegido-instalado-validação-do-cron-adiada--21112026).

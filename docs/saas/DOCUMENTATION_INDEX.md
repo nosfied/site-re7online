@@ -22,6 +22,10 @@
 
 ## Estado ativo
 
+- [Invariante de destino da atribuição humana](HUMAN_ASSIGNMENT_DESTINATION_INVARIANT_2026-11-21.md)
+  — correção funcional local validada para claim/assign; reparação produtiva da
+  conversa 3209 permanece separada e não autorizada.
+
 - [Princípios fundamentais de trabalho](WORKING_PRINCIPLES.md) — autoridade superior
   para decisões: multitenancy, não retrabalho, código/estado verdade, auditoria,
   documentação, preservação do que funciona e proteção da produção viva.

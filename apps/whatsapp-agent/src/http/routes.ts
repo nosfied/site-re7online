@@ -312,6 +312,7 @@ import {
   toPublicQueueAssignmentPolicy,
   type BalancedQueueAssignmentResult,
 } from "../queue/assignmentPolicy.js";
+import { resolveHumanAssignmentDestination } from "../queue/humanAssignmentDestination.js";
 
 const CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES = 3 * 1024 * 1024;
 import {
@@ -13853,6 +13854,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 409, { error: buildWindowClosedError(operationalConversation.window.expiresAt) });
         return;
       }
+      const destination = await resolveHumanAssignmentDestination(prisma, {
+        clientId: client.id,
+        departmentId: operationalConversation.departmentId ?? null,
+        queueId: operationalConversation.queueId ?? null,
+      });
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -13864,7 +13870,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
-          conversationDepartmentId: operationalConversation.departmentId ?? null,
+          conversationDepartmentId: destination.departmentId,
           conversationAssignedUserId: operationalConversation.assignedUserId ?? null,
         })
       ) {
@@ -13874,7 +13880,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           userId: clientAuth.userId,
           clientId: client.id,
           departmentId: departmentAccess.departmentId,
-          conversationDepartmentId: operationalConversation.departmentId ?? null,
+          conversationDepartmentId: destination.departmentId,
           waId: resolvedConversation.resolvedWaIdCanonical,
         });
         json(res, 403, {
@@ -13925,13 +13931,12 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         return;
       }
       const targetUserId = requestedUserId || clientAuth.userId;
-      const currentDepartmentId = operationalConversation.departmentId ?? null;
       const eligibility = await assertQueueAssignmentUserEligible({
         prisma,
         clientId: client.id,
         userId: targetUserId,
-        departmentId: currentDepartmentId,
-        requireDepartment: false,
+        departmentId: destination.departmentId,
+        requireDepartment: true,
       });
       if (!eligibility.ok) {
         json(res, eligibility.status, {
@@ -13940,27 +13945,6 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         });
         return;
       }
-      const currentQueue = currentDepartmentId
-        ? operationalConversation.queueId
-          ? await prisma.queue.findFirst({
-              where: {
-                id: operationalConversation.queueId,
-                clientId: client.id,
-                departmentId: currentDepartmentId,
-              },
-              select: { id: true },
-            })
-          : null
-        : null;
-      const queueId = currentDepartmentId
-        ? currentQueue?.id ??
-          (
-            await resolveOperationalQueueForDepartment(prisma, {
-              clientId: client.id,
-              departmentId: currentDepartmentId,
-            })
-          ).id
-        : null;
       const assignedAt = new Date().toISOString();
       let nextState: ConversationState = {
         ...operationalConversation,
@@ -13973,8 +13957,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         assignedUserId: eligibility.user.id,
         assignedTo: `user:${eligibility.user.id}`,
         assignedAt,
-        departmentId: currentDepartmentId,
-        queueId,
+        departmentId: destination.departmentId,
+        queueId: destination.queueId,
         status: ConversationOperationalStatus.IN_PROGRESS,
         closedAt: null,
       };
@@ -13982,6 +13966,14 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       nextState = claimedCycle.created
         ? clearSatisfactionRuntimeForNewServiceCycle(claimedCycle.state)
         : claimedCycle.state;
+      const revision = await runtimeStorage.upsertConversation(
+        nextState,
+        operationalConversation.runtimeWriteToken
+      );
+      if (operationalConversation.runtimeWriteToken && !revision) {
+        json(res, 409, httpError("conversation_changed", "A conversa mudou durante a atribuicao."));
+        return;
+      }
       if (claimedCycle.created) {
         await recordServiceCycleEvent({
           prisma,
@@ -13994,12 +13986,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           cycle: claimedCycle.cycle,
         });
       }
-      await runtimeStorage.upsertConversation(nextState);
       await persistConversationDepartment(prisma, {
         clientId: client.id,
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        departmentId: currentDepartmentId,
+        departmentId: destination.departmentId,
       });
       await recordConversationAssignment(prisma, {
         clientId: client.id,
@@ -14021,8 +14012,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           fromUserId: conversation.assignedUserId ?? null,
           toUserId: nextState.assignedUserId ?? null,
           assignedAt,
-          departmentId: currentDepartmentId,
-          queueId,
+          departmentId: destination.departmentId,
+          queueId: destination.queueId,
           status: nextState.status,
         },
       });
