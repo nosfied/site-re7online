@@ -24,6 +24,8 @@ jobs:
           fetch-depth: 0
       - name: Validate canonical project state
         run: python3 scripts/ci/verify-current-state.py
+      - name: Guard effective integration of persistent read-state and human assignment
+        run: python3 -B scripts/ci/verify-converta-ab-effective-tree.py
       - name: Validate pinned CSV release surface
         run: python3 scripts/ci/verify-release-manifest.py docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17.json
       - name: Validate CRM CSV UX and phone normalization candidate

@@ -52,6 +52,14 @@ em ensaio integrado representativo antes da primeira mutação, incluindo cache
 Next gerado durante execução. O lifecycle durável integrado é o controlador
 vigente; não criar mecanismo paralelo nem fazer experimentos no runtime ativo.
 
+**Persistência operacional entre releases:** toda superfície mutável alcançada
+por uma release deve ser classificada antes da ativação. Para o read-state da
+Inbox, o contrato local validado exige raiz externa privada, reconciliação
+autenticada e gates automatizados até retirement; detalhes e matriz estão em
+[Persistência durável de runtime](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md).
+Um `.data` preservado dentro da release continua dependência, não solução
+durável, e impede retirar sua única cópia recuperável.
+
 ## Topologia canônica
 
 - O build ocorre uma única vez em worktree Linux `x86_64` isolado no builder
