@@ -63,6 +63,24 @@ class PersistenceGateTest(unittest.TestCase):
         request["reconciliation"]["receiptSha256"] = "0" * 64
         with self.assertRaisesRegex(GATE.Denied, "request_sha256"): GATE.validate(request)
 
+    def test_aggregate_reconciliation_requires_complete_individual_receipts(self):
+        individual_path = self.base / "individual.json"
+        destination = str(self.root / "tenant-a/shared.json")
+        individual = {"schemaVersion": 2, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2", "state": "VERIFIED", "operationId": "tenant-op", "requestSha256": "1" * 64, "tenantId": "tenant-a", "scope": {"type": "shared"}, "destinationPath": destination}
+        individual_sha = put(individual_path, individual)
+        manifest_path = self.base / "manifest.json"
+        manifest = {"schemaVersion": 1, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_MANIFEST_V1", "operationId": "aggregate-op", "custodyRoot": {}, "entries": [{"requestPath": str(self.base / "request.json"), "requestSha256": "1" * 64, "tenantId": "tenant-a", "scope": {"type": "shared"}, "destinationPath": destination, "receiptPath": str(individual_path)}], "aggregateReceiptPath": str(self.base / "aggregate.json")}
+        manifest_sha = put(manifest_path, manifest)
+        aggregate_path = self.base / "aggregate.json"
+        aggregate = {"schemaVersion": 1, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_AGGREGATE_RECEIPT_V1", "operationId": "aggregate-op", "manifestSha256": manifest_sha, "state": "VERIFIED", "entries": [{"tenantId": "tenant-a", "scope": {"type": "shared"}, "destinationPath": destination, "requestSha256": "1" * 64, "receiptPath": str(individual_path), "receiptSha256": individual_sha}]}
+        aggregate_sha = put(aggregate_path, aggregate)
+        reconciliation = {"required": True, "state": "VERIFIED", "receipt": str(aggregate_path), "receiptSha256": aggregate_sha, "operationId": "aggregate-op", "manifest": str(manifest_path), "manifestSha256": manifest_sha, "destinationCount": 1}
+        self.assertEqual(GATE.validate(self.request(reconciliation=reconciliation))["reconciliation"], "VERIFIED")
+        aggregate["entries"] = []
+        reconciliation["receiptSha256"] = put(aggregate_path, aggregate)
+        with self.assertRaisesRegex(GATE.Denied, "reconciliation_receipt_semantics"):
+            GATE.validate(self.request(reconciliation=reconciliation))
+
     def test_ambiguous_or_absent_source_is_fail_closed_by_contract(self):
         request = self.request(reconciliation={"required": True, "state": "PENDING", "receipt": None, "receiptSha256": None, "operationId": "op", "tenantId": "tenant-a", "scope": {"type": "shared"}, "destinationPath": str(self.root / "tenant-a/shared.json")})
         with self.assertRaisesRegex(GATE.Denied, "reconciliation_state"): GATE.validate(request)
