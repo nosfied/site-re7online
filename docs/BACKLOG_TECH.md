@@ -1,5 +1,16 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Registro histórico de prioridades arquitetural e funcional — 21/11/2026
+
+**CHECKPOINT HISTÓRICO PR #435 / NÃO É STATUS PRODUTIVO ATUAL.** Frente A (#436), arquitetural/metodológica: correção local do `READ_STATE_RELEASE_LOCAL_STORAGE`; o gate era `IMPLEMENTED_NOT_ENFORCED` naquele checkpoint; a evolução V2 consta no contrato especializado e no PR #436. Frente B (#437), funcional de produto: invariante `HUMAN_ASSIGNMENT_MISSING_DEPARTMENT_QUEUE` localmente validado. A conversa 3209 do tenant `tendencia-modas` não foi modificada. Preservar PRs e níveis de evidência independentes.
+
+**Aceite 1:** leitura permanece marcada após restart e próxima troca de release, preservando as diferenças `shared`/`assigned`, aliases, `manualUnread`, timestamps e isolamento tenant; reconciliation sem sobrescrita ou replay; custódia durável/backup; regressões e readback. Precedente 7784 (41D→CB) já comprovado.
+
+**Aceite 2:** `BOT sem setor → claim/assign HUMAN` escolhe destino ativo, existente e validado (handoff explícito → contexto válido → padrão operacional do tenant), resolvendo `Department.operationalQueueId` e fila vinculada de forma atômica; inexistência nega antes de persistir atendente; `transfer` continua exigindo setor. Exercer IA Tendência, menus CRA-PR, handoff Demo, RBAC, concorrência e não-regressão de `HUMAN/WAITING` pendente; reparar a conversa 3209 separadamente, só após autorização e verificação da fila real.
+
+**Fronteira:** PRs e testes locais não autorizam deploy; se compuser ambas as correções numa release única, provar a cadeia `producer → installer → preflight → acceptance → finalize → retirement → closure` completa antes de ativar, confrontando 41D/CB e protegendo worker ED74. Não mexer em Privacidade 34/34, Meta gates, PM2, banco produtivo ou snapshot protegido. Depois do aceite e fechamento, retomar o readback P1 do primeiro cron pós-instalação e demais objetivos offsite/alerta/restore, sem disparar execução adicional. [Estado canônico](saas/CURRENT_STATE.md#registro-histórico-de-prioridades-arquitetural-e-funcional--21112026).
+
+
 ## P1 — Retomada do backup protegido em janela futura
 
 Instalação autenticada, receipt `2b394d97175dfbbeaba2045e570e45f39c2d27190241337303952b0db0626a31`. **Primeiro cron pós-instalação ainda não observado** na última verificação de 21/11/2026 às 20:32 (Fortaleza). Execução diária original: 02:40 UTC. Retomar somente por leitura, após o horário e em janela escolhida pelo Owner, sem execução manual, retry, alteração de cron, remoção do snapshot protegido ou segundo instalador. Resultado terminal de backup só pode ser afirmado com `retention_preserved`, `backup_success` e `backup_terminal`/exit comprovados. Detalhes, hashes e condições em [estado canônico](saas/CURRENT_STATE.md#p1--backup-composto-protegido-instalado-validação-do-cron-adiada--21112026).

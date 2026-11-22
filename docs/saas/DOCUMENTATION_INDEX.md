@@ -9,6 +9,8 @@
 
 ## Snapshot vigente e política de não retrabalho
 
+- [Prioridades arquitetural e funcional 21/11: persistência durável e atribuição humana com setor/fila](CURRENT_STATE.md#registro-histórico-de-prioridades-arquitetural-e-funcional--21112026) — checkpoint histórico de escopo, anterior ao enforcement V2; consultar o contrato especializado do #436 para o estado de implementação. Conversa 3209 não alterada; P1 backup segue suspensa.
+
 - [P1 backup protegido instalado, validação do cron pendente](CURRENT_STATE.md#p1--backup-composto-protegido-instalado-validação-do-cron-adiada--21112026) — receipt instalado e snapshot histórico `RETAIN_REQUIRED`; retomar somente leitura da primeira execução agendada, sem novo backup nem limpeza. Exceção e P00 estão separados pelos PRs #432/#433.
 
 - [Consolidação definitiva do builder externo (17–18/11/2026)](../reviews/CONVERTA_EXTERNAL_BUILDER_CONSOLIDATION_2026-11-17.md) — precedentes A838/FA10/ED74, PRs #375–#420, PR #415 draft histórico e closure sintética durável real.
