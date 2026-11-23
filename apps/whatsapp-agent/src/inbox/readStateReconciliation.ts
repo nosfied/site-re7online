@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getReadStateFileForScope, reconcileInboxReadStateSources, type ConversationReadScope, type InboxReadState } from "./readStateStore.js";
+import { fsyncDirectory, writeDurableAtomic, writeDurableExclusive } from "./readStateDurability.js";
 import { withInboxReadStateWriteLock } from "./readStateFileLock.js";
 
 const REQUEST_KIND = "CONVERTA_INBOX_READ_STATE_RECONCILIATION_V2";
@@ -19,8 +20,8 @@ const inside = (child: string, root: string) => child !== root && path.resolve(c
 
 async function readRegularFile(file: string) { const info = await fs.lstat(file); if (!info.isFile() || info.isSymbolicLink()) throw new Error("reconciliation_file_identity"); return fs.readFile(file); }
 async function authenticateRoot(root: RootAuthority) { if (!path.isAbsolute(root.path) || root.mode !== "0700") throw new Error("reconciliation_root_schema"); const info = await fs.lstat(root.path); if (!info.isDirectory() || info.isSymbolicLink() || info.dev !== root.device || info.ino !== root.inode || info.uid !== root.ownerUid || info.gid !== root.groupGid || (info.mode & 0o777) !== 0o700) throw new Error("reconciliation_root_identity"); }
-async function writePrivateExclusive(file: string, payload: string) { await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 }); await fs.writeFile(file, payload, { mode: 0o600, flag: "wx" }); }
-async function appendPrivate(file: string, payload: string) { const handle = await fs.open(file, "a", 0o600); try { await handle.write(payload); await handle.sync(); } finally { await handle.close(); } }
+async function writePrivateExclusive(file: string, payload: string) { await writeDurableExclusive(file, payload); }
+async function appendPrivate(file: string, payload: string) { const directory = path.dirname(file); await fs.mkdir(directory, { recursive: true, mode: 0o700 }); const existed = await fs.lstat(file).then(() => true, (error) => { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }); const handle = await fs.open(file, "a", 0o600); try { await handle.write(payload); await handle.sync(); } finally { await handle.close(); } if (!existed) await fsyncDirectory(directory); }
 function parseRequest(raw: Buffer): Request {
   const value = JSON.parse(raw.toString("utf8")) as Request;
   const keys = ["schemaVersion","kind","operationId","tenantId","scope","persistentRoot","custodyRoot","sourceRoots","sources","destination","anonymizationAuthority","journalPath","receiptPath"];
@@ -63,7 +64,7 @@ export async function reconcileInboxReadStateRequest(requestPath: string, expect
     const base = { schemaVersion: 2, kind: "CONVERTA_INBOX_READ_STATE_RECONCILIATION_JOURNAL_V2", operationId: request.operationId, requestSha256, tenantId: request.tenantId, scope: request.scope, destinationPath: request.destination.path, destinationSha256 };
     const events = await readEvents(request.journalPath); if (events.some((event) => event.operationId !== request.operationId || event.requestSha256 !== requestSha256 || event.destinationSha256 !== destinationSha256)) throw new Error("reconciliation_journal_conflict");
     if (!events.some((event) => event.state === "ATTEMPT")) { await appendPrivate(request.journalPath, canonical({ ...base, state: "ATTEMPT" })); await hook?.("after_attempt"); }
-    if (existingSha256 !== destinationSha256) { await fs.mkdir(path.dirname(request.destination.path), { recursive: true, mode: 0o700 }); const temporary = `${request.destination.path}.${request.operationId}.tmp`; await fs.writeFile(temporary, destinationPayload, { mode: 0o600, flag: "wx" }); await fs.rename(temporary, request.destination.path); await hook?.("after_destination"); }
+    if (existingSha256 !== destinationSha256) { const temporary = `${request.destination.path}.${request.operationId}.tmp`; await writeDurableAtomic(request.destination.path, destinationPayload, temporary); await hook?.("after_destination"); }
     const currentEvents = await readEvents(request.journalPath); if (!currentEvents.some((event) => event.state === "VERIFIED")) { await appendPrivate(request.journalPath, canonical({ ...base, state: "VERIFIED" })); await hook?.("after_verified"); }
     const receipt = { schemaVersion: 2, kind: RECEIPT_KIND, operationId: request.operationId, requestSha256, tenantId: request.tenantId, scope: request.scope, state: "VERIFIED", destinationPath: request.destination.path, destinationSha256, sourceSha256: request.sources.map((source) => source.sha256), anonymizationAuthoritySha256: request.anonymizationAuthority.sha256 };
     try { await writePrivateExclusive(request.receiptPath, canonical(receipt)); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }

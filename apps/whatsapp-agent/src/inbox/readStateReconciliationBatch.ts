@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeDurableExclusive } from "./readStateDurability.js";
 import { reconcileInboxReadStateRequest } from "./readStateReconciliation.js";
 
 const MANIFEST_KIND = "CONVERTA_INBOX_READ_STATE_RECONCILIATION_MANIFEST_V1";
@@ -105,7 +106,7 @@ export async function reconcileInboxReadStateManifest(manifestPath: string, expe
   }
   const receipt = { schemaVersion: 1, kind: RECEIPT_KIND, operationId: manifest.operationId, manifestSha256, inventorySha256, state: "VERIFIED", entries: verified };
   const payload = canonical(receipt);
-  try { await fs.mkdir(path.dirname(manifest.aggregateReceiptPath), { recursive: true, mode: 0o700 }); await fs.writeFile(manifest.aggregateReceiptPath, payload, { mode: 0o600, flag: "wx" }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+  try { await writeDurableExclusive(manifest.aggregateReceiptPath, payload); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const published = await readPrivate(manifest.aggregateReceiptPath); if (!published.equals(Buffer.from(payload))) throw new Error("reconciliation_batch_receipt_conflict");
   const publishedReceipt = JSON.parse(published.toString("utf8")); if (published.toString("utf8") !== canonical(publishedReceipt) || publishedReceipt.state !== "VERIFIED" || publishedReceipt.manifestSha256 !== manifestSha256 || publishedReceipt.inventorySha256 !== inventorySha256 || publishedReceipt.entries.length !== verified.length) throw new Error("reconciliation_batch_receipt_conflict");
   return { state: "VERIFIED", receiptSha256: sha256(published), entryCount: verified.length } as const;

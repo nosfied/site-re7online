@@ -1,6 +1,11 @@
 # Persistência durável de runtime entre releases
 
-**Estado:** `LOCAL_VALIDATED / CANONICALLY_ENFORCED / NOT_DEPLOYED / OWNER_REVIEW_REQUIRED`.
+**Estado:** `DURABILITY_LOCAL_VALIDATED / CUTOVER_CONTRACT_QUALIFIED / NOT_DEPLOYED / OWNER_REVIEW_REQUIRED`.
+
+**Baseline composto autenticado:** branch `review/campaign-recovery-20260926`,
+HEAD `b8f45210665d9657b607ab91355c3f646f9079d9`, árvore
+`e333b74a074cd8e934aba40b38da5af02f9f5af8`; PRs #440/#441 integrados,
+sem efeito produtivo nesta qualificação.
 
 Este contrato especializa o modelo de releases imutáveis. Código, pacote e cache
 continuam pertencendo à release; estado operacional necessário à continuidade
@@ -30,6 +35,16 @@ preservados; isso não autoriza copiá-los.
   continuam atômicos e serializados por destino. Escritores reais e reconciliação
   disputam o mesmo lock de filesystem derivado do destino; a fila em memória é
   apenas ordenação local, não autoridade de exclusão.
+- Os três escritores efetivos (`markInboxConversationRead`,
+  `markInboxConversationUnread` e `markInboxConversationUnreadFromActivity`) e
+  o reconciliador passam pelo mesmo lock. A autoridade do lock contém target,
+  boot ID, PID, start ticks e nonce; lock ativo nega, lock órfão só é recuperado
+  após readback físico e prova de processo ausente/reutilizado, e autoridade
+  malformada ou desconhecida permanece preservada e negada.
+- Publicação de estado, receipts e aggregate receipt sincroniza o arquivo antes
+  do rename/publicação e sincroniza o diretório após a troca de nome. Journal
+  append-only sincroniza o arquivo e, em sua criação, o diretório. Assim,
+  `VERIFIED` não depende apenas do page cache.
 - Restart, candidata e rollback recebem a mesma raiz pelo ambiente PM2
   autenticado. A raiz não integra intents de retirement da release.
 
@@ -81,3 +96,72 @@ O gate não altera receipts históricos de 41D/CB3721D4: schemas 1–3 continuam
 autenticáveis somente como autoridades históricas previamente seladas, sem receber retroativamente o estado
 `CANONICALLY_ENFORCED`. Produção continua com a dívida conhecida até autorização
 de provisionamento, reconciliação e deploy.
+
+## Contrato de cutover no driver canônico
+
+O gate isolado não elimina a janela entre a última escrita da CB3721D4 e a
+reconciliação. A CB é histórica, grava no próprio CWD e não disputa o lock da
+raiz externa. Portanto a ativação da primeira API durável deve negar enquanto o
+driver canônico não executar a seguinte seção journaled sob o lock global de
+deploy:
+
+1. autenticar CB ativa, candidata, inventário aprovado, fontes 41D/CB,
+   autoridade privada das exclusões 34/34 e roots/custódia;
+2. parar somente a API CB e provar ausência do PID/start ticks; frontend e
+   worker ED74 continuam fora da mutação;
+3. com todos os escritores CB excluídos, recapturar identidade e SHA das fontes,
+   materializar os requests finais e executar a reconciliação agregada;
+4. exigir aggregate receipt `VERIFIED` por readback de todos os destinos e
+   executar novamente o gate `activation` com a mesma autoridade;
+5. trocar o symlink da API, iniciar a candidata apontada para a raiz externa e
+   exigir readiness; somente então seguir a promoção normal do frontend.
+
+A fronteira de commit do cutover é **a candidata API saudável após o symlink ter
+sido promovido, com aggregate receipt já `VERIFIED`**. Antes dela, falha retoma
+CB no symlink original; o aggregate receipt eventualmente já publicado é
+replay-safe e não autoriza duplicar reconciliação. Depois dela, rollback da API
+só é seguro para release que consuma a mesma raiz externa. O `pm2 restart`
+atual não oferece uma janela entre stop e start: a implementação dessa seção no
+driver existente e seus testes requer autorização específica. Não criar outro
+controlador.
+
+## Rollback da primeira transição
+
+| Alternativa | Resultado | Custo/risco |
+| --- | --- | --- |
+| release mínima derivada da CB, apenas compatível com a raiz durável | **recomendada** para o primeiro cutover | exige geração canônica adicional; mantém dados e reversibilidade |
+| rollback por componente, mantendo API durável e retornando somente frontend à CB | possível somente se a falha não envolver API/contrato | exige qualificação explícita do perfil misto |
+| CB/41D histórica como rollback integral | degradado | volta a gravar no CWD, bifurca estado após o retorno e pode repetir o indicador verde |
+
+Depois que existir uma release anterior já durável, ela passa a ser o rollback
+normal. Nenhuma release histórica será modificada. Aceitar rollback degradado
+é decisão explícita do Owner, não inferência do runbook.
+
+## Backup, restore e autoridade do inventário
+
+A menor extensão do backup P1 é adicionar a raiz literal
+`/opt/re7online/runtime-data/inbox-read-state` ao snapshot composto existente,
+em subtree própria, preservando diretórios `0700`, arquivos `0600`, owner/group,
+layout tenant/scope e SHA256SUMS. O restore deve ocorrer primeiro em raiz isolada,
+autenticar manifesto, modos, identidade e hashes e somente então produzir uma
+intenção separada de promoção. Isso requer alteração versionada da rotina e
+contrato P1, instalação autorizada e validação do cron; não autoriza backup
+manual nem presume o readback do primeiro cron já pendente.
+
+O inventário de reconciliação é autoridade administrativa privada: enumera cada
+tenant/scope/destino, releases-fonte e hashes, e seu SHA aprovado vincula o
+manifesto agregado. As exclusões vêm de uma autoridade separada derivada dos
+receipts privados 34/34; não podem ser inferidas de ausência, do banco atual ou
+do próprio manifesto. Requests, receipts individuais e aggregate receipt devem
+referenciar essas autoridades byte-exatas.
+
+## Provas locais adicionais
+
+- concorrência: segundo escritor recebe `inbox_read_state_write_conflict`;
+- interrupção abrupta: processo morto por `SIGKILL` deixa autoridade que é
+  autenticada e recuperada uma única vez pelo próximo escritor;
+- lock desconhecido: negativa sem remoção ou substituição;
+- interrupções após `ATTEMPT`, destino e `VERIFIED`: retomada sem segunda
+  mutação de destino;
+- replay agregado: readback de receipts e destinos; adulteração, omissão,
+  expansão e drift continuam negativas.

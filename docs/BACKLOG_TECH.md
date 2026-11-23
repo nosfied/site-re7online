@@ -2,9 +2,9 @@
 
 ## P0 — Frentes A+B efetivamente integradas; implantação bloqueada por gates de persistência
 
-**`MERGED / EFFECTIVE_TREE_VERIFIED / NOT_DEPLOYED`.** Incidente de integração #437 (ancestral #436 presente, arquivos da Frente A ausentes) reconciliado por #438: merge `b6bfbc5b3b7375aa209ab4638558396a95efab0f`, árvore `754582eeb17ed4ff4dcecc4581c2b084eea7a7d3`, CI 4/4 PASS e guarda A+B da árvore efetiva. Não reabrir implementações locais já testadas, nem repetir merges e testes anteriores. [Relatório](reviews/CONVERTA_AB_EFFECTIVE_TREE_RECONCILIATION_2026-11-22.md).
+**`MERGED / EFFECTIVE_TREE_VERIFIED / NOT_DEPLOYED`.** Baseline vigente após #440/#441: HEAD `b8f45210665d9657b607ab91355c3f646f9079d9`, árvore composta `e333b74a074cd8e934aba40b38da5af02f9f5af8`, CI 4/4 PASS. O incidente anterior de integração #437 foi reconciliado por #438 e permanece como precedente; não reabrir implementações ou repetir merges/testes concluídos. [Relatório](reviews/CONVERTA_AB_EFFECTIVE_TREE_RECONCILIATION_2026-11-22.md).
 
-**Próximo gate da Frente A:** read-only/proposta de provisionamento de `/opt/re7online/runtime-data/inbox-read-state`; backup e restore deste novo root; autoridade de 34 anonimizações e fontes 41D/CB; reconciliação por tenant/scope com SHA/CAS/lock/receipts; compatibilidade de rollback histórico 41D; autoridade V2 admission schema 3/runtime schema 4. **Nenhum build/generation até resolver a fronteira de dados e retorno.**
+**Próximo gate da Frente A:** revisar/integrar a durabilidade local (lock órfão autenticado e `fsync`), autorizar a extensão do driver para a janela `stop CB → fonte final → aggregate VERIFIED → start candidata`, escolher rollback durável da primeira transição, provisionar `/opt/re7online/runtime-data/inbox-read-state`, estender backup/restore e materializar as autoridades privadas de inventário/anonimização. **Nenhum build/generation até resolver a fronteira de dados e retorno.**
 
 **Frente B:** código transacional e UI integrados, ainda não implantados; matriz Tendência/CRA-PR/Demo pronta para futura aceitação. Reparar conversa 3209 somente por intenção/autorização posterior. Perfil conjunto pretendido API+frontend, worker ED74 preservado; confirmar impacto e cadeia canônica antes do build.
 
