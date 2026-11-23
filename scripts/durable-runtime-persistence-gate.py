@@ -180,14 +180,27 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
             if cutover:
                 authorization = private_json(Path(str(reconciliation.get("authorization", ""))),
                                              str(reconciliation.get("authorizationSha256", "")))
-                if (authorization.get("schemaVersion") != 1 or authorization.get("kind") !=
-                        "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1" or
+                authorization_version = (authorization.get("schemaVersion"), authorization.get("kind"))
+                if (authorization_version not in {
+                        (1, "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1"),
+                        (2, "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V2")} or
                         authorization.get("operationId") != reconciliation["operationId"] or
                         len(authorization.get("entries", [])) != reconciliation.get("destinationCount") or
                         authorization.get("manifestPath") != reconciliation.get("manifest") or
                         authorization.get("aggregateReceiptPath") != reconciliation.get("receipt") or
                         authorization.get("sealReceiptPath") != reconciliation.get("sealReceipt")):
                     deny("reconciliation_snapshot_authorization_semantics")
+                if authorization_version[0] == 2:
+                    for entry in authorization["entries"]:
+                        sources = entry.get("sources") if isinstance(entry, dict) else None
+                        if (not isinstance(sources, list) or not sources or any(
+                                not isinstance(source, dict) or
+                                set(source) != {"releaseId", "path", "root", "admission", "privateCopyPath"} or
+                                source.get("admission") != "LEGACY_RELEASE_LOCAL_COPY_V1" or
+                                not isinstance(source.get("root"), dict) or
+                                source["root"].get("mode") != "0755"
+                                for source in sources)):
+                            deny("reconciliation_snapshot_legacy_authorization")
                 seal_path = Path(str(reconciliation.get("sealReceipt", "")))
                 if final_phase or seal_path.exists() or seal_path.is_symlink():
                     seal_sha = hashlib.sha256(seal_path.read_bytes()).hexdigest()

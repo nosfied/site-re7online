@@ -169,7 +169,7 @@ class FakeHost(deploy.Host):
                             self.cutover_publications[-1][1]).hexdigest(),
                         "entryCount": self.cutover_seal_result["entryCount"],
                     }
-                    seal_publications = self.cutover_publications[:4]
+                    seal_publications = self.cutover_publications[:-3]
                     if self.cutover_omit_aggregate:
                         self.cutover_publications = self.cutover_publications[:-1]
                     elif self.cutover_divergent_aggregate:
@@ -559,12 +559,13 @@ class DeployFixture(unittest.TestCase):
         persistent = self.base / "durable-read-state"
         custody = self.base / "read-state-cutover-custody"
         source_root = self.releases / self.rollback / "api-runtime/.data/app-read-state"
-        for directory in (persistent, custody, source_root):
+        for directory in (persistent, custody):
             directory.mkdir(parents=True, mode=0o700); directory.chmod(0o700)
+        source_root.mkdir(parents=True, mode=0o755); source_root.chmod(0o755)
         source = source_root / "tenant-a/shared.json"
-        source.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        source.parent.mkdir(parents=True, exist_ok=True, mode=0o755); source.parent.chmod(0o755)
         source_payload = b'{"lastReadAtByConversationKey":{"conversation-a":"2026-11-22T00:00:00.000Z"},"manuallyUnreadByConversationKey":{}}\n'
-        source.write_bytes(source_payload); source.chmod(0o600)
+        source.write_bytes(source_payload); source.chmod(0o644)
         privacy = custody / "privacy.private.json"
         put(privacy, {"schemaVersion": 1,
                       "kind": "CONVERTA_PRIVACY_ANONYMIZED_CONVERSATION_KEYS",
@@ -579,16 +580,25 @@ class DeployFixture(unittest.TestCase):
         manifest = custody / "manifest.private.json"
         seal_receipt = custody / "snapshot-seal.private.json"
         snapshot_authorization = custody / "snapshot-authorization.private.json"
+        private_copy = custody / "legacy-sources" / self.rollback / "tenant-a/shared.json"
+        source_root_info = source_root.lstat()
         put(snapshot_authorization, {
-            "schemaVersion": 1,
-            "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1",
+            "schemaVersion": 2,
+            "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V2",
             "operationId": "cutover-aggregate", "custodyRoot": self._root_authority(custody),
             "persistentRoot": self._root_authority(persistent),
             "authorizedSourceReleases": [self.rollback],
             "entries": [{"operationId": "cutover-tenant-a-shared", "tenantId": "tenant-a",
                          "scope": {"type": "shared"}, "destinationPath": str(destination),
                          "sources": [{"releaseId": self.rollback, "path": str(source),
-                                      "root": self._root_authority(source_root)}],
+                                      "root": {"path": str(source_root),
+                                               "device": source_root_info.st_dev,
+                                               "inode": source_root_info.st_ino,
+                                               "ownerUid": source_root_info.st_uid,
+                                               "groupGid": source_root_info.st_gid,
+                                               "mode": "0755"},
+                                      "admission": "LEGACY_RELEASE_LOCAL_COPY_V1",
+                                      "privateCopyPath": str(private_copy)}],
                          "anonymizationAuthority": {"path": str(privacy), "sha256": sha(privacy)},
                          "requestPath": str(request_path),
                          "journalPath": str(operation / "journal.private.jsonl"),
@@ -608,8 +618,8 @@ class DeployFixture(unittest.TestCase):
                 "operationId": "cutover-tenant-a-shared", "tenantId": "tenant-a",
                 "scope": {"type": "shared"}, "persistentRoot": self._root_authority(persistent),
                 "custodyRoot": self._root_authority(custody),
-                "sourceRoots": [self._root_authority(source_root)],
-                "sources": [{"path": str(source), "sha256": source_sha}],
+                "sourceRoots": [self._root_authority(custody)],
+                "sources": [{"path": str(private_copy), "sha256": source_sha}],
                 "destination": {"path": str(destination), "expectedExistingSha256": None},
                 "anonymizationAuthority": {"path": str(privacy), "sha256": sha(privacy)},
                 "journalPath": str(operation / "journal.private.jsonl"),
@@ -656,6 +666,19 @@ class DeployFixture(unittest.TestCase):
                                        "requestPath": str(request_path),
                                        "requestSha256": hashlib.sha256(request_raw).hexdigest(),
                                        "sourceAuthorities": source_authorities,
+                                       "sourceSnapshots": [{"releaseId": self.rollback,
+                                           "origin": {"path": str(source), "sha256": source_sha,
+                                                      "device": source.lstat().st_dev,
+                                                      "inode": source.lstat().st_ino,
+                                                      "ownerUid": source.lstat().st_uid,
+                                                      "groupGid": source.lstat().st_gid,
+                                                      "mode": "0644"},
+                                           "privateCopy": {"path": str(private_copy),
+                                                           "sha256": source_sha,
+                                                           "device": 0, "inode": 0,
+                                                           "ownerUid": custody.lstat().st_uid,
+                                                           "groupGid": custody.lstat().st_gid,
+                                                           "mode": "0600"}}],
                                        "anonymizationAuthoritySha256": sha(privacy)}]}
             seal_raw = (json.dumps(seal_value, sort_keys=True,
                                    separators=(",", ":")) + "\n").encode()
@@ -681,7 +704,8 @@ class DeployFixture(unittest.TestCase):
                          "state": "VERIFIED", "entries": [aggregate_entry]}
             aggregate_raw = (json.dumps(aggregate, sort_keys=True,
                                         separators=(",", ":")) + "\n").encode()
-            publications = [(request_path, request_raw), (inventory, inventory_raw),
+            publications = [(private_copy, source.read_bytes()),
+                            (request_path, request_raw), (inventory, inventory_raw),
                             (manifest, manifest_raw), (seal_receipt, seal_raw),
                             (destination, destination_payload), (individual_path, individual_raw),
                             (aggregate_path, aggregate_raw)]

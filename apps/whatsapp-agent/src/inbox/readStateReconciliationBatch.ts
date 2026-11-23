@@ -9,16 +9,18 @@ const MANIFEST_KIND = "CONVERTA_INBOX_READ_STATE_RECONCILIATION_MANIFEST_V1";
 const RECEIPT_KIND = "CONVERTA_INBOX_READ_STATE_RECONCILIATION_AGGREGATE_RECEIPT_V1";
 const INVENTORY_KIND = "CONVERTA_INBOX_READ_STATE_AUTHORIZED_DESTINATION_INVENTORY_V1";
 const SNAPSHOT_AUTHORIZATION_KIND = "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1";
+const LEGACY_SNAPSHOT_AUTHORIZATION_KIND = "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V2";
 const SNAPSHOT_SEAL_KIND = "CONVERTA_INBOX_READ_STATE_FINAL_SNAPSHOT_SEAL_V1";
 type RootAuthority = { path: string; device: number; inode: number; ownerUid: number; groupGid: number; mode: "0700" };
+type LegacyRootAuthority = Omit<RootAuthority, "mode"> & { mode: "0755" };
 type FileAuthority = { path: string; sha256: string };
 type SourceAuthority = { releaseId: string; sha256: string };
 type Scope = { type: "shared" } | { type: "assigned"; assignedUserId: string };
 type Entry = { requestPath: string; requestSha256: string; tenantId: string; scope: Scope; destinationPath: string; receiptPath: string; sourceAuthorities: SourceAuthority[]; anonymizationAuthoritySha256: string };
 type Manifest = { schemaVersion: 1; kind: typeof MANIFEST_KIND; operationId: string; custodyRoot: RootAuthority; inventoryAuthority: FileAuthority; entries: Entry[]; aggregateReceiptPath: string };
-type SnapshotSource = { releaseId: string; path: string; root: RootAuthority };
+type SnapshotSource = { releaseId: string; path: string; root: RootAuthority } | { releaseId: string; path: string; root: LegacyRootAuthority; admission: "LEGACY_RELEASE_LOCAL_COPY_V1"; privateCopyPath: string };
 type SnapshotEntry = { operationId: string; tenantId: string; scope: Scope; destinationPath: string; sources: SnapshotSource[]; anonymizationAuthority: FileAuthority; requestPath: string; journalPath: string; receiptPath: string };
-type SnapshotAuthorization = { schemaVersion: 1; kind: typeof SNAPSHOT_AUTHORIZATION_KIND; operationId: string; custodyRoot: RootAuthority; persistentRoot: RootAuthority; authorizedSourceReleases: string[]; entries: SnapshotEntry[]; inventoryPath: string; manifestPath: string; aggregateReceiptPath: string; sealReceiptPath: string };
+type SnapshotAuthorization = { schemaVersion: 1 | 2; kind: typeof SNAPSHOT_AUTHORIZATION_KIND | typeof LEGACY_SNAPSHOT_AUTHORIZATION_KIND; operationId: string; custodyRoot: RootAuthority; persistentRoot: RootAuthority; authorizedSourceReleases: string[]; entries: SnapshotEntry[]; inventoryPath: string; manifestPath: string; aggregateReceiptPath: string; sealReceiptPath: string };
 
 function sortValue(value: unknown): unknown { if (Array.isArray(value)) return value.map(sortValue); if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, sortValue(v)])); return value; }
 const canonical = (value: unknown) => `${JSON.stringify(sortValue(value))}\n`;
@@ -29,13 +31,41 @@ async function readPrivate(file: string) { const info = await fs.lstat(file); if
 async function authenticateRoot(root: RootAuthority) { const info = await fs.lstat(root.path); if (!path.isAbsolute(root.path) || root.mode !== "0700" || !info.isDirectory() || info.isSymbolicLink() || info.dev !== root.device || info.ino !== root.inode || info.uid !== root.ownerUid || info.gid !== root.groupGid || (info.mode & 0o777) !== 0o700) throw new Error("reconciliation_batch_custody_identity"); }
 async function publishExact(file: string, payload: string) { try { await writeDurableExclusive(file, payload); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; } const observed = await readPrivate(file); if (!observed.equals(Buffer.from(payload))) throw new Error("reconciliation_snapshot_publication_conflict"); }
 
+async function admitLegacySource(source: Extract<SnapshotSource, { admission: "LEGACY_RELEASE_LOCAL_COPY_V1" }>, custodyRoot: RootAuthority) {
+  const rootInfo = await fs.lstat(source.root.path);
+  if (!path.isAbsolute(source.root.path) || source.root.mode !== "0755" || !rootInfo.isDirectory() || rootInfo.isSymbolicLink() || rootInfo.dev !== source.root.device || rootInfo.ino !== source.root.inode || rootInfo.uid !== source.root.ownerUid || rootInfo.gid !== source.root.groupGid || (rootInfo.mode & 0o777) !== 0o755) throw new Error("reconciliation_snapshot_legacy_root_identity");
+  if (!inside(source.path, source.root.path) || !inside(source.privateCopyPath, custodyRoot.path)) throw new Error("reconciliation_snapshot_legacy_boundary");
+  let legacyAncestor = source.root.path;
+  for (const part of path.relative(source.root.path, path.dirname(source.path)).split(path.sep).filter(Boolean)) {
+    legacyAncestor = path.join(legacyAncestor, part); const info = await fs.lstat(legacyAncestor);
+    if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== source.root.ownerUid || info.gid !== source.root.groupGid || (info.mode & 0o777) !== 0o755) throw new Error("reconciliation_snapshot_legacy_ancestor_identity");
+  }
+  let custodyAncestor = custodyRoot.path;
+  for (const part of path.relative(custodyRoot.path, path.dirname(source.privateCopyPath)).split(path.sep).filter(Boolean)) {
+    custodyAncestor = path.join(custodyAncestor, part);
+    try { const info = await fs.lstat(custodyAncestor); if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== custodyRoot.ownerUid || info.gid !== custodyRoot.groupGid || (info.mode & 0o777) !== 0o700) throw new Error("reconciliation_snapshot_legacy_copy_ancestor_identity"); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; break; }
+  }
+  const before = await fs.lstat(source.path);
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.uid !== source.root.ownerUid || before.gid !== source.root.groupGid || (before.mode & 0o777) !== 0o644) throw new Error("reconciliation_snapshot_legacy_file_identity");
+  const raw = await fs.readFile(source.path); const after = await fs.lstat(source.path);
+  if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || after.mtimeMs !== before.mtimeMs) throw new Error("reconciliation_snapshot_legacy_source_changed");
+  const payload = raw.toString("utf8"); if (!Buffer.from(payload).equals(raw)) throw new Error("reconciliation_snapshot_legacy_encoding");
+  await publishExact(source.privateCopyPath, payload);
+  const copyInfo = await fs.lstat(source.privateCopyPath); const copyRaw = await readPrivate(source.privateCopyPath);
+  if (!copyRaw.equals(raw) || copyInfo.nlink !== 1 || copyInfo.uid !== custodyRoot.ownerUid || copyInfo.gid !== custodyRoot.groupGid || (copyInfo.mode & 0o777) !== 0o600) throw new Error("reconciliation_snapshot_legacy_copy_identity");
+  const physical = (file: string, info: { dev: number; ino: number; uid: number; gid: number; mode: number }) => ({ path: file, sha256: sha256(raw), device: info.dev, inode: info.ino, ownerUid: info.uid, groupGid: info.gid, mode: (info.mode & 0o777).toString(8).padStart(4, "0") });
+  return { path: source.privateCopyPath, root: custodyRoot, sha256: sha256(raw), snapshot: { releaseId: source.releaseId, origin: physical(source.path, before), privateCopy: physical(source.privateCopyPath, copyInfo) } };
+}
+
 function parseSnapshotAuthorization(raw: Buffer): SnapshotAuthorization {
   const value = JSON.parse(raw.toString("utf8")) as SnapshotAuthorization;
   const keys = ["schemaVersion", "kind", "operationId", "custodyRoot", "persistentRoot", "authorizedSourceReleases", "entries", "inventoryPath", "manifestPath", "aggregateReceiptPath", "sealReceiptPath"];
-  if (raw.toString("utf8") !== canonical(value) || Object.keys(value).sort().join() !== keys.sort().join() || value.schemaVersion !== 1 || value.kind !== SNAPSHOT_AUTHORIZATION_KIND || !value.operationId || !Array.isArray(value.authorizedSourceReleases) || !Array.isArray(value.entries) || value.entries.length === 0) throw new Error("reconciliation_snapshot_authorization_schema");
+  const legacy = value.schemaVersion === 2 && value.kind === LEGACY_SNAPSHOT_AUTHORIZATION_KIND;
+  if (raw.toString("utf8") !== canonical(value) || Object.keys(value).sort().join() !== keys.sort().join() || (!legacy && (value.schemaVersion !== 1 || value.kind !== SNAPSHOT_AUTHORIZATION_KIND)) || !value.operationId || !Array.isArray(value.authorizedSourceReleases) || !Array.isArray(value.entries) || value.entries.length === 0) throw new Error("reconciliation_snapshot_authorization_schema");
   const authorized = new Set(value.authorizedSourceReleases); if (authorized.size !== value.authorizedSourceReleases.length || [...authorized].some((release) => typeof release !== "string" || !release)) throw new Error("reconciliation_snapshot_authorization_schema");
   for (const output of [value.inventoryPath, value.manifestPath, value.aggregateReceiptPath, value.sealReceiptPath]) if (!inside(output, value.custodyRoot.path)) throw new Error("reconciliation_snapshot_custody_boundary");
-  const scopeKeys = new Set<string>(); const destinations = new Set<string>(); const requestPaths = new Set<string>();
+  const scopeKeys = new Set<string>(); const destinations = new Set<string>(); const requestPaths = new Set<string>(); const privateCopies = new Set<string>();
   for (const entry of value.entries) {
     const entryKeys = ["operationId", "tenantId", "scope", "destinationPath", "sources", "anonymizationAuthority", "requestPath", "journalPath", "receiptPath"];
     if (Object.keys(entry).sort().join() !== entryKeys.sort().join() || !entry.operationId || !entry.tenantId || !Array.isArray(entry.sources) || entry.sources.length === 0 || !/^[a-f0-9]{64}$/.test(entry.anonymizationAuthority?.sha256 ?? "")) throw new Error("reconciliation_snapshot_entry_schema");
@@ -44,29 +74,37 @@ function parseSnapshotAuthorization(raw: Buffer): SnapshotAuthorization {
     if (scopeKeys.has(scopeKey) || destinations.has(path.resolve(entry.destinationPath)) || requestPaths.has(path.resolve(entry.requestPath))) throw new Error("reconciliation_snapshot_duplicate_authority");
     scopeKeys.add(scopeKey); destinations.add(path.resolve(entry.destinationPath)); requestPaths.add(path.resolve(entry.requestPath));
     if (!inside(entry.destinationPath, value.persistentRoot.path) || !inside(entry.requestPath, value.custodyRoot.path) || !inside(entry.journalPath, value.custodyRoot.path) || !inside(entry.receiptPath, value.custodyRoot.path) || !inside(entry.anonymizationAuthority.path, value.custodyRoot.path)) throw new Error("reconciliation_snapshot_boundary");
-    for (const source of entry.sources) if (Object.keys(source).sort().join() !== ["path", "releaseId", "root"].sort().join() || !authorized.has(source.releaseId) || !inside(source.path, source.root.path)) throw new Error("reconciliation_snapshot_source_authority");
+    for (const source of entry.sources) {
+      const sourceKeys = legacy ? ["admission", "path", "privateCopyPath", "releaseId", "root"] : ["path", "releaseId", "root"];
+      if (Object.keys(source).sort().join() !== sourceKeys.sort().join() || !authorized.has(source.releaseId) || !inside(source.path, source.root.path)) throw new Error("reconciliation_snapshot_source_authority");
+      if (legacy && (!("admission" in source) || source.admission !== "LEGACY_RELEASE_LOCAL_COPY_V1" || source.root.mode !== "0755" || !inside(source.privateCopyPath, value.custodyRoot.path) || privateCopies.has(path.resolve(source.privateCopyPath)))) throw new Error("reconciliation_snapshot_legacy_authority");
+      if (legacy && "privateCopyPath" in source) privateCopies.add(path.resolve(source.privateCopyPath));
+    }
   }
   return value;
 }
 
 export async function materializeInboxReadStateFinalSnapshot(authorizationPath: string, expectedAuthorizationSha256: string) {
   const authorizationRaw = await readPrivate(authorizationPath); if (sha256(authorizationRaw) !== expectedAuthorizationSha256) throw new Error("reconciliation_snapshot_authorization_sha256");
-  const authorization = parseSnapshotAuthorization(authorizationRaw); await Promise.all([authenticateRoot(authorization.custodyRoot), authenticateRoot(authorization.persistentRoot), ...authorization.entries.flatMap((entry) => entry.sources.map((source) => authenticateRoot(source.root)))]);
+  const authorization = parseSnapshotAuthorization(authorizationRaw); await Promise.all([authenticateRoot(authorization.custodyRoot), authenticateRoot(authorization.persistentRoot), ...authorization.entries.flatMap((entry) => entry.sources.filter((source): source is Extract<SnapshotSource, { root: RootAuthority }> => !("admission" in source)).map((source) => authenticateRoot(source.root)))]);
   const manifestEntries: Entry[] = [];
+  const snapshotEntries: Array<{ tenantId: string; scope: Scope; sources: unknown[] }> = [];
   for (const entry of authorization.entries) {
     const anonymizationRaw = await readPrivate(entry.anonymizationAuthority.path); if (sha256(anonymizationRaw) !== entry.anonymizationAuthority.sha256) throw new Error("reconciliation_snapshot_anonymization_sha256");
-    const sources = await Promise.all(entry.sources.map(async (source) => ({ path: source.path, sha256: sha256(await readPrivate(source.path)) })));
+    const admitted = await Promise.all(entry.sources.map(async (source) => "admission" in source ? admitLegacySource(source, authorization.custodyRoot) : ({ path: source.path, root: source.root, sha256: sha256(await readPrivate(source.path)), snapshot: { releaseId: source.releaseId, origin: null, privateCopy: null } })));
+    const sources = admitted.map(({ path: sourcePath, sha256: sourceSha256 }) => ({ path: sourcePath, sha256: sourceSha256 }));
     let expectedExistingSha256: string | null = null; try { expectedExistingSha256 = sha256(await readPrivate(entry.destinationPath)); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-    const request = { schemaVersion: 2, kind: "CONVERTA_INBOX_READ_STATE_RECONCILIATION_V2", operationId: entry.operationId, tenantId: entry.tenantId, scope: entry.scope, persistentRoot: authorization.persistentRoot, custodyRoot: authorization.custodyRoot, sourceRoots: entry.sources.map((source) => source.root), sources, destination: { path: entry.destinationPath, expectedExistingSha256 }, anonymizationAuthority: entry.anonymizationAuthority, journalPath: entry.journalPath, receiptPath: entry.receiptPath };
+    const request = { schemaVersion: 2, kind: "CONVERTA_INBOX_READ_STATE_RECONCILIATION_V2", operationId: entry.operationId, tenantId: entry.tenantId, scope: entry.scope, persistentRoot: authorization.persistentRoot, custodyRoot: authorization.custodyRoot, sourceRoots: admitted.map((source) => source.root).filter((root, index, roots) => roots.findIndex((candidate) => candidate.path === root.path) === index), sources, destination: { path: entry.destinationPath, expectedExistingSha256 }, anonymizationAuthority: entry.anonymizationAuthority, journalPath: entry.journalPath, receiptPath: entry.receiptPath };
     const requestRaw = canonical(request); await publishExact(entry.requestPath, requestRaw);
     manifestEntries.push({ requestPath: entry.requestPath, requestSha256: sha256(requestRaw), tenantId: entry.tenantId, scope: entry.scope, destinationPath: entry.destinationPath, receiptPath: entry.receiptPath, sourceAuthorities: entry.sources.map((source, index) => ({ releaseId: source.releaseId, sha256: sources[index].sha256 })), anonymizationAuthoritySha256: entry.anonymizationAuthority.sha256 });
+    snapshotEntries.push({ tenantId: entry.tenantId, scope: entry.scope, sources: admitted.map((source) => source.snapshot) });
   }
   const destinations = manifestEntries.map(({ tenantId, scope, destinationPath, sourceAuthorities, anonymizationAuthoritySha256 }) => ({ tenantId, scope, destinationPath, sourceAuthorities, anonymizationAuthoritySha256 }));
   const inventory = { schemaVersion: 1, kind: INVENTORY_KIND, inventoryId: authorization.operationId, authorizedSourceReleases: authorization.authorizedSourceReleases, destinations };
   const inventoryRaw = canonical(inventory); await publishExact(authorization.inventoryPath, inventoryRaw);
   const manifest = { schemaVersion: 1, kind: MANIFEST_KIND, operationId: authorization.operationId, custodyRoot: authorization.custodyRoot, inventoryAuthority: { path: authorization.inventoryPath, sha256: sha256(inventoryRaw) }, entries: manifestEntries, aggregateReceiptPath: authorization.aggregateReceiptPath };
   const manifestRaw = canonical(manifest); await publishExact(authorization.manifestPath, manifestRaw);
-  const seal = { schemaVersion: 1, kind: SNAPSHOT_SEAL_KIND, state: "SEALED", operationId: authorization.operationId, authorizationSha256: expectedAuthorizationSha256, inventoryPath: authorization.inventoryPath, inventorySha256: sha256(inventoryRaw), manifestPath: authorization.manifestPath, manifestSha256: sha256(manifestRaw), aggregateReceiptPath: authorization.aggregateReceiptPath, entries: manifestEntries.map((entry) => ({ tenantId: entry.tenantId, scope: entry.scope, destinationPath: entry.destinationPath, requestPath: entry.requestPath, requestSha256: entry.requestSha256, sourceAuthorities: entry.sourceAuthorities, anonymizationAuthoritySha256: entry.anonymizationAuthoritySha256 })) };
+  const seal = { schemaVersion: 1, kind: SNAPSHOT_SEAL_KIND, state: "SEALED", operationId: authorization.operationId, authorizationSha256: expectedAuthorizationSha256, inventoryPath: authorization.inventoryPath, inventorySha256: sha256(inventoryRaw), manifestPath: authorization.manifestPath, manifestSha256: sha256(manifestRaw), aggregateReceiptPath: authorization.aggregateReceiptPath, entries: manifestEntries.map((entry, index) => ({ tenantId: entry.tenantId, scope: entry.scope, destinationPath: entry.destinationPath, requestPath: entry.requestPath, requestSha256: entry.requestSha256, sourceAuthorities: entry.sourceAuthorities, sourceSnapshots: snapshotEntries[index].sources, anonymizationAuthoritySha256: entry.anonymizationAuthoritySha256 })) };
   const sealRaw = canonical(seal); await publishExact(authorization.sealReceiptPath, sealRaw);
   return { state: "SEALED", sealReceiptSha256: sha256(sealRaw), manifestPath: authorization.manifestPath, manifestSha256: sha256(manifestRaw), entryCount: manifestEntries.length } as const;
 }

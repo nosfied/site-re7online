@@ -148,9 +148,14 @@ class PersistenceGateTest(unittest.TestCase):
         seal_path = self.base / "cutover-seal.json"
         authorization_path = self.base / "cutover-authorization.json"
         authorization_sha = put(authorization_path, {
-            "schemaVersion": 1,
-            "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1",
-            "operationId": "cutover-op", "entries": [{}],
+            "schemaVersion": 2,
+            "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V2",
+            "operationId": "cutover-op", "entries": [{"sources": [{
+                "releaseId": "immutable-cb", "path": "/legacy/shared.json",
+                "root": {"path": "/legacy", "mode": "0755"},
+                "admission": "LEGACY_RELEASE_LOCAL_COPY_V1",
+                "privateCopyPath": "/custody/legacy/shared.json",
+            }]}],
             "manifestPath": str(manifest_path),
             "aggregateReceiptPath": str(self.base / "aggregate.json"),
             "sealReceiptPath": str(seal_path),
@@ -176,6 +181,15 @@ class PersistenceGateTest(unittest.TestCase):
         )
         for phase in ("qualification", "admission", "preflight"):
             self.assertEqual("PENDING", GATE.validate(request, phase)["reconciliation"])
+        divergent_authorization = json.loads(authorization_path.read_text())
+        divergent_authorization["entries"][0]["sources"][0]["admission"] = "UNAUTHORIZED_COPY"
+        divergent_path = self.base / "cutover-authorization-divergent.json"
+        divergent_sha = put(divergent_path, divergent_authorization)
+        divergent_request = json.loads(json.dumps(request))
+        divergent_request["reconciliation"]["authorization"] = str(divergent_path)
+        divergent_request["reconciliation"]["authorizationSha256"] = divergent_sha
+        with self.assertRaisesRegex(GATE.Denied, "reconciliation_snapshot_legacy_authorization"):
+            GATE.validate(divergent_request, "preflight")
         with self.assertRaises(FileNotFoundError):
             GATE.validate(request, "activation")
 
