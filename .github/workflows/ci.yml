@@ -82,6 +82,8 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-preparation-artifact-lifecycle.py scripts/ci/test-deploy-control-worktree-materialize.py scripts/test_operational_preparers_v3.py
       - name: Validate canonical capacity recovery control plane
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery.py
+      - name: Validate read-state cutover administrative authorities
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-read-state-cutover-authority.py
       - name: Validate canonical capacity recovery supervisor
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery-supervisor.py
       - name: Validate privileged capacity process observer protocol
@@ -145,6 +147,8 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run build
+      - name: Validate Python-to-TypeScript read-state cutover authority contract
+        run: node --import tsx --test src/inbox/readStateCutoverAuthorityIntegration.test.ts
       - name: WhatsApp Meta tenant runtime DB-first regressions
         run: >-
           node --import tsx --test
