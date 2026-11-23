@@ -60,7 +60,7 @@ class CutoverAuthorityTest(unittest.TestCase):
 
     def provision_fixture(self):
         uid, gid = os.getuid(), os.getgid()
-        executor = Path("/usr/bin/install"); executor_info = executor.lstat()
+        executor = Path("/usr/bin/install").resolve(strict=True); executor_info = executor.lstat()
         executor_authority = {
             "path": str(executor), "sha256": hashlib.sha256(executor.read_bytes()).hexdigest(),
             "device": executor_info.st_dev, "inode": executor_info.st_ino,
