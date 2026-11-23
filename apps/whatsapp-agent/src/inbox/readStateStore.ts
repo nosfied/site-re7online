@@ -20,19 +20,62 @@ const EMPTY_READ_STATE: InboxReadState = {
   manuallyUnreadByConversationKey: {},
 };
 
-const dataDir = path.resolve(process.cwd(), ".data", "app-read-state");
 const writeQueues = new Map<string, Promise<void>>();
+
+export class InboxReadStateStorageError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
+export function resolveInboxReadStateRoot(options: {
+  cwd?: string;
+  nodeEnv?: string;
+  configuredRoot?: string;
+} = {}) {
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? "development";
+  const configured = (options.configuredRoot ?? process.env.INBOX_READ_STATE_ROOT ?? "").trim();
+  if (!configured) {
+    if (nodeEnv === "production") throw new InboxReadStateStorageError("inbox_read_state_root_required");
+    return path.join(cwd, ".data", "app-read-state");
+  }
+  if (!path.isAbsolute(configured)) throw new InboxReadStateStorageError("inbox_read_state_root_absolute");
+  const root = path.resolve(configured);
+  if (nodeEnv === "production" && (root === cwd || root.startsWith(`${cwd}${path.sep}`))) {
+    throw new InboxReadStateStorageError("inbox_read_state_root_release_local");
+  }
+  return root;
+}
+
+async function authenticateReadStateRoot() {
+  const root = resolveInboxReadStateRoot();
+  try {
+    const info = await fs.lstat(root);
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new InboxReadStateStorageError("inbox_read_state_root_identity");
+    }
+    if ((info.mode & 0o077) !== 0) throw new InboxReadStateStorageError("inbox_read_state_root_mode");
+    if (typeof process.getuid === "function" && info.uid !== process.getuid()) {
+      throw new InboxReadStateStorageError("inbox_read_state_root_owner");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT" || process.env.NODE_ENV === "production") throw error;
+    await fs.mkdir(root, { recursive: true, mode: 0o700 });
+  }
+  return root;
+}
 
 function sanitizePathPart(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function getReadStateFile(clientId: string) {
-  return path.join(dataDir, sanitizePathPart(clientId), "shared.json");
+function getReadStateFile(root: string, clientId: string) {
+  return path.join(root, sanitizePathPart(clientId), "shared.json");
 }
 
-function getAssignedReadStateFile(clientId: string, assignedUserId: string) {
-  return path.join(dataDir, sanitizePathPart(clientId), "assigned", `${sanitizePathPart(assignedUserId)}.json`);
+function getAssignedReadStateFile(root: string, clientId: string, assignedUserId: string) {
+  return path.join(root, sanitizePathPart(clientId), "assigned", `${sanitizePathPart(assignedUserId)}.json`);
 }
 
 export function resolveConversationReadScope(conversation: {
@@ -42,14 +85,15 @@ export function resolveConversationReadScope(conversation: {
   return assignedUserId ? { type: "assigned", assignedUserId } : { type: "shared" };
 }
 
-function getReadStateFileForScope(clientId: string, scope: ConversationReadScope = { type: "shared" }) {
+function getReadStateFileForScope(root: string, clientId: string, scope: ConversationReadScope = { type: "shared" }) {
   return scope.type === "assigned"
-    ? getAssignedReadStateFile(clientId, scope.assignedUserId)
-    : getReadStateFile(clientId);
+    ? getAssignedReadStateFile(root, clientId, scope.assignedUserId)
+    : getReadStateFile(root, clientId);
 }
 
 async function ensureDir(dir: string) {
-  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  await fs.chmod(dir, 0o700);
 }
 
 function enqueueWrite(targetFile: string, fn: () => Promise<void>) {
@@ -67,8 +111,9 @@ function enqueueWrite(targetFile: string, fn: () => Promise<void>) {
 async function writeAtomic(targetFile: string, payload: string) {
   await ensureDir(path.dirname(targetFile));
   const tmp = `${targetFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-  await fs.writeFile(tmp, payload, "utf-8");
+  await fs.writeFile(tmp, payload, { encoding: "utf-8", mode: 0o600 });
   await fs.rename(tmp, targetFile);
+  await fs.chmod(targetFile, 0o600);
 }
 
 function normalizeReadState(input: unknown): InboxReadState {
@@ -117,7 +162,8 @@ export async function getInboxReadStateForConversations(params: {
 }
 
 async function readInboxReadStateScope(clientId: string, scope: ConversationReadScope) {
-  const targetFile = getReadStateFileForScope(clientId, scope);
+  const root = await authenticateReadStateRoot();
+  const targetFile = getReadStateFileForScope(root, clientId, scope);
   try {
     const raw = await fs.readFile(targetFile, "utf-8");
     return normalizeReadState(JSON.parse(raw));
@@ -234,7 +280,8 @@ function projectReadStateForConversations(
 }
 
 async function writeInboxReadState(clientId: string, _userId: string, state: InboxReadState, scope: ConversationReadScope) {
-  const targetFile = getReadStateFileForScope(clientId, scope);
+  const root = await authenticateReadStateRoot();
+  const targetFile = getReadStateFileForScope(root, clientId, scope);
   return enqueueWrite(targetFile, () => writeAtomic(targetFile, JSON.stringify(state, null, 2)));
 }
 
