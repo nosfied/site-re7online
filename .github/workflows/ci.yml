@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, review/campaign-recovery-20260926]
+    branches: [main, develop, review/campaign-recovery-20260926, compat/cb3721d4-baseline]
   pull_request:
     branches: [main, develop, review/campaign-recovery-20260926]
   workflow_dispatch:
