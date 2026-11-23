@@ -401,7 +401,7 @@ class RealPm2Host(DEPLOY.Host):
                         self.cutover_publications[-1][1]).hexdigest(),
                     "entryCount": self.cutover_seal_result["entryCount"],
                 }
-                publications = self.cutover_publications[:4]
+                publications = self.cutover_publications[:-3]
                 result = self.cutover_seal_result
             elif action == "reconcile":
                 publications = self.cutover_publications[-3:]
