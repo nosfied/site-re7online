@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { writeDurableAtomic } from "./readStateDurability.js";
 import { withInboxReadStateWriteLock } from "./readStateFileLock.js";
 
 export type InboxReadState = {
@@ -112,8 +113,7 @@ function enqueueWrite<T>(targetFile: string, fn: () => Promise<T>) {
 async function writeAtomic(targetFile: string, payload: string) {
   await ensureDir(path.dirname(targetFile));
   const tmp = `${targetFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-  await fs.writeFile(tmp, payload, { encoding: "utf-8", mode: 0o600 });
-  await fs.rename(tmp, targetFile);
+  await writeDurableAtomic(targetFile, payload, tmp);
 }
 
 function normalizeReadState(input: unknown): InboxReadState {

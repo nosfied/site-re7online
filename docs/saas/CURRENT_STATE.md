@@ -1,5 +1,11 @@
 # Estado canônico do Converta
 
+## Fechamento local da durabilidade A — 22/11/2026
+
+**`CONVERTA_A_READSTATE_CUTOVER_AND_DURABILITY_LOCAL_VALIDATED / MERGED_BASELINE / NOT_DEPLOYED / OWNER_REVIEW_REQUIRED`.** O baseline composto integra #440 (merge `39fb64f5`) e #441 (merge `b8f45210`), HEAD `b8f45210665d9657b607ab91355c3f646f9079d9`, árvore `e333b74a074cd8e934aba40b38da5af02f9f5af8`. Em branch isolada, os escritores reais e o reconciliador foram fechados sobre lock autenticado recuperável e writes com `fsync` de arquivo/diretório; testes cobrem escritor ativo, autoridade desconhecida, `SIGKILL`, retomada e replay. Essas alterações ainda não foram integradas nem implantadas.
+
+O primeiro cutover permanece condicionado a uma extensão autorizada do driver existente: parar a API CB, provar ausência de escritores, recapturar fontes, reconciliar, exigir aggregate `VERIFIED`, promover/iniciar a API candidata e só então declarar o commit. O `pm2 restart` atual não expõe essa fronteira. Rollback recomendado: release mínima derivada da CB que consuma a raiz durável; CB/41D integral é retorno degradado e requer aceite explícito. A raiz `/opt/re7online/runtime-data/inbox-read-state` continua ausente, sem backup/restore P1 e sem reconciliação produtiva. Detalhes no [contrato especializado](DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md).
+
 ## Frentes A+B reconciliadas na árvore efetiva — 22/11/2026
 
 **`CONVERTA_A_B_EFFECTIVE_TREE_RESTORED / MERGED / NOT_DEPLOYED / OWNER_VALIDATION_PENDING`.** A branch `review/campaign-recovery-20260926` incorpora #435 (merge `2634bb46261dab97ef6157420d31b7f60bec07a7`), #436 (merge `41a420540f1309b58b404eb3abe41080960e1054`), #437 (merge `611ecadfed0398e4158474e8ce3760a6ed02c487`) e a reconciliação corretiva #438 (merge `b6bfbc5b3b7375aa209ab4638558396a95efab0f`, árvore `754582eeb17ed4ff4dcecc4581c2b084eea7a7d3`). A CI do #438 executou **4/4 PASS** no HEAD `62b53f8824c592d72efb2ca6273ae497a84e5237`, inclusive a nova guarda `scripts/ci/verify-converta-ab-effective-tree.py`. Readback pós-merge provou igualdade da árvore efetiva com a revisada. A guarda verifica presença simultânea dos componentes das duas frentes, sem substituir testes comportamentais.

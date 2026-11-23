@@ -221,12 +221,17 @@ jobs:
           node --import tsx --test --test-name-pattern "management-only consent" \
             src/http/automationConversations.test.ts
       - name: Backend durable-operation and multi-tenant tests
-        run: >-
-          node --import tsx --test
-          src/crm/crmCsvImportOperation.postgres.test.ts
-          src/crm/crmContactsCursor.test.ts
-          src/crm/crmContactsTotals.test.ts
-          src/crm/crmContactsReadModelContract.test.ts
+        run: |
+          node --import tsx --test \
+            src/inbox/readStateFileLock.test.ts \
+            src/inbox/readStateStore.test.ts \
+            src/inbox/readStateReconciliation.test.ts \
+            src/inbox/readStateReconciliationBatch.test.ts
+          node --import tsx --test \
+            src/crm/crmCsvImportOperation.postgres.test.ts \
+            src/crm/crmContactsCursor.test.ts \
+            src/crm/crmContactsTotals.test.ts \
+            src/crm/crmContactsReadModelContract.test.ts
       - name: Campaign uncertainty, recipient failure continuity and result projection
         run: |
           node --import tsx --test \
