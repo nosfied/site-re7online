@@ -145,19 +145,32 @@ class PersistenceGateTest(unittest.TestCase):
                          "receiptPath": str(self.base / "individual.json"), **authority}],
             "aggregateReceiptPath": str(self.base / "aggregate.json"),
         })
+        seal_path = self.base / "cutover-seal.json"
+        authorization_path = self.base / "cutover-authorization.json"
+        authorization_sha = put(authorization_path, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1",
+            "operationId": "cutover-op", "entries": [{}],
+            "manifestPath": str(manifest_path),
+            "aggregateReceiptPath": str(self.base / "aggregate.json"),
+            "sealReceiptPath": str(seal_path),
+        })
         request = self.request()
         request.pop("phase")
         request.update(
             schemaVersion=3, kind=GATE.KIND_V3, requiredPhases=list(GATE.PHASES),
             reconciliation={"required": True, "state": "PENDING",
                             "receipt": str(self.base / "aggregate.json"),
-                            "receiptSha256": "4" * 64, "operationId": "cutover-op",
-                            "manifest": str(manifest_path), "manifestSha256": manifest_sha,
+                            "operationId": "cutover-op", "manifest": str(manifest_path),
+                            "authorization": str(authorization_path),
+                            "authorizationSha256": authorization_sha,
+                            "sealReceipt": str(seal_path),
                             "destinationCount": 1},
             cutover={"mode": "FIRST_RELEASE_LOCAL_TO_DURABLE_V1",
                      "runner": {"path": str(self.base / "runner.js"), "sha256": "5" * 64},
                      "candidateStorage": {"path": str(self.base / "store.js"),
                                           "sha256": "6" * 64},
+                     "pm2": {"candidate": {}, "rollback": {}},
                      "rollbackCompatibility": {"path": str(self.base / "rollback.json"),
                                                "sha256": "7" * 64}},
         )

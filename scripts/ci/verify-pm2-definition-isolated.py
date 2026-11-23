@@ -385,8 +385,35 @@ class RealPm2Host(DEPLOY.Host):
         self.environment = environment
         self.mutations = []
         self.row_drift = None
+        self.cutover_sealer = None
+        self.cutover_publications = []
+        self.cutover_seal_result = None
+        self.cutover_result = None
 
     def run(self, command, *, timeout=40, pass_fds=(), env=None):
+        if len(command) == 5 and Path(command[1]).name == "readStateReconciliationBatch.js":
+            action = command[2]
+            if action == "seal":
+                self.cutover_seal_result, self.cutover_publications = self.cutover_sealer()
+                self.cutover_result = {
+                    "state": "VERIFIED",
+                    "receiptSha256": hashlib.sha256(
+                        self.cutover_publications[-1][1]).hexdigest(),
+                    "entryCount": self.cutover_seal_result["entryCount"],
+                }
+                publications = self.cutover_publications[:4]
+                result = self.cutover_seal_result
+            elif action == "reconcile":
+                publications = self.cutover_publications[-3:]
+                result = self.cutover_result
+            else:
+                raise AssertionError(f"unexpected_cutover_action:{action}")
+            for destination, payload in publications:
+                destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                if not destination.exists():
+                    destination.write_bytes(payload)
+                    destination.chmod(0o600)
+            return subprocess.CompletedProcess(command, 0, json.dumps(result) + "\n", "")
         merged = dict(self.environment)
         if env is not None:
             merged.update(env)
@@ -517,8 +544,47 @@ def prepare_real_driver_fixture(case, node):
         runtime_manifest_sha256=sha(case.runtime_manifest))
 
 
-def start_initial_processes(case, host, pm2):
-    case.stable["worker"].symlink_to(case.releases / case.rollback / "worker-runtime")
+def prepare_real_api_frontend_fixture(case, node):
+    case.node = node
+    case.host.node = node
+    for row in case.host.rows.values():
+        row["pm2_env"]["exec_interpreter"] = str(node)
+    (case.worker / "index.js").write_text(WORKER_SERVER)
+    for release in (case.rollback, case.candidate):
+        root = case.releases / release
+        (root / "api-runtime/dist/index.js").write_text(API_SERVER)
+        (root / "frontend-runtime/node_modules/next/dist/bin/next").write_text(FRONTEND_SERVER)
+        (root / "index.sha256").chmod(0o644)
+        (root / "manifest.json").chmod(0o644)
+        DEPLOY_TEST.put(root / "index.sha256", DEPLOY_TEST.release_index(root), 0o444)
+        manifest = json.loads((root / "manifest.json").read_text())
+        manifest["indexSha256"] = sha(root / "index.sha256")
+        manifest["runtimes"]["api"]["entrySha256"] = sha(root / "api-runtime/dist/index.js")
+        DEPLOY_TEST.put(root / "manifest.json", manifest, 0o444)
+    runtime = json.loads(case.runtime_manifest.read_text())
+    rollback_root = case.releases / case.rollback
+    common = {"releaseId": case.rollback,
+              "manifestSha256": sha(rollback_root / "manifest.json"),
+              "indexSha256": sha(rollback_root / "index.sha256")}
+    runtime["rollbackReleases"] = {
+        "api": {**common, "entrySha256": sha(rollback_root / "api-runtime/dist/index.js")},
+        "frontend": {**common,
+                     "entrySha256": sha(rollback_root / "frontend-runtime/node_modules/next/dist/bin/next"),
+                     "buildId": "rollback-build"},
+    }
+    runtime["controlPlaneSha"] = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], check=True,
+        capture_output=True, text=True).stdout.strip()
+    DEPLOY_TEST.put(case.runtime_manifest, runtime)
+    case.control_plane = runtime["controlPlaneSha"]
+    case.inputs = dataclasses.replace(
+        case.inputs, control_plane=case.control_plane,
+        runtime_manifest_sha256=sha(case.runtime_manifest))
+
+
+def start_initial_processes(case, host, pm2, worker_definition=None):
+    if "worker" in case.stable:
+        case.stable["worker"].symlink_to(case.releases / case.rollback / "worker-runtime")
     apps = []
     for component in ("api", "frontend"):
         stable = case.stable[component]
@@ -534,8 +600,23 @@ def start_initial_processes(case, host, pm2):
     ecosystem = case.base / "initial-api-frontend.pm2.json"
     write_private(ecosystem, {"apps": apps})
     pm2_cli(pm2, host.environment, "start", str(ecosystem))
-    rollback_definition = Path(json.loads(case.runtime_manifest.read_text())
-                               ["workerPm2"]["rollback"]["definition"])
+    runtime = json.loads(case.runtime_manifest.read_text())
+    if worker_definition:
+        rollback_definition = Path(worker_definition)
+    elif "workerPm2" in runtime:
+        rollback_definition = Path(runtime["workerPm2"]["rollback"]["definition"])
+    else:
+        rollback_definition = case.base / "preserved-worker.pm2.private.json"
+        write_private(rollback_definition, {"apps": [{
+            "name": DEPLOY.PROCESS_NAMES["worker"], "script": str(case.worker / "index.js"),
+            "cwd": str(case.worker), "interpreter": str(case.node), "args": [],
+            "node_args": [], "exec_mode": "fork_mode", "instances": 1,
+            "namespace": "converta", "autorestart": True, "wait_ready": False,
+            "restart_delay": 1000, "kill_timeout": 10000, "listen_timeout": 10000,
+            "out_file": str(case.base / "worker.out.log"),
+            "error_file": str(case.base / "worker.err.log"), "merge_logs": True,
+            "env": {"NODE_ENV": "production"},
+        }]})
     pm2_cli(pm2, host.environment, "start", str(rollback_definition), "--only",
             DEPLOY.PROCESS_NAMES["worker"])
     pm2_cli(pm2, host.environment, "save")
@@ -661,6 +742,76 @@ def run_real_three_component_driver(pm2, node):
                          ("NODE_ENV", "drift"), ("duplicate", True)):
         run_real_driver_scenario(pm2, node, f"deny-{field}", drift=(field, value))
     print("THREE_COMPONENT_REAL_PM2_INTEGRATION_PASS")
+
+
+def run_real_read_state_cutover(pm2, node):
+    fixture = DEPLOY_TEST.DeployFixture(methodName="runTest")
+    fixture.setUp()
+    pm2_home = fixture.base / "read-state-cutover-pm2-home"
+    pm2_home.mkdir(mode=0o700)
+    environment = dict(os.environ, PM2_HOME=str(pm2_home),
+                       PATH=str(node.parent) + os.pathsep + os.environ.get("PATH", ""))
+    host = RealPm2Host(environment)
+    try:
+        prepare_real_api_frontend_fixture(fixture, node)
+        gate_path = fixture.enable_read_state_cutover()
+        synthetic_host = fixture.host
+        host.cutover_sealer = synthetic_host.cutover_sealer
+        host.cutover_publications = synthetic_host.cutover_publications
+        host.cutover_seal_result = synthetic_host.cutover_seal_result
+        host.cutover_result = synthetic_host.cutover_result
+        fixture.host = host
+        fixture.pm2 = pm2
+        start_initial_processes(fixture, host, pm2)
+        driver = make_real_driver(fixture, host, pm2)
+        driver.preflight()
+        rows = host.pm2_rows(pm2)
+        legacy = next(row for row in rows if row.get("name") == DEPLOY.PROCESS_NAMES["api"])
+        assert "INBOX_READ_STATE_ROOT" not in legacy["pm2_env"], "legacy_cb_external_root"
+        worker_pid = int(next(row for row in rows if row.get("name") ==
+                              DEPLOY.PROCESS_NAMES["worker"])["pid"])
+        gate = json.loads(gate_path.read_text())
+        authorization = json.loads(Path(gate["reconciliation"]["authorization"]).read_text())
+        source = Path(authorization["entries"][0]["sources"][0]["path"])
+        source.write_text(json.dumps(json.loads(source.read_text()), indent=2) + "\n")
+        final_source_sha = sha(source)
+        driver.activate()
+        journal = driver._journal_read()
+        assert journal["state"] == "AWAITING_ACCEPTANCE", journal["state"]
+        assert journal["readStateCutover"]["state"] == "AGGREGATE_VERIFIED"
+        manifest = json.loads(Path(gate["reconciliation"]["manifest"]).read_text())
+        assert manifest["entries"][0]["sourceAuthorities"][0]["sha256"] == final_source_sha
+        candidate_rows = host.pm2_rows(pm2)
+        candidate_api = next(row for row in candidate_rows if row.get("name") ==
+                             DEPLOY.PROCESS_NAMES["api"])
+        expected_root = gate["persistentRoot"]["path"]
+        assert candidate_api["pm2_env"].get("INBOX_READ_STATE_ROOT") == expected_root
+        assert int(next(row for row in candidate_rows if row.get("name") ==
+                        DEPLOY.PROCESS_NAMES["worker"])["pid"]) == worker_pid
+        assert driver._selection_snapshot("frontend")["releaseId"] == fixture.candidate
+        assert driver._journal_read()["saveCount"] == 0
+        driver.rollback()
+        terminal = driver._journal_read()
+        assert terminal["state"] == "ROLLED_BACK", terminal["state"]
+        rollback_api = next(row for row in host.pm2_rows(pm2) if row.get("name") ==
+                            DEPLOY.PROCESS_NAMES["api"])
+        assert rollback_api["pm2_env"].get("INBOX_READ_STATE_ROOT") == expected_root
+        assert driver._selection_snapshot("api")["releaseId"] == fixture.rollback
+        assert driver._selection_snapshot("frontend")["releaseId"] == fixture.rollback
+        assert int(next(row for row in host.pm2_rows(pm2) if row.get("name") ==
+                        DEPLOY.PROCESS_NAMES["worker"])["pid"]) == worker_pid
+        assert terminal["saveCount"] == 0 and host.mutations.count(("save",)) == 0
+        print("READ_STATE_CUTOVER_REAL_PM2_INTEGRATION_PASS")
+    finally:
+        daemon = isolated_daemon_pid(pm2_home)
+        pm2_cli(pm2, environment, "delete", "all", check=False)
+        pm2_cli(pm2, environment, "kill", check=False)
+        if daemon is not None:
+            deadline = time.monotonic() + 5
+            while Path(f"/proc/{daemon}").exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            assert not Path(f"/proc/{daemon}").exists(), "isolated_pm2_daemon_residual"
+        fixture.tearDown()
 
 
 def binding_args(prefix, request_path, source_path, definition_path):
@@ -824,6 +975,7 @@ def main():
             handle.settimeout(0.2)
             assert handle.connect_ex(("127.0.0.1", port)) != 0, "isolated_port_not_released"
     run_real_three_component_driver(pm2_path, node)
+    run_real_read_state_cutover(pm2_path, node)
 
 
 if __name__ == "__main__":
