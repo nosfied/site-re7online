@@ -45,6 +45,27 @@ for (const point of ["after_attempt", "after_destination", "after_verified"] as 
   });
 }
 
+test("a pre-rename interruption resumes only from the byte-exact operation temporary", async () => {
+  const resumed = await fixture();
+  const payload = `${JSON.stringify({ lastReadAtByConversationKey: { alias: "2026-11-20T10:00:00.000Z" }, manuallyUnreadByConversationKey: { alias: true } }, null, 2)}\n`;
+  const resumedTemporary = `${resumed.destination}.${resumed.request.operationId}.tmp`;
+  await fs.mkdir(path.dirname(resumedTemporary), { recursive: true, mode: 0o700 });
+  await fs.writeFile(resumedTemporary, payload, { mode: 0o600, flag: "wx" });
+  assert.equal((await reconcileInboxReadStateRequest(resumed.requestPath, hash(resumed.raw))).state, "VERIFIED");
+  assert.equal(await fs.readFile(resumed.destination, "utf8"), payload);
+  await assert.rejects(fs.lstat(resumedTemporary), { code: "ENOENT" });
+  await fs.rm(resumed.root, { recursive: true, force: true });
+
+  const divergent = await fixture();
+  const divergentTemporary = `${divergent.destination}.${divergent.request.operationId}.tmp`;
+  await fs.mkdir(path.dirname(divergentTemporary), { recursive: true, mode: 0o700 });
+  await fs.writeFile(divergentTemporary, "divergent\n", { mode: 0o600, flag: "wx" });
+  await assert.rejects(reconcileInboxReadStateRequest(divergent.requestPath, hash(divergent.raw)), /read_state_durable_temporary_conflict/);
+  assert.equal(await fs.readFile(divergentTemporary, "utf8"), "divergent\n");
+  await assert.rejects(fs.lstat(divergent.destination), { code: "ENOENT" });
+  await fs.rm(divergent.root, { recursive: true, force: true });
+});
+
 test("active writer lock, path substitution and unauthenticated anonymization are denied", async () => {
   const f = await fixture(); await fs.mkdir(path.dirname(f.destination), { recursive: true, mode: 0o700 }); await fs.mkdir(inboxReadStateLockPath(f.destination), { mode: 0o700 });
   await assert.rejects(reconcileInboxReadStateRequest(f.requestPath, hash(f.raw)), /reconciliation_concurrent_operation/); await fs.rmdir(inboxReadStateLockPath(f.destination));
