@@ -145,6 +145,8 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run build
+      - name: Validate Python-to-TypeScript read-state cutover authority contract
+        run: node --import tsx --test src/inbox/readStateCutoverAuthorityIntegration.test.ts
       - name: WhatsApp Meta tenant runtime DB-first regressions
         run: >-
           node --import tsx --test

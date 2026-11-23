@@ -183,14 +183,15 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
                 authorization_version = (authorization.get("schemaVersion"), authorization.get("kind"))
                 if (authorization_version not in {
                         (1, "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1"),
-                        (2, "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V2")} or
+                        (2, "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V2"),
+                        (3, "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V3")} or
                         authorization.get("operationId") != reconciliation["operationId"] or
                         len(authorization.get("entries", [])) != reconciliation.get("destinationCount") or
                         authorization.get("manifestPath") != reconciliation.get("manifest") or
                         authorization.get("aggregateReceiptPath") != reconciliation.get("receipt") or
                         authorization.get("sealReceiptPath") != reconciliation.get("sealReceipt")):
                     deny("reconciliation_snapshot_authorization_semantics")
-                if authorization_version[0] == 2:
+                if authorization_version[0] in {2, 3}:
                     for entry in authorization["entries"]:
                         sources = entry.get("sources") if isinstance(entry, dict) else None
                         if (not isinstance(sources, list) or not sources or any(
