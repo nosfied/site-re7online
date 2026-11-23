@@ -31,7 +31,7 @@ async function fixture() {
   const source = path.join(sourceRoot, "tenant-a/shared.json"); await fs.writeFile(source, '{"lastReadAtByConversationKey":{"alias":"2026-11-23T10:00:00.000Z"},"manuallyUnreadByConversationKey":{}}\n', { mode: 0o644 }); await fs.chmod(source, 0o644);
   const privacy = path.join(custody, "privacy/tenant-a.json"), privacySha = await put(privacy, { schemaVersion: 1, kind: "CONVERTA_PRIVACY_ANONYMIZED_CONVERSATION_KEYS", tenantId: "tenant-a", conversationKeys: [] });
   const batch = path.join(custody, "privacy/batch.json"), batchSha = await put(batch, { inventorySha256: inventorySha, journalSha256: journalSha, custodyManifestSha256: custodySha, verifiedCount: 34 });
-  const ancestorInfo = await fs.stat(root), custodyInfo = await fs.stat(custody), executor = "/usr/bin/install", executorInfo = await fs.stat(executor);
+  const ancestorInfo = await fs.stat(root), custodyInfo = await fs.stat(custody), executor = await fs.realpath("/usr/bin/install"), executorInfo = await fs.stat(executor);
   const authority = (file: string, info: Stats) => ({ path: file, device: info.dev, inode: info.ino, ownerUid: info.uid, groupGid: info.gid, mode: `0${(info.mode & 0o777).toString(8).padStart(3, "0")}` });
   const createdDirectories = [path.dirname(persistent), persistent].map((file) => ({ path: file, ownerUid: ancestorInfo.uid, groupGid: ancestorInfo.gid, mode: "0700" }));
   const commands = createdDirectories.map((item) => [executor, "-d", "-o", String(item.ownerUid), "-g", String(item.groupGid), "-m", "0700", item.path]);
