@@ -50,6 +50,8 @@ jobs:
         run: bash scripts/test-deploy-impact-matrix.sh
       - name: Validate composite backup retention terminal behavior
         run: bash scripts/test-re7-converta-backup-retention.sh
+      - name: Validate isolated inbox read-state restore
+        run: python3 -m unittest -v scripts/ci/test-read-state-backup-restore.py
       - name: Validate authenticated protected backup retention observer
         run: python3 -m unittest -v scripts/ci/test-backup-retention-protected-observer.py
       - name: Validate PM2 definition namespace boundary

@@ -8,9 +8,21 @@ BIN="${ROOT}/bin"
 BACKUP_ROOT="${ROOT}/backup"
 CONTENT="${ROOT}/content"
 mkdir -p "${BIN}" "${BACKUP_ROOT}/snapshots" "${CONTENT}/training" "${CONTENT}/support" "${CONTENT}/media"
+mkdir -p "${CONTENT}/read-state/tenant-a/assigned"
 printf 'training\n' > "${CONTENT}/training/item.txt"
 printf 'support\n' > "${CONTENT}/support/item.txt"
 printf 'media\n' > "${CONTENT}/media/item.txt"
+printf '%s\n' '{"lastReadAtByConversationKey":{"conversation-a":"2026-11-23T00:00:00.000Z"},"manuallyUnreadByConversationKey":{}}' > "${CONTENT}/read-state/tenant-a/shared.json"
+printf '%s\n' '{"lastReadAtByConversationKey":{},"manuallyUnreadByConversationKey":{}}' > "${CONTENT}/read-state/tenant-a/assigned/user-a.json"
+find "${CONTENT}/read-state" -type d -exec chmod 0700 {} +
+find "${CONTENT}/read-state" -type f -exec chmod 0600 {} +
+READ_STATE_CONTRACT="${ROOT}/backup-read-state.v2.json"
+python3 - "${READ_STATE_CONTRACT}" "${CONTENT}/read-state" <<'PY'
+import json, sys
+value={"directoryMode":"0700","fileMode":"0600","kind":"CONVERTA_BACKUP_READ_STATE_EXTENSION_V2","preserveOwnerGroup":True,"schemaVersion":2,"snapshotSubtree":"runtime-data/inbox-read-state","sourceRoot":sys.argv[2]}
+open(sys.argv[1],"w").write(json.dumps(value,sort_keys=True,separators=(",",":"))+"\n")
+PY
+READ_STATE_CONTRACT_SHA256="$(sha256sum "${READ_STATE_CONTRACT}" | awk '{print $1}')"
 
 cat > "${BIN}/docker" <<'SH'
 #!/usr/bin/env bash
@@ -68,6 +80,9 @@ run_backup() {
     TRAINING_CONTENT_ROOT="${CONTENT}/training" \
     SUPPORT_ATTACHMENT_ROOT="${CONTENT}/support" \
     WEB_SESSION_MEDIA_ROOT="${CONTENT}/media" \
+    INBOX_READ_STATE_ROOT="${CONTENT}/read-state" \
+    BACKUP_READ_STATE_CONTRACT="${READ_STATE_CONTRACT}" \
+    BACKUP_READ_STATE_CONTRACT_SHA256="${READ_STATE_CONTRACT_SHA256}" \
     BACKUP_ALERT_HELPER="${BIN}/alert-helper" \
     bash "$(dirname "$0")/re7-converta-backup"
 }
@@ -121,6 +136,9 @@ grep -q 'backup_terminal status=success .* phase=complete exit_code=0' <<<"${sec
 [[ -L "${BACKUP_ROOT}/latest" ]]
 latest="$(readlink -f "${BACKUP_ROOT}/latest")"
 (cd "${latest}" && sha256sum -c SHA256SUMS >/dev/null)
+cmp "${CONTENT}/read-state/tenant-a/shared.json" "${latest}/runtime-data/inbox-read-state/tenant-a/shared.json"
+[[ "$(stat -Lc '%a' "${latest}/runtime-data/inbox-read-state/tenant-a")" == "700" ]]
+[[ "$(stat -Lc '%a' "${latest}/runtime-data/inbox-read-state/tenant-a/shared.json")" == "600" ]]
 ! find "${BACKUP_ROOT}" -maxdepth 1 -name '.keep-*' | grep -q .
 
 cat > "${BIN}/tampered-observer" <<'SH'
