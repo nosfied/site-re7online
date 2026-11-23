@@ -1,11 +1,11 @@
 # Persistência durável de runtime entre releases
 
-**Estado:** `DURABILITY_LOCAL_VALIDATED / CUTOVER_CONTRACT_QUALIFIED / NOT_DEPLOYED / OWNER_REVIEW_REQUIRED`.
+**Estado:** `PROVISION_CONTRACT_LOCAL_VALIDATED / CUTOVER_CONTRACT_QUALIFIED / NOT_DEPLOYED / OWNER_REVIEW_REQUIRED`.
 
 **Baseline composto autenticado:** branch `review/campaign-recovery-20260926`,
-HEAD `b8f45210665d9657b607ab91355c3f646f9079d9`, árvore
-`e333b74a074cd8e934aba40b38da5af02f9f5af8`; PRs #440/#441 integrados,
-sem efeito produtivo nesta qualificação.
+HEAD `6a5839e7078fde0926829e542da69852118c1ca6`, árvore
+`38baff99c1208497b956c742c593b0c8c44b2561`; Frentes A+B e contratos dos
+PRs #436–#443, #445 e #446 integrados, sem efeito produtivo nesta qualificação.
 
 Este contrato especializa o modelo de releases imutáveis. Código, pacote e cache
 continuam pertencendo à release; estado operacional necessário à continuidade
@@ -96,6 +96,26 @@ O gate não altera receipts históricos de 41D/CB3721D4: schemas 1–3 continuam
 autenticáveis somente como autoridades históricas previamente seladas, sem receber retroativamente o estado
 `CANONICALLY_ENFORCED`. Produção continua com a dívida conhecida até autorização
 de provisionamento, reconciliação e deploy.
+
+## Provisionamento físico separado do cutover
+
+O provisionamento da raiz vazia não concede autoridade para inventariar,
+reconciliar ou ativar. `read-state-cutover-authority.py` possui um plano mínimo
+versionado que autentica somente root literal, UID/GID e `0700`, ancestrais,
+executor/comandos fechados e destinos privados de lock, journal e receipt.
+`prepare-provision` publica `PROVISION_INTENT_PREPARED` com
+`automaticExecution=false`; `provision` somente pode executar após
+`CONVERTA_DURABLE_READ_STATE_PROVISION_AUTHORIZE_ONCE_V1` byte-exato.
+
+A execução futura registra cada comando como `ATTEMPT → RESULT`, permite
+retomada apenas por readback físico compatível e encerra em
+`ROOT_PROVISIONED_VERIFIED`. Replay idêntico reautentica o receipt e a raiz;
+replay divergente, symlink, ancestor/owner/mode divergente, preexistência sem
+journal ou concorrência negam. O plano administrativo de cutover V2 referencia
+obrigatoriamente esse receipt e a mesma identidade física. Somente a autoridade
+posterior do cutover contém tenants, scopes, fontes, exclusões 34/34 e rollback.
+O fluxo V1 do #446 permanece disponível exclusivamente para autoridades já
+seladas; a separação não cria lifecycle alternativo nem autoriza efeitos.
 
 ## Contrato de cutover no driver canônico
 
