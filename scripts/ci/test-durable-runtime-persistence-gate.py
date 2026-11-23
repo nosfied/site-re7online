@@ -121,6 +121,51 @@ class PersistenceGateTest(unittest.TestCase):
         with self.assertRaisesRegex(GATE.Denied, "release_persistent_dependency"):
             GATE.validate(request, "retirement")
 
+    def test_v3_cutover_is_pending_before_activation_and_requires_physical_receipt(self):
+        destination = str(self.root / "tenant-a/shared.json")
+        authority = {"tenantId": "tenant-a", "scope": {"type": "shared"},
+                     "destinationPath": destination,
+                     "sourceAuthorities": [{"releaseId": "immutable-cb", "sha256": "2" * 64}],
+                     "anonymizationAuthoritySha256": "3" * 64}
+        inventory_path = self.base / "cutover-inventory.json"
+        inventory_sha = put(inventory_path, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_INBOX_READ_STATE_AUTHORIZED_DESTINATION_INVENTORY_V1",
+            "inventoryId": "cutover", "authorizedSourceReleases": ["immutable-cb"],
+            "destinations": [authority],
+        })
+        manifest_path = self.base / "cutover-manifest.json"
+        manifest_sha = put(manifest_path, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_MANIFEST_V1",
+            "operationId": "cutover-op", "custodyRoot": {},
+            "inventoryAuthority": {"path": str(inventory_path), "sha256": inventory_sha},
+            "entries": [{"requestPath": str(self.base / "request.json"),
+                         "requestSha256": "1" * 64,
+                         "receiptPath": str(self.base / "individual.json"), **authority}],
+            "aggregateReceiptPath": str(self.base / "aggregate.json"),
+        })
+        request = self.request()
+        request.pop("phase")
+        request.update(
+            schemaVersion=3, kind=GATE.KIND_V3, requiredPhases=list(GATE.PHASES),
+            reconciliation={"required": True, "state": "PENDING",
+                            "receipt": str(self.base / "aggregate.json"),
+                            "receiptSha256": "4" * 64, "operationId": "cutover-op",
+                            "manifest": str(manifest_path), "manifestSha256": manifest_sha,
+                            "destinationCount": 1},
+            cutover={"mode": "FIRST_RELEASE_LOCAL_TO_DURABLE_V1",
+                     "runner": {"path": str(self.base / "runner.js"), "sha256": "5" * 64},
+                     "candidateStorage": {"path": str(self.base / "store.js"),
+                                          "sha256": "6" * 64},
+                     "rollbackCompatibility": {"path": str(self.base / "rollback.json"),
+                                               "sha256": "7" * 64}},
+        )
+        for phase in ("qualification", "admission", "preflight"):
+            self.assertEqual("PENDING", GATE.validate(request, phase)["reconciliation"])
+        with self.assertRaises(FileNotFoundError):
+            GATE.validate(request, "activation")
+
     def test_real_retirement_consumer_invokes_gate_before_disposition(self):
         request = self.request(dependencies=["candidate/.data/app-read-state"])
         request.pop("phase"); request.update(schemaVersion=2, kind=GATE.KIND_V2,

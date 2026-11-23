@@ -109,21 +109,33 @@ deploy:
    autoridade privada das exclusões 34/34 e roots/custódia;
 2. parar somente a API CB e provar ausência do PID/start ticks; frontend e
    worker ED74 continuam fora da mutação;
-3. com todos os escritores CB excluídos, recapturar identidade e SHA das fontes,
-   materializar os requests finais e executar a reconciliação agregada;
+3. com todos os escritores CB excluídos, recapturar identidade e SHA das fontes
+   já seladas e executar a reconciliação agregada; qualquer mudança exige nova
+   autoridade antes de outro cutover, nunca materialização oportunista no driver;
 4. exigir aggregate receipt `VERIFIED` por readback de todos os destinos e
    executar novamente o gate `activation` com a mesma autoridade;
 5. trocar o symlink da API, iniciar a candidata apontada para a raiz externa e
    exigir readiness; somente então seguir a promoção normal do frontend.
+
+A extensão local do driver usa
+`CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3`: o request privado mantém o
+aggregate em `PENDING`, mas já sela manifesto, inventário, receipt esperado,
+runner e módulo de storage da candidata, além da atestação de rollback
+compatível. Qualification,
+admission e preflight aceitam somente essa pendência autenticada; activation e
+fases posteriores exigem o receipt físico exato, seus receipts individuais e o
+readback dos destinos. V1/V2 permanecem inalterados.
 
 A fronteira de commit do cutover é **a candidata API saudável após o symlink ter
 sido promovido, com aggregate receipt já `VERIFIED`**. Antes dela, falha retoma
 CB no symlink original; o aggregate receipt eventualmente já publicado é
 replay-safe e não autoriza duplicar reconciliação. Depois dela, rollback da API
 só é seguro para release que consuma a mesma raiz externa. O `pm2 restart`
-atual não oferece uma janela entre stop e start: a implementação dessa seção no
-driver existente e seus testes requer autorização específica. Não criar outro
-controlador.
+continua sendo usado para a promoção, mas somente depois de `pm2 stop`, prova de
+ausência do PID/start ticks antigo e aggregate verificado. O journal registra
+`QUIESCE_ATTEMPT → QUIESCED → RECONCILING → AGGREGATE_VERIFIED`; retomada após
+perda abrupta adota apenas o próprio lock autenticado e reconcilia receipts, sem
+segunda mutação cega. Não criar outro controlador.
 
 ## Rollback da primeira transição
 
@@ -136,6 +148,12 @@ controlador.
 Depois que existir uma release anterior já durável, ela passa a ser o rollback
 normal. Nenhuma release histórica será modificada. Aceitar rollback degradado
 é decisão explícita do Owner, não inferência do runbook.
+
+A release mínima derivada da CB deve trazer `readStateStore.js` compatível com
+`INBOX_READ_STATE_ROOT`. A autoridade privada
+`CONVERTA_DURABLE_READ_STATE_ROLLBACK_COMPATIBILITY_V1` sela release, manifest,
+index, entrypoint, módulo de storage e raiz literal; o driver recusa CB/41D
+históricas sem essa atestação. Esta definição não cria nem autoriza a geração.
 
 ## Backup, restore e autoridade do inventário
 

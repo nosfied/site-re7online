@@ -121,6 +121,10 @@ class FakeHost(deploy.Host):
         self.committed_driver: str | None = None
         self.historical_driver_commit: str | None = None
         self.historical_driver_blob: str | None = None
+        self.cutover_publications: list[tuple[Path, bytes]] = []
+        self.cutover_result: dict[str, Any] | None = None
+        self.cutover_fail = False
+        self.lingering_processes: set[int] = set()
 
     def run(self, command: list[str], *, timeout: float = 40,
             pass_fds: tuple[int, ...] = (),
@@ -145,6 +149,16 @@ class FakeHost(deploy.Host):
                 else (ROOT / "scripts/converta-deploy.py").read_text()
             )
             return subprocess.CompletedProcess(command, 0, source, "")
+        if len(command) == 4 and Path(command[1]).name == "readStateReconciliationBatch.js":
+            self.events.append("CUTOVER:RECONCILE")
+            if self.cutover_fail:
+                return subprocess.CompletedProcess(command, 2, "", "injected reconciliation failure\n")
+            for path, payload in self.cutover_publications:
+                path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                if not path.exists():
+                    path.write_bytes(payload); path.chmod(0o600)
+            return subprocess.CompletedProcess(
+                command, 0, json.dumps(self.cutover_result) + "\n", "")
         if command[-1:] == ["--version"]:
             return subprocess.CompletedProcess(command, 0, "6.0.14\n", "")
         if (len(command) > 2 and Path(command[1]).name == "pm2-definition-control.py" and
@@ -207,6 +221,13 @@ class FakeHost(deploy.Host):
             put(self.dump, list(self.rows.values()))
             self.events.append("DUMP:SAVED")
             return
+        if len(args) == 2 and args[0] == "stop":
+            row = self.rows[args[1]]
+            old_pid = row["pid"]
+            self.process_cwds.pop(old_pid, None)
+            row["pid"] = 0
+            row["pm2_env"]["status"] = "stopped"
+            return
         if len(args) == 2 and args[0] == "delete":
             row = self.rows.pop(args[1])
             self.process_cwds.pop(row["pid"], None)
@@ -248,6 +269,7 @@ class FakeHost(deploy.Host):
         old_pid = row["pid"]
         self.next_pid += 1
         row["pid"] = self.next_pid
+        row["pm2_env"]["status"] = "online"
         row["pm2_env"]["restart_time"] += 1
         self.process_cwds.pop(old_pid, None)
         stable = Path(row["pm2_env"]["pm_cwd"])
@@ -271,6 +293,9 @@ class FakeHost(deploy.Host):
 
     def process_exe(self, pid: int) -> Path:
         return self.node
+
+    def process_identity_absent(self, pid: int, start_ticks: int) -> bool:
+        return pid not in self.process_cwds and pid not in self.lingering_processes
 
     def control_evidence(self, root: Path, args: list[str], *, report: Path,
                          stdout: Path, stderr: Path) -> dict[str, Any]:
@@ -487,6 +512,169 @@ class DeployFixture(unittest.TestCase):
                                            retirement=self.retirement)
         self.driver = self._driver()
         return request
+
+    @staticmethod
+    def _root_authority(path: Path) -> dict[str, Any]:
+        info = path.lstat()
+        return {"path": str(path), "device": info.st_dev, "inode": info.st_ino,
+                "ownerUid": info.st_uid, "groupGid": info.st_gid, "mode": "0700"}
+
+    def enable_read_state_cutover(self) -> Path:
+        persistent = self.base / "durable-read-state"
+        custody = self.base / "read-state-cutover-custody"
+        source_root = self.releases / self.rollback / "api-runtime/.data/app-read-state"
+        for directory in (persistent, custody, source_root):
+            directory.mkdir(parents=True, mode=0o700); directory.chmod(0o700)
+        source = source_root / "tenant-a/shared.json"
+        source.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        source_payload = b'{"lastReadAtByConversationKey":{"conversation-a":"2026-11-22T00:00:00.000Z"},"manuallyUnreadByConversationKey":{}}\n'
+        source.write_bytes(source_payload); source.chmod(0o600)
+        privacy = custody / "privacy.private.json"
+        put(privacy, {"schemaVersion": 1,
+                      "kind": "CONVERTA_PRIVACY_ANONYMIZED_CONVERSATION_KEYS",
+                      "tenantId": "tenant-a", "conversationKeys": []})
+        operation = custody / "tenant-a-shared"
+        operation.mkdir(mode=0o700)
+        destination = persistent / "tenant-a/shared.json"
+        individual_path = operation / "receipt.private.json"
+        request_path = operation / "request.private.json"
+        reconciliation_request = {
+            "schemaVersion": 2, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_V2",
+            "operationId": "cutover-tenant-a-shared", "tenantId": "tenant-a",
+            "scope": {"type": "shared"}, "persistentRoot": self._root_authority(persistent),
+            "custodyRoot": self._root_authority(custody),
+            "sourceRoots": [self._root_authority(source_root)],
+            "sources": [{"path": str(source), "sha256": sha(source)}],
+            "destination": {"path": str(destination), "expectedExistingSha256": None},
+            "anonymizationAuthority": {"path": str(privacy), "sha256": sha(privacy)},
+            "journalPath": str(operation / "journal.private.jsonl"),
+            "receiptPath": str(individual_path),
+        }
+        put(request_path, reconciliation_request)
+        source_authorities = [{"releaseId": self.rollback, "sha256": sha(source)}]
+        authority = {"tenantId": "tenant-a", "scope": {"type": "shared"},
+                     "destinationPath": str(destination),
+                     "sourceAuthorities": source_authorities,
+                     "anonymizationAuthoritySha256": sha(privacy)}
+        inventory = custody / "inventory.private.json"
+        put(inventory, {"schemaVersion": 1,
+                        "kind": "CONVERTA_INBOX_READ_STATE_AUTHORIZED_DESTINATION_INVENTORY_V1",
+                        "inventoryId": "cutover-inventory",
+                        "authorizedSourceReleases": [self.rollback],
+                        "destinations": [authority]})
+        aggregate_path = custody / "aggregate/receipt.private.json"
+        manifest = custody / "manifest.private.json"
+        manifest_entry = {"requestPath": str(request_path), "requestSha256": sha(request_path),
+                          "receiptPath": str(individual_path), **authority}
+        put(manifest, {"schemaVersion": 1,
+                       "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_MANIFEST_V1",
+                       "operationId": "cutover-aggregate", "custodyRoot": self._root_authority(custody),
+                       "inventoryAuthority": {"path": str(inventory), "sha256": sha(inventory)},
+                       "entries": [manifest_entry], "aggregateReceiptPath": str(aggregate_path)})
+        destination_payload = (b'{\n  "lastReadAtByConversationKey": {\n'
+                               b'    "conversation-a": "2026-11-22T00:00:00.000Z"\n'
+                               b'  },\n  "manuallyUnreadByConversationKey": {}\n}\n')
+        individual = {
+            "schemaVersion": 2,
+            "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2",
+            "operationId": "cutover-tenant-a-shared", "requestSha256": sha(request_path),
+            "tenantId": "tenant-a", "scope": {"type": "shared"}, "state": "VERIFIED",
+            "destinationPath": str(destination),
+            "destinationSha256": hashlib.sha256(destination_payload).hexdigest(),
+            "sourceSha256": [sha(source)], "anonymizationAuthoritySha256": sha(privacy),
+        }
+        individual_raw = (json.dumps(individual, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        aggregate_entry = {**authority, "requestSha256": sha(request_path),
+                           "receiptPath": str(individual_path),
+                           "receiptSha256": hashlib.sha256(individual_raw).hexdigest()}
+        aggregate = {"schemaVersion": 1,
+                     "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_AGGREGATE_RECEIPT_V1",
+                     "operationId": "cutover-aggregate", "manifestSha256": sha(manifest),
+                     "inventorySha256": sha(inventory), "state": "VERIFIED",
+                     "entries": [aggregate_entry]}
+        aggregate_raw = (json.dumps(aggregate, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+        candidate_runner = (self.releases / self.candidate /
+                            "api-runtime/dist/inbox/readStateReconciliationBatch.js")
+        candidate_runner.parent.mkdir(parents=True, exist_ok=True)
+        candidate_runner.write_text("// authenticated fixture runner\n")
+        candidate_store = (self.releases / self.candidate /
+                           "api-runtime/dist/inbox/readStateStore.js")
+        candidate_store.write_text("// durable-root candidate storage fixture\n")
+        rollback_store = (self.releases / self.rollback /
+                          "api-runtime/dist/inbox/readStateStore.js")
+        rollback_store.parent.mkdir(parents=True, exist_ok=True)
+        rollback_store.write_text("// durable-root compatible rollback fixture\n")
+        for release in (self.candidate, self.rollback):
+            root = self.releases / release
+            (root / "index.sha256").chmod(0o644)
+            (root / "manifest.json").chmod(0o644)
+            put(root / "index.sha256", release_index(root), 0o444)
+            manifest_value = json.loads((root / "manifest.json").read_text())
+            manifest_value["indexSha256"] = sha(root / "index.sha256")
+            put(root / "manifest.json", manifest_value, 0o444)
+
+        runtime = json.loads(self.runtime_manifest.read_text())
+        rollback_root = self.releases / self.rollback
+        for identity in runtime["rollbackReleases"].values():
+            identity["manifestSha256"] = sha(rollback_root / "manifest.json")
+            identity["indexSha256"] = sha(rollback_root / "index.sha256")
+        compatibility = custody / "rollback-compatibility.private.json"
+        rollback_api = runtime["rollbackReleases"]["api"]
+        put(compatibility, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_DURABLE_READ_STATE_ROLLBACK_COMPATIBILITY_V1",
+            "releaseId": self.rollback, "manifestSha256": rollback_api["manifestSha256"],
+            "indexSha256": rollback_api["indexSha256"],
+            "apiEntrySha256": rollback_api["entrySha256"],
+            "readStateStore": {"path": str(rollback_store), "sha256": sha(rollback_store)},
+            "persistentRoot": str(persistent),
+        })
+        gate_request = custody / "durable-persistence-cutover.private.json"
+        aggregate_sha = hashlib.sha256(aggregate_raw).hexdigest()
+        put(gate_request, {
+            "schemaVersion": 3, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3",
+            "requiredPhases": ["qualification", "admission", "preflight", "activation",
+                               "acceptance", "finalize", "retirement"],
+            "surface": "INBOX_READ_STATE_V1",
+            "persistentRoot": {"path": str(persistent), "ownerUid": os.geteuid(),
+                               "groupGid": os.getegid(), "mode": "0700"},
+            "releaseRoots": [{"role": "candidate", "path": str(self.releases / self.candidate)},
+                             {"role": "rollback", "path": str(self.releases / self.rollback)}],
+            "reconciliation": {"required": True, "state": "PENDING",
+                               "receipt": str(aggregate_path), "receiptSha256": aggregate_sha,
+                               "operationId": "cutover-aggregate", "manifest": str(manifest),
+                               "manifestSha256": sha(manifest), "destinationCount": 1},
+            "unreconciledReleaseDependencies": [],
+            "cutover": {"mode": "FIRST_RELEASE_LOCAL_TO_DURABLE_V1",
+                        "runner": {"path": str(candidate_runner), "sha256": sha(candidate_runner)},
+                        "candidateStorage": {"path": str(candidate_store),
+                                             "sha256": sha(candidate_store)},
+                        "rollbackCompatibility": {"path": str(compatibility),
+                                                  "sha256": sha(compatibility)}},
+        })
+        runtime["schemaVersion"] = 4
+        runtime["durablePersistence"] = {"request": str(gate_request),
+                                         "requestSha256": sha(gate_request)}
+        put(self.runtime_manifest, runtime)
+        contract = json.loads(self.generation_contract.read_text())
+        contract["durablePersistence"] = runtime["durablePersistence"]
+        put(self.generation_contract, contract)
+        put(self.retirement.intent, {"contractSha256": sha(self.generation_contract)})
+        self.retirement = dataclasses.replace(
+            self.retirement, intent_sha256=sha(self.retirement.intent))
+        self.inputs = dataclasses.replace(
+            self.inputs, runtime_manifest_sha256=sha(self.runtime_manifest),
+            retirement=self.retirement)
+        self.host.rows[deploy.PROCESS_NAMES["api"]]["pm2_env"]["INBOX_READ_STATE_ROOT"] = str(persistent)
+        self.host.cutover_publications = [
+            (destination, destination_payload), (individual_path, individual_raw),
+            (aggregate_path, aggregate_raw),
+        ]
+        self.host.cutover_result = {"state": "VERIFIED", "receiptSha256": aggregate_sha,
+                                    "entryCount": 1}
+        self.driver = self._driver()
+        return gate_request
 
     def terminal_retirement_sentinel(self) -> tuple[Path, bytes]:
         """Bind a real canonical closure to a removed synthetic release sentinel."""
@@ -3599,6 +3787,115 @@ if config_path:
     def test_durable_persistence_invalid_receipt_denies_before_transaction(self):
         self.enable_durable_persistence(invalid_receipt=True)
         with self.assertRaisesRegex(deploy.Denied, "durable_persistence"):
+            self.driver.preflight()
+        self.assertFalse(self.transaction.exists())
+
+    def test_read_state_cutover_quiesces_reconciles_and_preserves_unselected_components(self):
+        self.inputs = dataclasses.replace(self.inputs, components=("api",))
+        self.enable_read_state_cutover()
+        frontend_pid = self.host.rows[deploy.PROCESS_NAMES["frontend"]]["pid"]
+        worker_pid = self.host.rows[deploy.PROCESS_NAMES["worker"]]["pid"]
+        self.driver.preflight()
+        self.assertEqual("PENDING", self.driver._journal_read()["binding"][
+            "durablePersistence"] and self.driver._enforce_durable_persistence(
+                self.driver._authenticated_runtime_manifest(), "preflight")["reconciliation"])
+        self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual("AWAITING_ACCEPTANCE", journal["state"])
+        self.assertEqual("AGGREGATE_VERIFIED", journal["readStateCutover"]["state"])
+        self.assertEqual(1, journal["readStateCutover"]["runnerInvocations"])
+        self.assertLess(self.host.events.index("PM2:stop re7-whatsapp-agent"),
+                        self.host.events.index("CUTOVER:RECONCILE"))
+        self.assertLess(self.host.events.index("CUTOVER:RECONCILE"),
+                        self.host.events.index("PM2:restart re7-whatsapp-agent"))
+        self.assertEqual(frontend_pid, self.host.rows[deploy.PROCESS_NAMES["frontend"]]["pid"])
+        self.assertEqual(worker_pid, self.host.rows[deploy.PROCESS_NAMES["worker"]]["pid"])
+        materializer, acceptance_request = self.acceptance_materializer_request()
+        completed = self.run_acceptance_materializer(materializer, acceptance_request)
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.driver.finalize()
+        self.assertEqual(1, self.host.save_calls)
+        with self.assertRaisesRegex(deploy.Denied, "finalize_state"):
+            self.driver.finalize()
+        self.assertEqual(1, self.host.save_calls)
+
+    def test_read_state_cutover_changed_source_denies_and_recovers_old_api(self):
+        gate = self.enable_read_state_cutover()
+        self.driver.preflight()
+        request = json.loads(gate.read_text())
+        manifest = json.loads(Path(request["reconciliation"]["manifest"]).read_text())
+        entry_request = json.loads(Path(manifest["entries"][0]["requestPath"]).read_text())
+        Path(entry_request["sources"][0]["path"]).write_text("changed\n")
+        with self.assertRaisesRegex(deploy.Denied, "read_state_cutover_source_changed"):
+            self.driver.activate()
+        self.assertNotIn("CUTOVER:RECONCILE", self.host.events)
+        self.assertEqual("online", self.host.rows[deploy.PROCESS_NAMES["api"]]["pm2_env"]["status"])
+        self.assertEqual("ROLLED_BACK", self.driver._journal_read()["state"])
+
+    def test_read_state_cutover_partial_or_divergent_aggregate_never_activates(self):
+        gate = self.enable_read_state_cutover()
+        request = json.loads(gate.read_text())
+        aggregate = Path(request["reconciliation"]["receipt"])
+        self.host.cutover_publications = [
+            publication for publication in self.host.cutover_publications
+            if publication[0] != aggregate
+        ]
+        self.driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "durable_persistence"):
+            self.driver.activate()
+        self.assertEqual("ROLLED_BACK", self.driver._journal_read()["state"])
+        self.assertEqual(self.rollback, self.driver._selection_snapshot("api")["releaseId"])
+
+    def test_read_state_cutover_divergent_aggregate_never_activates(self):
+        gate = self.enable_read_state_cutover()
+        request = json.loads(gate.read_text())
+        aggregate = Path(request["reconciliation"]["receipt"])
+        self.host.cutover_publications = [
+            (path, b"{}\n" if path == aggregate else payload)
+            for path, payload in self.host.cutover_publications
+        ]
+        self.driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "durable_persistence"):
+            self.driver.activate()
+        self.assertEqual("ROLLED_BACK", self.driver._journal_read()["state"])
+        self.assertEqual(self.rollback, self.driver._selection_snapshot("api")["releaseId"])
+
+    def test_read_state_cutover_lingering_writer_denies_without_reconciliation(self):
+        self.enable_read_state_cutover()
+        self.driver.preflight()
+        prior_pid = self.host.rows[deploy.PROCESS_NAMES["api"]]["pid"]
+        self.host.lingering_processes.add(prior_pid)
+        with self.assertRaisesRegex(deploy.Denied, "writer_active_recovery"):
+            self.driver.activate()
+        self.assertNotIn("CUTOVER:RECONCILE", self.host.events)
+        self.assertEqual("ACTIVATING", self.driver._journal_read()["state"])
+        self.assertFalse(self.driver._selection_snapshot("api")["releaseId"] == self.candidate)
+
+    def test_read_state_cutover_resumes_after_aggregate_without_repeating_reconciliation(self):
+        self.enable_read_state_cutover()
+        self.driver.preflight()
+        original = self.driver._failpoint
+        def abrupt(point: str) -> None:
+            if point == "read_state_cutover_after_aggregate":
+                raise KeyboardInterrupt("simulated abrupt process loss")
+            original(point)
+        self.driver._failpoint = abrupt  # type: ignore[method-assign]
+        with self.assertRaises(KeyboardInterrupt):
+            self.driver.activate()
+        self.assertEqual("ACTIVATING", self.driver._journal_read()["state"])
+        self.driver = self._driver()
+        self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual("AWAITING_ACCEPTANCE", journal["state"])
+        self.assertEqual(1, journal["readStateCutover"]["runnerInvocations"])
+        self.assertEqual(1, self.host.events.count("CUTOVER:RECONCILE"))
+
+    def test_read_state_cutover_requires_authenticated_compatible_rollback(self):
+        gate = self.enable_read_state_cutover()
+        request = json.loads(gate.read_text())
+        compatibility = Path(request["cutover"]["rollbackCompatibility"]["path"])
+        compatibility.write_text(compatibility.read_text() + " ")
+        with self.assertRaisesRegex(deploy.Denied, "rollback_binding"):
             self.driver.preflight()
         self.assertFalse(self.transaction.exists())
 

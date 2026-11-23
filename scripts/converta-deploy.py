@@ -587,6 +587,19 @@ class Host:
         except OSError:
             deny(f"process_exe:{pid}")
 
+    def process_identity_absent(self, pid: int, start_ticks: int) -> bool:
+        try:
+            text = Path(f"/proc/{pid}/stat").read_text()
+        except FileNotFoundError:
+            return True
+        except OSError:
+            deny(f"process_absence:{pid}")
+        try:
+            observed = int(text[text.rfind(")") + 2:].split()[19])
+        except (ValueError, IndexError):
+            deny(f"process_absence:{pid}")
+        return observed != start_ticks
+
 
 class Driver:
     def __init__(self, inputs: Inputs, *, host: Host | None = None,
@@ -2496,6 +2509,8 @@ class Driver:
         self._control_head()
         runtime_manifest = self._authenticated_runtime_manifest()
         persistence = self._enforce_durable_persistence(runtime_manifest, "preflight")
+        release = self._release()
+        cutover = self._read_state_cutover(runtime_manifest) if persistence is not None else None
         if self.journal.exists():
             deny("transaction_exists")
         if self.inputs.transaction_root.exists():
@@ -2504,7 +2519,6 @@ class Driver:
                 deny("transaction_root_not_empty")
         else:
             self.inputs.transaction_root.mkdir(mode=0o700, parents=True)
-        release = self._release()
         pm2 = self._resolve_pm2()
         rows = self.host.pm2_rows(pm2)
         worker = self._worker(rows)
@@ -2524,6 +2538,10 @@ class Driver:
                 deny(f"preflight_rollback_release:{component}")
             readiness[component] = self._readiness(
                 component, release_id, expected, f"preflight-{component}")
+        if (cutover is not None and
+                self._row(rows, PROCESS_NAMES["api"]).get("pm2_env", {}).get(
+                    "INBOX_READ_STATE_ROOT") != cutover["persistentRoot"]["path"]):
+            deny("read_state_cutover_runtime_root")
         if "worker" in self.inputs.components:
             rollback_identity = runtime_manifest["rollbackReleases"]["worker"]
             expected = self._rollback_release("worker", rollback_identity).resolve(strict=True)
@@ -2633,10 +2651,12 @@ class Driver:
         except OSError:
             deny("global_lock_changed")
         expected_identity = (os.geteuid(), os.getegid(), 0o600, 1)
+        own_value = self._lock_value(journal)
         observed_identity = (before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode),
                              before.st_nlink)
         if (self.lock.is_symlink() or not stat.S_ISREG(before.st_mode) or
-                observed_identity != expected_identity or before.st_size not in {0, 65}):
+                observed_identity != expected_identity or
+                before.st_size not in {0, 65, len(own_value)}):
             deny("global_lock_active")
         self._failpoint("existing_empty_lock_observed")
         try:
@@ -2654,7 +2674,7 @@ class Driver:
             except BlockingIOError:
                 deny("global_lock_active")
             current = self.lock.lstat()
-            content = os.pread(fd, 66, 0)
+            content = os.pread(fd, max(66, len(own_value) + 1), 0)
             if (self.lock.is_symlink() or
                     (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino) or
                     (current.st_uid, current.st_gid, stat.S_IMODE(current.st_mode),
@@ -2663,6 +2683,17 @@ class Driver:
                 deny("global_lock_changed")
             adopted_sentinel = None
             if content:
+                if len(content) == len(own_value) and content != own_value:
+                    deny("global_lock_active")
+                transition = journal.get("lockTransition")
+                if content == own_value:
+                    if (not isinstance(transition, dict) or transition.get("state") != "BOUND" or
+                            transition.get("device") != opened.st_dev or
+                            transition.get("inode") != opened.st_ino or
+                            transition.get("contentSha256") != hashlib.sha256(content).hexdigest() or
+                            journal.get("lockDigest") != hashlib.sha256(content).hexdigest()):
+                        deny("global_lock_resume_authority")
+                    return
                 adopted_sentinel = self._authenticate_retirement_sentinel_closure(content)
                 after_auth = self.lock.lstat()
                 if ((after_auth.st_dev, after_auth.st_ino) != (opened.st_dev, opened.st_ino) or
@@ -3077,56 +3108,308 @@ class Driver:
             if any(expected.get(key) != current.get(key) for key in stable):
                 deny("private_data_overlay_identity_drift")
 
+    def _durable_persistence_request(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        binding = manifest.get("durablePersistence")
+        if (not isinstance(binding, dict) or set(binding) != {"request", "requestSha256"} or
+                not isinstance(binding.get("request"), str) or
+                not SHA256.fullmatch(str(binding.get("requestSha256", "")))):
+            deny("durable_persistence_binding")
+        path = Path(binding["request"])
+        raw, _ = stable_regular_bytes(path, required_mode=0o600)
+        if hashlib.sha256(raw).hexdigest() != binding["requestSha256"]:
+            deny("durable_persistence_request_sha256")
+        value = json_object(raw, path.name)
+        canonical = (json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                separators=(",", ":")) + "\n").encode()
+        if raw != canonical:
+            deny("durable_persistence_request_canonical")
+        return value
+
+    def _read_state_cutover(self, manifest: dict[str, Any]) -> dict[str, Any] | None:
+        if "durablePersistence" not in manifest:
+            return None
+        request = self._durable_persistence_request(manifest)
+        if request.get("schemaVersion") != 3:
+            return None
+        if (request.get("kind") != "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3" or
+                "api" not in self.inputs.components):
+            deny("read_state_cutover_request")
+        cutover = request.get("cutover")
+        if (not isinstance(cutover, dict) or
+                cutover.get("mode") != "FIRST_RELEASE_LOCAL_TO_DURABLE_V1"):
+            deny("read_state_cutover_contract")
+        reconciliation = request.get("reconciliation")
+        if (not isinstance(reconciliation, dict) or reconciliation.get("required") is not True or
+                reconciliation.get("state") != "PENDING"):
+            deny("read_state_cutover_reconciliation")
+
+        runner_binding = cutover.get("runner")
+        candidate_storage_binding = cutover.get("candidateStorage")
+        rollback_binding = cutover.get("rollbackCompatibility")
+        if (not isinstance(runner_binding, dict) or
+                set(runner_binding) != {"path", "sha256"} or
+                not isinstance(candidate_storage_binding, dict) or
+                set(candidate_storage_binding) != {"path", "sha256"} or
+                not isinstance(rollback_binding, dict) or
+                set(rollback_binding) != {"path", "sha256"}):
+            deny("read_state_cutover_binding")
+        runner = Path(str(runner_binding.get("path", "")))
+        expected_runner = (self.release_root /
+                           "api-runtime/dist/inbox/readStateReconciliationBatch.js")
+        if runner != expected_runner or not SHA256.fullmatch(str(runner_binding.get("sha256", ""))):
+            deny("read_state_cutover_runner")
+        runner_raw, _ = stable_regular_bytes(runner)
+        if hashlib.sha256(runner_raw).hexdigest() != runner_binding["sha256"]:
+            deny("read_state_cutover_runner_sha256")
+        candidate_store = (self.release_root /
+                           "api-runtime/dist/inbox/readStateStore.js")
+        if (Path(str(candidate_storage_binding.get("path", ""))) != candidate_store or
+                not SHA256.fullmatch(str(candidate_storage_binding.get("sha256", "")))):
+            deny("read_state_cutover_candidate_store")
+        candidate_store_raw, _ = stable_regular_bytes(candidate_store)
+        if hashlib.sha256(candidate_store_raw).hexdigest() != candidate_storage_binding["sha256"]:
+            deny("read_state_cutover_candidate_store_sha256")
+
+        compatibility_path = Path(str(rollback_binding.get("path", "")))
+        compatibility_raw, _ = stable_regular_bytes(compatibility_path, required_mode=0o600)
+        if (not SHA256.fullmatch(str(rollback_binding.get("sha256", ""))) or
+                hashlib.sha256(compatibility_raw).hexdigest() != rollback_binding["sha256"]):
+            deny("read_state_cutover_rollback_binding")
+        compatibility = json_object(compatibility_raw, compatibility_path.name)
+        expected_keys = {"schemaVersion", "kind", "releaseId", "manifestSha256",
+                         "indexSha256", "apiEntrySha256", "readStateStore",
+                         "persistentRoot"}
+        rollback = manifest["rollbackReleases"]["api"]
+        root = request["persistentRoot"]["path"]
+        if (set(compatibility) != expected_keys or compatibility.get("schemaVersion") != 1 or
+                compatibility.get("kind") !=
+                "CONVERTA_DURABLE_READ_STATE_ROLLBACK_COMPATIBILITY_V1" or
+                compatibility.get("releaseId") != rollback["releaseId"] or
+                compatibility.get("manifestSha256") != rollback["manifestSha256"] or
+                compatibility.get("indexSha256") != rollback["indexSha256"] or
+                compatibility.get("apiEntrySha256") != rollback["entrySha256"] or
+                compatibility.get("persistentRoot") != root):
+            deny("read_state_cutover_rollback_compatibility")
+        store = compatibility.get("readStateStore")
+        rollback_store = (self.releases / rollback["releaseId"] /
+                          "api-runtime/dist/inbox/readStateStore.js")
+        if (not isinstance(store, dict) or set(store) != {"path", "sha256"} or
+                Path(str(store.get("path", ""))) != rollback_store or
+                not SHA256.fullmatch(str(store.get("sha256", "")))):
+            deny("read_state_cutover_rollback_store")
+        store_raw, _ = stable_regular_bytes(rollback_store)
+        if hashlib.sha256(store_raw).hexdigest() != store["sha256"]:
+            deny("read_state_cutover_rollback_store_sha256")
+        return request
+
+    def _recapture_read_state_sources(self, request: dict[str, Any]) -> dict[str, Any]:
+        reconciliation = request["reconciliation"]
+        manifest_path = Path(reconciliation["manifest"])
+        manifest_raw, _ = stable_regular_bytes(manifest_path, required_mode=0o600)
+        if hashlib.sha256(manifest_raw).hexdigest() != reconciliation["manifestSha256"]:
+            deny("read_state_cutover_manifest_sha256")
+        manifest = json_object(manifest_raw, manifest_path.name)
+        entries = manifest.get("entries")
+        if not isinstance(entries, list) or len(entries) != reconciliation["destinationCount"]:
+            deny("read_state_cutover_manifest_entries")
+        recaptured: list[dict[str, Any]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                deny("read_state_cutover_manifest_entry")
+            request_path = Path(str(entry.get("requestPath", "")))
+            entry_raw, _ = stable_regular_bytes(request_path, required_mode=0o600)
+            if hashlib.sha256(entry_raw).hexdigest() != entry.get("requestSha256"):
+                deny("read_state_cutover_request_sha256")
+            entry_request = json_object(entry_raw, request_path.name)
+            sources = entry_request.get("sources")
+            if not isinstance(sources, list) or not sources:
+                deny("read_state_cutover_sources")
+            expected = sorted(str(item.get("sha256", "")) for item in entry.get("sourceAuthorities", [])
+                              if isinstance(item, dict))
+            observed: list[str] = []
+            for source in sources:
+                if (not isinstance(source, dict) or set(source) != {"path", "sha256"} or
+                        not SHA256.fullmatch(str(source.get("sha256", "")))):
+                    deny("read_state_cutover_source_authority")
+                source_raw, _ = stable_regular_bytes(Path(source["path"]))
+                actual = hashlib.sha256(source_raw).hexdigest()
+                if actual != source["sha256"]:
+                    deny("read_state_cutover_source_changed")
+                observed.append(actual)
+            if sorted(observed) != expected:
+                deny("read_state_cutover_source_manifest")
+            anonymization = entry_request.get("anonymizationAuthority")
+            if (not isinstance(anonymization, dict) or
+                    set(anonymization) != {"path", "sha256"}):
+                deny("read_state_cutover_anonymization")
+            anonymization_raw, _ = stable_regular_bytes(Path(anonymization["path"]))
+            if (hashlib.sha256(anonymization_raw).hexdigest() != anonymization["sha256"] or
+                    anonymization["sha256"] != entry.get("anonymizationAuthoritySha256")):
+                deny("read_state_cutover_anonymization_changed")
+            recaptured.append({"requestSha256": entry["requestSha256"],
+                               "sourceSha256": sorted(observed),
+                               "anonymizationAuthoritySha256": anonymization["sha256"]})
+        return {"manifestSha256": reconciliation["manifestSha256"],
+                "entries": recaptured}
+
+    def _api_is_quiesced(self, previous: dict[str, Any]) -> bool:
+        matches = [row for row in self.host.pm2_rows(self._resolve_pm2())
+                   if row.get("name") == PROCESS_NAMES["api"]]
+        if len(matches) > 1:
+            deny("read_state_cutover_api_cardinality")
+        if matches:
+            env = matches[0].get("pm2_env", {})
+            if env.get("status") == "online":
+                return False
+        return self.host.process_identity_absent(previous["pid"], previous["startTicks"])
+
+    def _execute_read_state_cutover(self, journal: dict[str, Any], request: dict[str, Any]) -> None:
+        previous = journal["previous"]["processes"]["api"]
+        root = request["persistentRoot"]["path"]
+        transition = journal.setdefault("readStateCutover", {
+            "schemaVersion": 1, "state": "PENDING", "operationId":
+            request["reconciliation"]["operationId"], "runnerInvocations": 0,
+        })
+        if (transition.get("operationId") != request["reconciliation"]["operationId"] or
+                transition.get("state") not in {"PENDING", "QUIESCE_ATTEMPT", "QUIESCED",
+                                                "RECONCILING", "AGGREGATE_VERIFIED"}):
+            deny("read_state_cutover_transition")
+        if transition["state"] == "PENDING":
+            api_row = self._row(self.host.pm2_rows(self._resolve_pm2()), PROCESS_NAMES["api"])
+            if api_row.get("pm2_env", {}).get("INBOX_READ_STATE_ROOT") != root:
+                deny("read_state_cutover_runtime_root")
+            transition["state"] = "QUIESCE_ATTEMPT"
+            self._journal_write(journal, "ACTIVATING")
+            self.host.pm2_mutate(self._resolve_pm2(), ["stop", PROCESS_NAMES["api"]])
+        if transition["state"] == "QUIESCE_ATTEMPT":
+            if not self._api_is_quiesced(previous):
+                deny("read_state_cutover_writer_active")
+            transition["state"] = "QUIESCED"
+            transition["quiescedProcess"] = {"pid": previous["pid"],
+                                              "startTicks": previous["startTicks"]}
+            self._journal_write(journal, "ACTIVATING")
+            self._failpoint("read_state_cutover_after_quiesce")
+        if transition["state"] == "QUIESCED":
+            transition["sourceReadback"] = self._recapture_read_state_sources(request)
+            transition["state"] = "RECONCILING"
+            self._journal_write(journal, "ACTIVATING")
+        if transition["state"] == "RECONCILING":
+            cutover = request["cutover"]
+            runner = cutover["runner"]["path"]
+            reconciliation = request["reconciliation"]
+            transition["runnerInvocations"] += 1
+            self._journal_write(journal, "ACTIVATING")
+            result = self.host.run([
+                previous["interpreterPhysical"], runner,
+                reconciliation["manifest"], reconciliation["manifestSha256"],
+            ], timeout=300)
+            if result.returncode:
+                deny("read_state_cutover_reconciliation_failed")
+            try:
+                output = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                deny("read_state_cutover_reconciliation_output")
+            if (not isinstance(output, dict) or output.get("state") not in
+                    {"VERIFIED", "REPLAY_VERIFIED"} or
+                    output.get("receiptSha256") != reconciliation["receiptSha256"]):
+                deny("read_state_cutover_reconciliation_result")
+            transition["state"] = "AGGREGATE_VERIFIED"
+            transition["aggregateReceiptSha256"] = output["receiptSha256"]
+            self._journal_write(journal, "ACTIVATING")
+            self._failpoint("read_state_cutover_after_aggregate")
+        self._enforce_durable_persistence(self._authenticated_runtime_manifest(), "activation")
+
+    def _recover_quiesced_api(self, journal: dict[str, Any]) -> None:
+        transition = journal.get("readStateCutover")
+        if (not isinstance(transition, dict) or transition.get("state") not in
+                {"QUIESCE_ATTEMPT", "QUIESCED", "RECONCILING", "AGGREGATE_VERIFIED"} or
+                journal.get("activationAttempted")):
+            return
+        previous = journal["previous"]
+        prior_api = previous["processes"]["api"]
+        if not self.host.process_identity_absent(prior_api["pid"], prior_api["startTicks"]):
+            deny("read_state_cutover_writer_active_recovery")
+        target = Path(previous["symlinks"]["api"])
+        atomic_symlink(self.stable["api"], target)
+        self.host.pm2_mutate(self._resolve_pm2(), ["restart", PROCESS_NAMES["api"]])
+        restored = self._process_snapshot(
+            self._row(self.host.pm2_rows(self._resolve_pm2()), PROCESS_NAMES["api"]),
+            "api", target.resolve(strict=True))
+        if self._configuration_projection(restored) != self._configuration_projection(
+                previous["processes"]["api"]):
+            deny("read_state_cutover_recovery_configuration")
+        self._readiness("api", previous["releases"]["api"], target.resolve(strict=True),
+                        "read-state-cutover-recovery-api")
+        transition["state"] = "RECOVERED"
+        self._journal_write(journal, "ACTIVATING")
+
     def activate(self) -> None:
         journal = self._journal_read()
-        if journal["state"] != "PREFLIGHT_PASS":
+        resuming = journal["state"] == "ACTIVATING"
+        if journal["state"] not in {"PREFLIGHT_PASS", "ACTIVATING"}:
             deny("activate_state")
         if self.inputs.retirement is not None:
             self._check_external_retirement(self.inputs.retirement)
-        self._control_head(); runtime_manifest = self._authenticated_runtime_manifest()
-        self._enforce_durable_persistence(runtime_manifest, "activation")
+        self._control_head(journal if resuming else None)
+        runtime_manifest = self._authenticated_runtime_manifest()
+        cutover = self._read_state_cutover(runtime_manifest)
+        if cutover is None:
+            if resuming:
+                deny("activate_state")
+            self._enforce_durable_persistence(runtime_manifest, "activation")
         release = self._release()
         self._validate_private_data_continuity(journal, release)
         self._acquire_lock(journal)
+        if not resuming:
+            try:
+                rows = self.host.pm2_rows(self._resolve_pm2())
+                processes = {}
+                for component in COMPONENTS:
+                    selection = self._selection_snapshot(component)
+                    if selection != journal.get("preflight", {}).get("selections", {}).get(component):
+                        deny(f"pre_activation_selection_drift:{component}")
+                    current_runtime = Path(selection["physicalRuntime"])
+                    snapshot = self._process_snapshot(
+                        self._row(rows, self._process_name(component)), component, current_runtime)
+                    if snapshot != journal.get("preflight", {}).get("processes", {}).get(component):
+                        deny(f"pre_activation_process_drift:{component}")
+                    processes[component] = snapshot
+                worker = self._worker(rows)
+                if worker != journal.get("preflight", {}).get("worker"):
+                    deny("pre_activation_worker_drift")
+                previous = {
+                    "symlinks": {component: os.readlink(self.stable[component]) for component in COMPONENTS},
+                    "releases": {component: runtime_manifest["rollbackReleases"][component]["releaseId"]
+                                 for component in self._payload_components()},
+                    "worker": worker, "processes": processes,
+                    "dump": private_file_identity(self.dump),
+                }
+                if "worker" in self.inputs.components:
+                    previous["symlinks"]["worker"] = None
+                    previous["processes"]["worker"] = worker
+                rollback_dump = self.inputs.transaction_root / "rollback.dump.pm2"
+                if rollback_dump.exists():
+                    deny("rollback_dump_exists")
+                shutil.copyfile(self.dump, rollback_dump)
+                os.chmod(rollback_dump, 0o600)
+                with rollback_dump.open("rb") as stream: os.fsync(stream.fileno())
+            except Exception:
+                self._rollback_lock_transition(journal)
+                raise
+            journal["previous"] = previous
+            journal["rollbackDumpSha256"] = digest(rollback_dump)
+            self._journal_write(journal, "ACTIVATING")
+        else:
+            if (cutover is None or journal.get("activationAttempted") or
+                    journal.get("readStateCutover", {}).get("state") not in
+                    {"QUIESCE_ATTEMPT", "QUIESCED", "RECONCILING", "AGGREGATE_VERIFIED"}):
+                deny("activate_resume_state")
+            previous = journal.get("previous")
+            if not isinstance(previous, dict):
+                deny("activate_resume_previous")
         try:
-            rows = self.host.pm2_rows(self._resolve_pm2())
-            processes = {}
-            for component in COMPONENTS:
-                selection = self._selection_snapshot(component)
-                if selection != journal.get("preflight", {}).get("selections", {}).get(component):
-                    deny(f"pre_activation_selection_drift:{component}")
-                current_runtime = Path(selection["physicalRuntime"])
-                snapshot = self._process_snapshot(
-                    self._row(rows, self._process_name(component)), component, current_runtime)
-                if snapshot != journal.get("preflight", {}).get("processes", {}).get(component):
-                    deny(f"pre_activation_process_drift:{component}")
-                processes[component] = snapshot
-            worker = self._worker(rows)
-            if worker != journal.get("preflight", {}).get("worker"):
-                deny("pre_activation_worker_drift")
-            previous = {
-                "symlinks": {component: os.readlink(self.stable[component]) for component in COMPONENTS},
-                "releases": {component: runtime_manifest["rollbackReleases"][component]["releaseId"]
-                             for component in self._payload_components()},
-                "worker": worker, "processes": processes,
-                "dump": private_file_identity(self.dump),
-            }
-            if "worker" in self.inputs.components:
-                previous["symlinks"]["worker"] = None
-                previous["processes"]["worker"] = worker
-            rollback_dump = self.inputs.transaction_root / "rollback.dump.pm2"
-            if rollback_dump.exists():
-                deny("rollback_dump_exists")
-            shutil.copyfile(self.dump, rollback_dump)
-            os.chmod(rollback_dump, 0o600)
-            with rollback_dump.open("rb") as stream: os.fsync(stream.fileno())
-        except Exception:
-            self._rollback_lock_transition(journal)
-            raise
-        journal["previous"] = previous
-        journal["rollbackDumpSha256"] = digest(rollback_dump)
-        self._journal_write(journal, "ACTIVATING")
-        try:
+            if cutover is not None:
+                self._execute_read_state_cutover(journal, cutover)
             readiness: dict[str, Any] = {}
             candidate_processes: dict[str, Any] = {}
             for component in self.inputs.components:
@@ -3158,6 +3441,7 @@ class Driver:
                                     "worker": worker}
             self._journal_write(journal, "AWAITING_ACCEPTANCE")
         except Exception:
+            self._recover_quiesced_api(journal)
             self._rollback_internal(journal)
             raise
 

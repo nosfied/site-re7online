@@ -15,6 +15,7 @@ from typing import Any
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 KIND = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V1"
 KIND_V2 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V2"
+KIND_V3 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3"
 PHASES = ("qualification", "admission", "preflight", "activation", "acceptance",
           "finalize", "retirement")
 ENFORCEMENT_STATE = "CANONICALLY_ENFORCED"
@@ -64,10 +65,13 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
     common = {"schemaVersion", "kind", "surface", "persistentRoot", "releaseRoots",
               "reconciliation", "unreconciledReleaseDependencies"}
     legacy = request.get("schemaVersion") == 1
-    required = common | ({"phase"} if legacy else {"requiredPhases"})
+    cutover = request.get("schemaVersion") == 3
+    required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set())
     if (set(request) != required or
             (legacy and request.get("kind") != KIND) or
-            (not legacy and (request.get("schemaVersion") != 2 or request.get("kind") != KIND_V2))):
+            (not legacy and not cutover and
+             (request.get("schemaVersion") != 2 or request.get("kind") != KIND_V2)) or
+            (cutover and request.get("kind") != KIND_V3)):
         deny("request_schema")
     if legacy:
         declared_phases = (request.get("phase"),)
@@ -100,16 +104,22 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
     if not isinstance(reconciliation, dict) or set(reconciliation) not in (individual_keys, aggregate_keys):
         deny("reconciliation_schema")
     required_reconciliation = reconciliation.get("required") is True
-    expected_state = "VERIFIED" if required_reconciliation else "NOT_REQUIRED"
+    expected_state = ("PENDING" if cutover and required_reconciliation else
+                      "VERIFIED" if required_reconciliation else "NOT_REQUIRED")
     if reconciliation.get("state") != expected_state:
         deny("reconciliation_state")
+    receipt_value: dict[str, Any] | None = None
     if required_reconciliation:
         receipt = Path(str(reconciliation.get("receipt", "")))
         receipt_sha = str(reconciliation.get("receiptSha256", ""))
-        receipt_value = private_json(receipt, receipt_sha)
+        if cutover and set(reconciliation) != aggregate_keys:
+            deny("reconciliation_cutover_requires_aggregate")
+        final_phase = phase in {"activation", "acceptance", "finalize", "retirement"}
+        if not cutover or final_phase or receipt.exists() or receipt.is_symlink():
+            receipt_value = private_json(receipt, receipt_sha)
         if set(reconciliation) == individual_keys:
             expected = {"schemaVersion": 2, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2", "state": "VERIFIED", "operationId": reconciliation["operationId"], "tenantId": reconciliation["tenantId"], "scope": reconciliation["scope"], "destinationPath": reconciliation["destinationPath"]}
-            if any(receipt_value.get(key) != value for key, value in expected.items()):
+            if receipt_value is None or any(receipt_value.get(key) != value for key, value in expected.items()):
                 deny("reconciliation_receipt_semantics")
         else:
             manifest = private_json(Path(str(reconciliation.get("manifest", ""))), str(reconciliation.get("manifestSha256", "")))
@@ -124,7 +134,7 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
             if (inventory.get("schemaVersion") != 1 or inventory.get("kind") != "CONVERTA_INBOX_READ_STATE_AUTHORIZED_DESTINATION_INVENTORY_V1"
                     or not isinstance(inventory.get("destinations"), list)):
                 deny("reconciliation_inventory_semantics")
-            if (receipt_value.get("schemaVersion") != 1 or receipt_value.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_AGGREGATE_RECEIPT_V1"
+            if receipt_value is not None and (receipt_value.get("schemaVersion") != 1 or receipt_value.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_AGGREGATE_RECEIPT_V1"
                     or receipt_value.get("state") != "VERIFIED" or receipt_value.get("operationId") != reconciliation["operationId"]
                     or receipt_value.get("manifestSha256") != reconciliation["manifestSha256"] or not isinstance(receipt_value.get("entries"), list)
                     or receipt_value.get("inventorySha256") != inventory_authority["sha256"]
@@ -135,16 +145,25 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
             if len(inventory_entries) != len(inventory["destinations"]) or inventory_entries != manifest_inventory_entries:
                 deny("reconciliation_inventory_completeness")
             manifest_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in manifest["entries"] if isinstance(entry, dict)}
-            receipt_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in receipt_value["entries"] if isinstance(entry, dict)}
-            if len(manifest_entries) != len(manifest["entries"]) or manifest_entries != receipt_entries:
-                deny("reconciliation_receipt_completeness")
-            for entry in receipt_value["entries"]:
-                individual = private_json(Path(str(entry.get("receiptPath", ""))), str(entry.get("receiptSha256", "")))
-                if (individual.get("schemaVersion") != 2 or individual.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2"
-                        or individual.get("state") != "VERIFIED" or individual.get("tenantId") != entry.get("tenantId")
-                        or individual.get("scope") != entry.get("scope") or individual.get("destinationPath") != entry.get("destinationPath")
-                        or individual.get("requestSha256") != entry.get("requestSha256")):
-                    deny("reconciliation_individual_receipt_semantics")
+            if receipt_value is not None:
+                receipt_entries = {(entry.get("tenantId"), canonical(entry.get("scope")), entry.get("destinationPath"), entry.get("requestSha256"), entry.get("receiptPath"), canonical(entry.get("sourceAuthorities")), entry.get("anonymizationAuthoritySha256")) for entry in receipt_value["entries"] if isinstance(entry, dict)}
+                if len(manifest_entries) != len(manifest["entries"]) or manifest_entries != receipt_entries:
+                    deny("reconciliation_receipt_completeness")
+                for entry in receipt_value["entries"]:
+                    individual = private_json(Path(str(entry.get("receiptPath", ""))), str(entry.get("receiptSha256", "")))
+                    if (individual.get("schemaVersion") != 2 or individual.get("kind") != "CONVERTA_INBOX_READ_STATE_RECONCILIATION_RECEIPT_V2"
+                            or individual.get("state") != "VERIFIED" or individual.get("tenantId") != entry.get("tenantId")
+                            or individual.get("scope") != entry.get("scope") or individual.get("destinationPath") != entry.get("destinationPath")
+                            or individual.get("requestSha256") != entry.get("requestSha256")):
+                        deny("reconciliation_individual_receipt_semantics")
+                    if cutover:
+                        destination = Path(str(entry.get("destinationPath", "")))
+                        try:
+                            destination_raw = destination.read_bytes()
+                        except OSError:
+                            deny("reconciliation_destination_readback")
+                        if hashlib.sha256(destination_raw).hexdigest() != individual.get("destinationSha256"):
+                            deny("reconciliation_destination_readback")
     elif any(reconciliation.get(key) is not None for key in set(reconciliation) - {"required", "state"}):
         deny("reconciliation_unnecessary")
 
@@ -174,12 +193,26 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
                 deny("persistent_root_ancestor")
         observation = {"device": info.st_dev, "inode": info.st_ino, "mode": "0700",
                        "ownerUid": info.st_uid, "groupGid": info.st_gid}
+    if cutover:
+        cutover_value = request.get("cutover")
+        cutover_keys = {"mode", "runner", "candidateStorage", "rollbackCompatibility"}
+        if (not isinstance(cutover_value, dict) or set(cutover_value) != cutover_keys or
+                cutover_value.get("mode") != "FIRST_RELEASE_LOCAL_TO_DURABLE_V1"):
+            deny("cutover_schema")
+        for label in ("runner", "candidateStorage", "rollbackCompatibility"):
+            binding = cutover_value.get(label)
+            if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+                    not Path(str(binding.get("path", ""))).is_absolute() or
+                    not SHA256.fullmatch(str(binding.get("sha256", "")))):
+                deny(f"cutover_{label}_binding")
     enforcement = (ENFORCEMENT_STATE if not legacy and invoked_phase is not None
                    else "LEGACY_VALIDATED_NOT_ENFORCED")
     return {"schemaVersion": 1, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_REPORT",
             "result": "PASS", "phase": phase, "surface": request["surface"],
             "persistentRoot": str(root), "observation": observation,
-            "reconciliation": reconciliation["state"], "enforcementState": enforcement}
+            "reconciliation": ("VERIFIED" if receipt_value is not None else reconciliation["state"]),
+            "cutoverMode": request.get("cutover", {}).get("mode"),
+            "enforcementState": enforcement}
 
 
 def main() -> int:
