@@ -156,6 +156,10 @@ class ProtectedRetentionObserverTests(unittest.TestCase):
                          INSTALLER.OBSERVER_SOURCE_SHA256)
         self.assertEqual(INSTALLER.digest(INSTALLER.SUDOERS_SOURCE.read_bytes()),
                          INSTALLER.SUDOERS_SOURCE_SHA256)
+        self.assertEqual(INSTALLER.digest(INSTALLER.READ_STATE_CONTRACT_SOURCE.read_bytes()),
+                         INSTALLER.READ_STATE_CONTRACT_SOURCE_SHA256)
+        self.assertEqual(INSTALLER.digest(INSTALLER.READ_STATE_RESTORE_SOURCE.read_bytes()),
+                         INSTALLER.READ_STATE_RESTORE_SOURCE_SHA256)
         value = json.loads(INSTALLER.CONTRACT_RAW)
         self.assertEqual(INSTALLER.CONTRACT_RAW, OBSERVER.canonical(value))
         self.assertEqual(value["snapshot"]["manifestSha256"],

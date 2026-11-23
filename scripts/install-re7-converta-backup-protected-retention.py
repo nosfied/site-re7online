@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Closed, idempotent installer for protected backup retention v1.
+"""Closed installer for protected retention v1 plus read-state backup v2.
 
 This installer is intentionally not invoked by CI or by the backup job.  A future
 administrative authorization must authenticate this file and run it once as root.
@@ -19,14 +19,20 @@ SOURCE_DIR = Path(__file__).resolve().parent
 BACKUP_SOURCE = SOURCE_DIR / "re7-converta-backup"
 OBSERVER_SOURCE = SOURCE_DIR / "backup-retention-protected-observer.py"
 SUDOERS_SOURCE = SOURCE_DIR.parent / "config/sudoers/re7online-backup-retention-protected-observer"
+READ_STATE_CONTRACT_SOURCE = SOURCE_DIR.parent / "config/backup-read-state.v2.json"
+READ_STATE_RESTORE_SOURCE = SOURCE_DIR / "read-state-backup-restore-isolated.py"
 BACKUP_TARGET = Path("/usr/local/sbin/re7-converta-backup")
 OBSERVER_TARGET = Path("/usr/local/libexec/re7online/backup-retention-protected-observer.py")
 SUDOERS_TARGET = Path("/etc/sudoers.d/re7online-backup-retention-protected-observer")
 CONTRACT_TARGET = Path("/etc/re7online/backup-retention-protected.v1.json")
-PREDECESSOR_BACKUP_SHA256 = "179a9ab52ab155cfcba908628be0a8d24796c6f917829ad00054e690e2ad6f71"
-BACKUP_SOURCE_SHA256 = "c796bc3e5379ade7e61e024eac33ec749e2956f85b94c35bdf92641cf1d134a4"
+READ_STATE_CONTRACT_TARGET = Path("/etc/re7online/backup-read-state.v2.json")
+READ_STATE_RESTORE_TARGET = Path("/usr/local/libexec/re7online/read-state-backup-restore-isolated.py")
+PREDECESSOR_BACKUP_SHA256 = "c796bc3e5379ade7e61e024eac33ec749e2956f85b94c35bdf92641cf1d134a4"
+BACKUP_SOURCE_SHA256 = "632c0a5ce20700d5ab9be9a9e1da2826ecf735d5dca28629c1629c5e31cf8255"
 OBSERVER_SOURCE_SHA256 = "08ef7300267bc8c3049b01f662fecc830f2ac372f1fd35638e449f6401bce79c"
 SUDOERS_SOURCE_SHA256 = "55a5306c4ab3955d8787776c5652f4157c14fe15535230b12e0af8c4eb085bb0"
+READ_STATE_CONTRACT_SOURCE_SHA256 = "261d5cf2e0358f5e48f2aea0643e0220292c314f6b8aa7f82ab8d839690d7d81"
+READ_STATE_RESTORE_SOURCE_SHA256 = "40cedd778e45b60c0b2d3472dfb137272478ac6ddc3af1916177a0516552c3d6"
 
 
 def canonical(value: object) -> bytes:
@@ -133,6 +139,8 @@ def install() -> dict[str, object]:
     backup_raw, _ = read_regular(BACKUP_SOURCE, BACKUP_SOURCE_SHA256, {0o755})
     observer_raw, _ = read_regular(OBSERVER_SOURCE, OBSERVER_SOURCE_SHA256, {0o755})
     sudoers_raw, _ = read_regular(SUDOERS_SOURCE, SUDOERS_SOURCE_SHA256, {0o644})
+    read_state_contract_raw, _ = read_regular(READ_STATE_CONTRACT_SOURCE, READ_STATE_CONTRACT_SOURCE_SHA256, {0o644})
+    read_state_restore_raw, _ = read_regular(READ_STATE_RESTORE_SOURCE, READ_STATE_RESTORE_SOURCE_SHA256, {0o755})
     check = subprocess.run(["/usr/sbin/visudo", "-cf", str(SUDOERS_SOURCE)],
                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE, check=False)
@@ -143,11 +151,14 @@ def install() -> dict[str, object]:
     contract = install_file(CONTRACT_TARGET, CONTRACT_RAW, 0o600, set())
     observer = install_file(OBSERVER_TARGET, observer_raw, 0o500, set())
     sudoers = install_file(SUDOERS_TARGET, sudoers_raw, 0o440, set())
+    read_state_contract = install_file(READ_STATE_CONTRACT_TARGET, read_state_contract_raw, 0o600, set())
+    read_state_restore = install_file(READ_STATE_RESTORE_TARGET, read_state_restore_raw, 0o500, set())
     backup = install_file(BACKUP_TARGET, backup_raw, 0o750,
                           {PREDECESSOR_BACKUP_SHA256}, uid=0, gid=1000)
-    return {"schemaVersion": 1, "kind": "CONVERTA_BACKUP_PROTECTED_RETENTION_INSTALLATION",
+    return {"schemaVersion": 2, "kind": "CONVERTA_BACKUP_PROTECTED_RETENTION_AND_READ_STATE_INSTALLATION",
             "contractSha256": digest(CONTRACT_RAW), "contract": contract,
-            "observer": observer, "sudoers": sudoers, "backup": backup}
+            "observer": observer, "sudoers": sudoers, "readStateContract": read_state_contract,
+            "readStateRestore": read_state_restore, "backup": backup}
 
 
 if __name__ == "__main__":
