@@ -110,20 +110,35 @@ deploy:
 2. parar somente a API CB e provar ausência do PID/start ticks; frontend e
    worker ED74 continuam fora da mutação;
 3. com todos os escritores CB excluídos, recapturar identidade e SHA das fontes,
-   materializar os requests finais e executar a reconciliação agregada;
+   materializar os requests finais pelo runner autenticado e executar a
+   reconciliação agregada; a autorização administrativa anterior limita
+   byte-exatamente tenant, scope, destino, source path/release e anonimização;
 4. exigir aggregate receipt `VERIFIED` por readback de todos os destinos e
    executar novamente o gate `activation` com a mesma autoridade;
 5. trocar o symlink da API, iniciar a candidata apontada para a raiz externa e
    exigir readiness; somente então seguir a promoção normal do frontend.
 
+A extensão local do driver usa
+`CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3`: o request privado mantém o
+aggregate em `PENDING`, mas já sela a autorização administrativa, os caminhos
+de saída, runner, módulo e ambiente de storage da candidata, além da atestação
+de rollback compatível. Depois do quiesce, o runner publica de forma exclusiva
+requests, inventário, manifesto e `FINAL_SNAPSHOT_SEAL`; o driver apenas
+autentica o readback e registra seus hashes no journal. Qualification,
+admission e preflight aceitam somente essa pendência autenticada; activation e
+fases posteriores exigem o receipt físico exato, seus receipts individuais e o
+readback dos destinos. V1/V2 permanecem inalterados.
+
 A fronteira de commit do cutover é **a candidata API saudável após o symlink ter
 sido promovido, com aggregate receipt já `VERIFIED`**. Antes dela, falha retoma
 CB no symlink original; o aggregate receipt eventualmente já publicado é
 replay-safe e não autoriza duplicar reconciliação. Depois dela, rollback da API
-só é seguro para release que consuma a mesma raiz externa. O `pm2 restart`
-atual não oferece uma janela entre stop e start: a implementação dessa seção no
-driver existente e seus testes requer autorização específica. Não criar outro
-controlador.
+só é seguro para release que consuma a mesma raiz externa. A promoção substitui
+a API pela definição PM2 candidata autenticada somente depois de `pm2 stop`,
+prova de ausência do PID/start ticks antigo e aggregate verificado. O journal registra
+`QUIESCE_ATTEMPT → QUIESCED → SNAPSHOT_SEALING → SNAPSHOT_SEALED → RECONCILING → AGGREGATE_VERIFIED`; retomada após
+perda abrupta adota apenas o próprio lock autenticado e reconcilia receipts, sem
+segunda mutação cega. Não criar outro controlador.
 
 ## Rollback da primeira transição
 
@@ -137,6 +152,15 @@ Depois que existir uma release anterior já durável, ela passa a ser o rollback
 normal. Nenhuma release histórica será modificada. Aceitar rollback degradado
 é decisão explícita do Owner, não inferência do runbook.
 
+A release mínima derivada da CB deve trazer `readStateStore.js` compatível com
+`INBOX_READ_STATE_ROOT`. A autoridade privada
+`CONVERTA_DURABLE_READ_STATE_ROLLBACK_COMPATIBILITY_V1` sela release, manifest,
+index, entrypoint, módulo de storage e raiz literal; o driver recusa CB/41D
+históricas sem essa atestação. O driver também executa o módulo autenticado para
+provar `resolveInboxReadStateRoot()` e aplica o binding fechado somente ao
+iniciar candidata ou rollback compatível; a CB anterior permanece CWD-local e
+sem `INBOX_READ_STATE_ROOT`. Esta definição não cria nem autoriza a geração.
+
 ## Backup, restore e autoridade do inventário
 
 A menor extensão do backup P1 é adicionar a raiz literal
@@ -148,12 +172,14 @@ intenção separada de promoção. Isso requer alteração versionada da rotina 
 contrato P1, instalação autorizada e validação do cron; não autoriza backup
 manual nem presume o readback do primeiro cron já pendente.
 
-O inventário de reconciliação é autoridade administrativa privada: enumera cada
-tenant/scope/destino, releases-fonte e hashes, e seu SHA aprovado vincula o
-manifesto agregado. As exclusões vêm de uma autoridade separada derivada dos
-receipts privados 34/34; não podem ser inferidas de ausência, do banco atual ou
-do próprio manifesto. Requests, receipts individuais e aggregate receipt devem
-referenciar essas autoridades byte-exatas.
+O inventário administrativo privado enumera cada tenant/scope/destino, source
+path/release e autoridade de anonimização; ele não fixa antecipadamente o hash
+de uma fonte ainda viva. Depois da exclusão comprovada dos writers, o runner
+autenticado deriva somente os hashes desse conjunto fechado e publica o
+inventário físico, requests, manifesto e receipt de selagem. Qualquer omissão,
+ampliação ou path divergente nega. As exclusões vêm de autoridade separada
+derivada dos receipts privados 34/34; não podem ser inferidas de ausência, do
+banco atual ou do próprio manifesto.
 
 ## Provas locais adicionais
 
