@@ -701,3 +701,23 @@ com raiz/worktree ausentes, custódia preservada e locks livres.
 
 P00-D deixa de ser frente de desenvolvimento. As provas pendentes acompanham a
 próxima atualização autorizada; não justificam novo pipeline ou PR preventivo.
+
+## Correção dirigida de modos físicos — 24/11/2026
+
+A materialização do control plane `37232a67e5c9` reproduziu uma fronteira P00-D
+mais estreita: o índice Git declarava scripts `100755` e configurações `100644`,
+mas `core.sharedRepository=true` com umask `0002` produziu fisicamente `0775` e
+`0664`. O instalador protegido do backup negou a primeira fonte com
+`IDENTITY:scripts/re7-converta-backup`, antes de qualquer publicação. A árvore,
+lifecycle e negativa permanecem preservados e não autorizam `chmod`, nova
+materialização ou repetição do instalador.
+
+A correção local do produtor canônico combina umask `0022` e override efêmero
+`core.sharedRepository=false` somente no `git worktree add`, valida todos os
+blobs e diretórios antes de `CREATION_COMPLETED` e sela o inventário físico no
+receipt V2. A regressão integrada usa o materializador e o leitor real do
+instalador sob `sharedRepository=true / umask=0002`; drift de modo, bytes ou
+symlink nega antes do consumo. Receipts V1 históricos permanecem compatíveis.
+Uma futura árvore sucessora deve nascer do commit integrado desta correção e do
+basename derivado desse novo commit; o destino `37232a67e5c9` não pode ser
+reutilizado nem substituído enquanto sua custódia estiver aberta.
