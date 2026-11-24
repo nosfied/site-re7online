@@ -1603,6 +1603,17 @@ conteúdo único — inclusive coberto por `.gitignore` — mantém a árvore e 
 alocação equivalente. Interrupção depois do receipt da operação pode retomar a
 disposição pelos mesmos bytes determinísticos, sem repetir a cópia.
 
+O fechamento da materialização também autentica a representação física dos
+arquivos rastreados. O produtor executa `git worktree add` com umask `0022` e
+override efêmero `core.sharedRepository=false`, sem alterar a configuração do
+repositório de autoridade. Antes de publicar `CREATION_COMPLETED` ou o receipt,
+exige diretórios `0755`, blobs Git `100755` como arquivos `0755`, blobs `100644`
+como arquivos `0644`, owner/group do executor, ausência de symlinks/submodules e
+status integralmente limpo. O receipt V2 sela o SHA-256 do inventário físico
+`path + gitObject + sha256 + mode`; o consumidor o revalida antes de copiar ou
+retirar qualquer controle. Receipts V1 históricos continuam consumíveis pelo
+contrato anterior e não são retroativamente reclassificados.
+
 O request schema 2 admite somente cópias privadas derivadas enumeradas. Cada
 entrada vincula caminho relativo, SHA-256 e um controle rastreado já preservado
 como autoridade. Antes de qualquer retirada, o consumidor exige arquivo regular

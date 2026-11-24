@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,14 @@ spec = importlib.util.spec_from_file_location("preparation_artifact_lifecycle", 
 lifecycle = importlib.util.module_from_spec(spec); spec.loader.exec_module(lifecycle)
 CONTROL_NAMES = ("deploy-preparation-admission.py", "preparation_artifact_lifecycle.py",
                  "operational_state_contract.py")
+INSTALLER_SOURCES = {
+    "scripts/re7-converta-backup": 0o755,
+    "scripts/backup-retention-protected-observer.py": 0o755,
+    "scripts/read-state-backup-restore-isolated.py": 0o755,
+    "scripts/install-re7-converta-backup-protected-retention.py": 0o755,
+    "config/sudoers/re7online-backup-retention-protected-observer": 0o644,
+    "config/backup-read-state.v2.json": 0o644,
+}
 
 
 class DeployControlWorktreeTests(unittest.TestCase):
@@ -30,8 +39,14 @@ class DeployControlWorktreeTests(unittest.TestCase):
         (self.repo / "scripts").mkdir()
         for name in CONTROL_NAMES:
             shutil.copyfile(SCRIPTS / name, self.repo / "scripts" / name)
+        for relative, mode in INSTALLER_SOURCES.items():
+            target = self.repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = SCRIPTS.parent / relative if relative.startswith("config/") else SCRIPTS / Path(relative).name
+            shutil.copyfile(source, target)
+            target.chmod(mode)
         (self.repo / ".gitignore").write_text("private-*.txt\n")
-        subprocess.run(["git", "-C", str(self.repo), "add", "scripts", ".gitignore"],
+        subprocess.run(["git", "-C", str(self.repo), "add", "scripts", "config", ".gitignore"],
                        check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "fixture"], check=True)
         self.commit = self.git("rev-parse", "HEAD"); self.tree = self.git("rev-parse", "HEAD^{tree}")
@@ -67,15 +82,16 @@ class DeployControlWorktreeTests(unittest.TestCase):
     def write_private(path, value):
         path.write_bytes(lifecycle.canonical(value)); path.chmod(0o600)
 
-    def run_tool(self, *args):
+    def run_tool(self, *args, umask=-1):
         return subprocess.run([sys.executable, "-B", str(TOOL), *map(str, args)],
             text=True, capture_output=True,
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, umask=umask)
 
-    def materialize(self):
+    def materialize(self, *, umask=-1):
         result = self.run_tool("materialize", "--repository", self.repo,
             "--destination", self.destination, "--commit", self.commit,
-            "--contract", self.contract, "--contract-sha256", self.sha(self.contract))
+            "--contract", self.contract, "--contract-sha256", self.sha(self.contract),
+            umask=umask)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
@@ -200,6 +216,123 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "SANITIZED")
         self.assertEqual(lifecycle.validate_existing_lifecycles(self.controls, self.value)
                          ["reservedBytes"], 0)
+
+    def test_shared_repository_umask_is_closed_and_real_installer_sources_pass(self):
+        subprocess.run(["git", "-C", str(self.repo), "config", "core.sharedRepository", "true"],
+                       check=True)
+        source_hashes = {relative: self.sha(self.repo / relative)
+                         for relative in INSTALLER_SOURCES}
+        materialized = self.materialize(umask=0o002)
+        for relative, mode in INSTALLER_SOURCES.items():
+            staged = self.destination / relative
+            self.assertEqual(stat.S_IMODE(staged.lstat().st_mode), mode)
+            self.assertEqual(self.sha(staged), source_hashes[relative])
+        receipt = json.loads((Path(materialized["lifecyclePath"]).parent /
+                              "materialization-receipt.private.json").read_text())
+        self.assertEqual(receipt["schemaVersion"], 2)
+        self.assertEqual(receipt["physicalTreeSha256"], materialized["physicalTreeSha256"])
+        self.assertEqual(self.git("-C", str(self.destination), "status", "--porcelain=v1",
+                                  "--untracked-files=all", "--ignored=matching"), "")
+        code = """import importlib.util, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location('real_installer', path)
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+for source, expected, mode in (
+    (module.BACKUP_SOURCE, module.BACKUP_SOURCE_SHA256, 0o755),
+    (module.OBSERVER_SOURCE, module.OBSERVER_SOURCE_SHA256, 0o755),
+    (module.SUDOERS_SOURCE, module.SUDOERS_SOURCE_SHA256, 0o644),
+    (module.READ_STATE_CONTRACT_SOURCE, module.READ_STATE_CONTRACT_SOURCE_SHA256, 0o644),
+    (module.READ_STATE_RESTORE_SOURCE, module.READ_STATE_RESTORE_SOURCE_SHA256, 0o755),
+): module.read_regular(source, expected, {mode})
+print('INSTALLER_SOURCE_VALIDATION_PASS')
+"""
+        validated = subprocess.run(
+            [sys.executable, "-I", "-B", "-E", "-s", "-c", code,
+             str(self.destination / "scripts/install-re7-converta-backup-protected-retention.py")],
+            text=True, capture_output=True)
+        self.assertEqual(validated.returncode, 0, validated.stderr)
+        self.assertIn("INSTALLER_SOURCE_VALIDATION_PASS", validated.stdout)
+
+    def test_physical_mode_drift_is_denied_before_consumption(self):
+        materialized = self.materialize()
+        changed = self.destination / "scripts/deploy-preparation-admission.py"
+        changed.chmod(0o664)
+        output, request = self.consume_request(materialized)
+        denied = self.consume(materialized, request)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn("deploy_control_tracked_mode", denied.stderr)
+        self.assertTrue(self.destination.exists())
+        self.assertFalse((output / "deploy-control-operation-receipt.private.json").exists())
+
+    def test_tracked_symlink_and_content_drift_are_denied(self):
+        materialized = self.materialize()
+        changed = self.destination / "scripts/deploy-preparation-admission.py"
+        changed.unlink(); changed.symlink_to("preparation_artifact_lifecycle.py")
+        output, request = self.consume_request(materialized)
+        denied = self.consume(materialized, request)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn("deploy_control_tracked_mode", denied.stderr)
+        self.assertTrue(changed.is_symlink())
+        self.assertFalse((output / "deploy-control-operation-receipt.private.json").exists())
+
+    def test_tracked_bytes_drift_is_denied_against_materialization_receipt(self):
+        materialized = self.materialize()
+        changed = self.destination / "scripts/deploy-preparation-admission.py"
+        changed.write_bytes(changed.read_bytes() + b"\n# drift\n")
+        changed.chmod(0o644)
+        output, request = self.consume_request(materialized)
+        denied = self.consume(materialized, request)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn("deploy_control_physical_tree_hash", denied.stderr)
+        self.assertTrue(self.destination.exists())
+        self.assertFalse((output / "deploy-control-operation-receipt.private.json").exists())
+
+    def test_historical_schema_one_materialization_receipt_remains_consumable(self):
+        materialized = self.materialize()
+        receipt_path = (Path(materialized["lifecyclePath"]).parent /
+                        "materialization-receipt.private.json")
+        receipt = json.loads(receipt_path.read_text())
+        receipt["schemaVersion"] = 1
+        receipt.pop("physicalTreeSha256")
+        self.write_private(receipt_path, receipt)
+        materialized["materializationReceiptSha256"] = self.sha(receipt_path)
+        output, request = self.consume_request(materialized)
+        consumed = self.consume(materialized, request)
+        self.assertEqual(consumed.returncode, 0, consumed.stderr)
+        self.assertEqual(json.loads(consumed.stdout)["state"], "SANITIZED")
+        self.assertTrue((output / "deploy-control-terminal-receipt.private.json").exists())
+
+    def test_tracked_symlink_is_denied_during_materialization(self):
+        target = self.repo / "scripts" / "linked-control.py"
+        target.symlink_to("deploy-preparation-admission.py")
+        subprocess.run(["git", "-C", str(self.repo), "add", "scripts/linked-control.py"],
+                       check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "tracked symlink"],
+                       check=True)
+        self.commit = self.git("rev-parse", "HEAD")
+        self.tree = self.git("rev-parse", "HEAD^{tree}")
+        self.destination = self.controls / self.commit[:12]
+        item = self.value["preparationArtifacts"][0]
+        item["path"] = str(self.destination)
+        item["scope"] = "deploy-control:" + self.commit
+        item["authority"]["sha256"] = hashlib.sha256(
+            (self.commit + "\n").encode()).hexdigest()
+        item["equivalenceSha256"] = hashlib.sha256(lifecycle.canonical({
+            "repository": str(self.repo), "commit": self.commit,
+            "tree": self.tree})).hexdigest()
+        self.value["generationId"] = "control-" + self.commit[:12]
+        self.write_private(self.contract, self.value)
+        denied = self.run_tool("materialize", "--repository", self.repo,
+            "--destination", self.destination, "--commit", self.commit,
+            "--contract", self.contract, "--contract-sha256", self.sha(self.contract),
+            umask=0o002)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn("deploy_control_tracked_mode", denied.stderr)
+        lifecycle_path = (self.controls / ("." + self.destination.name + ".lifecycle") /
+                          "preparation-artifacts.lifecycle.private.json")
+        self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "RETENTION_DEBT")
+        self.assertFalse((lifecycle_path.parent /
+                          "materialization-receipt.private.json").exists())
 
     def test_exact_private_copies_receive_individual_receipts_before_sanitization(self):
         materialized = self.materialize()

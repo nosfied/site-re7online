@@ -22,9 +22,10 @@ import preparation_artifact_lifecycle as lifecycle
 
 TERMINAL_KEYS = {"schemaVersion", "kind", "operationId", "controlPath",
                  "controlCommit", "materializationReceiptSha256", "outcome"}
-MATERIALIZATION_KEYS = {"schemaVersion", "kind", "operationId", "controlPath",
-                        "controlCommit", "controlTree", "contractSha256",
-                        "reservation", "realized"}
+MATERIALIZATION_KEYS_V1 = {"schemaVersion", "kind", "operationId", "controlPath",
+                           "controlCommit", "controlTree", "contractSha256",
+                           "reservation", "realized"}
+MATERIALIZATION_KEYS_V2 = MATERIALIZATION_KEYS_V1 | {"physicalTreeSha256"}
 CONSUME_KEYS_V1 = {"schemaVersion", "kind", "operationId", "controlPath",
                    "controlCommit", "materializationReceiptSha256", "outputRoot",
                    "controls"}
@@ -141,6 +142,72 @@ def git(repo: Path, *arguments: str) -> str:
     return result.stdout.strip()
 
 
+def git_raw(repo: Path, *arguments: str) -> bytes:
+    result = subprocess.run(["git", "-C", str(repo), *arguments],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    require(result.returncode == 0,
+            "deploy_control_git_" + arguments[0].replace("-", "_"))
+    return result.stdout
+
+
+def stable_tracked_file(path: Path, expected_mode: int) -> bytes:
+    before = path.lstat()
+    require(not path.is_symlink() and stat.S_ISREG(before.st_mode) and
+            (before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode)) ==
+            (os.geteuid(), os.getegid(), expected_mode),
+            "deploy_control_tracked_mode")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        opened = os.fstat(fd); chunks = []
+        while chunk := os.read(fd, 1024 * 1024):
+            chunks.append(chunk)
+        after = os.fstat(fd)
+    finally:
+        os.close(fd)
+    current = path.lstat()
+    key = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_uid,
+                         value.st_gid, value.st_size, value.st_mtime_ns,
+                         value.st_ctime_ns, value.st_nlink)
+    require(key(before) == key(opened) == key(after) == key(current),
+            "deploy_control_tracked_changed")
+    return b"".join(chunks)
+
+
+def physical_tree_sha256(repo: Path, control: Path, commit: str) -> str:
+    root = control.lstat()
+    require(not control.is_symlink() and stat.S_ISDIR(root.st_mode) and
+            (root.st_uid, root.st_gid, stat.S_IMODE(root.st_mode)) ==
+            (os.geteuid(), os.getegid(), 0o755), "deploy_control_root_mode")
+    gitfile = control / ".git"
+    stable_tracked_file(gitfile, 0o644)
+    entries = []
+    directories = {Path(".")}
+    raw_tree = git_raw(repo, "ls-tree", "-rz", "--full-tree", commit)
+    for record in raw_tree.split(b"\0"):
+        if not record:
+            continue
+        metadata, raw_path = record.split(b"\t", 1)
+        mode, object_type, object_id = metadata.decode("ascii").split()
+        require(object_type == "blob" and mode in {"100644", "100755"},
+                "deploy_control_tracked_mode")
+        relative = Path(os.fsdecode(raw_path))
+        require(not relative.is_absolute() and relative != Path(".") and
+                ".." not in relative.parts, "deploy_control_tracked_path")
+        expected_mode = 0o755 if mode == "100755" else 0o644
+        content = stable_tracked_file(control / relative, expected_mode)
+        entries.append({"path": str(relative), "mode": f"0{expected_mode:03o}",
+                        "sha256": digest(content), "gitObject": object_id})
+        directories.update(relative.parents)
+    require(bool(entries), "deploy_control_tracked_empty")
+    for relative in directories:
+        directory = control if relative == Path(".") else control / relative
+        info = directory.lstat()
+        require(not directory.is_symlink() and stat.S_ISDIR(info.st_mode) and
+                (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) ==
+                (os.geteuid(), os.getegid(), 0o755), "deploy_control_directory_mode")
+    return digest(lifecycle.canonical(entries))
+
+
 def binding(contract: dict[str, Any], repo: Path, destination: Path,
             requested_commit: str) -> tuple[dict[str, Any], str, str]:
     artifacts = lifecycle.validate_contract(contract)
@@ -196,15 +263,24 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
     lifecycle.replace_lifecycle(lifecycle_path,
         lifecycle.lifecycle_value(contract, "OPEN", "CREATION_STARTED"))
     try:
-        git(repo, "worktree", "add", "--detach", str(destination), commit)
+        previous_umask = os.umask(0o022)
+        try:
+            git(repo, "-c", "core.sharedRepository=false", "worktree", "add",
+                "--detach", str(destination), commit)
+        finally:
+            os.umask(previous_umask)
+        physical_tree = physical_tree_sha256(repo, destination, commit)
+        require(git(destination, "status", "--porcelain=v1", "--untracked-files=all",
+                    "--ignored=matching") == "", "deploy_control_materialization_drift")
         realized = lifecycle.measure_realized(contract)
         lifecycle.replace_lifecycle(lifecycle_path,
             lifecycle.lifecycle_value(contract, "OPEN", "CREATION_COMPLETED", realized=realized))
-        receipt = {"schemaVersion": 1, "kind": "DEPLOY_CONTROL_WORKTREE_MATERIALIZED",
+        receipt = {"schemaVersion": 2, "kind": "DEPLOY_CONTROL_WORKTREE_MATERIALIZED",
                    "operationId": contract["generationId"],
                    "controlPath": str(destination), "controlCommit": commit,
                    "controlTree": tree, "contractSha256": digest(contract_raw),
-                   "reservation": reservation, "realized": realized}
+                   "reservation": reservation, "realized": realized,
+                   "physicalTreeSha256": physical_tree}
         receipt_raw = exclusive_json(custody / "materialization-receipt.private.json", receipt)
         return {**receipt, "materializationReceiptSha256": digest(receipt_raw),
                 "lifecyclePath": str(lifecycle_path),
@@ -294,13 +370,17 @@ def worktree_registered(repo: Path, control: Path) -> bool:
 
 def validate_control_worktree(repo: Path, control: Path, commit: str,
                               controls: list[dict[str, Any]],
-                              present_derived_copies: list[dict[str, Any]] | None = None
+                              present_derived_copies: list[dict[str, Any]] | None = None,
+                              expected_physical_tree: str | None = None,
                               ) -> list[tuple[dict[str, Any], bytes]]:
     require(control.exists() and not control.is_symlink() and control.is_dir(),
             "deploy_control_consume_worktree")
     require(worktree_registered(repo, control), "deploy_control_consume_registration")
     require(git(control, "rev-parse", "HEAD") == commit,
             "deploy_control_consume_drift")
+    if expected_physical_tree is not None:
+        require(physical_tree_sha256(repo, control, commit) == expected_physical_tree,
+                "deploy_control_physical_tree_hash")
     status = git(control, "status", "--porcelain=v1", "--untracked-files=all",
                  "--ignored=matching")
     expected_status = sorted(
@@ -524,13 +604,21 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
     materialization, materialization_raw = stable_private(
         args.materialization_receipt, args.materialization_receipt_sha256,
         "deploy_control_materialization_receipt")
-    require(set(materialization) == MATERIALIZATION_KEYS and
-            materialization.get("schemaVersion") == 1 and
+    materialization_schema = materialization.get("schemaVersion")
+    require(((materialization_schema == 1 and
+              set(materialization) == MATERIALIZATION_KEYS_V1) or
+             (materialization_schema == 2 and
+              set(materialization) == MATERIALIZATION_KEYS_V2 and
+              isinstance(materialization.get("physicalTreeSha256"), str) and
+              len(materialization["physicalTreeSha256"]) == 64 and
+              set(materialization["physicalTreeSha256"]) <= HEX)) and
             materialization.get("kind") == "DEPLOY_CONTROL_WORKTREE_MATERIALIZED" and
             materialization.get("operationId") == current.get("generationId") and
             materialization.get("controlPath") == artifacts[0]["path"] and
             materialization.get("controlCommit") == artifacts[0]["scope"].split(":", 1)[1],
             "deploy_control_materialization_receipt_schema")
+    expected_physical_tree = (materialization["physicalTreeSha256"]
+                              if materialization_schema == 2 else None)
     request, request_raw = stable_private(args.request, args.request_sha256,
                                           "deploy_control_consume_request")
     control, output, controls, derived_copies = consume_request(
@@ -587,7 +675,8 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
         if not operation_exists:
             require_no_derived_copy_evidence(output, derived_copies)
             sources = validate_control_worktree(
-                repo, control, commit, controls, derived_copies)
+                repo, control, commit, controls, derived_copies,
+                expected_physical_tree)
             require(not terminal_receipt.exists() and not terminal_receipt.is_symlink(),
                     "deploy_control_terminal_exists")
             for item, raw in sources:
@@ -598,12 +687,14 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
         present_copies = present_derived_copies(
             control, output, current["generationId"], commit,
             digest(request_raw), derived_copies)
-        validate_control_worktree(repo, control, commit, controls, present_copies)
+        validate_control_worktree(repo, control, commit, controls, present_copies,
+                                  expected_physical_tree)
         disposition_receipts = dispose_derived_copies(
             control, output, current["generationId"], commit,
             digest(request_raw), derived_copies)
         if control.exists() or control.is_symlink():
-            validate_control_worktree(repo, control, commit, controls)
+            validate_control_worktree(repo, control, commit, controls,
+                                      expected_physical_tree=expected_physical_tree)
             git(repo, "worktree", "remove", str(control))
         require(not control.exists() and not control.is_symlink() and
                 not worktree_registered(repo, control), "deploy_control_disposition_incomplete")
