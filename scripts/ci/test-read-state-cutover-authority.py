@@ -254,8 +254,72 @@ class CutoverAuthorityTest(unittest.TestCase):
         journal = json.loads((self.custody / "provision-journal.json").read_text())
         first = [event for event in journal["events"] if event.get("ordinal") == 1 and event.get("event") == "RESULT"]
         self.assertEqual(result["state"], "ROOT_PROVISIONED_VERIFIED")
-        self.assertEqual(first[0]["resultSource"], "RECONCILED_PHYSICAL_READBACK")
+        self.assertEqual(first[0]["resultSource"], "INTERRUPTED_COMMAND_PHYSICAL_READBACK")
         self.assertEqual(len(calls), 1)
+
+    def test_interrupted_attempt_without_physical_effect_is_denied_without_retry(self):
+        fixture = self.provision_fixture(); _, _, _, _, intent, intent_sha, owner, owner_sha, _ = fixture
+        calls = []
+        def interrupted_before_effect(command, **_kwargs):
+            calls.append(command)
+            raise RuntimeError("synthetic_pre_effect_interruption")
+        with patch.object(AUTH.subprocess, "run", side_effect=interrupted_before_effect):
+            with self.assertRaisesRegex(RuntimeError, "synthetic_pre_effect_interruption"):
+                AUTH.provision(intent, intent_sha, owner, owner_sha)
+        with patch.object(AUTH.subprocess, "run", side_effect=AssertionError("must not retry")):
+            with self.assertRaisesRegex(RuntimeError, "provision_interrupted_effect_unproven"):
+                AUTH.provision(intent, intent_sha, owner, owner_sha)
+        self.assertEqual(len(calls), 1)
+
+    def test_existing_result_requires_same_physical_inode_and_intact_result_passes(self):
+        for replace_identity in (False, True):
+            with self.subTest(replace_identity=replace_identity):
+                self.setUp()
+                plan, _, _, _, intent, intent_sha, owner, owner_sha, _ = self.provision_fixture()
+                original = AUTH.provision(intent, intent_sha, owner, owner_sha)
+                Path(plan["outputs"]["receiptPath"]).unlink()
+                if replace_identity:
+                    replacement = self.persistent.with_name("replacement-read-state")
+                    replacement.mkdir(mode=0o700)
+                    self.persistent.rmdir(); replacement.rename(self.persistent)
+                    with self.assertRaisesRegex(RuntimeError, "provision_journal_result_authority"):
+                        AUTH.provision(intent, intent_sha, owner, owner_sha)
+                else:
+                    resumed = AUTH.provision(intent, intent_sha, owner, owner_sha)
+                    self.assertEqual(resumed["state"], "ROOT_PROVISIONED_VERIFIED")
+                    self.assertEqual(resumed["provisionReceiptSha256"], original["provisionReceiptSha256"])
+
+    def test_tampered_duplicated_or_inconsistent_journal_is_denied(self):
+        cases = ("duplicate", "command", "order")
+        for case in cases:
+            with self.subTest(case=case):
+                self.setUp()
+                plan, _, _, _, intent, intent_sha, owner, owner_sha, _ = self.provision_fixture()
+                AUTH.provision(intent, intent_sha, owner, owner_sha)
+                Path(plan["outputs"]["receiptPath"]).unlink()
+                journal_path = Path(plan["outputs"]["journalPath"])
+                journal = json.loads(journal_path.read_text())
+                if case == "duplicate":
+                    journal["events"].insert(1, dict(journal["events"][0]))
+                    expected = "provision_journal_event_order"
+                elif case == "command":
+                    journal["events"][1]["command"] = ["/bin/false"]
+                    expected = "provision_journal_event_binding"
+                else:
+                    journal["events"][0], journal["events"][1] = journal["events"][1], journal["events"][0]
+                    expected = "provision_journal_event_order"
+                put(journal_path, journal)
+                with self.assertRaisesRegex(RuntimeError, expected):
+                    AUTH.provision(intent, intent_sha, owner, owner_sha)
+
+    def test_terminal_receipt_denies_replaced_physical_identity(self):
+        fixture = self.provision_fixture(); _, _, _, _, intent, intent_sha, owner, owner_sha, _ = fixture
+        AUTH.provision(intent, intent_sha, owner, owner_sha)
+        replacement = self.persistent.with_name("replacement-read-state")
+        replacement.mkdir(mode=0o700)
+        self.persistent.rmdir(); replacement.rename(self.persistent)
+        with self.assertRaisesRegex(RuntimeError, "provision_receipt_physical_readback"):
+            AUTH.provision(intent, intent_sha, owner, owner_sha)
 
     def test_concurrent_execution_is_denied(self):
         plan, _, _, _, intent, intent_sha, owner, owner_sha, _ = self.provision_fixture()

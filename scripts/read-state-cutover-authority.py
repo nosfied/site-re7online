@@ -205,6 +205,80 @@ def expected_created_authority(item: dict) -> dict:
             "mode": f"0{stat.S_IMODE(info.st_mode):03o}"}
 
 
+def validate_recorded_authority(recorded: object, item: dict, error: str) -> dict:
+    keys = {"path", "device", "inode", "ownerUid", "groupGid", "mode"}
+    if not isinstance(recorded, dict) or set(recorded) != keys:
+        raise RuntimeError(error)
+    observed = expected_created_authority(item)
+    if recorded != observed:
+        raise RuntimeError(error)
+    return observed
+
+
+def validate_provision_journal(journal: dict, plan: dict, plan_sha256: str,
+                               intent_sha256: str, owner_sha256: str) -> dict:
+    keys = {"schemaVersion", "kind", "operationId", "planSha256",
+            "provisionIntentSha256", "ownerAuthorizationSha256", "state", "events"}
+    if (set(journal) != keys or journal.get("schemaVersion") != 1 or
+            journal.get("kind") != "CONVERTA_DURABLE_READ_STATE_PROVISION_JOURNAL_V1" or
+            journal.get("operationId") != plan["operationId"] or
+            journal.get("planSha256") != plan_sha256 or
+            journal.get("provisionIntentSha256") != intent_sha256 or
+            journal.get("ownerAuthorizationSha256") != owner_sha256 or
+            journal.get("state") not in {"IN_PROGRESS", "ROOT_PROVISIONED_VERIFIED"} or
+            not isinstance(journal.get("events"), list)):
+        raise RuntimeError("provision_journal_binding")
+    stages = [0] * len(plan["commands"])
+    authorities: list[dict | None] = [None] * len(plan["commands"])
+    verified = False
+    for index, event in enumerate(journal["events"]):
+        if not isinstance(event, dict):
+            raise RuntimeError("provision_journal_event_schema")
+        event_type = event.get("event")
+        if event_type == "VERIFIED":
+            if (set(event) != {"event", "operationId", "createdDirectories"} or
+                    event.get("operationId") != plan["operationId"] or
+                    index != len(journal["events"]) - 1 or verified or
+                    stages != [2] * len(stages) or event.get("createdDirectories") != authorities):
+                raise RuntimeError("provision_journal_event_order")
+            for recorded, item in zip(event["createdDirectories"], plan["createdDirectories"]):
+                validate_recorded_authority(recorded, item, "provision_journal_verified_authority")
+            verified = True
+            continue
+        ordinal = event.get("ordinal")
+        if (not isinstance(ordinal, int) or isinstance(ordinal, bool) or
+                ordinal < 1 or ordinal > len(stages)):
+            raise RuntimeError("provision_journal_event_ordinal")
+        item_index = ordinal - 1
+        command = plan["commands"][item_index]
+        common = {"operationId": plan["operationId"], "ordinal": ordinal, "command": command}
+        if any(event.get(key) != value for key, value in common.items()):
+            raise RuntimeError("provision_journal_event_binding")
+        if event_type == "ATTEMPT":
+            if set(event) != {"event", *common} or stages[item_index] != 0 or any(
+                    stage != 2 for stage in stages[:item_index]) or any(
+                    stage != 0 for stage in stages[item_index + 1:]):
+                raise RuntimeError("provision_journal_event_order")
+            stages[item_index] = 1
+        elif event_type == "RESULT":
+            if (set(event) != {"event", *common, "resultSource", "authority"} or
+                    stages[item_index] != 1 or event.get("resultSource") not in
+                    {"EXECUTED", "INTERRUPTED_COMMAND_PHYSICAL_READBACK"}):
+                raise RuntimeError("provision_journal_event_order")
+            authorities[item_index] = validate_recorded_authority(
+                event.get("authority"), plan["createdDirectories"][item_index],
+                "provision_journal_result_authority")
+            stages[item_index] = 2
+        else:
+            raise RuntimeError("provision_journal_event_schema")
+    if journal["state"] == "ROOT_PROVISIONED_VERIFIED":
+        if not verified or stages != [2] * len(stages):
+            raise RuntimeError("provision_journal_terminal_state")
+    elif verified:
+        raise RuntimeError("provision_journal_terminal_state")
+    return {"stages": stages, "authorities": authorities, "verified": verified}
+
+
 def provision(intent_path: Path, intent_sha256: str, owner_path: Path,
               owner_sha256: str) -> dict:
     intent = private_json(intent_path, intent_sha256)
@@ -236,28 +310,33 @@ def provision(intent_path: Path, intent_sha256: str, owner_path: Path,
         journal_path = Path(plan["outputs"]["journalPath"]); receipt_path = Path(plan["outputs"]["receiptPath"])
         if receipt_path.exists() or receipt_path.is_symlink():
             receipt_sha = digest(receipt_path.read_bytes()); receipt = private_json(receipt_path, receipt_sha)
-            if (receipt.get("kind") != "CONVERTA_DURABLE_READ_STATE_PROVISION_RECEIPT_V1" or
+            receipt_keys = {"schemaVersion", "kind", "event", "state", "operationId",
+                            "planSha256", "provisionIntentSha256", "ownerAuthorizationSha256",
+                            "journalPath", "journalSha256", "root", "createdDirectories",
+                            "automaticExecution"}
+            if (set(receipt) != receipt_keys or receipt.get("schemaVersion") != 1 or
+                    receipt.get("kind") != "CONVERTA_DURABLE_READ_STATE_PROVISION_RECEIPT_V1" or
+                    receipt.get("event") != "ROOT_PROVISIONED_VERIFIED" or
                     receipt.get("state") != "ROOT_PROVISIONED_VERIFIED" or
+                    receipt.get("operationId") != plan["operationId"] or
                     receipt.get("planSha256") != intent["planSha256"] or
                     receipt.get("provisionIntentSha256") != intent_sha256 or
-                    receipt.get("ownerAuthorizationSha256") != owner_sha256):
+                    receipt.get("ownerAuthorizationSha256") != owner_sha256 or
+                    receipt.get("journalPath") != str(journal_path) or
+                    receipt.get("automaticExecution") is not False):
                 raise RuntimeError("provision_receipt_binding")
             authorities = [expected_created_authority(item) for item in plan["createdDirectories"]]
-            if receipt.get("createdDirectories") != authorities:
+            if receipt.get("root") != authorities[-1] or receipt.get("createdDirectories") != authorities:
                 raise RuntimeError("provision_receipt_physical_readback")
             journal = private_json(journal_path, receipt.get("journalSha256", ""))
-            if journal.get("state") != "ROOT_PROVISIONED_VERIFIED":
-                raise RuntimeError("provision_journal_binding")
+            validate_provision_journal(journal, plan, intent["planSha256"], intent_sha256,
+                                       owner_sha256)
             return {"state": "ROOT_PROVISIONED_VERIFIED", "provisionReceiptSha256": receipt_sha,
                     "replayed": True}
         if journal_path.exists() or journal_path.is_symlink():
             journal_raw = journal_path.read_bytes(); journal = private_json(journal_path, digest(journal_raw))
-            expected_journal = {"schemaVersion": 1, "kind": "CONVERTA_DURABLE_READ_STATE_PROVISION_JOURNAL_V1",
-                                "operationId": plan["operationId"], "planSha256": intent["planSha256"],
-                                "provisionIntentSha256": intent_sha256,
-                                "ownerAuthorizationSha256": owner_sha256}
-            if any(journal.get(key) != value for key, value in expected_journal.items()):
-                raise RuntimeError("provision_journal_binding")
+            journal_state = validate_provision_journal(
+                journal, plan, intent["planSha256"], intent_sha256, owner_sha256)
         else:
             if any(Path(item["path"]).exists() or Path(item["path"]).is_symlink()
                    for item in plan["createdDirectories"]):
@@ -267,28 +346,42 @@ def provision(intent_path: Path, intent_sha256: str, owner_path: Path,
                        "provisionIntentSha256": intent_sha256,
                        "ownerAuthorizationSha256": owner_sha256, "state": "IN_PROGRESS", "events": []}
             replace_private(journal_path, journal)
+            journal_state = {"stages": [0] * len(plan["commands"]),
+                             "authorities": [None] * len(plan["commands"]), "verified": False}
         for ordinal, (item, command) in enumerate(zip(plan["createdDirectories"], plan["commands"]), 1):
-            results = [event for event in journal["events"] if event.get("ordinal") == ordinal and event.get("event") == "RESULT"]
-            if results:
-                expected_created_authority(item); continue
-            attempts = [event for event in journal["events"] if event.get("ordinal") == ordinal and event.get("event") == "ATTEMPT"]
-            if not attempts:
-                journal["events"].append({"event": "ATTEMPT", "ordinal": ordinal, "command": command})
+            stage = journal_state["stages"][ordinal - 1]
+            if stage == 2:
+                continue
+            if stage == 0:
+                journal["events"].append({"event": "ATTEMPT", "operationId": plan["operationId"],
+                                          "ordinal": ordinal, "command": command})
                 replace_private(journal_path, journal)
+                new_attempt = True
+            else:
+                new_attempt = False
             path = Path(item["path"])
             if path.exists() or path.is_symlink():
-                authority = expected_created_authority(item); result_source = "RECONCILED_PHYSICAL_READBACK"
+                if new_attempt:
+                    raise RuntimeError("provision_unattributed_preexisting")
+                authority = expected_created_authority(item)
+                result_source = "INTERRUPTED_COMMAND_PHYSICAL_READBACK"
             else:
+                if not new_attempt:
+                    raise RuntimeError("provision_interrupted_effect_unproven")
                 subprocess.run(command, check=True, stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 authority = expected_created_authority(item); result_source = "EXECUTED"
-            journal["events"].append({"event": "RESULT", "ordinal": ordinal,
+            journal["events"].append({"event": "RESULT", "operationId": plan["operationId"],
+                                      "ordinal": ordinal, "command": command,
                                       "resultSource": result_source, "authority": authority})
             replace_private(journal_path, journal)
         authorities = [expected_created_authority(item) for item in plan["createdDirectories"]]
-        if not any(event.get("event") == "VERIFIED" for event in journal["events"]):
-            journal["events"].append({"event": "VERIFIED", "createdDirectories": authorities})
+        if not journal_state["verified"]:
+            journal["events"].append({"event": "VERIFIED", "operationId": plan["operationId"],
+                                      "createdDirectories": authorities})
         journal["state"] = "ROOT_PROVISIONED_VERIFIED"
+        validate_provision_journal(journal, plan, intent["planSha256"], intent_sha256,
+                                   owner_sha256)
         journal_sha = replace_private(journal_path, journal)
         receipt = {"schemaVersion": 1, "kind": "CONVERTA_DURABLE_READ_STATE_PROVISION_RECEIPT_V1",
                    "event": "ROOT_PROVISIONED_VERIFIED", "state": "ROOT_PROVISIONED_VERIFIED",
