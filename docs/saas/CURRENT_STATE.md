@@ -1,5 +1,25 @@
 # Estado canônico do Converta
 
+## Contrato mínimo de provisionamento read-state — 23/11/2026
+
+**`PROVISION_CONTRACT_LOCAL_VALIDATED / PR_REVIEW_REQUIRED / NOT_DEPLOYED`.**
+O baseline integrado da branch operacional é
+`6a5839e7078fde0926829e542da69852118c1ca6`, árvore
+`38baff99c1208497b956c742c593b0c8c44b2561`; ele contém as Frentes A+B e os
+contratos integrados dos PRs #436–#443, #445 e #446. A correção local atual
+mantém o mecanismo `scripts/read-state-cutover-authority.py` e separa a
+autorização física mínima da raiz da autorização administrativa completa do
+cutover. O fluxo novo publica intent sem efeito, exige `AUTHORIZE_ONCE` literal,
+mantém journal/lock, autentica o readback físico e produz receipt que passa a
+ser entrada obrigatória do plano de cutover V2. O contrato V1 do #446 continua
+aceito byte-exatamente.
+
+Nada foi provisionado. A raiz
+`/opt/re7online/runtime-data/inbox-read-state` continua ausente; extensão P1,
+backup/restore, inventário privado, rollback #444, reconciliação e release A+B
+continuam pendentes de gates e autorizações próprios. Este registro não é uma
+autoridade do Owner e não autoriza `mkdir`, reconciliação, geração ou deploy.
+
 ## Fechamento local da durabilidade A — 22/11/2026
 
 **`CONVERTA_READSTATE_CANONICAL_CUTOVER_IMPLEMENTED_LOCAL / PR_REVIEW_REQUIRED / NOT_DEPLOYED`.** Sobre o baseline canônico pós-#442 `8c855a7526c662c017461ff88e8155a367e29ba4` / árvore `f6bb89abc8da8cc08b6715f4448ac9d19358e1fc`, uma branch isolada estende o driver existente com o cutover journaled e o gate V3 `PENDING → VERIFIED`: quiesce da API antiga, prova de ausência do writer, recaptura de fontes seladas, reconciliador V2/aggregate, readback físico, activation e retomada sem repetição. O contrato também exige rollback mínimo compatível com a raiz durável; CB/41D históricas não são aceitas silenciosamente. Nada foi integrado ou implantado.
