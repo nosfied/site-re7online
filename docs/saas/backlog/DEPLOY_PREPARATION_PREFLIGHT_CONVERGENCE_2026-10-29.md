@@ -702,6 +702,26 @@ com raiz/worktree ausentes, custódia preservada e locks livres.
 P00-D deixa de ser frente de desenvolvimento. As provas pendentes acompanham a
 próxima atualização autorizada; não justificam novo pipeline ou PR preventivo.
 
+## Extensão permanente — compatibilidade temporal e entre hosts (25/11/2026)
+
+O primeiro cutover durável demonstrou uma lacuna que CI isolada não revelou: a
+fixture iniciava no rollback compatível, enquanto produção ainda selecionava a
+predecessora release-local. P00-D passa a exigir a matriz de interface descrita
+em `DEPLOY_ARTIFACT_LIFECYCLE.md`, cobrindo produtor, momento, consumidor,
+schema, identidade, host, autoridade, lifecycle e teste integrado antes de cada
+efeito. A regressão de referência começa com CB ativa, A+B inativa, #444
+instalada mas não selecionada e ED74 preservada.
+
+O runtime manifest versionado separa `predecessorReleases` de
+`rollbackReleases`; o preflight autentica o primeiro papel e o cutover/rollback
+durável autentica o segundo. A prova deve incluir negativas por troca dos papéis,
+retomada após snapshot/aggregate, falha após promoção e rollback interrompido.
+O aggregate verificado seleciona a recuperação durável, mas somente readiness da
+API candidata materializa `CANDIDATE_API_HEALTHY`. Isso fecha, no consumidor
+real, as patinações observadas de LF canônico, bytes compilados prematuros,
+manifesto/instalador incompatíveis, Git/Gate ausentes no host, control plane não
+consumido e fixture com topologia artificial.
+
 ## Correção dirigida de modos físicos — 24/11/2026
 
 A materialização do control plane `37232a67e5c9` reproduziu uma fronteira P00-D

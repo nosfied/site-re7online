@@ -170,6 +170,29 @@ deploy:
 5. trocar o symlink da API, iniciar a candidata apontada para a raiz externa e
    exigir readiness; somente então seguir a promoção normal do frontend.
 
+### Papéis temporais do primeiro cutover
+
+No deploy histórico, predecessora e rollback imediato eram a mesma release. No
+primeiro cutover durável isso não é verdade: CB3721D4 é a predecessora ativa,
+A+B é a candidata inerte e #444 é o rollback que já consome a raiz externa. O
+runtime manifest sucessor usa `predecessorReleases` exclusivamente para
+autenticar seleção/processo anteriores ao quiesce e mantém `rollbackReleases`
+como retorno durável. O operational state protege ambos: o predecessor aparece
+em `immediateRollbackReleases` e predecessor/rollback permanecem no conjunto
+`rollbackReleases`. Schemas históricos sem o novo campo conservam a semântica
+anterior byte por byte.
+
+O journal registra separadamente `previous.releases` e
+`previous.durableRollbackReleases`. Antes do aggregate verificado, uma negativa
+pode recuperar a CB com a configuração original. Depois de
+`AGGREGATE_VERIFIED`, qualquer recuperação usa #444 e `INBOX_READ_STATE_ROOT`,
+impedindo reintrodução de um writer release-local. Esse estado ainda não é o
+commit: a fronteira irrevogável é registrada em `durableCommit` somente depois
+de a API candidata ser promovida e passar readiness, com boundary
+`CANDIDATE_API_HEALTHY`. Falha de candidata/frontend ou rollback retomado nunca
+restaura CB/41D após essa fronteira; componentes já restaurados são autenticados
+e não reiniciados novamente.
+
 A extensão local do driver usa
 `CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3`: o request privado mantém o
 aggregate em `PENDING`, mas já sela a autorização administrativa, os caminhos
