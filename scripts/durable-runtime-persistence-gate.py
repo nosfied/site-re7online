@@ -64,17 +64,20 @@ def confined_outside(root: Path, release_roots: list[Path]) -> None:
 
 def validate_external_admission_authority(binding: Any, root_value: dict[str, Any]) -> dict[str, Any]:
     keys = {"path", "sha256", "operationId", "provisionReceiptSha256",
+            "ownerAuthorizationSha256", "materializationRequestSha256",
             "materializerSha256"}
     if (not isinstance(binding, dict) or set(binding) != keys or
             not isinstance(binding.get("operationId"), str) or not binding["operationId"] or
             not SHA256.fullmatch(str(binding.get("provisionReceiptSha256", ""))) or
+            not SHA256.fullmatch(str(binding.get("ownerAuthorizationSha256", ""))) or
+            not SHA256.fullmatch(str(binding.get("materializationRequestSha256", ""))) or
             not SHA256.fullmatch(str(binding.get("materializerSha256", "")))):
         deny("external_admission_authority_binding")
     authority = private_json(Path(str(binding.get("path", ""))),
                              str(binding.get("sha256", "")))
     authority_keys = {"schemaVersion", "kind", "state", "operationId",
-                      "persistentRoot", "createdDirectories", "provisioningAuthority",
-                      "materializer", "automaticExecution"}
+                      "sourceCustody", "persistentRoot", "createdDirectories",
+                      "provisioningAuthority", "materializer", "automaticExecution"}
     if (set(authority) != authority_keys or authority.get("schemaVersion") != 1 or
             authority.get("kind") !=
             "CONVERTA_DURABLE_READ_STATE_EXTERNAL_ADMISSION_AUTHORITY_V1" or
@@ -91,15 +94,24 @@ def validate_external_admission_authority(binding: Any, root_value: dict[str, An
     provisioning = authority.get("provisioningAuthority")
     provisioning_keys = {"planSha256", "provisionIntentSha256",
                          "ownerAuthorizationSha256", "journalSha256",
-                         "provisionReceiptSha256"}
+                         "provisionReceiptSha256", "materializationRequestSha256"}
     if (not isinstance(provisioning, dict) or set(provisioning) != provisioning_keys or
             any(not SHA256.fullmatch(str(provisioning.get(key, "")))
                 for key in provisioning_keys) or
             provisioning.get("provisionReceiptSha256") !=
-            binding["provisionReceiptSha256"]):
+            binding["provisionReceiptSha256"] or
+            provisioning.get("ownerAuthorizationSha256") !=
+            binding["ownerAuthorizationSha256"] or
+            provisioning.get("materializationRequestSha256") !=
+            binding["materializationRequestSha256"]):
         deny("external_admission_authority_provenance")
-    physical = authority.get("persistentRoot")
+    source_custody = authority.get("sourceCustody")
     physical_keys = {"path", "device", "inode", "ownerUid", "groupGid", "mode"}
+    if (not isinstance(source_custody, dict) or set(source_custody) != physical_keys or
+            not Path(str(source_custody.get("path", ""))).is_absolute() or
+            source_custody.get("mode") != "0700"):
+        deny("external_admission_authority_custody")
+    physical = authority.get("persistentRoot")
     if (not isinstance(physical, dict) or set(physical) != physical_keys or
             physical.get("path") != root_value["path"] or
             physical.get("ownerUid") != root_value["ownerUid"] or
@@ -166,14 +178,15 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
     common = {"schemaVersion", "kind", "surface", "persistentRoot", "releaseRoots",
               "reconciliation", "unreconciledReleaseDependencies"}
     legacy = request.get("schemaVersion") == 1
-    cutover = request.get("schemaVersion") == 3
     external = request.get("schemaVersion") == 4
+    cutover = (request.get("schemaVersion") == 3 or
+               (external and "cutover" in request))
     required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set()) | ({"externalAdmissionAuthority"} if external else set())
     if (set(request) != required or
             (legacy and request.get("kind") != KIND) or
             (not legacy and not cutover and not external and
              (request.get("schemaVersion") != 2 or request.get("kind") != KIND_V2)) or
-            (cutover and request.get("kind") != KIND_V3) or
+            (request.get("schemaVersion") == 3 and request.get("kind") != KIND_V3) or
             (external and request.get("kind") != KIND_V4)):
         deny("request_schema")
     if legacy:

@@ -217,7 +217,9 @@ class CutoverAuthorityTest(unittest.TestCase):
             "ownerAuthorizationSha256": owner_sha,
             "journalSha256": json.loads(Path(plan["outputs"]["receiptPath"]).read_text())["journalSha256"],
             "provisionReceiptSha256": provisioned["provisionReceiptSha256"],
+            "materializationRequestSha256": request_sha,
         })
+        self.assertEqual(authority["sourceCustody"], plan["custodyRoot"])
         self.assertEqual(AUTH.materialize_external_admission_authority(
             request_path, request_sha), result)
 

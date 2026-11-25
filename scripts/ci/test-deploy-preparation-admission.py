@@ -375,7 +375,12 @@ class AdmissionTests(unittest.TestCase):
                 materialization_request, request_sha)
         finally:
             AUTHORITY.ROOT = old_root
-        return authority_path, result, plan
+        imported = self.private / "builder-import" / authority_path.name
+        imported.parent.mkdir(mode=0o700)
+        imported.write_bytes(authority_path.read_bytes()); imported.chmod(0o600)
+        self.assertEqual(hashlib.sha256(imported.read_bytes()).hexdigest(),
+                         result["externalAdmissionAuthoritySha256"])
+        return imported, result, plan, request_sha
 
     def write_template(self, value):
         self.template.write_text(json.dumps(value))
@@ -526,7 +531,7 @@ class AdmissionTests(unittest.TestCase):
         old_request = Path(value["durablePersistence"]["request"])
         old_request.unlink()
         persistent = self.base / "remote-runtime-data/inbox-read-state"
-        authority_path, result, plan = self.external_admission_fixture(persistent)
+        authority_path, result, plan, authority_request_sha = self.external_admission_fixture(persistent)
         remote_identity = json.loads(authority_path.read_text())["persistentRoot"]
         persistent.rmdir()
         persistent.parent.rmdir()
@@ -546,6 +551,9 @@ class AdmissionTests(unittest.TestCase):
                 "sha256": hashlib.sha256(authority_path.read_bytes()).hexdigest(),
                 "operationId": plan["operationId"],
                 "provisionReceiptSha256": result["provisionReceiptSha256"],
+                "ownerAuthorizationSha256": json.loads(authority_path.read_text())[
+                    "provisioningAuthority"]["ownerAuthorizationSha256"],
+                "materializationRequestSha256": authority_request_sha,
                 "materializerSha256": result["materializerSha256"],
             },
         }
@@ -560,6 +568,14 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(report["durablePersistenceEnforcement"], "CANONICALLY_ENFORCED")
         with self.assertRaisesRegex(GATE.Denied, "persistent_root_absent"):
             GATE.validate(gate_value, "preflight")
+        copied_receipt = json.loads(json.dumps(gate_value))
+        receipt_path = Path(plan["outputs"]["receiptPath"])
+        copied_receipt["externalAdmissionAuthority"]["path"] = str(receipt_path)
+        copied_receipt["externalAdmissionAuthority"]["sha256"] = hashlib.sha256(
+            receipt_path.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(GATE.Denied,
+                                    "external_admission_authority_semantics"):
+            GATE.validate(copied_receipt, "admission")
         tampered = json.loads(authority_path.read_text())
         tampered["persistentRoot"]["inode"] += 1
         authority_path.write_bytes(GATE.canonical(tampered)); authority_path.chmod(0o600)
@@ -568,6 +584,98 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(GATE.Denied, "external_admission_authority_created_directories"):
             GATE.validate(gate_value, "admission")
         self.assertEqual(remote_identity["path"], str(persistent))
+
+    def test_v3_external_builder_admission_preserves_first_cutover_pending_contract(self):
+        value = self.v3_request(("api", "frontend"))
+        Path(value["durablePersistence"]["request"]).unlink()
+        persistent = self.base / "remote-cutover-runtime-data/inbox-read-state"
+        authority_path, result, plan, authority_request_sha = self.external_admission_fixture(persistent)
+        external = json.loads(authority_path.read_text())
+        persistent.rmdir(); persistent.parent.rmdir()
+        cutover_authorization = self.private / "cutover-authorization.json"
+        manifest_path = self.private / "cutover-manifest.json"
+        receipt_path = self.private / "cutover-aggregate.json"
+        seal_path = self.private / "cutover-seal.json"
+        cutover_authorization.write_bytes(GATE.canonical({
+            "schemaVersion": 3,
+            "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V3",
+            "operationId": "ab-first-cutover",
+            "administrativeAuthority": {"path": str(self.private / "owner.json"),
+                                        "sha256": "8" * 64},
+            "custodyRoot": {}, "persistentRoot": external["persistentRoot"],
+            "authorizedSourceReleases": ["immutable-cb"],
+            "entries": [{"sources": [{"releaseId": "immutable-cb",
+                                        "path": "/legacy/shared.json",
+                                        "root": {"path": "/legacy", "mode": "0755"},
+                                        "admission": "LEGACY_RELEASE_LOCAL_COPY_V1",
+                                        "privateCopyPath": "/custody/legacy/shared.json"}]}],
+            "inventoryPath": str(self.private / "inventory.json"),
+            "manifestPath": str(manifest_path),
+            "aggregateReceiptPath": str(receipt_path),
+            "sealReceiptPath": str(seal_path),
+        })); cutover_authorization.chmod(0o600)
+        authorization_sha = hashlib.sha256(cutover_authorization.read_bytes()).hexdigest()
+        gate_value = {
+            "schemaVersion": 4, "kind": GATE.KIND_V4,
+            "requiredPhases": list(GATE.PHASES), "surface": "INBOX_READ_STATE_V1",
+            "persistentRoot": plan["root"],
+            "releaseRoots": [{"role": "candidate", "path": str(self.base / "candidate-ab")},
+                             {"role": "rollback", "path": str(self.base / "rollback-compatible")}],
+            "reconciliation": {"required": True, "state": "PENDING",
+                               "receipt": str(receipt_path), "operationId": "ab-first-cutover",
+                               "manifest": str(manifest_path),
+                               "authorization": str(cutover_authorization),
+                               "authorizationSha256": authorization_sha,
+                               "sealReceipt": str(seal_path), "destinationCount": 1},
+            "unreconciledReleaseDependencies": [],
+            "externalAdmissionAuthority": {
+                "path": str(authority_path),
+                "sha256": result["externalAdmissionAuthoritySha256"],
+                "operationId": plan["operationId"],
+                "provisionReceiptSha256": result["provisionReceiptSha256"],
+                "ownerAuthorizationSha256": external["provisioningAuthority"][
+                    "ownerAuthorizationSha256"],
+                "materializationRequestSha256": authority_request_sha,
+                "materializerSha256": result["materializerSha256"],
+            },
+            "cutover": {"mode": "FIRST_RELEASE_LOCAL_TO_DURABLE_V1",
+                        "runner": {"path": str(self.base / "runner.js"), "sha256": "5" * 64},
+                        "candidateStorage": {"path": str(self.base / "storage.js"),
+                                             "sha256": "6" * 64},
+                        "pm2": {"candidate": {}, "rollback": {}},
+                        "rollbackCompatibility": {"path": str(self.base / "rollback.json"),
+                                                  "sha256": "7" * 64}},
+        }
+        gate_request = self.private / "durable-persistence-cutover-external.private.json"
+        gate_request.write_bytes(GATE.canonical(gate_value)); gate_request.chmod(0o600)
+        value["finalRoot"] = str(self.private / "admitted-v4-cutover")
+        value["durablePersistence"] = {
+            "request": str(gate_request),
+            "requestSha256": hashlib.sha256(gate_request.read_bytes()).hexdigest(),
+        }
+        process, report = self.run_request(value)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(report["durablePersistenceEnforcement"], "CANONICALLY_ENFORCED")
+        self.assertEqual(GATE.validate(gate_value, "admission")["reconciliation"], "PENDING")
+        with self.assertRaisesRegex(GATE.Denied, "persistent_root_absent"):
+            GATE.validate(gate_value, "preflight")
+        persistent.mkdir(parents=True, mode=0o700); persistent.parent.chmod(0o700)
+        with self.assertRaisesRegex(GATE.Denied,
+                                    "persistent_root_remote_authority_divergence"):
+            GATE.validate(gate_value, "preflight")
+        without_external = dict(gate_value); without_external.pop("externalAdmissionAuthority")
+        with self.assertRaisesRegex(GATE.Denied, "request_schema"):
+            GATE.validate(without_external, "admission")
+        historical_v3 = dict(without_external)
+        historical_v3.update(schemaVersion=3, kind=GATE.KIND_V3)
+        persistent.rmdir(); persistent.parent.rmdir()
+        with self.assertRaisesRegex(GATE.Denied, "persistent_root_absent"):
+            GATE.validate(historical_v3, "admission")
+        divergent_replay = json.loads(json.dumps(gate_value))
+        divergent_replay["externalAdmissionAuthority"]["operationId"] = "other-provision"
+        with self.assertRaisesRegex(GATE.Denied,
+                                    "external_admission_authority_semantics"):
+            GATE.validate(divergent_replay, "admission")
 
     def test_v3_frontend_only_does_not_require_read_state_authority(self):
         value = self.request(); value["schemaVersion"] = 3

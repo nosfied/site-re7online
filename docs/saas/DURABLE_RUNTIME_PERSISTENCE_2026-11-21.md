@@ -91,8 +91,10 @@ A rota V3 `frontend` continua válida sem autoridade de read-state.
   intent, `AUTHORIZE_ONCE`, journal, receipt e readback físico. A autoridade
   vincula operation ID, SHA de toda a cadeia e device/inode/UID/GID/`0700`; um
   receipt copiado isoladamente não é autoridade. Qualification/admission podem
-  consumir essa projeção privada byte-exata, mas ela não dispensa a leitura física
-  nas fases produtivas.
+  consumir essa projeção privada byte-exata, tanto no rollback sem reconciliação
+  quanto no primeiro cutover com o bloco V3 integral em `PENDING`; ela não dispensa
+  a leitura física nas fases produtivas nem altera a transição posterior para
+  `VERIFIED`.
 - **Preflight:** autentica device/inode, uid/gid, `0700`, ancestrais e raízes
   candidatas/rollback; receipt de reconciliação é validado semanticamente por
   operação, tenant, scope e destino quando declarado.
@@ -127,6 +129,11 @@ Para a topologia de builder externo, a ação
 privada, somente a projeção terminal derivada dessa cadeia. A projeção não cria a
 raiz, não altera o receipt e não pode ser usada em `preflight` ou fases seguintes:
 essas fases reabrem a raiz na VPS e exigem identidade física igual à registrada.
+Ela registra a identidade da custódia de origem e o SHA do próprio pedido de
+materialização. O transporte para a custódia do builder preserva os bytes; o
+pedido privado P00-D fixa o SHA do destino recebido, do pedido produtor, do
+`AUTHORIZE_ONCE`, do receipt e do materializador. Coerência interna de um JSON
+não referenciado por esse pedido autenticado não concede autoridade.
 O fluxo V1 do #446 permanece disponível exclusivamente para autoridades já
 seladas; a separação não cria lifecycle alternativo nem autoriza efeitos.
 
