@@ -56,6 +56,14 @@ MANIFEST_FIELDS = {
     "sourceDateEpoch", "builtAt", "toolchain", "runtimes", "indexSha256",
     "reproducibility",
 }
+MANIFEST_V2_FIELDS = MANIFEST_FIELDS | {"durablePersistence"}
+PENDING_GATE_KIND = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V5"
+COMPILED_AUTHORITY_KIND = "CONVERTA_DURABLE_READ_STATE_COMPILED_AUTHORITY_V1"
+PENDING_COMPILED_STATE = "PENDING_BUILD_VERIFY"
+COMPILED_RELATIVE_PATHS = {
+    "runner": "api-runtime/dist/inbox/readStateReconciliationBatch.js",
+    "candidateStorage": "api-runtime/dist/inbox/readStateStore.js",
+}
 CAPACITY_FIELDS = {
     "schemaVersion", "contractId", "capturedAtUtc", "targetCommit", "releaseId",
     "filesystemPath", "buildWorkspaceGrowthBytes", "runtimePayloadBytes",
@@ -106,6 +114,58 @@ def requested_components(value: str) -> tuple[str, ...]:
     if components not in SUPPORTED_COMPONENT_SETS:
         deny("components")
     return components
+
+
+def pending_persistence_request(path: Path | None, expected_sha256: str | None,
+                                target: str, release_id: str) -> tuple[dict[str, Any], str] | None:
+    if path is None and expected_sha256 is None:
+        return None
+    if path is None or expected_sha256 is None or not SHA256.fullmatch(expected_sha256):
+        deny("durable_persistence_request_binding")
+    raw, info = stable_bytes(path)
+    if (info.st_uid != os.geteuid() or info.st_gid != os.getegid() or
+            stat.S_IMODE(info.st_mode) != 0o600 or sha256_bytes(raw) != expected_sha256):
+        deny("durable_persistence_request_identity")
+    value = json_object(raw, path.name)
+    if raw != canonical_json(value):
+        deny("durable_persistence_request_canonical")
+    required = {"schemaVersion", "kind", "requiredPhases", "surface", "persistentRoot",
+                "releaseRoots", "reconciliation", "unreconciledReleaseDependencies",
+                "externalAdmissionAuthority", "cutover", "candidateIdentity"}
+    identity = value.get("candidateIdentity")
+    if (set(value) != required or value.get("schemaVersion") != 5 or
+            value.get("kind") != PENDING_GATE_KIND or
+            not isinstance(identity, dict) or
+            identity != {"generationId": release_id, "targetCommit": target}):
+        deny("durable_persistence_request_schema")
+    roots = value.get("releaseRoots")
+    candidates = [item for item in roots if isinstance(item, dict) and
+                  item.get("role") == "candidate"] if isinstance(roots, list) else []
+    if len(candidates) != 1 or Path(str(candidates[0].get("path", ""))).name != release_id:
+        deny("durable_persistence_candidate_root")
+    candidate = Path(candidates[0]["path"])
+    cutover = value.get("cutover")
+    if not isinstance(cutover, dict):
+        deny("durable_persistence_cutover")
+    for label, relative in COMPILED_RELATIVE_PATHS.items():
+        binding = cutover.get(label)
+        if (not isinstance(binding, dict) or
+                binding != {"path": str(candidate / relative), "relativePath": relative,
+                            "state": PENDING_COMPILED_STATE}):
+            deny(f"durable_persistence_{label}_pending")
+    return value, expected_sha256
+
+
+def compile_persistence_request(request: dict[str, Any], request_sha256: str,
+                                release_root: Path) -> dict[str, Any]:
+    artifacts: dict[str, dict[str, str]] = {}
+    for label, relative in COMPILED_RELATIVE_PATHS.items():
+        raw, _ = stable_bytes(release_root / relative)
+        artifacts[label] = {"path": request["cutover"][label]["path"],
+                            "relativePath": relative, "sha256": sha256_bytes(raw)}
+    return {"schemaVersion": 1, "kind": COMPILED_AUTHORITY_KIND,
+            "sourceAdmissionRequestSha256": request_sha256,
+            "artifacts": artifacts}
 
 
 def runtime_names(components: tuple[str, ...]) -> tuple[str, ...]:
@@ -1104,13 +1164,16 @@ def validate_index(release_root: Path, raw: bytes, components: tuple[str, ...] =
 
 def validate_manifest(release_root: Path, expected_target: str, expected_release: str,
                       components: tuple[str, ...] = BASE_COMPONENTS, *,
+                      durable_persistence_request_sha256: str | None = None,
                       allow_private_data_overlay: bool = False,
                       allow_a959_private_data_overlay: bool = False,
                       allow_f160_runtime_cache_overlay: bool = False) -> dict[str, Any]:
     manifest_raw, _ = stable_bytes(release_root / "manifest.json")
     index_raw, _ = stable_bytes(release_root / "index.sha256")
     manifest = json_object(manifest_raw, "manifest.json")
-    if set(manifest) != MANIFEST_FIELDS or manifest.get("schemaVersion") != 1:
+    schema = manifest.get("schemaVersion")
+    expected_fields = MANIFEST_V2_FIELDS if schema == 2 else MANIFEST_FIELDS
+    if set(manifest) != expected_fields or schema not in {1, 2}:
         deny("release_manifest_schema")
     if manifest.get("producer") != {"name": "converta-release.py", "formatVersion": 1}:
         deny("release_manifest_producer")
@@ -1138,6 +1201,37 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
     )
     if manifest.get("indexSha256") != index_sha:
         deny("release_manifest_index")
+    if schema == 1:
+        if durable_persistence_request_sha256 is not None:
+            deny("release_manifest_durable_persistence_missing")
+    else:
+        if (durable_persistence_request_sha256 is None or
+                not SHA256.fullmatch(durable_persistence_request_sha256)):
+            deny("release_manifest_durable_persistence_binding")
+        authority = manifest.get("durablePersistence")
+        if (not isinstance(authority, dict) or
+                set(authority) != {"schemaVersion", "kind", "sourceAdmissionRequestSha256",
+                                   "artifacts"} or
+                authority.get("schemaVersion") != 1 or
+                authority.get("kind") != COMPILED_AUTHORITY_KIND or
+                authority.get("sourceAdmissionRequestSha256") !=
+                durable_persistence_request_sha256):
+            deny("release_manifest_durable_persistence_authority")
+        artifacts = authority.get("artifacts")
+        if not isinstance(artifacts, dict) or set(artifacts) != set(COMPILED_RELATIVE_PATHS):
+            deny("release_manifest_durable_persistence_artifacts")
+        for label, relative in COMPILED_RELATIVE_PATHS.items():
+            binding = artifacts.get(label)
+            bound_path = Path(str(binding.get("path", ""))) if isinstance(binding, dict) else Path()
+            artifact_raw, _ = stable_bytes(release_root / relative)
+            if (not isinstance(binding, dict) or
+                    set(binding) != {"path", "relativePath", "sha256"} or
+                    not bound_path.is_absolute() or
+                    bound_path.parts[-len(Path(relative).parts):] != Path(relative).parts or
+                    bound_path.parents[len(Path(relative).parts) - 1].name != expected_release or
+                    binding.get("relativePath") != relative or
+                    binding.get("sha256") != sha256_bytes(artifact_raw)):
+                deny(f"release_manifest_durable_persistence_{label}")
     runtimes = manifest.get("runtimes")
     if not isinstance(runtimes, dict) or set(runtimes) != set(components):
         deny("release_manifest_runtimes")
@@ -1383,6 +1477,7 @@ def authenticate_private_data_contract(path: Path, expected_sha256: str,
 def verify_root(root: Path, target: str, release_id: str,
                 deployed_marker_sha256: str | None = None, *,
                 components: tuple[str, ...] = BASE_COMPONENTS,
+                durable_persistence_request_sha256: str | None = None,
                 allow_private_data_overlay: bool = False,
                 allow_a959_private_data_overlay: bool = False,
                 allow_f160_runtime_cache_overlay: bool = False,
@@ -1413,6 +1508,7 @@ def verify_root(root: Path, target: str, release_id: str,
             deny("deployed_marker_mismatch")
     result = validate_manifest(
         root, target, release_id, components,
+        durable_persistence_request_sha256=durable_persistence_request_sha256,
         allow_private_data_overlay=allow_private_data_overlay,
         allow_a959_private_data_overlay=allow_a959_private_data_overlay,
         allow_f160_runtime_cache_overlay=allow_f160_runtime_cache_overlay,
@@ -1423,6 +1519,9 @@ def verify_root(root: Path, target: str, release_id: str,
 
 
 def build(args: argparse.Namespace) -> None:
+    args.pending_persistence = pending_persistence_request(
+        args.durable_persistence_request, args.durable_persistence_request_sha256,
+        args.target, args.release_id)
     roots = validate_build_paths(args)
     with generation_build_window(args.output.parent):
         build_in_generation_window(args, roots)
@@ -1733,9 +1832,18 @@ def build_in_generation_window(args: argparse.Namespace,
                 "entrypoint": "worker-runtime/dist/whatsapp-web-worker/src/index.js",
                 "entrySha256": sha256_bytes(worker_raw),
             }
+        if args.pending_persistence is not None:
+            pending_request, pending_sha256 = args.pending_persistence
+            manifest["schemaVersion"] = 2
+            manifest["durablePersistence"] = compile_persistence_request(
+                pending_request, pending_sha256, release_root)
         (release_root / "manifest.json").write_bytes(canonical_json(manifest))
         normalize_tree(release_root, args.source_date_epoch)
-        verified = verify_root(release_root, args.target, args.release_id, components=components)
+        persistence_sha = (args.pending_persistence[1]
+                           if args.pending_persistence is not None else None)
+        verified = verify_root(
+            release_root, args.target, args.release_id, components=components,
+            durable_persistence_request_sha256=persistence_sha)
         package = args.output / f"{args.release_id}.tar.xz"
         package_identity = monitored_phase(
             "package",
@@ -1751,7 +1859,8 @@ def build_in_generation_window(args: argparse.Namespace,
             try:
                 extracted = safe_extract(package, temporary, args.release_id)
                 extracted_verified = verify_root(
-                    extracted, args.target, args.release_id, components=components)
+                    extracted, args.target, args.release_id, components=components,
+                    durable_persistence_request_sha256=persistence_sha)
                 if (extracted_verified != verified or
                         canonical_json(scan_runtime(extracted, components)) !=
                         canonical_json(scan_runtime(release_root, components))):
@@ -1804,6 +1913,10 @@ def build_in_generation_window(args: argparse.Namespace,
 
 def verify(args: argparse.Namespace) -> None:
     components = requested_components(args.components)
+    persistence = pending_persistence_request(
+        args.durable_persistence_request, args.durable_persistence_request_sha256,
+        args.target, args.release_id)
+    persistence_sha = persistence[1] if persistence is not None else None
     if bool(args.release_root) == bool(args.package):
         deny("verify_source")
     if args.package and args.deployed_marker_sha256 is not None:
@@ -1840,7 +1953,9 @@ def verify(args: argparse.Namespace) -> None:
         result = verify_root(
             args.release_root.resolve(strict=True), args.target, args.release_id,
             args.deployed_marker_sha256,
-            components=components, allow_private_data_overlay=contract_bound,
+            components=components,
+            durable_persistence_request_sha256=persistence_sha,
+            allow_private_data_overlay=contract_bound,
             allow_a959_private_data_overlay=args.legacy_a959_private_data_overlay,
             allow_f160_runtime_cache_overlay=(args.legacy_f160_runtime_cache_overlay or
                                                args.legacy_p00_runtime_cache_overlay),
@@ -1848,13 +1963,19 @@ def verify(args: argparse.Namespace) -> None:
     else:
         with tempfile.TemporaryDirectory(prefix="converta-release-verify-") as temporary:
             root = safe_extract(args.package.resolve(strict=True), Path(temporary), args.release_id)
-            result = verify_root(root, args.target, args.release_id, components=components)
+            result = verify_root(
+                root, args.target, args.release_id, components=components,
+                durable_persistence_request_sha256=persistence_sha)
     print(canonical_json({"result": "RELEASE VERIFIED", "releaseId": args.release_id,
                           "targetCommit": args.target, **result}).decode().strip())
 
 
 def install(args: argparse.Namespace) -> None:
     components = requested_components(args.components)
+    persistence = pending_persistence_request(
+        args.durable_persistence_request, args.durable_persistence_request_sha256,
+        args.target, args.release_id)
+    persistence_sha = persistence[1] if persistence is not None else None
     roots = authenticated_build_roots(args.root_policy, args.root_policy_sha256)
     releases_root = args.installed_releases_root
     if releases_root != roots["releases"]:
@@ -1881,6 +2002,7 @@ def install(args: argparse.Namespace) -> None:
         result = verify_root(
             staged, args.target, args.release_id,
             components=components, physical_name=staged.name, expected_root_mode=0o700,
+            durable_persistence_request_sha256=persistence_sha,
         )
         before = staged.lstat()
         os.chmod(staged, package_root_mode)
@@ -1893,7 +2015,9 @@ def install(args: argparse.Namespace) -> None:
             deny("installed_release_exists")
         os.rename(staged, final)
         fsync_directory(releases_root)
-        final_result = verify_root(final, args.target, args.release_id, components=components)
+        final_result = verify_root(
+            final, args.target, args.release_id, components=components,
+            durable_persistence_request_sha256=persistence_sha)
         if final_result != result:
             deny("installed_release_postrename_mismatch")
         result = final_result
@@ -1906,13 +2030,17 @@ def install(args: argparse.Namespace) -> None:
         extracted: Path | None = None
         try:
             extracted = safe_extract(package, temporary, args.release_id)
-            result = verify_root(extracted, args.target, args.release_id, components=components)
+            result = verify_root(
+                extracted, args.target, args.release_id, components=components,
+                durable_persistence_request_sha256=persistence_sha)
             if final.exists() or final.is_symlink():
                 deny("installed_release_exists")
             os.rename(extracted, final)
             fsync_directory(releases_root)
             temporary.rmdir()
-            result = verify_root(final, args.target, args.release_id, components=components)
+            result = verify_root(
+                final, args.target, args.release_id, components=components,
+                durable_persistence_request_sha256=persistence_sha)
         except BaseException:
             if extracted is not None and extracted.exists():
                 shutil.rmtree(extracted)
@@ -1952,6 +2080,8 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--root-policy-sha256", required=True)
     build_parser.add_argument("--npm-cache-root", type=Path)
     build_parser.add_argument("--temporary-root", type=Path)
+    build_parser.add_argument("--durable-persistence-request", type=Path)
+    build_parser.add_argument("--durable-persistence-request-sha256")
     build_parser.set_defaults(handler=build)
     verify_parser = commands.add_parser("verify")
     source = verify_parser.add_mutually_exclusive_group(required=True)
@@ -1963,6 +2093,8 @@ def parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--deployed-marker-sha256")
     verify_parser.add_argument("--artifact-contract", type=Path)
     verify_parser.add_argument("--artifact-contract-sha256")
+    verify_parser.add_argument("--durable-persistence-request", type=Path)
+    verify_parser.add_argument("--durable-persistence-request-sha256")
     verify_parser.add_argument("--legacy-a959-private-data-overlay", action="store_true")
     verify_parser.add_argument("--legacy-f160-runtime-cache-overlay", action="store_true")
     verify_parser.add_argument("--legacy-p00-runtime-cache-overlay", action="store_true")
@@ -1975,6 +2107,8 @@ def parser() -> argparse.ArgumentParser:
     install_parser.add_argument("--installed-releases-root", type=Path, required=True)
     install_parser.add_argument("--root-policy", type=Path, required=True)
     install_parser.add_argument("--root-policy-sha256", required=True)
+    install_parser.add_argument("--durable-persistence-request", type=Path)
+    install_parser.add_argument("--durable-persistence-request-sha256")
     install_parser.add_argument("--recovery-manifest", type=Path)
     install_parser.add_argument("--recovery-manifest-sha256")
     install_parser.set_defaults(handler=install)

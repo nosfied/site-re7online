@@ -677,6 +677,58 @@ class AdmissionTests(unittest.TestCase):
                                     "external_admission_authority_semantics"):
             GATE.validate(divergent_replay, "admission")
 
+        pending = json.loads(json.dumps(gate_value))
+        candidate_root = self.base / "releases" / value["generationId"]
+        pending.update(
+            schemaVersion=5, kind=GATE.KIND_V5,
+            candidateIdentity={"generationId": value["generationId"],
+                               "targetCommit": value["targetCommit"]},
+        )
+        pending["releaseRoots"][0]["path"] = str(candidate_root)
+        for label, relative in GATE.COMPILED_RELATIVE_PATHS.items():
+            pending["cutover"][label] = {
+                "path": str(candidate_root / relative),
+                "relativePath": relative,
+                "state": GATE.PENDING_COMPILED_STATE,
+            }
+        pending_request = self.private / "durable-persistence-cutover-pending-v5.private.json"
+        pending_request.write_bytes(GATE.canonical(pending)); pending_request.chmod(0o600)
+        value["finalRoot"] = str(self.private / "admitted-v5-cutover-pending")
+        value["durablePersistence"] = {
+            "request": str(pending_request),
+            "requestSha256": hashlib.sha256(pending_request.read_bytes()).hexdigest(),
+        }
+        pending_process, pending_report = self.run_request(value)
+        self.assertEqual(pending_process.returncode, 0,
+                         pending_process.stdout + pending_process.stderr)
+        self.assertEqual(pending_report["durablePersistenceEnforcement"],
+                         "CANONICALLY_ENFORCED")
+        gate_report = GATE.validate(pending, "admission")
+        self.assertEqual(gate_report["compiledArtifactState"],
+                         GATE.PENDING_COMPILED_STATE)
+        placeholder = json.loads(json.dumps(pending))
+        placeholder["cutover"]["runner"] = {
+            "path": str(candidate_root / GATE.COMPILED_RELATIVE_PATHS["runner"]),
+            "sha256": "5" * 64,
+        }
+        with self.assertRaisesRegex(GATE.Denied, "cutover_runner_pending_binding"):
+            GATE.validate(placeholder, "admission")
+
+        mismatched = json.loads(json.dumps(pending))
+        mismatched["candidateIdentity"]["targetCommit"] = "f" * 40
+        mismatched_path = self.private / "durable-persistence-cutover-mismatch-v5.private.json"
+        mismatched_path.write_bytes(GATE.canonical(mismatched)); mismatched_path.chmod(0o600)
+        mismatched_value = dict(value)
+        mismatched_value["finalRoot"] = str(self.private / "denied-v5-cutover-mismatch")
+        mismatched_value["durablePersistence"] = {
+            "request": str(mismatched_path),
+            "requestSha256": hashlib.sha256(mismatched_path.read_bytes()).hexdigest(),
+        }
+        denied_process, denied_report = self.run_request(mismatched_value)
+        self.assertEqual(denied_process.returncode, 2)
+        self.assertIn("durablePersistence:candidate_identity", denied_report["errors"])
+        self.assertFalse(Path(mismatched_value["finalRoot"]).exists())
+
     def test_v3_frontend_only_does_not_require_read_state_authority(self):
         value = self.request(); value["schemaVersion"] = 3
         value["components"] = ["frontend"]; value["durablePersistence"] = None

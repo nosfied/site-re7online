@@ -17,6 +17,13 @@ KIND = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V1"
 KIND_V2 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V2"
 KIND_V3 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3"
 KIND_V4 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V4"
+KIND_V5 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V5"
+COMPILED_AUTHORITY_KIND = "CONVERTA_DURABLE_READ_STATE_COMPILED_AUTHORITY_V1"
+PENDING_COMPILED_STATE = "PENDING_BUILD_VERIFY"
+COMPILED_RELATIVE_PATHS = {
+    "runner": "api-runtime/dist/inbox/readStateReconciliationBatch.js",
+    "candidateStorage": "api-runtime/dist/inbox/readStateStore.js",
+}
 PHASES = ("qualification", "admission", "preflight", "activation", "acceptance",
           "finalize", "retirement")
 ENFORCEMENT_STATE = "CANONICALLY_ENFORCED"
@@ -174,20 +181,47 @@ def validate_aggregate_materialization(reconciliation: dict[str, Any], manifest_
                     deny("reconciliation_destination_readback")
 
 
+def _candidate_root(request: dict[str, Any]) -> Path:
+    return Path(next(item["path"] for item in request["releaseRoots"]
+                     if item["role"] == "candidate"))
+
+
+def validate_pending_compiled_bindings(request: dict[str, Any]) -> None:
+    identity = request.get("candidateIdentity")
+    candidate = _candidate_root(request)
+    if (not isinstance(identity, dict) or set(identity) != {"generationId", "targetCommit"} or
+            not isinstance(identity.get("generationId"), str) or
+            candidate.name != identity.get("generationId") or
+            not re.fullmatch(r"[0-9a-f]{40}", str(identity.get("targetCommit", "")))):
+        deny("cutover_candidate_identity")
+    cutover = request["cutover"]
+    for label, relative in COMPILED_RELATIVE_PATHS.items():
+        binding = cutover.get(label)
+        expected_path = candidate / relative
+        if (not isinstance(binding, dict) or
+                set(binding) != {"path", "relativePath", "state"} or
+                binding.get("state") != PENDING_COMPILED_STATE or
+                binding.get("relativePath") != relative or
+                Path(str(binding.get("path", ""))) != expected_path):
+            deny(f"cutover_{label}_pending_binding")
+
+
 def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[str, Any]:
     common = {"schemaVersion", "kind", "surface", "persistentRoot", "releaseRoots",
               "reconciliation", "unreconciledReleaseDependencies"}
     legacy = request.get("schemaVersion") == 1
-    external = request.get("schemaVersion") == 4
+    external = request.get("schemaVersion") in {4, 5}
     cutover = (request.get("schemaVersion") == 3 or
                (external and "cutover" in request))
-    required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set()) | ({"externalAdmissionAuthority"} if external else set())
+    pending_compiled = request.get("schemaVersion") == 5
+    required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set()) | ({"externalAdmissionAuthority"} if external else set()) | ({"candidateIdentity"} if pending_compiled else set())
     if (set(request) != required or
             (legacy and request.get("kind") != KIND) or
             (not legacy and not cutover and not external and
              (request.get("schemaVersion") != 2 or request.get("kind") != KIND_V2)) or
             (request.get("schemaVersion") == 3 and request.get("kind") != KIND_V3) or
-            (external and request.get("kind") != KIND_V4)):
+            (request.get("schemaVersion") == 4 and request.get("kind") != KIND_V4) or
+            (pending_compiled and request.get("kind") != KIND_V5)):
         deny("request_schema")
     if legacy:
         declared_phases = (request.get("phase"),)
@@ -334,12 +368,18 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
         if (not isinstance(cutover_value, dict) or set(cutover_value) != cutover_keys or
                 cutover_value.get("mode") != "FIRST_RELEASE_LOCAL_TO_DURABLE_V1"):
             deny("cutover_schema")
-        for label in ("runner", "candidateStorage", "rollbackCompatibility"):
+        labels = (("rollbackCompatibility",) if pending_compiled else
+                  ("runner", "candidateStorage", "rollbackCompatibility"))
+        for label in labels:
             binding = cutover_value.get(label)
             if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
                     not Path(str(binding.get("path", ""))).is_absolute() or
                     not SHA256.fullmatch(str(binding.get("sha256", "")))):
                 deny(f"cutover_{label}_binding")
+        if pending_compiled:
+            validate_pending_compiled_bindings(request)
+            if phase not in {"qualification", "admission"}:
+                deny("compiled_authority_pending")
         pm2 = cutover_value.get("pm2")
         if not isinstance(pm2, dict) or set(pm2) != {"candidate", "rollback"}:
             deny("cutover_pm2_binding")
@@ -353,6 +393,9 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
                                  reconciliation["state"]),
               "cutoverMode": request.get("cutover", {}).get("mode"),
               "enforcementState": enforcement}
+    if pending_compiled:
+        report["candidateIdentity"] = request["candidateIdentity"]
+        report["compiledArtifactState"] = PENDING_COMPILED_STATE
     if external:
         report["observationSource"] = (
             "AUTHENTICATED_REMOTE_PROVISION_RECEIPT" if phase == "admission" else

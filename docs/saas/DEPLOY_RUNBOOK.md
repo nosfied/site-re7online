@@ -176,12 +176,12 @@ Para `b58ed195-v3-once`, o perfil de captura `empty-transaction-preservation` au
 | qualification | operador + Git/CI/política/toolchain; autentica target e orçamento | matriz PASS; drift nega; sem efeito e sem autorização produtiva |
 | admission | `deploy-preparation-admission.py` + projeção/provas; publica custódia privada | schema compartilhado PASS; negativa não publica; novo destino exclusivo |
 | open | `disposable-builder-lifecycle.py` + contrato/política; aloca raiz durável | lifecycle `OPEN`; raiz/tmpfiles/lock divergente nega; ato de build separado |
-| build | `converta-release.py` + target/worktree; produz uma vez | pacote/manifesto/índice; falha vira dívida; nunca repetir o mesmo efeito |
-| verify | mesmo produtor + pacote; verifica árvore/entrypoints | `RELEASE VERIFIED`; divergência nega; pacote permanece evidência |
+| build | `converta-release.py` + target/worktree; produz uma vez | pacote/manifesto/índice; para primeiro cutover, transforma somente o binding V5 `PENDING_BUILD_VERIFY` admitido em autoridade compilada no manifesto schema 2; falha vira dívida; nunca repetir o mesmo efeito |
+| verify | mesmo produtor + pacote; verifica árvore/entrypoints | `RELEASE VERIFIED`; reabre request V5, autoridade compilada e bytes dos módulos; divergência nega; pacote permanece evidência |
 | export | lifecycle + artefatos; copia autoridade para custódia | export receipt; parcial nega; retoma sem rebuild |
 | transfer | transporte autenticado + pacote; upload único | readback/hash; divergência nega; autorização específica |
-| install | `converta-release.py install` + pacote; instala inerte | receipt/identidade; não ativa; recuperação só por manifesto fechado |
-| preflight | driver + runtime/bindings/retornos; observa sem promover | journal PASS; negativa preserva; ativação exige owner |
+| install | `converta-release.py install` + pacote; instala inerte | receipt/identidade; reabre o mesmo binding V5 e a autoridade compilada; não ativa; recuperação só por manifesto fechado |
+| preflight | driver + runtime/bindings/retornos; observa sem promover | runtime manifest schema 5 vincula admission V5 e runtime V3; estado pending, target/hash ou derivação divergente negam; journal PASS; ativação exige owner |
 | activate | driver + preflight/lock; promove componentes na ordem selada | readiness/identidade; falha usa rollback e journal; não repetir |
 | acceptance | materializador + journal/testes; vincula aceite humano/técnico | aceite autenticado; não executa save; finalize exige owner |
 | finalize | wrapper/driver + aceite; faz no máximo um `pm2 save` e marker | journal terminal ou retomável; save durável nunca se repete |
