@@ -130,8 +130,10 @@ case "$PWD:$*" in
     printf 'generated\n' > node_modules/.prisma/client/index.js
     ;;
   */apps/whatsapp-agent:*build*)
-    mkdir -p dist
+    mkdir -p dist/inbox
     printf 'console.log("api fixture");\n' > dist/index.js
+    printf 'console.log("reconciliation fixture");\n' > dist/inbox/readStateReconciliationBatch.js
+    printf 'console.log("storage fixture");\n' > dist/inbox/readStateStore.js
     ;;
   */apps/whatsapp-agent:*ci*)
     mkdir -p node_modules/.bin node_modules/runtime-package
@@ -353,6 +355,287 @@ class ReleaseProducerTest(unittest.TestCase):
             "path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
             "state": "ACTIVE_DEPENDENCY", "retirableOn": "NEVER_AUTOMATIC",
         })
+
+    def test_build_produces_compiled_authority_from_typed_pending_request(self) -> None:
+        release_id = f"{self.release_id}-temporal"
+        output = self.outputs / "output-temporal-authority"
+        capacity = capacity_contract(
+            self.base / "capacity-temporal.private.json", self.base, self.target, release_id)
+        candidate = self.releases / release_id
+        request_value = {
+            "schemaVersion": 5, "kind": MODULE.PENDING_GATE_KIND,
+            "requiredPhases": ["qualification", "admission", "preflight", "activation",
+                               "acceptance", "finalize", "retirement"],
+            "surface": "INBOX_READ_STATE_V1",
+            "persistentRoot": {"path": "/opt/re7online/runtime-data/inbox-read-state",
+                               "ownerUid": 1000, "groupGid": 1000, "mode": "0700"},
+            "releaseRoots": [{"role": "candidate", "path": str(candidate)},
+                             {"role": "rollback", "path": str(self.releases / "rollback")}],
+            "reconciliation": {"required": True, "state": "PENDING",
+                               "receipt": "/private/aggregate", "operationId": "cutover",
+                               "manifest": "/private/manifest",
+                               "authorization": "/private/authorization",
+                               "authorizationSha256": "1" * 64,
+                               "sealReceipt": "/private/seal", "destinationCount": 17},
+            "unreconciledReleaseDependencies": [],
+            "externalAdmissionAuthority": {
+                "path": "/private/external", "sha256": "2" * 64,
+                "operationId": "provision", "provisionReceiptSha256": "3" * 64,
+                "ownerAuthorizationSha256": "4" * 64,
+                "materializationRequestSha256": "5" * 64,
+                "materializerSha256": "6" * 64},
+            "candidateIdentity": {"generationId": release_id,
+                                  "targetCommit": self.target},
+            "cutover": {
+                "mode": "FIRST_RELEASE_LOCAL_TO_DURABLE_V1",
+                "runner": {"path": str(candidate / MODULE.COMPILED_RELATIVE_PATHS["runner"]),
+                           "relativePath": MODULE.COMPILED_RELATIVE_PATHS["runner"],
+                           "state": MODULE.PENDING_COMPILED_STATE},
+                "candidateStorage": {
+                    "path": str(candidate / MODULE.COMPILED_RELATIVE_PATHS["candidateStorage"]),
+                    "relativePath": MODULE.COMPILED_RELATIVE_PATHS["candidateStorage"],
+                    "state": MODULE.PENDING_COMPILED_STATE},
+                "pm2": {"candidate": {}, "rollback": {}},
+                "rollbackCompatibility": {"path": "/private/rollback", "sha256": "7" * 64},
+            },
+        }
+        request = self.base / "pending-temporal-build.private.json"
+        write(request, json.dumps(request_value, sort_keys=True,
+                                  separators=(",", ":")) + "\n", 0o600)
+        request_sha = hashlib.sha256(request.read_bytes()).hexdigest()
+        arguments = [
+            "build", "--repo", str(self.repo), "--target", self.target,
+            "--release-id", release_id, "--components", COMPONENTS,
+            "--output", str(output), "--installed-releases-root", str(self.releases),
+            "--source-date-epoch", EPOCH, "--capacity-contract", str(capacity),
+            "--root-policy", str(self.root_policy), "--root-policy-sha256", self.root_policy_sha,
+            "--npm-cache-root", str(self.npm_cache), "--temporary-root", str(self.temporary_root),
+            "--durable-persistence-request", str(request),
+            "--durable-persistence-request-sha256", request_sha,
+        ]
+        parsed = MODULE.parser().parse_args(arguments)
+        with patch.dict(os.environ, self.env, clear=True):
+            parsed.handler(parsed)
+        manifest = json.loads((output / release_id / "manifest.json").read_text())
+        self.assertEqual(manifest["schemaVersion"], 2)
+        self.assertEqual(manifest["durablePersistence"]["sourceAdmissionRequestSha256"],
+                         request_sha)
+        for label, relative in MODULE.COMPILED_RELATIVE_PATHS.items():
+            self.assertEqual(manifest["durablePersistence"]["artifacts"][label]["sha256"],
+                             hashlib.sha256((output / release_id / relative).read_bytes()).hexdigest())
+        verified = invoke(
+            "verify", "--package", str(output / f"{release_id}.tar.xz"),
+            "--target", self.target, "--release-id", release_id, "--components", COMPONENTS,
+            "--durable-persistence-request", str(request),
+            "--durable-persistence-request-sha256", request_sha)
+        self.assertEqual(verified.returncode, 0, verified.stderr)
+        lifecycle = output / "generation-lifecycle.private.json"
+        write(output / "generation-review.private.json", json.dumps({
+            "schemaVersion": 1, "generationId": release_id,
+            "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+            "decision": "SANITIZED", "reviewer": "synthetic-test",
+            "reason": "temporal authority fixture closed", "evidenceSha256": "a" * 64,
+        }) + "\n", 0o600)
+
+    def test_pending_cutover_becomes_compiled_authority_for_verify_install_and_preflight(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="durable-temporal-authority-") as directory:
+            base = Path(directory)
+            releases = base / "releases"; releases.mkdir()
+            source_parent = base / "source"; source_parent.mkdir()
+            source = source_parent / self.release_id
+            shutil.copytree(self.release, source, symlinks=True)
+            persistent = base / "runtime-data/inbox-read-state"
+            persistent.mkdir(parents=True, mode=0o700); persistent.chmod(0o700)
+            persistent.parent.chmod(0o700)
+            authorization = base / "cutover-authorization.private.json"
+            manifest_path = base / "reconciliation-manifest.private.json"
+            receipt_path = base / "aggregate-receipt.private.json"
+            seal_path = base / "snapshot-seal.private.json"
+            write(authorization, json.dumps({
+                "schemaVersion": 1,
+                "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1",
+                "operationId": "temporal-authority-fixture",
+                "entries": [{}],
+                "manifestPath": str(manifest_path),
+                "aggregateReceiptPath": str(receipt_path),
+                "sealReceiptPath": str(seal_path),
+            }, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+            candidate = releases / self.release_id
+            external_custody = base / "external-custody"; external_custody.mkdir(mode=0o700)
+            root_info = persistent.lstat(); custody_info = external_custody.lstat()
+            physical_root = {"path": str(persistent), "device": root_info.st_dev,
+                             "inode": root_info.st_ino, "ownerUid": root_info.st_uid,
+                             "groupGid": root_info.st_gid, "mode": "0700"}
+            external = base / "external-admission-authority.private.json"
+            external_value = {
+                "schemaVersion": 1,
+                "kind": "CONVERTA_DURABLE_READ_STATE_EXTERNAL_ADMISSION_AUTHORITY_V1",
+                "state": "ROOT_PROVISIONED_VERIFIED", "operationId": "provision",
+                "sourceCustody": {"path": str(external_custody),
+                                  "device": custody_info.st_dev, "inode": custody_info.st_ino,
+                                  "ownerUid": custody_info.st_uid,
+                                  "groupGid": custody_info.st_gid, "mode": "0700"},
+                "persistentRoot": physical_root, "createdDirectories": [physical_root],
+                "provisioningAuthority": {
+                    "planSha256": "0" * 64, "provisionIntentSha256": "1" * 64,
+                    "ownerAuthorizationSha256": "3" * 64, "journalSha256": "4" * 64,
+                    "provisionReceiptSha256": "2" * 64,
+                    "materializationRequestSha256": "4" * 64,
+                },
+                "materializer": {"kind": "READ_STATE_CUTOVER_AUTHORITY_V1",
+                                 "sha256": "5" * 64},
+                "automaticExecution": False,
+            }
+            write(external, json.dumps(external_value, sort_keys=True,
+                                       separators=(",", ":")) + "\n", 0o600)
+            request_value = {
+                "schemaVersion": 5,
+                "kind": MODULE.PENDING_GATE_KIND,
+                "requiredPhases": ["qualification", "admission", "preflight", "activation",
+                                   "acceptance", "finalize", "retirement"],
+                "surface": "INBOX_READ_STATE_V1",
+                "persistentRoot": {"path": str(persistent), "ownerUid": os.geteuid(),
+                                   "groupGid": os.getegid(), "mode": "0700"},
+                "releaseRoots": [
+                    {"role": "candidate", "path": str(candidate)},
+                    {"role": "rollback", "path": str(releases / "rollback-compatible")},
+                ],
+                "reconciliation": {
+                    "required": True, "state": "PENDING", "receipt": str(receipt_path),
+                    "operationId": "temporal-authority-fixture", "manifest": str(manifest_path),
+                    "authorization": str(authorization),
+                    "authorizationSha256": hashlib.sha256(authorization.read_bytes()).hexdigest(),
+                    "sealReceipt": str(seal_path), "destinationCount": 1,
+                },
+                "unreconciledReleaseDependencies": [],
+                "externalAdmissionAuthority": {
+                    "path": str(external),
+                    "sha256": hashlib.sha256(external.read_bytes()).hexdigest(),
+                    "operationId": "provision", "provisionReceiptSha256": "2" * 64,
+                    "ownerAuthorizationSha256": "3" * 64,
+                    "materializationRequestSha256": "4" * 64,
+                    "materializerSha256": "5" * 64,
+                },
+                "candidateIdentity": {"generationId": self.release_id,
+                                      "targetCommit": self.target},
+                "cutover": {
+                    "mode": "FIRST_RELEASE_LOCAL_TO_DURABLE_V1",
+                    "runner": {
+                        "path": str(candidate / MODULE.COMPILED_RELATIVE_PATHS["runner"]),
+                        "relativePath": MODULE.COMPILED_RELATIVE_PATHS["runner"],
+                        "state": MODULE.PENDING_COMPILED_STATE,
+                    },
+                    "candidateStorage": {
+                        "path": str(candidate / MODULE.COMPILED_RELATIVE_PATHS["candidateStorage"]),
+                        "relativePath": MODULE.COMPILED_RELATIVE_PATHS["candidateStorage"],
+                        "state": MODULE.PENDING_COMPILED_STATE,
+                    },
+                    "pm2": {"candidate": {}, "rollback": {}},
+                    "rollbackCompatibility": {"path": str(base / "rollback.private.json"),
+                                              "sha256": "6" * 64},
+                },
+            }
+            request = base / "durable-persistence-pending.private.json"
+            write(request, json.dumps(request_value, sort_keys=True, separators=(",", ":")) + "\n",
+                  0o600)
+            request_sha = hashlib.sha256(request.read_bytes()).hexdigest()
+            pending = MODULE.pending_persistence_request(
+                request, request_sha, self.target, self.release_id)
+            self.assertIsNotNone(pending)
+            manifest = json.loads((source / "manifest.json").read_text())
+            manifest["schemaVersion"] = 2
+            manifest["durablePersistence"] = MODULE.compile_persistence_request(
+                request_value, request_sha, source)
+            (source / "manifest.json").write_bytes(MODULE.canonical_json(manifest))
+            self.assertEqual(
+                MODULE.verify_root(source, self.target, self.release_id,
+                                   durable_persistence_request_sha256=request_sha)["buildId"],
+                "fixture-build-id")
+
+            tar_path = base / "candidate.tar"
+            package = base / f"{self.release_id}.tar.xz"
+            MODULE.write_tar(source, tar_path, int(EPOCH)); MODULE.compress_tar(tar_path, package)
+            verified = invoke(
+                "verify", "--package", str(package), "--target", self.target,
+                "--release-id", self.release_id, "--components", COMPONENTS,
+                "--durable-persistence-request", str(request),
+                "--durable-persistence-request-sha256", request_sha)
+            self.assertEqual(verified.returncode, 0, verified.stderr)
+
+            roots = {}
+            for name in ("repository", "worktrees", "outputs", "releases", "staging"):
+                path = releases if name == "releases" else base / name
+                path.mkdir(exist_ok=True)
+                info = path.lstat()
+                roots[name] = {"path": str(path), "ownerUid": info.st_uid,
+                               "groupGid": info.st_gid,
+                               "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}
+            evidence = base / "evidence"; evidence.mkdir()
+            info = evidence.lstat()
+            roots["evidence"] = [{"path": str(evidence), "ownerUid": info.st_uid,
+                                  "groupGid": info.st_gid,
+                                  "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}]
+            policy = base / "roots.private.json"
+            write(policy, json.dumps({"schemaVersion": 1, "canonicalRoots": roots},
+                                     sort_keys=True) + "\n", 0o600)
+            installed = invoke(
+                "install", "--package", str(package), "--target", self.target,
+                "--release-id", self.release_id, "--components", COMPONENTS,
+                "--installed-releases-root", str(releases), "--root-policy", str(policy),
+                "--root-policy-sha256", hashlib.sha256(policy.read_bytes()).hexdigest(),
+                "--durable-persistence-request", str(request),
+                "--durable-persistence-request-sha256", request_sha)
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+
+            installed_manifest = json.loads((candidate / "manifest.json").read_text())
+            compiled = installed_manifest["durablePersistence"]
+            self.assertEqual(compiled["sourceAdmissionRequestSha256"], request_sha)
+            for label, relative in MODULE.COMPILED_RELATIVE_PATHS.items():
+                self.assertEqual(compiled["artifacts"][label], {
+                    "path": str(candidate / relative), "relativePath": relative,
+                    "sha256": hashlib.sha256((candidate / relative).read_bytes()).hexdigest(),
+                })
+
+            still_pending = subprocess.run([
+                sys.executable, str(ROOT / "scripts/durable-runtime-persistence-gate.py"),
+                "validate", "--request", str(request), "--request-sha256", request_sha,
+                "--phase", "preflight",
+            ], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(still_pending.returncode, 2)
+            self.assertIn("compiled_authority_pending", still_pending.stderr)
+
+            wrong_target = invoke(
+                "verify", "--release-root", str(candidate), "--target", "f" * 40,
+                "--release-id", self.release_id, "--components", COMPONENTS,
+                "--durable-persistence-request", str(request),
+                "--durable-persistence-request-sha256", request_sha)
+            self.assertEqual(wrong_target.returncode, 2)
+            self.assertIn("durable_persistence_request_schema", wrong_target.stderr)
+
+            other_root = base / "other-generation"
+            shutil.copytree(candidate, other_root)
+            other = invoke(
+                "verify", "--release-root", str(other_root), "--target", self.target,
+                "--release-id", self.release_id, "--components", COMPONENTS,
+                "--durable-persistence-request", str(request),
+                "--durable-persistence-request-sha256", request_sha)
+            self.assertEqual(other.returncode, 2)
+            self.assertIn("release_directory_identity", other.stderr)
+
+            store = candidate / MODULE.COMPILED_RELATIVE_PATHS["candidateStorage"]
+            saved_store = store.read_bytes(); store.unlink()
+            with self.assertRaises(MODULE.Denied):
+                MODULE.verify_root(
+                    candidate, self.target, self.release_id,
+                    durable_persistence_request_sha256=request_sha)
+            store.write_bytes(saved_store); store.chmod(0o644)
+
+            runner = candidate / MODULE.COMPILED_RELATIVE_PATHS["runner"]
+            runner.write_bytes(runner.read_bytes() + b"tampered\n")
+            with self.assertRaisesRegex(MODULE.Denied, "release_index_mismatch"):
+                MODULE.verify_root(
+                    candidate, self.target, self.release_id,
+                    durable_persistence_request_sha256=request_sha)
 
     def install_arguments(self) -> list[str]:
         return [

@@ -95,6 +95,18 @@ A rota V3 `frontend` continua válida sem autoridade de read-state.
   quanto no primeiro cutover com o bloco V3 integral em `PENDING`; ela não dispensa
   a leitura física nas fases produtivas nem altera a transição posterior para
   `VERIFIED`.
+- **Fronteira temporal do primeiro cutover:** qualification/admission usam o
+  schema V5. `runner` e `candidateStorage` ficam vinculados ao target e à
+  geração por `path`, `relativePath` e estado tipado `PENDING_BUILD_VERIFY`;
+  placeholders de SHA são proibidos. O build-once autenticado consome esse
+  mesmo request e publica no manifesto schema 2 a autoridade compilada
+  `CONVERTA_DURABLE_READ_STATE_COMPILED_AUTHORITY_V1`, contendo os hashes físicos
+  dos dois módulos. `verify` reabre o request, o manifesto e os bytes do pacote;
+  `install` repete a mesma verificação no destino inerte. O runtime manifest
+  schema 5 vincula simultaneamente o request V5 de admission e o request V3
+  derivado para preflight. O driver aceita a derivação somente quando target,
+  geração, raiz, cutover, autorização, rollback e hashes compilados concordam.
+  Preflight e fases posteriores nunca aceitam `PENDING_BUILD_VERIFY`.
 - **Preflight:** autentica device/inode, uid/gid, `0700`, ancestrais e raízes
   candidatas/rollback; receipt de reconciliação é validado semanticamente por
   operação, tenant, scope e destino quando declarado.

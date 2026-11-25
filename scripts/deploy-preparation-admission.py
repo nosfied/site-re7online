@@ -424,10 +424,19 @@ def validate_request(value: Any) -> tuple[
             if spec is None or spec.loader is None:
                 raise RuntimeError("load")
             helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
-            helper.enforce(value.get("durablePersistence"), "qualification", deny_contract,
-                           base=helper_path.parent)
-            helper.enforce(value.get("durablePersistence"), "admission", deny_contract,
-                           base=helper_path.parent)
+            qualification = helper.enforce(
+                value.get("durablePersistence"), "qualification", deny_contract,
+                base=helper_path.parent)
+            admission = helper.enforce(
+                value.get("durablePersistence"), "admission", deny_contract,
+                base=helper_path.parent)
+            for report in (qualification, admission):
+                candidate_identity = report.get("candidateIdentity")
+                if (candidate_identity is not None and candidate_identity != {
+                        "generationId": value.get("generationId"),
+                        "targetCommit": value.get("targetCommit"),
+                }):
+                    deny_contract("candidate_identity")
         except (RuntimeError, OSError) as error:
             errors.append(f"durablePersistence:{error}")
     return sorted(set(errors)), controls, template_info, producer

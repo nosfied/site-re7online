@@ -4007,6 +4007,91 @@ if config_path:
             self.driver.finalize()
         self.assertEqual(1, self.host.save_calls)
 
+    def test_read_state_cutover_preflight_consumes_compiled_temporal_authority(self):
+        runtime_gate_path = self.enable_read_state_cutover()
+        runtime_request = json.loads(runtime_gate_path.read_text())
+        candidate_root = self.releases / self.candidate
+        admission_request = json.loads(json.dumps(runtime_request))
+        admission_request.update(
+            schemaVersion=5,
+            kind="CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V5",
+            candidateIdentity={"generationId": self.candidate,
+                               "targetCommit": self.target},
+            externalAdmissionAuthority={
+                "path": str(self.base / "external-admission.private.json"),
+                "sha256": "1" * 64, "operationId": "provision",
+                "provisionReceiptSha256": "2" * 64,
+                "ownerAuthorizationSha256": "3" * 64,
+                "materializationRequestSha256": "4" * 64,
+                "materializerSha256": "5" * 64,
+            },
+        )
+        relative_paths = {
+            "runner": "api-runtime/dist/inbox/readStateReconciliationBatch.js",
+            "candidateStorage": "api-runtime/dist/inbox/readStateStore.js",
+        }
+        for label, relative in relative_paths.items():
+            admission_request["cutover"][label] = {
+                "path": str(candidate_root / relative), "relativePath": relative,
+                "state": "PENDING_BUILD_VERIFY",
+            }
+        admission_path = self.base / "durable-persistence-admission-v5.private.json"
+        put(admission_path, admission_request)
+
+        candidate_manifest_path = candidate_root / "manifest.json"
+        candidate_manifest = json.loads(candidate_manifest_path.read_text())
+        candidate_manifest["schemaVersion"] = 2
+        candidate_manifest["durablePersistence"] = {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_DURABLE_READ_STATE_COMPILED_AUTHORITY_V1",
+            "sourceAdmissionRequestSha256": sha(admission_path),
+            "artifacts": {
+                label: {"path": str(candidate_root / relative),
+                        "relativePath": relative,
+                        "sha256": sha(candidate_root / relative)}
+                for label, relative in relative_paths.items()
+            },
+        }
+        candidate_manifest_path.chmod(0o644)
+        put(candidate_manifest_path, candidate_manifest, 0o444)
+
+        candidate_pm2 = runtime_request["cutover"]["pm2"]["candidate"]
+        source_path = Path(candidate_pm2["sourceArtifact"])
+        source_value = json.loads(source_path.read_text())
+        source_value["releaseIdentity"]["releaseManifestSha256"] = sha(candidate_manifest_path)
+        put(source_path, source_value)
+        candidate_pm2["sourceSha256"] = sha(source_path)
+        put(runtime_gate_path, runtime_request)
+
+        runtime_manifest = json.loads(self.runtime_manifest.read_text())
+        runtime_manifest["schemaVersion"] = 5
+        runtime_manifest["durablePersistence"] = {
+            "request": str(runtime_gate_path), "requestSha256": sha(runtime_gate_path)}
+        runtime_manifest["durablePersistenceAdmission"] = {
+            "request": str(admission_path), "requestSha256": sha(admission_path)}
+        put(self.runtime_manifest, runtime_manifest)
+        contract = json.loads(self.generation_contract.read_text())
+        contract["durablePersistence"] = runtime_manifest["durablePersistence"]
+        put(self.generation_contract, contract)
+        put(self.retirement.intent, {"contractSha256": sha(self.generation_contract)})
+        self.retirement = dataclasses.replace(
+            self.retirement, intent_sha256=sha(self.retirement.intent))
+        self.inputs = dataclasses.replace(
+            self.inputs, runtime_manifest_sha256=sha(self.runtime_manifest),
+            retirement=self.retirement)
+        self.driver = self._driver()
+        self.driver.preflight()
+        self.assertEqual(self.driver._journal_read()["state"], "PREFLIGHT_PASS")
+
+        compiled = json.loads(candidate_manifest_path.read_text())["durablePersistence"]
+        compiled["artifacts"]["runner"]["sha256"] = "0" * 64
+        candidate_manifest["durablePersistence"] = compiled
+        candidate_manifest_path.chmod(0o644)
+        put(candidate_manifest_path, candidate_manifest, 0o444)
+        with self.assertRaisesRegex(deploy.Denied,
+                                    "durable_persistence_compiled_artifact:runner"):
+            self._driver()._read_state_cutover(runtime_manifest)
+
     def test_read_state_cutover_seals_legitimate_final_cb_write_after_quiesce(self):
         gate = self.enable_read_state_cutover()
         self.driver.preflight()

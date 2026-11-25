@@ -826,7 +826,13 @@ class Driver:
         durable = "durablePersistence" in value
         if durable:
             expected_keys.add("durablePersistence")
-        expected_schema = 4 if durable else (3 if successor else (2 if worker_selected else 1))
+        temporal = "durablePersistenceAdmission" in value
+        if temporal:
+            expected_keys.add("durablePersistenceAdmission")
+            if not durable:
+                deny("runtime_manifest_temporal_authority")
+        expected_schema = (5 if temporal else 4 if durable else
+                           (3 if successor else (2 if worker_selected else 1)))
         if set(value) != expected_keys or value.get("schemaVersion") != expected_schema:
             deny("runtime_manifest_schema")
         if (value.get("mode") != "fixed-current-existing-pm2" or
@@ -3187,8 +3193,9 @@ class Driver:
             if any(expected.get(key) != current.get(key) for key in stable):
                 deny("private_data_overlay_identity_drift")
 
-    def _durable_persistence_request(self, manifest: dict[str, Any]) -> dict[str, Any]:
-        binding = manifest.get("durablePersistence")
+    def _durable_persistence_request(self, manifest: dict[str, Any],
+                                     key: str = "durablePersistence") -> dict[str, Any]:
+        binding = manifest.get(key)
         if (not isinstance(binding, dict) or set(binding) != {"request", "requestSha256"} or
                 not isinstance(binding.get("request"), str) or
                 not SHA256.fullmatch(str(binding.get("requestSha256", "")))):
@@ -3204,6 +3211,68 @@ class Driver:
             deny("durable_persistence_request_canonical")
         return value
 
+    def _validate_temporal_persistence_authority(
+        self, manifest: dict[str, Any], runtime_request: dict[str, Any]
+    ) -> None:
+        if "durablePersistenceAdmission" not in manifest:
+            return
+        admission_binding = manifest["durablePersistenceAdmission"]
+        admission = self._durable_persistence_request(
+            manifest, "durablePersistenceAdmission")
+        if (admission.get("schemaVersion") != 5 or admission.get("kind") !=
+                "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V5" or
+                admission.get("candidateIdentity") != {
+                    "generationId": self.inputs.release,
+                    "targetCommit": self.inputs.target,
+                }):
+            deny("durable_persistence_temporal_admission")
+        candidate_roots = [item for item in admission.get("releaseRoots", [])
+                           if isinstance(item, dict) and item.get("role") == "candidate"]
+        if (len(candidate_roots) != 1 or
+                Path(str(candidate_roots[0].get("path", ""))) != self.release_root):
+            deny("durable_persistence_temporal_candidate")
+        expected = {key: value for key, value in admission.items()
+                    if key not in {"externalAdmissionAuthority", "candidateIdentity"}}
+        expected["schemaVersion"] = 3
+        expected["kind"] = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3"
+        expected["cutover"] = dict(expected["cutover"])
+        # PM2 identities are produced only after the immutable manifest exists.
+        # They remain fully authenticated by the runtime request and PM2 control.
+        expected["cutover"]["pm2"] = runtime_request.get("cutover", {}).get("pm2")
+
+        release_manifest = read_json(self.release_root / "manifest.json")
+        compiled = release_manifest.get("durablePersistence")
+        if (release_manifest.get("schemaVersion") != 2 or
+                not isinstance(compiled, dict) or
+                compiled.get("schemaVersion") != 1 or
+                compiled.get("kind") !=
+                "CONVERTA_DURABLE_READ_STATE_COMPILED_AUTHORITY_V1" or
+                compiled.get("sourceAdmissionRequestSha256") !=
+                admission_binding.get("requestSha256")):
+            deny("durable_persistence_compiled_authority")
+        artifacts = compiled.get("artifacts")
+        relative_paths = {
+            "runner": "api-runtime/dist/inbox/readStateReconciliationBatch.js",
+            "candidateStorage": "api-runtime/dist/inbox/readStateStore.js",
+        }
+        if not isinstance(artifacts, dict) or set(artifacts) != set(relative_paths):
+            deny("durable_persistence_compiled_artifacts")
+        for label, relative in relative_paths.items():
+            physical = self.release_root / relative
+            physical_sha = digest(physical)
+            pending = admission.get("cutover", {}).get(label)
+            artifact = artifacts.get(label)
+            runtime_binding = runtime_request.get("cutover", {}).get(label)
+            if (pending != {"path": str(physical), "relativePath": relative,
+                            "state": "PENDING_BUILD_VERIFY"} or
+                    artifact != {"path": str(physical), "relativePath": relative,
+                                 "sha256": physical_sha} or
+                    runtime_binding != {"path": str(physical), "sha256": physical_sha}):
+                deny(f"durable_persistence_compiled_artifact:{label}")
+            expected["cutover"][label] = runtime_binding
+        if runtime_request != expected:
+            deny("durable_persistence_temporal_derivation")
+
     def _read_state_cutover(self, manifest: dict[str, Any]) -> dict[str, Any] | None:
         if "durablePersistence" not in manifest:
             return None
@@ -3213,6 +3282,7 @@ class Driver:
         if (request.get("kind") != "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3" or
                 "api" not in self.inputs.components):
             deny("read_state_cutover_request")
+        self._validate_temporal_persistence_authority(manifest, request)
         cutover = request.get("cutover")
         if (not isinstance(cutover, dict) or
                 cutover.get("mode") != "FIRST_RELEASE_LOCAL_TO_DURABLE_V1"):
