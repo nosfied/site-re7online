@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop, review/campaign-recovery-20260926, compat/cb3721d4-baseline]
   pull_request:
-    branches: [main, develop, review/campaign-recovery-20260926]
+    branches: [main, develop, review/campaign-recovery-20260926, compat/cb3721d4-baseline]
   workflow_dispatch:
 
 concurrency:
@@ -74,6 +74,8 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-preparation-artifact-lifecycle.py scripts/ci/test-deploy-control-worktree-materialize.py scripts/test_operational_preparers_v3.py
       - name: Validate canonical capacity recovery control plane
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery.py
+      - name: Validate rollback compatibility contract materialization
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-read-state-rollback-compatibility.py
       - name: Validate canonical capacity recovery supervisor
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery-supervisor.py
       - name: Validate privileged capacity process observer protocol
@@ -99,6 +101,11 @@ jobs:
           --pm2 "$RUNNER_TEMP/re7-pm2-definition-tools/node_modules/.bin/pm2"
           --node "$(command -v node)"
           --npm "$(command -v npm)"
+      - name: Prove CB read-state survives PM2 delete and start
+        run: >-
+          python3 scripts/ci/verify-read-state-rollback-pm2.py
+          --pm2 "$RUNNER_TEMP/re7-pm2-definition-tools/node_modules/.bin/pm2"
+          --node "$(command -v node)"
       - name: Validate disposable builder terminal lifecycle
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-disposable-builder-lifecycle.py
       - name: Prove disposable builder lifecycle with real PM2
@@ -137,6 +144,8 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run build
+      - name: Validate CB rollback-compatible durable read-state behavior
+        run: node --import tsx --test src/inbox/readStateStore.test.ts src/inbox/readStateRollbackCompatibility.test.ts
       - name: WhatsApp Meta tenant runtime DB-first regressions
         run: >-
           node --import tsx --test
