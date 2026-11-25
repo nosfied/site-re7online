@@ -85,6 +85,14 @@ A rota V3 `frontend` continua válida sem autoridade de read-state.
 
 - **Qualification:** classifica superfície, prova raiz externa e vincula plano de
   reconciliação.
+- **Admission em builder externo:** o schema V4 não executa `lstat()` remoto por
+  aproximação. Ele exige uma autoridade portátil `ROOT_PROVISIONED_VERIFIED`
+  produzida por `read-state-cutover-authority.py` após autenticar, na VPS, plano,
+  intent, `AUTHORIZE_ONCE`, journal, receipt e readback físico. A autoridade
+  vincula operation ID, SHA de toda a cadeia e device/inode/UID/GID/`0700`; um
+  receipt copiado isoladamente não é autoridade. Qualification/admission podem
+  consumir essa projeção privada byte-exata, mas ela não dispensa a leitura física
+  nas fases produtivas.
 - **Preflight:** autentica device/inode, uid/gid, `0700`, ancestrais e raízes
   candidatas/rollback; receipt de reconciliação é validado semanticamente por
   operação, tenant, scope e destino quando declarado.
@@ -114,6 +122,11 @@ replay divergente, symlink, ancestor/owner/mode divergente, preexistência sem
 journal ou concorrência negam. O plano administrativo de cutover V2 referencia
 obrigatoriamente esse receipt e a mesma identidade física. Somente a autoridade
 posterior do cutover contém tenants, scopes, fontes, exclusões 34/34 e rollback.
+Para a topologia de builder externo, a ação
+`materialize-external-admission-authority` publica, dentro da mesma custódia
+privada, somente a projeção terminal derivada dessa cadeia. A projeção não cria a
+raiz, não altera o receipt e não pode ser usada em `preflight` ou fases seguintes:
+essas fases reabrem a raiz na VPS e exigem identidade física igual à registrada.
 O fluxo V1 do #446 permanece disponível exclusivamente para autoridades já
 seladas; a separação não cria lifecycle alternativo nem autoriza efeitos.
 

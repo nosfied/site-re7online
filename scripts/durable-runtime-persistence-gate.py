@@ -16,6 +16,7 @@ SHA256 = re.compile(r"^[a-f0-9]{64}$")
 KIND = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V1"
 KIND_V2 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V2"
 KIND_V3 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3"
+KIND_V4 = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V4"
 PHASES = ("qualification", "admission", "preflight", "activation", "acceptance",
           "finalize", "retirement")
 ENFORCEMENT_STATE = "CANONICALLY_ENFORCED"
@@ -59,6 +60,59 @@ def confined_outside(root: Path, release_roots: list[Path]) -> None:
             deny("release_root_absolute")
         if root == release_root or release_root in root.parents or root in release_root.parents:
             deny("persistent_root_release_overlap")
+
+
+def validate_external_admission_authority(binding: Any, root_value: dict[str, Any]) -> dict[str, Any]:
+    keys = {"path", "sha256", "operationId", "provisionReceiptSha256",
+            "materializerSha256"}
+    if (not isinstance(binding, dict) or set(binding) != keys or
+            not isinstance(binding.get("operationId"), str) or not binding["operationId"] or
+            not SHA256.fullmatch(str(binding.get("provisionReceiptSha256", ""))) or
+            not SHA256.fullmatch(str(binding.get("materializerSha256", "")))):
+        deny("external_admission_authority_binding")
+    authority = private_json(Path(str(binding.get("path", ""))),
+                             str(binding.get("sha256", "")))
+    authority_keys = {"schemaVersion", "kind", "state", "operationId",
+                      "persistentRoot", "createdDirectories", "provisioningAuthority",
+                      "materializer", "automaticExecution"}
+    if (set(authority) != authority_keys or authority.get("schemaVersion") != 1 or
+            authority.get("kind") !=
+            "CONVERTA_DURABLE_READ_STATE_EXTERNAL_ADMISSION_AUTHORITY_V1" or
+            authority.get("state") != "ROOT_PROVISIONED_VERIFIED" or
+            authority.get("operationId") != binding["operationId"] or
+            authority.get("automaticExecution") is not False):
+        deny("external_admission_authority_semantics")
+    materializer = authority.get("materializer")
+    if (not isinstance(materializer, dict) or
+            set(materializer) != {"kind", "sha256"} or
+            materializer.get("kind") != "READ_STATE_CUTOVER_AUTHORITY_V1" or
+            materializer.get("sha256") != binding["materializerSha256"]):
+        deny("external_admission_authority_materializer")
+    provisioning = authority.get("provisioningAuthority")
+    provisioning_keys = {"planSha256", "provisionIntentSha256",
+                         "ownerAuthorizationSha256", "journalSha256",
+                         "provisionReceiptSha256"}
+    if (not isinstance(provisioning, dict) or set(provisioning) != provisioning_keys or
+            any(not SHA256.fullmatch(str(provisioning.get(key, "")))
+                for key in provisioning_keys) or
+            provisioning.get("provisionReceiptSha256") !=
+            binding["provisionReceiptSha256"]):
+        deny("external_admission_authority_provenance")
+    physical = authority.get("persistentRoot")
+    physical_keys = {"path", "device", "inode", "ownerUid", "groupGid", "mode"}
+    if (not isinstance(physical, dict) or set(physical) != physical_keys or
+            physical.get("path") != root_value["path"] or
+            physical.get("ownerUid") != root_value["ownerUid"] or
+            physical.get("groupGid") != root_value["groupGid"] or
+            physical.get("mode") != root_value["mode"] or
+            not isinstance(physical.get("device"), int) or
+            not isinstance(physical.get("inode"), int)):
+        deny("external_admission_authority_root")
+    created = authority.get("createdDirectories")
+    if (not isinstance(created, list) or not created or created[-1] != physical or
+            any(not isinstance(item, dict) or set(item) != physical_keys for item in created)):
+        deny("external_admission_authority_created_directories")
+    return authority
 
 
 def validate_aggregate_materialization(reconciliation: dict[str, Any], manifest_sha: str,
@@ -113,12 +167,14 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
               "reconciliation", "unreconciledReleaseDependencies"}
     legacy = request.get("schemaVersion") == 1
     cutover = request.get("schemaVersion") == 3
-    required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set())
+    external = request.get("schemaVersion") == 4
+    required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set()) | ({"externalAdmissionAuthority"} if external else set())
     if (set(request) != required or
             (legacy and request.get("kind") != KIND) or
-            (not legacy and not cutover and
+            (not legacy and not cutover and not external and
              (request.get("schemaVersion") != 2 or request.get("kind") != KIND_V2)) or
-            (cutover and request.get("kind") != KIND_V3)):
+            (cutover and request.get("kind") != KIND_V3) or
+            (external and request.get("kind") != KIND_V4)):
         deny("request_schema")
     if legacy:
         declared_phases = (request.get("phase"),)
@@ -144,6 +200,8 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
     confined_outside(root, release_roots)
     if root_value.get("mode") != "0700" or not isinstance(root_value.get("ownerUid"), int) or not isinstance(root_value.get("groupGid"), int):
         deny("persistent_root_policy")
+    external_authority = (validate_external_admission_authority(
+        request.get("externalAdmissionAuthority"), root_value) if external else None)
 
     reconciliation = request.get("reconciliation")
     individual_keys = {"required", "state", "receipt", "receiptSha256", "operationId", "tenantId", "scope", "destinationPath"}
@@ -232,7 +290,7 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
         deny("release_persistent_dependency")
 
     observation = None
-    if phase not in {"qualification"}:
+    if phase not in {"qualification", "admission"} or not external:
         try:
             info = root.lstat()
             resolved = root.resolve(strict=True)
@@ -251,6 +309,11 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
                 deny("persistent_root_ancestor")
         observation = {"device": info.st_dev, "inode": info.st_ino, "mode": "0700",
                        "ownerUid": info.st_uid, "groupGid": info.st_gid}
+        if external and observation != {key: external_authority["persistentRoot"][key]
+                                        for key in ("device", "inode", "mode", "ownerUid", "groupGid")}:
+            deny("persistent_root_remote_authority_divergence")
+    elif phase == "admission":
+        observation = dict(external_authority["persistentRoot"])
     if cutover:
         cutover_value = request.get("cutover")
         cutover_keys = {"mode", "runner", "candidateStorage", "pm2",
@@ -269,12 +332,19 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
             deny("cutover_pm2_binding")
     enforcement = (ENFORCEMENT_STATE if not legacy and invoked_phase is not None
                    else "LEGACY_VALIDATED_NOT_ENFORCED")
-    return {"schemaVersion": 1, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_REPORT",
-            "result": "PASS", "phase": phase, "surface": request["surface"],
-            "persistentRoot": str(root), "observation": observation,
-            "reconciliation": ("VERIFIED" if receipt_value is not None else reconciliation["state"]),
-            "cutoverMode": request.get("cutover", {}).get("mode"),
-            "enforcementState": enforcement}
+    report = {"schemaVersion": 1,
+              "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_REPORT",
+              "result": "PASS", "phase": phase, "surface": request["surface"],
+              "persistentRoot": str(root), "observation": observation,
+              "reconciliation": ("VERIFIED" if receipt_value is not None else
+                                 reconciliation["state"]),
+              "cutoverMode": request.get("cutover", {}).get("mode"),
+              "enforcementState": enforcement}
+    if external:
+        report["observationSource"] = (
+            "AUTHENTICATED_REMOTE_PROVISION_RECEIPT" if phase == "admission" else
+            "LOCAL_PHYSICAL_READBACK" if observation is not None else None)
+    return report
 
 
 def main() -> int:

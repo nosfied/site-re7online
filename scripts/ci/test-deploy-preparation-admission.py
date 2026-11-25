@@ -14,6 +14,14 @@ SCRIPT = Path(__file__).resolve().parents[1] / "deploy-preparation-admission.py"
 SPEC = importlib.util.spec_from_file_location("deploy_preparation_admission", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+AUTHORITY_SCRIPT = Path(__file__).resolve().parents[1] / "read-state-cutover-authority.py"
+AUTHORITY_SPEC = importlib.util.spec_from_file_location("read_state_cutover_authority_admission_test", AUTHORITY_SCRIPT)
+AUTHORITY = importlib.util.module_from_spec(AUTHORITY_SPEC)
+AUTHORITY_SPEC.loader.exec_module(AUTHORITY)
+GATE_SCRIPT = Path(__file__).resolve().parents[1] / "durable-runtime-persistence-gate.py"
+GATE_SPEC = importlib.util.spec_from_file_location("durable_gate_admission_test", GATE_SCRIPT)
+GATE = importlib.util.module_from_spec(GATE_SPEC)
+GATE_SPEC.loader.exec_module(GATE)
 H = "a" * 64
 REQUIRED_CHECKS = {
     "contract", "lifecycle", "review-output", "intent-output", "commands-output",
@@ -295,6 +303,80 @@ class AdmissionTests(unittest.TestCase):
         )
         return result, json.loads(result.stdout)
 
+    def external_admission_fixture(self, persistent: Path):
+        custody = self.private / "remote-provision"
+        custody.mkdir(mode=0o700)
+        uid, gid = os.getuid(), os.getgid()
+        executor = Path("/usr/bin/install").resolve(strict=True)
+        executor_info = executor.lstat()
+        physical = lambda path: {"path": str(path), "device": path.lstat().st_dev,
+                                 "inode": path.lstat().st_ino,
+                                 "ownerUid": path.lstat().st_uid,
+                                 "groupGid": path.lstat().st_gid,
+                                 "mode": f"0{path.lstat().st_mode & 0o777:03o}"}
+        created = [
+            {"path": str(persistent.parent), "ownerUid": uid, "groupGid": gid, "mode": "0700"},
+            {"path": str(persistent), "ownerUid": uid, "groupGid": gid, "mode": "0700"},
+        ]
+        commands = [[str(executor), "-d", "-o", str(uid), "-g", str(gid),
+                     "-m", "0700", item["path"]] for item in created]
+        plan = {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_DURABLE_READ_STATE_PROVISION_PLAN_V1",
+            "operationId": "two-host-provision-1",
+            "root": {"path": str(persistent), "ownerUid": uid, "groupGid": gid, "mode": "0700"},
+            "custodyRoot": physical(custody),
+            "ancestors": [physical(self.base)],
+            "createdDirectories": created,
+            "executor": {"path": str(executor),
+                         "sha256": hashlib.sha256(executor.read_bytes()).hexdigest(),
+                         "device": executor_info.st_dev, "inode": executor_info.st_ino,
+                         "ownerUid": executor_info.st_uid, "groupGid": executor_info.st_gid,
+                         "mode": f"0{executor_info.st_mode & 0o777:03o}"},
+            "commands": commands, "initialState": "ABSENT", "automaticExecution": False,
+            "outputs": {"intentPath": str(custody / "intent.json"),
+                        "journalPath": str(custody / "journal.json"),
+                        "receiptPath": str(custody / "receipt.json"),
+                        "lockPath": str(custody / "provision.lock")},
+        }
+        def put(path, value):
+            path.write_bytes(AUTHORITY.canonical(value)); path.chmod(0o600)
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        old_root = AUTHORITY.ROOT
+        AUTHORITY.ROOT = str(persistent)
+        try:
+            plan_path = custody / "plan.json"; plan_sha = put(plan_path, plan)
+            prepared = AUTHORITY.prepare_provision(plan_path, plan_sha)
+            intent_path = Path(plan["outputs"]["intentPath"])
+            intent_sha = prepared["provisionIntentSha256"]
+            owner_path = custody / "owner.json"
+            owner_sha = put(owner_path, {
+                "schemaVersion": 1,
+                "kind": "CONVERTA_DURABLE_READ_STATE_PROVISION_AUTHORIZE_ONCE_V1",
+                "decision": "AUTHORIZE_ONCE", "operationId": plan["operationId"],
+                "planSha256": plan_sha, "provisionIntentSha256": intent_sha,
+                "approvedRoot": str(persistent), "approvedCommands": commands,
+                "owner": "fixture-owner",
+            })
+            provisioned = AUTHORITY.provision(intent_path, intent_sha, owner_path, owner_sha)
+            authority_path = custody / "external-admission.json"
+            materialization_request = custody / "external-admission-request.json"
+            request_sha = put(materialization_request, {
+                "schemaVersion": 1,
+                "kind": "CONVERTA_DURABLE_READ_STATE_EXTERNAL_ADMISSION_AUTHORITY_REQUEST_V1",
+                "operationId": plan["operationId"],
+                "provisionIntent": {"path": str(intent_path), "sha256": intent_sha},
+                "ownerAuthorization": {"path": str(owner_path), "sha256": owner_sha},
+                "provisionReceipt": {"path": plan["outputs"]["receiptPath"],
+                                     "sha256": provisioned["provisionReceiptSha256"]},
+                "outputPath": str(authority_path),
+            })
+            result = AUTHORITY.materialize_external_admission_authority(
+                materialization_request, request_sha)
+        finally:
+            AUTHORITY.ROOT = old_root
+        return authority_path, result, plan
+
     def write_template(self, value):
         self.template.write_text(json.dumps(value))
         self.template.chmod(0o600)
@@ -438,6 +520,54 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(report["durablePersistenceEnforcement"], "CANONICALLY_ENFORCED")
         for name in ("durable-runtime-persistence-gate.py", "durable_persistence_enforcement.py"):
             self.assertTrue((Path(value["finalRoot"]) / name).is_file())
+
+    def test_v3_external_builder_admission_uses_authenticated_remote_authority_only(self):
+        value = self.v3_request(("api", "frontend"))
+        old_request = Path(value["durablePersistence"]["request"])
+        old_request.unlink()
+        persistent = self.base / "remote-runtime-data/inbox-read-state"
+        authority_path, result, plan = self.external_admission_fixture(persistent)
+        remote_identity = json.loads(authority_path.read_text())["persistentRoot"]
+        persistent.rmdir()
+        persistent.parent.rmdir()
+        gate_request = self.private / "durable-persistence-external.private.json"
+        gate_value = {
+            "schemaVersion": 4, "kind": GATE.KIND_V4,
+            "requiredPhases": list(GATE.PHASES), "surface": "INBOX_READ_STATE_V1",
+            "persistentRoot": plan["root"],
+            "releaseRoots": [{"role": "candidate", "path": str(self.base / "candidate")},
+                             {"role": "rollback", "path": str(self.base / "rollback")}],
+            "reconciliation": {"required": False, "state": "NOT_REQUIRED", "receipt": None,
+                               "receiptSha256": None, "operationId": None, "tenantId": None,
+                               "scope": None, "destinationPath": None},
+            "unreconciledReleaseDependencies": [],
+            "externalAdmissionAuthority": {
+                "path": str(authority_path),
+                "sha256": hashlib.sha256(authority_path.read_bytes()).hexdigest(),
+                "operationId": plan["operationId"],
+                "provisionReceiptSha256": result["provisionReceiptSha256"],
+                "materializerSha256": result["materializerSha256"],
+            },
+        }
+        gate_request.write_bytes(GATE.canonical(gate_value)); gate_request.chmod(0o600)
+        value["durablePersistence"] = {
+            "request": str(gate_request),
+            "requestSha256": hashlib.sha256(gate_request.read_bytes()).hexdigest(),
+        }
+        result_process, report = self.run_request(value)
+        self.assertEqual(result_process.returncode, 0,
+                         result_process.stdout + result_process.stderr)
+        self.assertEqual(report["durablePersistenceEnforcement"], "CANONICALLY_ENFORCED")
+        with self.assertRaisesRegex(GATE.Denied, "persistent_root_absent"):
+            GATE.validate(gate_value, "preflight")
+        tampered = json.loads(authority_path.read_text())
+        tampered["persistentRoot"]["inode"] += 1
+        authority_path.write_bytes(GATE.canonical(tampered)); authority_path.chmod(0o600)
+        gate_value["externalAdmissionAuthority"]["sha256"] = hashlib.sha256(
+            authority_path.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(GATE.Denied, "external_admission_authority_created_directories"):
+            GATE.validate(gate_value, "admission")
+        self.assertEqual(remote_identity["path"], str(persistent))
 
     def test_v3_frontend_only_does_not_require_read_state_authority(self):
         value = self.request(); value["schemaVersion"] = 3

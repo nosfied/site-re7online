@@ -397,6 +397,96 @@ def provision(intent_path: Path, intent_sha256: str, owner_path: Path,
         os.close(lock_fd)
 
 
+def materialize_external_admission_authority(request_path: Path,
+                                             request_sha256: str) -> dict:
+    request = private_json(request_path, request_sha256)
+    keys = {"schemaVersion", "kind", "operationId", "provisionIntent",
+            "ownerAuthorization", "provisionReceipt", "outputPath"}
+    binding_keys = {"path", "sha256"}
+    if (set(request) != keys or request.get("schemaVersion") != 1 or
+            request.get("kind") !=
+            "CONVERTA_DURABLE_READ_STATE_EXTERNAL_ADMISSION_AUTHORITY_REQUEST_V1" or
+            not isinstance(request.get("operationId"), str) or not request["operationId"] or
+            any(not isinstance(request.get(name), dict) or
+                set(request[name]) != binding_keys
+                for name in ("provisionIntent", "ownerAuthorization", "provisionReceipt")) or
+            not Path(str(request.get("outputPath", ""))).is_absolute()):
+        raise RuntimeError("external_admission_request_schema")
+    intent_binding = request["provisionIntent"]
+    owner_binding = request["ownerAuthorization"]
+    receipt_binding = request["provisionReceipt"]
+    intent_path = Path(intent_binding["path"])
+    intent = private_json(intent_path, intent_binding["sha256"])
+    if (intent.get("schemaVersion") != 2 or intent.get("kind") !=
+            "CONVERTA_DURABLE_READ_STATE_PROVISION_INTENT_V2" or
+            intent.get("operationId") != request["operationId"]):
+        raise RuntimeError("external_admission_intent_binding")
+    plan = private_json(Path(intent["planPath"]), intent["planSha256"])
+    validate_provision_plan(plan)
+    if not inside(str(request["outputPath"]), plan["custodyRoot"]["path"]):
+        raise RuntimeError("external_admission_output_boundary")
+    if intent != provision_intent(Path(intent["planPath"]), intent["planSha256"], plan):
+        raise RuntimeError("external_admission_intent_binding")
+    owner = private_json(Path(owner_binding["path"]), owner_binding["sha256"])
+    validate_provision_owner(owner, plan, intent["planSha256"],
+                             intent_binding["sha256"])
+    expected_receipt_path = Path(plan["outputs"]["receiptPath"])
+    if Path(receipt_binding["path"]) != expected_receipt_path:
+        raise RuntimeError("external_admission_receipt_binding")
+    receipt = private_json(expected_receipt_path, receipt_binding["sha256"])
+    receipt_keys = {"schemaVersion", "kind", "event", "state", "operationId",
+                    "planSha256", "provisionIntentSha256",
+                    "ownerAuthorizationSha256", "journalPath", "journalSha256",
+                    "root", "createdDirectories", "automaticExecution"}
+    if (set(receipt) != receipt_keys or receipt.get("schemaVersion") != 1 or
+            receipt.get("kind") != "CONVERTA_DURABLE_READ_STATE_PROVISION_RECEIPT_V1" or
+            receipt.get("event") != "ROOT_PROVISIONED_VERIFIED" or
+            receipt.get("state") != "ROOT_PROVISIONED_VERIFIED" or
+            receipt.get("operationId") != request["operationId"] or
+            receipt.get("planSha256") != intent["planSha256"] or
+            receipt.get("provisionIntentSha256") != intent_binding["sha256"] or
+            receipt.get("ownerAuthorizationSha256") != owner_binding["sha256"] or
+            receipt.get("automaticExecution") is not False):
+        raise RuntimeError("external_admission_receipt_binding")
+    journal_path = Path(receipt["journalPath"])
+    if journal_path != Path(plan["outputs"]["journalPath"]):
+        raise RuntimeError("external_admission_journal_binding")
+    journal = private_json(journal_path, receipt["journalSha256"])
+    journal_state = validate_provision_journal(
+        journal, plan, intent["planSha256"], intent_binding["sha256"],
+        owner_binding["sha256"])
+    if not journal_state["verified"]:
+        raise RuntimeError("external_admission_journal_binding")
+    authorities = [expected_created_authority(item)
+                   for item in plan["createdDirectories"]]
+    if receipt.get("root") != authorities[-1] or receipt.get("createdDirectories") != authorities:
+        raise RuntimeError("external_admission_physical_readback")
+    materializer_sha = file_digest(Path(__file__).resolve())
+    authority = {
+        "schemaVersion": 1,
+        "kind": "CONVERTA_DURABLE_READ_STATE_EXTERNAL_ADMISSION_AUTHORITY_V1",
+        "state": "ROOT_PROVISIONED_VERIFIED",
+        "operationId": request["operationId"],
+        "persistentRoot": authorities[-1],
+        "createdDirectories": authorities,
+        "provisioningAuthority": {
+            "planSha256": intent["planSha256"],
+            "provisionIntentSha256": intent_binding["sha256"],
+            "ownerAuthorizationSha256": owner_binding["sha256"],
+            "journalSha256": receipt["journalSha256"],
+            "provisionReceiptSha256": receipt_binding["sha256"],
+        },
+        "materializer": {"kind": "READ_STATE_CUTOVER_AUTHORITY_V1",
+                         "sha256": materializer_sha},
+        "automaticExecution": False,
+    }
+    authority_sha = publish(Path(request["outputPath"]), authority)
+    return {"state": "EXTERNAL_ADMISSION_AUTHORITY_MATERIALIZED",
+            "externalAdmissionAuthoritySha256": authority_sha,
+            "provisionReceiptSha256": receipt_binding["sha256"],
+            "materializerSha256": materializer_sha}
+
+
 def validate_plan(value: dict) -> None:
     version = value.get("schemaVersion")
     keys = {"schemaVersion", "kind", "operationId", "persistentRoot", "custodyRoot", "authorizedSourceReleases", "entries", "privacyBatchAuthority", "outputs"}
@@ -543,11 +633,13 @@ def materialize(request_path: Path, request_sha256: str,
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(); parser.add_argument("action", choices=("prepare-provision", "provision", "prepare", "materialize")); parser.add_argument("path"); parser.add_argument("sha256")
+    parser = argparse.ArgumentParser(); parser.add_argument("action", choices=("prepare-provision", "provision", "prepare", "materialize", "materialize-external-admission-authority")); parser.add_argument("path"); parser.add_argument("sha256")
     parser.add_argument("--owner-authorization"); parser.add_argument("--owner-authorization-sha256")
     args = parser.parse_args()
     if args.action == "prepare-provision": result = prepare_provision(Path(args.path), args.sha256)
     elif args.action == "prepare": result = prepare(Path(args.path), args.sha256)
+    elif args.action == "materialize-external-admission-authority":
+        result = materialize_external_admission_authority(Path(args.path), args.sha256)
     else:
         if not args.owner_authorization or not args.owner_authorization_sha256: raise RuntimeError("owner_authorization_required")
         if args.action == "provision":
