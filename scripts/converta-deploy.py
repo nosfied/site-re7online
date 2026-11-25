@@ -3721,9 +3721,9 @@ class Driver:
                         "schemaVersion": 1, "state": "COMMITTED",
                         "boundary": "CANDIDATE_API_HEALTHY",
                         "releaseId": self.inputs.release,
-                        "pid": readiness[component]["pid"],
-                        "startTicks": readiness[component]["startTicks"],
-                        "restartCount": readiness[component]["restartCount"],
+                        "pid": candidate_processes[component]["pid"],
+                        "startTicks": candidate_processes[component]["startTicks"],
+                        "restartCount": candidate_processes[component]["restartCount"],
                     }
                     self._journal_write(journal, "ACTIVATING")
                 journal.setdefault("activationProgress", []).append(component)

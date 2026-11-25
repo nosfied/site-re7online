@@ -364,6 +364,8 @@ class FakeHost(deploy.Host):
                  "socketOwnerRelation": "DIRECT", "releaseId": release_id}
         if component == "worker":
             value.update(processCardinality=1, duplicateWorkerPrevented=True)
+        if getattr(self, "readiness_omit_restart_count", False):
+            value.pop("restartCount")
         put(report, value)
         deploy.atomic_private_bytes(stdout, (json.dumps(value) + "\n").encode())
         deploy.atomic_private_bytes(stderr, b"")
@@ -4074,6 +4076,18 @@ if config_path:
         self.assertIn(self.driver._journal_read()["state"],
                       {"DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
         self.assertEqual(1, self.host.save_calls)
+
+    def test_first_cutover_commit_uses_authenticated_process_identity_when_readiness_omits_restart(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.host.readiness_omit_restart_count = True
+        self.driver.preflight()
+        self.driver.activate()
+        commit = self.driver._journal_read()["readStateCutover"]["durableCommit"]
+        api = self.driver._process_snapshot(
+            self.host.rows[deploy.PROCESS_NAMES["api"]], "api",
+            self.releases / self.candidate / deploy.RUNTIME_DIR["api"])
+        self.assertEqual(api["restartCount"], commit["restartCount"])
 
     def test_first_cutover_real_topology_denies_predecessor_identity_drift(self):
         predecessor = self.configure_first_cutover_topology()
