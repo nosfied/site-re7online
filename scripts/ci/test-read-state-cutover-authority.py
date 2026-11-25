@@ -190,6 +190,69 @@ class CutoverAuthorityTest(unittest.TestCase):
         self.assertEqual(prepared["state"], "CUTOVER_PLAN_PREPARED")
         self.assertEqual(materialized["state"], "CUTOVER_PLAN_AUTHORIZED")
 
+    def test_external_admission_authority_is_derived_from_terminal_provision_chain(self):
+        plan, plan_path, plan_sha, _, intent, intent_sha, owner, owner_sha, _ = self.provision_fixture()
+        provisioned = AUTH.provision(intent, intent_sha, owner, owner_sha)
+        request_path = self.custody / "external-admission-request.json"
+        output_path = self.custody / "external-admission-authority.json"
+        request = {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_DURABLE_READ_STATE_EXTERNAL_ADMISSION_AUTHORITY_REQUEST_V1",
+            "operationId": plan["operationId"],
+            "provisionIntent": {"path": str(intent), "sha256": intent_sha},
+            "ownerAuthorization": {"path": str(owner), "sha256": owner_sha},
+            "provisionReceipt": {"path": plan["outputs"]["receiptPath"],
+                                 "sha256": provisioned["provisionReceiptSha256"]},
+            "outputPath": str(output_path),
+        }
+        request_sha = put(request_path, request)
+        result = AUTH.materialize_external_admission_authority(request_path, request_sha)
+        authority = json.loads(output_path.read_text())
+        self.assertEqual(result["state"], "EXTERNAL_ADMISSION_AUTHORITY_MATERIALIZED")
+        self.assertEqual(authority["persistentRoot"], AUTH.expected_created_authority(
+            plan["createdDirectories"][-1]))
+        self.assertEqual(authority["provisioningAuthority"], {
+            "planSha256": plan_sha,
+            "provisionIntentSha256": intent_sha,
+            "ownerAuthorizationSha256": owner_sha,
+            "journalSha256": json.loads(Path(plan["outputs"]["receiptPath"]).read_text())["journalSha256"],
+            "provisionReceiptSha256": provisioned["provisionReceiptSha256"],
+            "materializationRequestSha256": request_sha,
+        })
+        self.assertEqual(authority["sourceCustody"], plan["custodyRoot"])
+        self.assertEqual(AUTH.materialize_external_admission_authority(
+            request_path, request_sha), result)
+
+        missing_owner = dict(request)
+        missing_owner["ownerAuthorization"] = {"path": str(self.custody / "absent.json"),
+                                                "sha256": "0" * 64}
+        missing_path = self.custody / "external-admission-missing-owner.json"
+        with self.assertRaises(FileNotFoundError):
+            AUTH.materialize_external_admission_authority(
+                missing_path, put(missing_path, missing_owner))
+
+        altered_owner = self.custody / "altered-provision-owner.json"
+        altered_owner_sha = put(altered_owner, {**json.loads(owner.read_text()),
+                                                "approvedRoot": str(self.persistent) + "-other"})
+        altered = dict(request)
+        altered["ownerAuthorization"] = {"path": str(altered_owner),
+                                         "sha256": altered_owner_sha}
+        altered_path = self.custody / "external-admission-altered-owner.json"
+        with self.assertRaisesRegex(RuntimeError, "provision_owner_authorization_binding"):
+            AUTH.materialize_external_admission_authority(
+                altered_path, put(altered_path, altered))
+
+        replacement = self.persistent.with_name("replacement-read-state")
+        replacement.mkdir(mode=0o700)
+        self.persistent.rmdir(); replacement.rename(self.persistent)
+        divergent_path = self.custody / "external-admission-divergent-root.json"
+        divergent = {**request, "outputPath": str(self.custody / "never-published.json")}
+        with self.assertRaisesRegex(RuntimeError,
+                                    "provision_journal_result_authority"):
+            AUTH.materialize_external_admission_authority(
+                divergent_path, put(divergent_path, divergent))
+        self.assertFalse((self.custody / "never-published.json").exists())
+
     def test_provision_denies_tampered_divergent_path_mode_ancestor_and_symlink(self):
         cases = ("owner", "path", "mode", "ancestor", "symlink")
         for case in cases:
