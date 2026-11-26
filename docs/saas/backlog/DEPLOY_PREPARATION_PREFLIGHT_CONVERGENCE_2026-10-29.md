@@ -722,6 +722,11 @@ real, as patinações observadas de LF canônico, bytes compilados prematuros,
 manifesto/instalador incompatíveis, Git/Gate ausentes no host, control plane não
 consumido e fixture com topologia artificial.
 
+Contrato temporal de recuperação: antes de `AGGREGATE_VERIFIED`, CB somente
+quando segura; de `AGGREGATE_VERIFIED` até `CANDIDATE_API_HEALTHY`, #444 sem
+retorno release-local; depois de `CANDIDATE_API_HEALTHY`, somente rollback
+durável. `AGGREGATE_VERIFIED` não é o compromisso irrevogável.
+
 O preflight deve distinguir quatro fotografias sem projetar uma sobre a outra:
 o estado operacional vigente autentica apenas ativações concluídas; o plano de
 transição futura declara predecessora, candidata e rollback durável; o journal

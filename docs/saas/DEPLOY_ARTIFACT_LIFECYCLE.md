@@ -1785,3 +1785,8 @@ da última ativação concluída; (B) o plano futuro, no qual CB é predecessora
 efeitos realmente observados; e (D) o grafo sucessor, publicado apenas depois dos
 efeitos comprovados pela autoridade canônica. Nenhum consumidor pode projetar B,
 C ou D sobre A para satisfazer preflight.
+
+Contrato temporal de recuperação: antes de `AGGREGATE_VERIFIED`, CB somente
+quando segura; de `AGGREGATE_VERIFIED` até `CANDIDATE_API_HEALTHY`, #444 sem
+retorno release-local; depois de `CANDIDATE_API_HEALTHY`, somente rollback
+durável. `AGGREGATE_VERIFIED` não é o compromisso irrevogável.

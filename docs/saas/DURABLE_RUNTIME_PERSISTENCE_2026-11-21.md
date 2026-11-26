@@ -219,10 +219,14 @@ fases posteriores exigem o receipt físico exato, seus receipts individuais e o
 readback dos destinos. V1/V2 permanecem inalterados.
 
 A fronteira de commit do cutover é **a candidata API saudável após o symlink ter
-sido promovido, com aggregate receipt já `VERIFIED`**. Antes dela, falha retoma
-CB no symlink original; o aggregate receipt eventualmente já publicado é
-replay-safe e não autoriza duplicar reconciliação. Depois dela, rollback da API
-só é seguro para release que consuma a mesma raiz externa. A promoção substitui
+sido promovido, com aggregate receipt já `VERIFIED`**. Contrato temporal de
+recuperação: antes de `AGGREGATE_VERIFIED`, CB somente quando segura; de
+`AGGREGATE_VERIFIED` até `CANDIDATE_API_HEALTHY`, #444 sem retorno release-local;
+depois de `CANDIDATE_API_HEALTHY`, somente rollback durável.
+`AGGREGATE_VERIFIED` não é o compromisso irrevogável. O aggregate receipt já
+publicado é replay-safe e não autoriza duplicar reconciliação. Depois do
+compromisso, rollback da API só é seguro para release que consuma a mesma raiz
+externa. A promoção substitui
 a API pela definição PM2 candidata autenticada somente depois de `pm2 stop`,
 prova de ausência do PID/start ticks antigo e aggregate verificado. O journal registra
 `QUIESCE_ATTEMPT → QUIESCED → SNAPSHOT_SEALING → SNAPSHOT_SEALED → RECONCILING → AGGREGATE_VERIFIED`; retomada após

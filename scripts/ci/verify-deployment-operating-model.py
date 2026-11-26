@@ -115,6 +115,27 @@ def validate_first_cutover_document_set(documents):
         raise ValueError("P00-D backlog does not preserve the four photographs")
 
 
+def validate_first_cutover_rollback_windows(documents):
+    """Reject release-local recovery after aggregate, including outside A-D."""
+    contract = (
+        "Contrato temporal de recuperação: antes de `AGGREGATE_VERIFIED`, CB "
+        "somente quando segura; de `AGGREGATE_VERIFIED` até "
+        "`CANDIDATE_API_HEALTHY`, #444 sem retorno release-local; depois de "
+        "`CANDIDATE_API_HEALTHY`, somente rollback durável. "
+        "`AGGREGATE_VERIFIED` não é o compromisso irrevogável."
+    )
+    contradiction = re.compile(
+        r"(?is)antes\s+(?:dela|do\s+compromisso|de\s+`?CANDIDATE_API_HEALTHY`?)"
+        r".{0,160}?(?:retoma|retorna|recupera).{0,40}?\bCB\b"
+    )
+    for name, document in documents.items():
+        normalized = " ".join(document.split())
+        if contract not in normalized:
+            raise ValueError(f"rollback_window_contract_missing:{name}")
+        if contradiction.search(document):
+            raise ValueError(f"rollback_window_release_local_after_aggregate:{name}")
+
+
 model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text()
 for marker in (
     "define a arquitetura e os princípios vigentes",
@@ -274,14 +295,16 @@ durable_persistence = (
 p00d_backlog = (
     ROOT / "docs/saas/backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md"
 ).read_text()
+first_cutover_documents = {
+    "runbook": runbook,
+    "model": model,
+    "durable": durable_persistence,
+    "lifecycle": lifecycle,
+    "backlog": p00d_backlog,
+}
 try:
-    validate_first_cutover_document_set({
-        "runbook": runbook,
-        "model": model,
-        "durable": durable_persistence,
-        "lifecycle": lifecycle,
-        "backlog": p00d_backlog,
-    })
+    validate_first_cutover_document_set(first_cutover_documents)
+    validate_first_cutover_rollback_windows(first_cutover_documents)
 except (ValueError, KeyError) as error:
     require(False, f"first cutover documentary semantics: {error}")
 
@@ -296,6 +319,17 @@ except ValueError:
     pass
 else:
     require(False, "contradictory first-cutover documentary fixture was accepted")
+
+rollback_window_fixture = (
+    ROOT / "scripts/ci/fixtures/first-cutover-rollback-window-contradiction.md"
+).read_text()
+try:
+    validate_first_cutover_rollback_windows({"fixture": rollback_window_fixture})
+except ValueError as error:
+    require(str(error) == "rollback_window_release_local_after_aggregate:fixture",
+            f"unexpected rollback-window negative predicate: {error}")
+else:
+    require(False, "release-local recovery after aggregate was accepted")
 
 require(state["canonicalTopology"] == {
     "build": "BUILD_ONCE_ISOLATED_NODE_20_20_0_NPM_10_8_2",

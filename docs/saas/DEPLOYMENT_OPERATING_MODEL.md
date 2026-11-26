@@ -149,6 +149,11 @@ coerência interna do grafo histórico, a seleção física corrente e as autori
 do plano. Journal e estado operacional sucessor só passam a provar novos papéis
 depois dos respectivos efeitos canônicos.
 
+Contrato temporal de recuperação: antes de `AGGREGATE_VERIFIED`, CB somente
+quando segura; de `AGGREGATE_VERIFIED` até `CANDIDATE_API_HEALTHY`, #444 sem
+retorno release-local; depois de `CANDIDATE_API_HEALTHY`, somente rollback
+durável. `AGGREGATE_VERIFIED` não é o compromisso irrevogável.
+
 1. Produzir e validar um único pacote imutável no builder autorizado com
    `converta-release.py build|verify`. Na alternativa externa, transferir uma cópia
    do mesmo pacote, reconferir os hashes na VPS e verificar antes de instalar.
