@@ -831,8 +831,14 @@ class Driver:
             expected_keys.add("durablePersistenceAdmission")
             if not durable:
                 deny("runtime_manifest_temporal_authority")
-        expected_schema = (5 if temporal else 4 if durable else
-                           (3 if successor else (2 if worker_selected else 1)))
+        predecessor = "predecessorReleases" in value
+        if predecessor:
+            expected_keys.add("predecessorReleases")
+            if not durable or "api" not in self.inputs.components:
+                deny("runtime_manifest_predecessor_scope")
+        base_schema = (5 if temporal else 4 if durable else
+                       (3 if successor else (2 if worker_selected else 1)))
+        expected_schema = base_schema + (1 if predecessor else 0)
         if set(value) != expected_keys or value.get("schemaVersion") != expected_schema:
             deny("runtime_manifest_schema")
         if (value.get("mode") != "fixed-current-existing-pm2" or
@@ -844,30 +850,34 @@ class Driver:
             deny("runtime_manifest_allowlist")
         if value.get("processes") != PROCESS_NAMES:
             deny("runtime_manifest_processes")
-        rollbacks = value.get("rollbackReleases")
         payload_components = self._payload_components()
-        if not isinstance(rollbacks, dict) or set(rollbacks) != set(payload_components):
-            deny("runtime_manifest_rollbacks")
-        for component in payload_components:
-            identity = rollbacks.get(component)
-            common = {"releaseId", "manifestSha256", "indexSha256", "entrySha256"}
-            expected = common | ({"buildId"} if component == "frontend" else set())
-            legacy_expected = common | {"authorityKind", "manifestName", "indexName"}
-            allowed_expected = ({frozenset(expected), frozenset(legacy_expected)}
-                                if successor and component == "worker" else {frozenset(expected)})
-            if (not isinstance(identity, dict) or frozenset(identity) not in allowed_expected or
-                    not isinstance(identity.get("releaseId"), str) or
-                    not identity["releaseId"] or
-                    not all(SHA256.fullmatch(str(identity.get(key, "")))
-                            for key in ("manifestSha256", "indexSha256", "entrySha256")) or
-                    (component == "frontend" and
-                     (not isinstance(identity.get("buildId"), str) or not identity["buildId"]))):
-                deny(f"runtime_manifest_rollback:{component}")
-            if (successor and component == "worker" and set(identity) == legacy_expected and (
-                    identity.get("authorityKind") != "legacy-enumerated-release" or
-                    identity.get("manifestName") != "release-manifest.json" or
-                    identity.get("indexName") != "release-index.json")):
-                deny("runtime_manifest_rollback:worker:legacy_authority")
+        def validate_release_roles(roles: Any, label: str) -> None:
+            if not isinstance(roles, dict) or set(roles) != set(payload_components):
+                deny(f"runtime_manifest_{label}s")
+            for component in payload_components:
+                identity = roles.get(component)
+                common = {"releaseId", "manifestSha256", "indexSha256", "entrySha256"}
+                expected = common | ({"buildId"} if component == "frontend" else set())
+                legacy_expected = common | {"authorityKind", "manifestName", "indexName"}
+                allowed_expected = ({frozenset(expected), frozenset(legacy_expected)}
+                                    if successor and component == "worker" else {frozenset(expected)})
+                if (not isinstance(identity, dict) or frozenset(identity) not in allowed_expected or
+                        not isinstance(identity.get("releaseId"), str) or
+                        not identity["releaseId"] or
+                        not all(SHA256.fullmatch(str(identity.get(key, "")))
+                                for key in ("manifestSha256", "indexSha256", "entrySha256")) or
+                        (component == "frontend" and
+                         (not isinstance(identity.get("buildId"), str) or not identity["buildId"]))):
+                    deny(f"runtime_manifest_{label}:{component}")
+                if (successor and component == "worker" and set(identity) == legacy_expected and (
+                        identity.get("authorityKind") != "legacy-enumerated-release" or
+                        identity.get("manifestName") != "release-manifest.json" or
+                        identity.get("indexName") != "release-index.json")):
+                    deny(f"runtime_manifest_{label}:worker:legacy_authority")
+
+        validate_release_roles(value.get("rollbackReleases"), "rollback")
+        if predecessor:
+            validate_release_roles(value.get("predecessorReleases"), "predecessor")
         if worker_selected:
             self._validate_worker_pm2_binding(value.get("workerPm2"))
         if successor:
@@ -882,6 +892,11 @@ class Driver:
         if self._stable_identity(current) != self._stable_identity(info):
             deny("runtime_manifest_changed")
         return value
+
+    @staticmethod
+    def _predecessor_releases(manifest: dict[str, Any]) -> dict[str, Any]:
+        """Return the authenticated pre-cutover selections for this manifest version."""
+        return manifest.get("predecessorReleases", manifest["rollbackReleases"])
 
     def _validate_worker_pm2_binding(self, value: Any) -> None:
         if not isinstance(value, dict) or set(value) != {"candidate", "rollback"}:
@@ -2126,11 +2141,28 @@ class Driver:
             deny("generation_retirement_receipt_parent_identity")
         return binding
 
-    def _require_reconciled_component_rollbacks(self, binding: RetirementBinding) -> None:
+    def _require_reconciled_component_rollbacks(
+            self, binding: RetirementBinding, manifest: dict[str, Any]) -> None:
         raw, _ = stable_regular_bytes(binding.operational_state, required_mode=0o600)
         value = json_object(raw, binding.operational_state.name)
         immediate = value.get("immediateRollbackReleases")
         payload_components = self._payload_components()
+        predecessor = manifest.get("predecessorReleases")
+        if predecessor is not None:
+            expected_immediate = {
+                component: predecessor[component]["releaseId"]
+                for component in payload_components
+            }
+            durable = {
+                manifest["rollbackReleases"][component]["releaseId"]
+                for component in payload_components
+            }
+            rollbacks = value.get("rollbackReleases")
+            if (immediate != expected_immediate or not isinstance(rollbacks, list) or
+                    not set(expected_immediate.values()).issubset(set(rollbacks)) or
+                    not durable.issubset(set(rollbacks))):
+                deny("rollback_role_temporal_reconciliation_required")
+            return
         if immediate is None:
             if set(self.inputs.components) != set(payload_components):
                 deny("rollback_role_legacy_transition_required")
@@ -2579,54 +2611,64 @@ class Driver:
         if self.inputs.retirement.deployment_lock != self.lock:
             deny("generation_retirement_lock_mismatch")
         retirement = self._authenticate_retirement()
-        self._require_reconciled_component_rollbacks(retirement)
         self._check_external_retirement(retirement)
         self._control_head()
         runtime_manifest = self._authenticated_runtime_manifest()
+        self._require_reconciled_component_rollbacks(retirement, runtime_manifest)
         persistence = self._enforce_durable_persistence(runtime_manifest, "preflight")
         release = self._release()
         cutover = self._read_state_cutover(runtime_manifest) if persistence is not None else None
         if self.journal.exists():
             deny("transaction_exists")
-        if self.inputs.transaction_root.exists():
-            private_directory(self.inputs.transaction_root)
-            if any(self.inputs.transaction_root.iterdir()):
-                deny("transaction_root_not_empty")
-        else:
-            self.inputs.transaction_root.mkdir(mode=0o700, parents=True)
         pm2 = self._resolve_pm2()
         rows = self.host.pm2_rows(pm2)
         worker = self._worker(rows)
         processes: dict[str, Any] = {}
         readiness: dict[str, Any] = {}
         selections: dict[str, Any] = {}
+        predecessor_releases = self._predecessor_releases(runtime_manifest)
         for component in COMPONENTS:
             selections[component] = self._selection_snapshot(component)
-            rollback_identity = runtime_manifest["rollbackReleases"][component]
-            expected = self._rollback_release(component, rollback_identity).resolve(strict=True)
+            predecessor_identity = predecessor_releases[component]
+            expected = self._rollback_release(component, predecessor_identity).resolve(strict=True)
             if Path(selections[component]["physicalRuntime"]) != expected:
-                deny(f"preflight_rollback_runtime:{component}")
+                reason = ("preflight_predecessor_runtime" if "predecessorReleases" in runtime_manifest
+                          else "preflight_rollback_runtime")
+                deny(f"{reason}:{component}")
             processes[component] = self._process_snapshot(
                 self._row(rows, self._process_name(component)), component, expected)
             release_id = selections[component]["releaseId"]
-            if release_id != rollback_identity["releaseId"]:
-                deny(f"preflight_rollback_release:{component}")
-            readiness[component] = self._readiness(
-                component, release_id, expected, f"preflight-{component}")
+            if release_id != predecessor_identity["releaseId"]:
+                reason = ("preflight_predecessor_release" if "predecessorReleases" in runtime_manifest
+                          else "preflight_rollback_release")
+                deny(f"{reason}:{component}")
         if "worker" in self.inputs.components:
-            rollback_identity = runtime_manifest["rollbackReleases"]["worker"]
-            expected = self._rollback_release("worker", rollback_identity).resolve(strict=True)
+            predecessor_identity = predecessor_releases["worker"]
+            expected = self._rollback_release("worker", predecessor_identity).resolve(strict=True)
             worker = self._process_snapshot(
                 self._row(rows, self._process_name("worker")), "worker", expected)
             selections["worker"] = {
                 "path": None, "target": None, "physicalRuntime": str(expected),
-                "releaseId": rollback_identity["releaseId"],
+                "releaseId": predecessor_identity["releaseId"],
             }
             processes["worker"] = worker
+        if self.inputs.transaction_root.exists():
+            private_directory(self.inputs.transaction_root)
+            if any(self.inputs.transaction_root.iterdir()):
+                deny("transaction_root_not_empty")
+        else:
+            self.inputs.transaction_root.mkdir(mode=0o700, parents=True)
+        for component in COMPONENTS:
+            release_id = selections[component]["releaseId"]
+            expected = Path(selections[component]["physicalRuntime"])
+            readiness[component] = self._readiness(
+                component, release_id, expected, f"preflight-{component}")
+        if "worker" in self.inputs.components:
             readiness["worker"] = {
                 "result": "PREFLIGHT_WORKER_IDENTITY_PASS", "pid": worker["pid"],
                 "startTicks": worker["startTicks"], "restartCount": worker["restartCount"],
-                "releaseId": rollback_identity["releaseId"], "processCardinality": 1,
+                "releaseId": predecessor_releases["worker"]["releaseId"],
+                "processCardinality": 1,
             }
         regular_private(self.dump)
         if shutil.disk_usage(self.inputs.transaction_root).free < 64 * 1024 * 1024:
@@ -3563,7 +3605,7 @@ class Driver:
         transition = journal.get("readStateCutover")
         if (not isinstance(transition, dict) or transition.get("state") not in
                 {"QUIESCE_ATTEMPT", "QUIESCED", "SNAPSHOT_SEALING", "SNAPSHOT_SEALED",
-                 "RECONCILING", "AGGREGATE_VERIFIED"} or
+                 "RECONCILING"} or
                 journal.get("activationAttempted")):
             return
         previous = journal["previous"]
@@ -3620,11 +3662,16 @@ class Driver:
                     deny("pre_activation_worker_drift")
                 previous = {
                     "symlinks": {component: os.readlink(self.stable[component]) for component in COMPONENTS},
-                    "releases": {component: runtime_manifest["rollbackReleases"][component]["releaseId"]
+                    "releases": {component: self._predecessor_releases(runtime_manifest)[component]["releaseId"]
                                  for component in self._payload_components()},
                     "worker": worker, "processes": processes,
                     "dump": private_file_identity(self.dump),
                 }
+                if "predecessorReleases" in runtime_manifest:
+                    previous["durableRollbackReleases"] = {
+                        component: runtime_manifest["rollbackReleases"][component]["releaseId"]
+                        for component in self._payload_components()
+                    }
                 if "worker" in self.inputs.components:
                     previous["symlinks"]["worker"] = None
                     previous["processes"]["worker"] = worker
@@ -3665,6 +3712,20 @@ class Driver:
                     api_cutover_binding=(cutover["cutover"]["pm2"]["candidate"]
                                          if cutover is not None and component == "api"
                                          else None))
+                if cutover is not None and component == "api":
+                    transition = journal.get("readStateCutover")
+                    if (not isinstance(transition, dict) or
+                            transition.get("state") != "AGGREGATE_VERIFIED"):
+                        deny("read_state_cutover_commit_state")
+                    transition["durableCommit"] = {
+                        "schemaVersion": 1, "state": "COMMITTED",
+                        "boundary": "CANDIDATE_API_HEALTHY",
+                        "releaseId": self.inputs.release,
+                        "pid": candidate_processes[component]["pid"],
+                        "startTicks": candidate_processes[component]["startTicks"],
+                        "restartCount": candidate_processes[component]["restartCount"],
+                    }
+                    self._journal_write(journal, "ACTIVATING")
                 journal.setdefault("activationProgress", []).append(component)
                 self._journal_write(journal, "ACTIVATING")
                 if component == "frontend":
@@ -3701,23 +3762,46 @@ class Driver:
             attempted = journal.get("activationAttempted", [])
             if not isinstance(attempted, list) or any(item not in THREE_COMPONENTS for item in attempted):
                 deny("rollback_activation_progress")
-            for component in reversed(attempted):
-                target = previous.get("symlinks", {}).get(component)
+            transition = journal.get("readStateCutover")
+            durable_recovery = bool(
+                isinstance(transition, dict) and
+                transition.get("state") == "AGGREGATE_VERIFIED" and
+                isinstance(previous.get("durableRollbackReleases"), dict)
+            )
+            rollback_role = "durableRollback" if durable_recovery else "predecessor"
+            recorded_role = progress.setdefault("releaseRole", rollback_role)
+            if recorded_role != rollback_role:
+                deny("rollback_release_role_drift")
+            releases = (previous["durableRollbackReleases"] if durable_recovery
+                        else previous.get("releases", {}))
+            restore_components = list(attempted)
+            if durable_recovery:
+                for component in self._payload_components():
+                    if component not in restore_components:
+                        restore_components.append(component)
+            for component in reversed(restore_components):
+                release_id = releases.get(component)
+                if not isinstance(release_id, str):
+                    deny(f"rollback_release_missing:{component}")
+                rollback_runtime = self.releases / release_id / RUNTIME_DIR[component]
+                target = (str(rollback_runtime) if durable_recovery and component != "worker"
+                          else previous.get("symlinks", {}).get(component))
                 if component != "worker" and not isinstance(target, str):
                     deny(f"rollback_symlink_missing:{component}")
                 if component not in progress["restoredComponents"]:
-                    release_id = previous.get("releases", {}).get(component)
-                    if not isinstance(release_id, str):
-                        deny(f"rollback_release_missing:{component}")
-                    rollback_runtime = self.releases / release_id / RUNTIME_DIR[component]
                     if component == "worker":
                         restored, readiness = self._restore_worker(
                             journal, progress, release_id, rollback_runtime.resolve(strict=True))
                     else:
-                        current = self._process_snapshot(
-                            self._row(self.host.pm2_rows(self._resolve_pm2()),
-                                      self._process_name(component)),
-                            component, self.stable[component].resolve(strict=True))
+                        if durable_recovery and component == "api" and self._api_is_quiesced(
+                                previous["processes"]["api"],
+                                self._read_state_source_roots(cutover)):
+                            current = previous["processes"]["api"]
+                        else:
+                            current = self._process_snapshot(
+                                self._row(self.host.pm2_rows(self._resolve_pm2()),
+                                          self._process_name(component)),
+                                component, self.stable[component].resolve(strict=True))
                         atomic_symlink(self.stable[component], Path(target))
                         restored, readiness = self._restart_existing(
                             component, current, release_id, rollback_runtime.resolve(strict=True),
@@ -3731,13 +3815,9 @@ class Driver:
                     self._journal_write(journal, "ROLLING_BACK")
                     self._failpoint(f"rollback_after_{component}")
                 else:
-                    expected_target = (self.releases / previous["releases"][component] /
-                                       RUNTIME_DIR[component] if component == "worker" else Path(target))
+                    expected_target = (rollback_runtime if component == "worker" else Path(target))
                     if self.stable[component].resolve(strict=True) != expected_target.resolve(strict=True):
                         deny(f"rollback_symlink_drift:{component}")
-                    release_id = previous.get("releases", {}).get(component)
-                    if not isinstance(release_id, str):
-                        deny(f"rollback_release_missing:{component}")
                     current = self._process_snapshot(
                         self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
                         component, expected_target.resolve(strict=True))

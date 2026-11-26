@@ -1752,3 +1752,28 @@ do builder, exportação ou instalação, não incrementa contadores e não conc
 ativação. O retorno worker legado pode ser autenticado pelos nomes históricos
 `release-manifest.json`/`release-index.json` somente quando marker, índice e
 entrypoint enumerado concordarem; releases modernas continuam no contrato atual.
+
+## Matriz obrigatória produtor → consumidor → fase → host
+
+Uma fase não está qualificada apenas porque seus contratos são válidos
+isoladamente. Antes de `admission`, `open`, build, export/transfer, install,
+preflight e activate, a preparação P00-D deve registrar para cada interface:
+artefato, produtor autorizado, primeiro momento legítimo de existência,
+consumidor e versão, schema/campos, SHA/modo/identidade física, host de consumo,
+autoridade administrativa, estado de lifecycle/retomada e regressão integrada.
+Evidência estável pode ser reaberta por SHA; seleção, processo, capacidade, lock
+e identidade física voláteis são recapturados na fronteira consumidora.
+
+São negativas obrigatórias: JSON com LF fora da serialização canônica; hash de
+módulo exigido antes do build; instalador V1 diante de manifesto V2; objeto Git
+ausente na VPS; Gate V5 ausente no host consumidor; control plane transitório
+usado antes de `consume`; predecessora confundida com rollback durável; e fixture
+que inicia no rollback quando produção ainda seleciona a predecessora. A matriz
+não exige bytes futuros: registra seu produtor e bloqueia somente quando chega o
+primeiro consumidor legítimo. CI verde isolada não substitui essa prova.
+
+Para CB → A+B, o pacote, manifesto, índice, módulos e receipt de instalação da
+candidata permanecem imutáveis. Um control plane sucessor é compatível sem
+rebuild quando autentica separadamente target/release, Gate V5, autoridade
+compilada e driver sucessor; o runtime manifest vincula esse control plane e usa
+o novo papel temporal sem editar o pacote instalado.

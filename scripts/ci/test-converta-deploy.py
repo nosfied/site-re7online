@@ -364,6 +364,8 @@ class FakeHost(deploy.Host):
                  "socketOwnerRelation": "DIRECT", "releaseId": release_id}
         if component == "worker":
             value.update(processCardinality=1, duplicateWorkerPrevented=True)
+        if getattr(self, "readiness_omit_restart_count", False):
+            value.pop("restartCount")
         put(report, value)
         deploy.atomic_private_bytes(stdout, (json.dumps(value) + "\n").encode())
         deploy.atomic_private_bytes(stderr, b"")
@@ -555,10 +557,39 @@ class DeployFixture(unittest.TestCase):
         return {"path": str(path), "device": info.st_dev, "inode": info.st_ino,
                 "ownerUid": info.st_uid, "groupGid": info.st_gid, "mode": "0700"}
 
-    def enable_read_state_cutover(self) -> Path:
+    def configure_first_cutover_topology(self) -> str:
+        predecessor = "immutable-cb-predecessor"
+        self._release(predecessor, "cb-build", "d" * 40)
+        for component in deploy.COMPONENTS:
+            self.stable[component].unlink()
+            runtime = self.releases / predecessor / deploy.RUNTIME_DIR[component]
+            os.symlink(runtime, self.stable[component])
+            row = self.host.rows[deploy.PROCESS_NAMES[component]]
+            self.host.process_cwds[row["pid"]] = runtime.resolve()
+        operational = json.loads(self.retirement.operational_state.read_text())
+        operational["observations"]["currentLinks"] = [
+            {"path": str(path), "target": str(path.resolve())}
+            for path in self.stable.values()
+        ]
+        operational["activeReleases"] = [predecessor]
+        operational["rollbackReleases"] = sorted({predecessor, self.rollback})
+        operational["immediateRollbackReleases"] = {
+            component: predecessor for component in deploy.COMPONENTS
+        }
+        put(self.retirement.operational_state, operational)
+        self.retirement = dataclasses.replace(
+            self.retirement,
+            operational_state_sha256=sha(self.retirement.operational_state),
+        )
+        self.inputs = dataclasses.replace(self.inputs, retirement=self.retirement)
+        self.driver = self._driver()
+        return predecessor
+
+    def enable_read_state_cutover(self, *, predecessor_release: str | None = None) -> Path:
         persistent = self.base / "durable-read-state"
         custody = self.base / "read-state-cutover-custody"
-        source_root = self.releases / self.rollback / "api-runtime/.data/app-read-state"
+        source_release = predecessor_release or self.rollback
+        source_root = self.releases / source_release / "api-runtime/.data/app-read-state"
         for directory in (persistent, custody):
             directory.mkdir(parents=True, mode=0o700); directory.chmod(0o700)
         source_root.mkdir(parents=True, mode=0o755); source_root.chmod(0o755)
@@ -580,17 +611,17 @@ class DeployFixture(unittest.TestCase):
         manifest = custody / "manifest.private.json"
         seal_receipt = custody / "snapshot-seal.private.json"
         snapshot_authorization = custody / "snapshot-authorization.private.json"
-        private_copy = custody / "legacy-sources" / self.rollback / "tenant-a/shared.json"
+        private_copy = custody / "legacy-sources" / source_release / "tenant-a/shared.json"
         source_root_info = source_root.lstat()
         put(snapshot_authorization, {
             "schemaVersion": 2,
             "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V2",
             "operationId": "cutover-aggregate", "custodyRoot": self._root_authority(custody),
             "persistentRoot": self._root_authority(persistent),
-            "authorizedSourceReleases": [self.rollback],
+            "authorizedSourceReleases": [source_release],
             "entries": [{"operationId": "cutover-tenant-a-shared", "tenantId": "tenant-a",
                          "scope": {"type": "shared"}, "destinationPath": str(destination),
-                         "sources": [{"releaseId": self.rollback, "path": str(source),
+                         "sources": [{"releaseId": source_release, "path": str(source),
                                       "root": {"path": str(source_root),
                                                "device": source_root_info.st_dev,
                                                "inode": source_root_info.st_ino,
@@ -627,7 +658,7 @@ class DeployFixture(unittest.TestCase):
             }
             request_raw = (json.dumps(reconciliation_request, sort_keys=True,
                                       separators=(",", ":")) + "\n").encode()
-            source_authorities = [{"releaseId": self.rollback, "sha256": source_sha}]
+            source_authorities = [{"releaseId": source_release, "sha256": source_sha}]
             authority = {"tenantId": "tenant-a", "scope": {"type": "shared"},
                          "destinationPath": str(destination),
                          "sourceAuthorities": source_authorities,
@@ -635,7 +666,7 @@ class DeployFixture(unittest.TestCase):
             inventory_value = {"schemaVersion": 1,
                                "kind": "CONVERTA_INBOX_READ_STATE_AUTHORIZED_DESTINATION_INVENTORY_V1",
                                "inventoryId": "cutover-aggregate",
-                               "authorizedSourceReleases": [self.rollback],
+                               "authorizedSourceReleases": [source_release],
                                "destinations": [authority]}
             inventory_raw = (json.dumps(inventory_value, sort_keys=True,
                                         separators=(",", ":")) + "\n").encode()
@@ -666,7 +697,7 @@ class DeployFixture(unittest.TestCase):
                                        "requestPath": str(request_path),
                                        "requestSha256": hashlib.sha256(request_raw).hexdigest(),
                                        "sourceAuthorities": source_authorities,
-                                       "sourceSnapshots": [{"releaseId": self.rollback,
+                                       "sourceSnapshots": [{"releaseId": source_release,
                                            "origin": {"path": str(source), "sha256": source_sha,
                                                       "device": source.lstat().st_dev,
                                                       "inode": source.lstat().st_ino,
@@ -727,7 +758,7 @@ class DeployFixture(unittest.TestCase):
                           "api-runtime/dist/inbox/readStateStore.js")
         rollback_store.parent.mkdir(parents=True, exist_ok=True)
         rollback_store.write_text(store_fixture)
-        for release in (self.candidate, self.rollback):
+        for release in dict.fromkeys((self.candidate, self.rollback, source_release)):
             root = self.releases / release
             (root / "index.sha256").chmod(0o644)
             (root / "manifest.json").chmod(0o644)
@@ -741,6 +772,20 @@ class DeployFixture(unittest.TestCase):
         for identity in runtime["rollbackReleases"].values():
             identity["manifestSha256"] = sha(rollback_root / "manifest.json")
             identity["indexSha256"] = sha(rollback_root / "index.sha256")
+        if predecessor_release is not None:
+            predecessor_root = self.releases / predecessor_release
+            common = {
+                "releaseId": predecessor_release,
+                "manifestSha256": sha(predecessor_root / "manifest.json"),
+                "indexSha256": sha(predecessor_root / "index.sha256"),
+            }
+            runtime["predecessorReleases"] = {
+                "api": {**common, "entrySha256":
+                        sha(predecessor_root / "api-runtime/dist/index.js")},
+                "frontend": {**common, "entrySha256": sha(
+                    predecessor_root / "frontend-runtime/node_modules/next/dist/bin/next"),
+                    "buildId": "cb-build"},
+            }
         compatibility = custody / "rollback-compatibility.private.json"
         rollback_api = runtime["rollbackReleases"]["api"]
         put(compatibility, {
@@ -831,7 +876,7 @@ class DeployFixture(unittest.TestCase):
                         "rollbackCompatibility": {"path": str(compatibility),
                                                   "sha256": sha(compatibility)}},
         })
-        runtime["schemaVersion"] = 4
+        runtime["schemaVersion"] = 5 if predecessor_release is not None else 4
         runtime["durablePersistence"] = {"request": str(gate_request),
                                          "requestSha256": sha(gate_request)}
         put(self.runtime_manifest, runtime)
@@ -4007,8 +4052,168 @@ if config_path:
             self.driver.finalize()
         self.assertEqual(1, self.host.save_calls)
 
+    def test_first_cutover_real_topology_reaches_finalize_with_distinct_release_roles(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.driver.preflight()
+        preflight = self.driver._journal_read()["preflight"]
+        self.assertEqual(predecessor, preflight["selections"]["api"]["releaseId"])
+        self.assertEqual(predecessor, preflight["selections"]["frontend"]["releaseId"])
+        manifest = self.driver._authenticated_runtime_manifest()
+        self.assertEqual(self.rollback, manifest["rollbackReleases"]["api"]["releaseId"])
+        self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual("AWAITING_ACCEPTANCE", journal["state"])
+        self.assertEqual("COMMITTED", journal["readStateCutover"]["durableCommit"]["state"])
+        self.assertEqual("CANDIDATE_API_HEALTHY",
+                         journal["readStateCutover"]["durableCommit"]["boundary"])
+        self.assertEqual({"api": self.rollback, "frontend": self.rollback},
+                         journal["previous"]["durableRollbackReleases"])
+        materializer, acceptance_request = self.acceptance_materializer_request()
+        completed = self.run_acceptance_materializer(materializer, acceptance_request)
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.driver.finalize()
+        self.assertIn(self.driver._journal_read()["state"],
+                      {"DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
+        self.assertEqual(1, self.host.save_calls)
+
+    def test_first_cutover_commit_uses_authenticated_process_identity_when_readiness_omits_restart(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.host.readiness_omit_restart_count = True
+        self.driver.preflight()
+        self.driver.activate()
+        commit = self.driver._journal_read()["readStateCutover"]["durableCommit"]
+        api = self.driver._process_snapshot(
+            self.host.rows[deploy.PROCESS_NAMES["api"]], "api",
+            self.releases / self.candidate / deploy.RUNTIME_DIR["api"])
+        self.assertEqual(api["restartCount"], commit["restartCount"])
+
+    def test_first_cutover_real_topology_denies_predecessor_identity_drift(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.stable["api"].unlink()
+        os.symlink(self.releases / self.rollback / deploy.RUNTIME_DIR["api"], self.stable["api"])
+        with self.assertRaisesRegex(deploy.Denied, "preflight_predecessor_runtime:api"):
+            self.driver.preflight()
+        self.assertFalse(self.transaction.exists())
+
+    def test_first_cutover_real_topology_denies_rollback_compatibility_relabel(self):
+        predecessor = self.configure_first_cutover_topology()
+        gate = self.enable_read_state_cutover(predecessor_release=predecessor)
+        runtime = json.loads(self.runtime_manifest.read_text())
+        runtime["rollbackReleases"] = runtime["predecessorReleases"]
+        put(self.runtime_manifest, runtime)
+        self.inputs = dataclasses.replace(
+            self.inputs, runtime_manifest_sha256=sha(self.runtime_manifest))
+        self.driver = self._driver()
+        with self.assertRaisesRegex(deploy.Denied, "read_state_cutover_rollback_compatibility"):
+            self.driver.preflight()
+        self.assertTrue(gate.is_file())
+        self.assertFalse(self.transaction.exists())
+
+    def test_first_cutover_failure_after_quiesce_recovers_predecessor(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.driver.preflight()
+        self.driver.failpoints.add("read_state_cutover_after_quiesce")
+        with self.assertRaisesRegex(deploy.Denied, "injected:read_state_cutover_after_quiesce"):
+            self.driver.activate()
+        self.assertEqual("ROLLED_BACK", self.driver._journal_read()["state"])
+        self.assertEqual(predecessor, self.driver._selection_snapshot("api")["releaseId"])
+        self.assertNotIn("INBOX_READ_STATE_ROOT",
+                         self.host.rows[deploy.PROCESS_NAMES["api"]]["pm2_env"])
+
+    def test_first_cutover_failure_after_aggregate_recovers_durable_rollback(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.driver.preflight()
+        self.driver.failpoints.add("read_state_cutover_after_aggregate")
+        with self.assertRaisesRegex(deploy.Denied, "injected:read_state_cutover_after_aggregate"):
+            self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual("ROLLED_BACK", journal["state"])
+        self.assertEqual("durableRollback", journal["rollback"]["releaseRole"])
+        for component in deploy.COMPONENTS:
+            self.assertEqual(self.rollback,
+                             self.driver._selection_snapshot(component)["releaseId"])
+        self.assertEqual(str(self.base / "durable-read-state"),
+                         self.host.rows[deploy.PROCESS_NAMES["api"]]["pm2_env"].get(
+                             "INBOX_READ_STATE_ROOT"))
+
+    def test_first_cutover_candidate_failure_never_returns_to_release_local_writer(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.driver.preflight()
+        self.host.wait_fail = "api"
+        with self.assertRaises(deploy.Denied):
+            self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual("ROLLED_BACK", journal["state"])
+        self.assertEqual("durableRollback", journal["rollback"]["releaseRole"])
+        self.assertEqual(self.rollback, self.driver._selection_snapshot("api")["releaseId"])
+        self.assertEqual(str(self.base / "durable-read-state"),
+                         self.host.rows[deploy.PROCESS_NAMES["api"]]["pm2_env"].get(
+                             "INBOX_READ_STATE_ROOT"))
+
+    def test_first_cutover_snapshot_resume_is_idempotent_with_real_topology(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.driver.preflight()
+        original = self.driver._failpoint
+
+        def abrupt(point: str) -> None:
+            if point == "read_state_cutover_after_snapshot_seal":
+                raise KeyboardInterrupt("simulated process loss after seal")
+            original(point)
+
+        self.driver._failpoint = abrupt  # type: ignore[method-assign]
+        with self.assertRaises(KeyboardInterrupt):
+            self.driver.activate()
+        self.driver = self._driver()
+        self.driver.activate()
+        transition = self.driver._journal_read()["readStateCutover"]
+        self.assertEqual(1, transition["sealInvocations"])
+        self.assertEqual(1, transition["runnerInvocations"])
+        self.assertEqual("COMMITTED", transition["durableCommit"]["state"])
+
+    def test_first_cutover_frontend_failure_after_commit_rolls_both_roles_to_444(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.driver.preflight()
+        self.host.wait_fail = "frontend"
+        with self.assertRaises(deploy.Denied):
+            self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual("COMMITTED", journal["readStateCutover"]["durableCommit"]["state"])
+        self.assertEqual("ROLLED_BACK", journal["state"])
+        for component in deploy.COMPONENTS:
+            self.assertEqual(self.rollback,
+                             self.driver._selection_snapshot(component)["releaseId"])
+
+    def test_first_cutover_durable_rollback_resumes_without_repeating_restored_component(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        self.driver.preflight()
+        self.host.wait_fail = "frontend"
+        self.driver.failpoints.add("rollback_after_frontend")
+        with self.assertRaisesRegex(deploy.Denied, "injected:rollback_after_frontend"):
+            self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual("FAILED", journal["state"])
+        self.assertEqual(["frontend"], journal["rollback"]["restoredComponents"])
+        frontend_restarts = self.host.events.count("PM2:restart re7-admin-front")
+        self.driver = self._driver()
+        self.driver.rollback()
+        journal = self.driver._journal_read()
+        self.assertEqual("ROLLED_BACK", journal["state"])
+        self.assertEqual(frontend_restarts,
+                         self.host.events.count("PM2:restart re7-admin-front"))
+        self.assertEqual(["frontend", "api"], journal["rollback"]["restoredComponents"])
+
     def test_read_state_cutover_preflight_consumes_compiled_temporal_authority(self):
-        runtime_gate_path = self.enable_read_state_cutover()
+        predecessor = self.configure_first_cutover_topology()
+        runtime_gate_path = self.enable_read_state_cutover(predecessor_release=predecessor)
         runtime_request = json.loads(runtime_gate_path.read_text())
         candidate_root = self.releases / self.candidate
         admission_request = json.loads(json.dumps(runtime_request))
@@ -4064,7 +4269,7 @@ if config_path:
         put(runtime_gate_path, runtime_request)
 
         runtime_manifest = json.loads(self.runtime_manifest.read_text())
-        runtime_manifest["schemaVersion"] = 5
+        runtime_manifest["schemaVersion"] = 6
         runtime_manifest["durablePersistence"] = {
             "request": str(runtime_gate_path), "requestSha256": sha(runtime_gate_path)}
         runtime_manifest["durablePersistenceAdmission"] = {

@@ -181,8 +181,8 @@ Para `b58ed195-v3-once`, o perfil de captura `empty-transaction-preservation` au
 | export | lifecycle + artefatos; copia autoridade para custódia | export receipt; parcial nega; retoma sem rebuild |
 | transfer | transporte autenticado + pacote; upload único | readback/hash; divergência nega; autorização específica |
 | install | `converta-release.py install` + pacote; instala inerte | receipt/identidade; reabre o mesmo binding V5 e a autoridade compilada; não ativa; recuperação só por manifesto fechado |
-| preflight | driver + runtime/bindings/retornos; observa sem promover | runtime manifest schema 5 vincula admission V5 e runtime V3; estado pending, target/hash ou derivação divergente negam; journal PASS; ativação exige owner |
-| activate | driver + preflight/lock; promove componentes na ordem selada | readiness/identidade; falha usa rollback e journal; não repetir |
+| preflight | driver + runtime/bindings/retornos; observa sem promover | primeiro cutover usa runtime manifest schema 6: `predecessorReleases` autentica a seleção corrente, `rollbackReleases` autentica o retorno durável e admission V5/runtime V3 continuam vinculados; schemas históricos preservam o papel único; papel, estado pending, target/hash ou derivação divergente negam antes do journal; ativação exige owner |
+| activate | driver + preflight/lock; promove componentes na ordem selada | CB permanece predecessora até quiesce; após aggregate verificado a recuperação usa rollback durável, mas o commit é somente `CANDIDATE_API_HEALTHY`; readiness/identidade e journal comprovam a fronteira; nunca retornar silenciosamente ao writer release-local nem repetir efeitos |
 | acceptance | materializador + journal/testes; vincula aceite humano/técnico | aceite autenticado; não executa save; finalize exige owner |
 | finalize | wrapper/driver + aceite; faz no máximo um `pm2 save` e marker | journal terminal ou retomável; save durável nunca se repete |
 | retirement | lifecycle/retirement + intent e `AUTHORIZE_ONCE`; efeitos literais | `ATTEMPT→RESULT→VERIFIED`; divergência para; continua remanescentes |

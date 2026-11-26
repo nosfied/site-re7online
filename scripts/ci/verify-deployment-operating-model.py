@@ -73,6 +73,8 @@ require("scripts/frontend-finalization-continuation.py" in runbook and
         "scripts/fixed-current-finalization-continuation.py" in runbook and
         "wrappers inline" in runbook,
         "runbook continuation entries")
+require("predecessorReleases" in runbook and "CANDIDATE_API_HEALTHY" in runbook,
+        "first durable cutover temporal roles")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK",
                "generation-retirement.py", "DEPLOYED_SANITIZED",
@@ -87,7 +89,9 @@ for marker in ('choices=("preflight", "activate", "finalize", "rollback", "statu
                '["delete", name]', '["start", str(definition), "--only", name]',
                '"validate-pair", *arguments',
                '"--deployment-lock-fd", str(EXTERNAL_LOCK_FD)',
-               'pass_fds=(EXTERNAL_LOCK_FD,), env=environment'):
+               'pass_fds=(EXTERNAL_LOCK_FD,), env=environment',
+               '"predecessorReleases"', '"durableRollbackReleases"',
+               '"boundary": "CANDIDATE_API_HEALTHY"'):
     require(marker in driver, f"minimal deploy driver marker {marker}")
 for forbidden in ('"--update-env"',):
     require(forbidden not in driver, f"fixed-current driver forbidden marker {forbidden}")
@@ -152,6 +156,15 @@ require(fixture["classification"] == "READINESS_RACE_SINGLE_SAMPLE",
 require(fixture["observedDelaySeconds"] >= 4 and not fixture["containsEnvironmentValues"],
         "sanitized readiness evidence")
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
+lifecycle = (ROOT / "docs/saas/DEPLOY_ARTIFACT_LIFECYCLE.md").read_text()
+for marker in (
+    "Matriz obrigatória produtor → consumidor → fase → host",
+    "JSON com LF fora da serialização canônica",
+    "Gate V5 ausente no host consumidor",
+    "predecessora confundida com rollback durável",
+    "CI verde isolada não substitui essa prova",
+):
+    require(marker in lifecycle, f"P00-D interface matrix marker {marker}")
 require(state["canonicalTopology"] == {
     "build": "BUILD_ONCE_ISOLATED_NODE_20_20_0_NPM_10_8_2",
     "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",
