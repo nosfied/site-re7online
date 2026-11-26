@@ -445,6 +445,12 @@ class WorkerRollbackContinuationBinding:
 
 
 @dataclass(frozen=True)
+class ConsumedControlPlaneExecutionBinding:
+    authority: Path
+    authority_sha256: str
+
+
+@dataclass(frozen=True)
 class Inputs:
     release: str
     target: str
@@ -461,6 +467,8 @@ class Inputs:
     runtime_cache_reconciliation_sha256: str | None = None
     control_plane_succession: ControlPlaneSuccessionBinding | None = None
     worker_rollback_continuation: WorkerRollbackContinuationBinding | None = None
+    consumed_control_plane_execution: ConsumedControlPlaneExecutionBinding | None = None
+    control_plane_tree: str | None = None
 
     def binding(self) -> dict[str, Any]:
         value = {
@@ -476,6 +484,12 @@ class Inputs:
             value["retirementSentinelClosure"] = self.retirement_sentinel_closure.binding()
         if self.control_plane_succession is not None:
             value["controlPlaneSuccession"] = self.control_plane_succession.binding()
+        if self.consumed_control_plane_execution is not None:
+            value["consumedControlPlaneExecution"] = {
+                "authority": str(self.consumed_control_plane_execution.authority),
+                "authoritySha256": self.consumed_control_plane_execution.authority_sha256,
+            }
+            value["controlPlaneTree"] = self.control_plane_tree
         return value
 
 
@@ -691,7 +705,9 @@ class Driver:
         expected = str(value.get("sha256", ""))
         if not path.is_absolute() or not SHA256.fullmatch(expected):
             deny(f"control_plane_succession:{label}")
-        raw, _ = stable_regular_bytes(path, required_mode=0o600)
+        raw, info = stable_regular_bytes(path, required_mode=0o600)
+        if (info.st_uid, info.st_gid) != (os.geteuid(), os.getegid()):
+            deny(f"consumed_control_plane:{label}:owner")
         if hashlib.sha256(raw).hexdigest() != expected:
             deny(f"control_plane_succession:{label}:sha256")
         return path, expected
@@ -1072,10 +1088,184 @@ class Driver:
         self._worker_rollback_continuation_cache = value
         return value
 
+    def _canonical_private_binding(self, binding: Any, label: str) -> tuple[Path, dict[str, Any], bytes]:
+        if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"} or
+                not SHA256.fullmatch(str(binding.get("sha256", "")))):
+            deny(f"consumed_control_plane:{label}:binding")
+        path = Path(str(binding.get("path", "")))
+        if not path.is_absolute():
+            deny(f"consumed_control_plane:{label}:path")
+        raw, _ = stable_regular_bytes(path, required_mode=0o600)
+        if hashlib.sha256(raw).hexdigest() != binding["sha256"]:
+            deny(f"consumed_control_plane:{label}:sha256")
+        value = json_object(raw, path.name)
+        canonical = (json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                separators=(",", ":")) + "\n").encode()
+        if raw != canonical:
+            deny(f"consumed_control_plane:{label}:canonical")
+        return path, value, raw
+
+    def _consumed_control_plane_head(self) -> None:
+        binding = self.inputs.consumed_control_plane_execution
+        if binding is None:
+            deny("consumed_control_plane_binding")
+        if (not binding.authority.is_absolute() or
+                not SHA256.fullmatch(binding.authority_sha256)):
+            deny("consumed_control_plane_binding")
+        execution_path, execution, execution_raw = self._canonical_private_binding(
+            {"path": str(binding.authority), "sha256": binding.authority_sha256},
+            "execution")
+        execution_keys = {
+            "schemaVersion", "kind", "controlCommit", "controlTree", "driver",
+            "controlPlaneSuccession", "runtimeManifest", "transactionRoot",
+        }
+        if (set(execution) != execution_keys or execution.get("schemaVersion") != 1 or
+                execution.get("kind") !=
+                "CONVERTA_CONSUMED_CONTROL_PLANE_EXECUTION_V1" or
+                execution.get("controlCommit") != self.inputs.control_plane or
+                execution.get("controlTree") != self.inputs.control_plane_tree or
+                execution.get("transactionRoot") != str(self.inputs.transaction_root)):
+            deny("consumed_control_plane_execution")
+        runtime_binding = execution.get("runtimeManifest")
+        if runtime_binding != {"path": str(self.inputs.runtime_manifest),
+                               "sha256": self.inputs.runtime_manifest_sha256}:
+            deny("consumed_control_plane_runtime_manifest")
+        authority_path, authority, _ = self._canonical_private_binding(
+            execution.get("controlPlaneSuccession"), "authority")
+        authority_keys = {
+            "schemaVersion", "kind", "operationId", "controlCommit", "controlTree",
+            "physicalTreeSha256", "custody", "driver", "materializationReceipt",
+            "consumeRequest", "operationReceipt", "terminalReceipt",
+        }
+        if (set(authority) != authority_keys or authority.get("schemaVersion") != 1 or
+                authority.get("kind") !=
+                "CONVERTA_CONSUMED_CONTROL_PLANE_AUTHORITY_V1" or
+                authority.get("controlCommit") != execution.get("controlCommit") or
+                authority.get("controlTree") != execution.get("controlTree") or
+                authority.get("driver") != execution.get("driver")):
+            deny("consumed_control_plane_authority")
+        custody = authority.get("custody")
+        if not isinstance(custody, dict) or set(custody) != {
+                "path", "device", "inode", "uid", "gid", "mode"}:
+            deny("consumed_control_plane_custody")
+        root = Path(str(custody.get("path", "")))
+        try:
+            info = root.lstat()
+        except OSError:
+            deny("consumed_control_plane_custody")
+        if (not root.is_absolute() or root.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                (info.st_dev, info.st_ino, info.st_uid, info.st_gid,
+                 format(stat.S_IMODE(info.st_mode), "04o")) !=
+                (custody.get("device"), custody.get("inode"), custody.get("uid"),
+                 custody.get("gid"), custody.get("mode")) or
+                not authority_path.is_relative_to(root) or
+                not execution_path.is_relative_to(root)):
+            deny("consumed_control_plane_custody")
+        driver_binding = authority.get("driver")
+        driver_path = Path(__file__).resolve()
+        driver_raw, driver_info = stable_regular_bytes(driver_path, required_mode=0o600)
+        if (not isinstance(driver_binding, dict) or
+                driver_binding != {"path": str(driver_path),
+                                   "sha256": hashlib.sha256(driver_raw).hexdigest()} or
+                (driver_info.st_uid, driver_info.st_gid) !=
+                (custody.get("uid"), custody.get("gid")) or
+                not driver_path.is_relative_to(root)):
+            deny("consumed_control_plane_driver")
+        materialization_path, materialization, _ = self._canonical_private_binding(
+            authority.get("materializationReceipt"), "materialization_receipt")
+        if (materialization.get("schemaVersion") != 2 or
+                materialization.get("kind") != "DEPLOY_CONTROL_WORKTREE_MATERIALIZED" or
+                materialization.get("operationId") != authority.get("operationId") or
+                materialization.get("controlCommit") != authority.get("controlCommit") or
+                materialization.get("controlTree") != authority.get("controlTree") or
+                materialization.get("physicalTreeSha256") !=
+                authority.get("physicalTreeSha256")):
+            deny("consumed_control_plane_materialization_receipt")
+        request_path, request, _ = self._canonical_private_binding(
+            authority.get("consumeRequest"), "consume_request")
+        if (request.get("schemaVersion") != 3 or
+                request.get("kind") != "DEPLOY_CONTROL_MATERIALIZE_CONTROLS" or
+                request.get("operationId") != authority.get("operationId") or
+                request.get("controlCommit") != authority.get("controlCommit") or
+                request.get("materializationReceiptSha256") !=
+                authority["materializationReceipt"]["sha256"] or
+                Path(str(request.get("outputRoot", ""))) != root):
+            deny("consumed_control_plane_consume_request")
+        driver_execution = request.get("driverExecution")
+        expected_relative_driver = driver_path.relative_to(root)
+        expected_relative_authority = authority_path.relative_to(root)
+        if (not isinstance(driver_execution, dict) or driver_execution != {
+                "source": "scripts/converta-deploy.py",
+                "destination": str(expected_relative_driver),
+                "authorityDestination": str(expected_relative_authority)}):
+            deny("consumed_control_plane_consume_request_driver")
+        controls = request.get("controls")
+        expected_control = {"source": "scripts/converta-deploy.py",
+                            "destination": str(expected_relative_driver),
+                            "sha256": driver_binding["sha256"]}
+        if not isinstance(controls, list) or controls.count(expected_control) != 1:
+            deny("consumed_control_plane_consume_request_driver")
+        observed_destinations: set[str] = set()
+        for item in controls:
+            if (not isinstance(item, dict) or set(item) != {"source", "destination", "sha256"} or
+                    not SHA256.fullmatch(str(item.get("sha256", "")))):
+                deny("consumed_control_plane_control")
+            relative = Path(str(item.get("destination", "")))
+            if (relative.is_absolute() or relative == Path(".") or ".." in relative.parts or
+                    str(relative) in observed_destinations):
+                deny("consumed_control_plane_control_path")
+            observed_destinations.add(str(relative))
+            control_path = root / relative
+            control_raw, control_info = stable_regular_bytes(control_path, required_mode=0o600)
+            if ((control_info.st_uid, control_info.st_gid) !=
+                    (custody.get("uid"), custody.get("gid")) or
+                    hashlib.sha256(control_raw).hexdigest() != item["sha256"]):
+                deny("consumed_control_plane_control_identity")
+        _, operation, _ = self._canonical_private_binding(
+            authority.get("operationReceipt"), "operation_receipt")
+        if (operation.get("schemaVersion") != 1 or
+                operation.get("kind") != "DEPLOY_CONTROL_CONTROLS_MATERIALIZED" or
+                operation.get("operationId") != authority.get("operationId") or
+                operation.get("controlCommit") != authority.get("controlCommit") or
+                operation.get("materializationReceiptSha256") !=
+                authority["materializationReceipt"]["sha256"] or
+                operation.get("requestSha256") != authority["consumeRequest"]["sha256"] or
+                operation.get("controls") != controls):
+            deny("consumed_control_plane_operation_receipt")
+        _, terminal, _ = self._canonical_private_binding(
+            authority.get("terminalReceipt"), "terminal_receipt")
+        if (terminal.get("schemaVersion") != 1 or
+                terminal.get("kind") != "DEPLOY_CONTROL_OPERATION_TERMINAL_RECEIPT" or
+                terminal.get("operationId") != authority.get("operationId") or
+                terminal.get("controlCommit") != authority.get("controlCommit") or
+                terminal.get("materializationReceiptSha256") !=
+                authority["materializationReceipt"]["sha256"] or
+                terminal.get("outcome") != "TERMINAL_SUCCESS"):
+            deny("consumed_control_plane_terminal_receipt")
+        if materialization_path == request_path:
+            deny("consumed_control_plane_authority_alias")
+        # Re-read the execution authority last so a replacement during the
+        # complete chain validation cannot become the accepted authority.
+        final_raw, _ = stable_regular_bytes(binding.authority, required_mode=0o600)
+        final_driver_raw, final_driver_info = stable_regular_bytes(
+            driver_path, required_mode=0o600)
+        driver_identity = lambda value: (
+            value.st_dev, value.st_ino, value.st_uid, value.st_gid, value.st_mode,
+            value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+        if (final_raw != execution_raw or final_driver_raw != driver_raw or
+                driver_identity(final_driver_info) != driver_identity(driver_info)):
+            deny("consumed_control_plane_execution_changed")
+
     def _control_head(self, continuation_journal: dict[str, Any] | None = None) -> None:
         if (self.inputs.runtime_cache_reconciliation is not None and
                 self.inputs.worker_rollback_continuation is not None):
             deny("continuation_binding_conflict")
+        if self.inputs.consumed_control_plane_execution is not None:
+            if (self.inputs.runtime_cache_reconciliation is not None or
+                    self.inputs.worker_rollback_continuation is not None):
+                deny("consumed_control_plane_continuation_conflict")
+            self._consumed_control_plane_head()
+            return
         result = self.host.run(["git", "-C", str(self.repo), "rev-parse", "HEAD"])
         if result.returncode:
             deny("control_plane_identity")
@@ -4010,11 +4200,14 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--release", required=True)
     parser.add_argument("--target", required=True)
     parser.add_argument("--control-plane", required=True)
+    parser.add_argument("--control-plane-tree")
     parser.add_argument("--components", required=True)
     parser.add_argument("--runtime-manifest", type=Path, required=True)
     parser.add_argument("--runtime-manifest-sha256", required=True)
     parser.add_argument("--control-plane-succession", type=Path)
     parser.add_argument("--control-plane-succession-sha256")
+    parser.add_argument("--consumed-control-plane-execution", type=Path)
+    parser.add_argument("--consumed-control-plane-execution-sha256")
     parser.add_argument("--worker-rollback-continuation", type=Path)
     parser.add_argument("--worker-rollback-continuation-sha256")
     parser.add_argument("--transaction-root", type=Path, required=True)
@@ -4050,6 +4243,14 @@ def parse() -> tuple[str, Inputs]:
     if ((args.control_plane_succession is None) !=
             (args.control_plane_succession_sha256 is None)):
         deny("control_plane_succession_binding")
+    if ((args.consumed_control_plane_execution is None) !=
+            (args.consumed_control_plane_execution_sha256 is None)):
+        deny("consumed_control_plane_binding")
+    if args.consumed_control_plane_execution is not None:
+        if not SHA40.fullmatch(str(args.control_plane_tree or "")):
+            deny("consumed_control_plane_tree")
+    elif args.control_plane_tree is not None:
+        deny("consumed_control_plane_tree_without_execution")
     if ((args.worker_rollback_continuation is None) !=
             (args.worker_rollback_continuation_sha256 is None)):
         deny("worker_rollback_continuation_binding")
@@ -4070,6 +4271,10 @@ def parse() -> tuple[str, Inputs]:
     succession = (ControlPlaneSuccessionBinding(
         args.control_plane_succession, args.control_plane_succession_sha256)
         if args.control_plane_succession is not None else None)
+    consumed_execution = (ConsumedControlPlaneExecutionBinding(
+        args.consumed_control_plane_execution,
+        args.consumed_control_plane_execution_sha256)
+        if args.consumed_control_plane_execution is not None else None)
     rollback_continuation = (WorkerRollbackContinuationBinding(
         args.worker_rollback_continuation, args.worker_rollback_continuation_sha256)
         if args.worker_rollback_continuation is not None else None)
@@ -4084,7 +4289,9 @@ def parse() -> tuple[str, Inputs]:
         runtime_cache_reconciliation=args.runtime_cache_reconciliation,
         runtime_cache_reconciliation_sha256=args.runtime_cache_reconciliation_sha256,
         control_plane_succession=succession,
-        worker_rollback_continuation=rollback_continuation)
+        worker_rollback_continuation=rollback_continuation,
+        consumed_control_plane_execution=consumed_execution,
+        control_plane_tree=args.control_plane_tree)
 
 
 def main() -> int:

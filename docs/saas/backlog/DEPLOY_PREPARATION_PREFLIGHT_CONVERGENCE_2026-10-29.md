@@ -757,3 +757,27 @@ symlink nega antes do consumo. Receipts V1 históricos permanecem compatíveis.
 Uma futura árvore sucessora deve nascer do commit integrado desta correção e do
 basename derivado desse novo commit; o destino `37232a67e5c9` não pode ser
 reutilizado nem substituído enquanto sua custódia estiver aberta.
+
+## Correção da fronteira consume → preflight — 26/11/2026
+
+O staging #452 expôs outra incompatibilidade de interface que já deveria ter
+sido negada na fixture: `consume` removia o `.git`, mas `_control_head()` exigia
+`git rev-parse HEAD`. A cópia byte-exata do driver não preservava sozinha a
+autoridade necessária ao consumidor final; portanto `CREATION_COMPLETED` e os
+testes isolados do materializador não constituíam prontidão de preflight.
+
+O contrato sucessor mantém os fluxos históricos intactos e acrescenta o request
+schema 3 somente quando `converta-deploy.py` será executado após o consumo. O
+receipt terminal sela uma autoridade de sucessão com commit/tree, inventário
+físico, driver, custódia e receipts. Depois de runtime manifest e transaction
+root existirem, um binding de execução privado fecha esses insumos; o driver
+recaptura bytes, paths, modos, identidades e toda a cadeia antes de aceitar a
+identidade do control plane. Não há flag de bypass nem confiança em variável de
+ambiente.
+
+A regressão permanente executa os produtores e consumidores reais na ordem
+`materialize → consume → disposição Git → binding → driver consumido → runtime
+schema 6 → preflight`. Ela nega driver substituído, commit/tree divergentes,
+receipt ausente/adulterado e retoma a interrupção após a disposição sem repetir
+a cópia. A topologia integrada mantém CB como predecessora ativa, 41D como
+rollback histórico, A+B inativa, #444 como retorno durável e ED74 preservado.

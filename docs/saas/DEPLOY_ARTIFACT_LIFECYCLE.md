@@ -1603,6 +1603,19 @@ conteúdo único — inclusive coberto por `.gitignore` — mantém a árvore e 
 alocação equivalente. Interrupção depois do receipt da operação pode retomar a
 disposição pelos mesmos bytes determinísticos, sem repetir a cópia.
 
+Quando um dos controles copiados é `converta-deploy.py`, o request schema 3
+declara explicitamente o driver. Depois da disposição Git e do receipt terminal,
+`consume` publica `CONVERTA_CONSUMED_CONTROL_PLANE_AUTHORITY_V1`, vinculando
+commit/tree, inventário físico, bytes do executável, custódia e os receipts de
+materialização, consumo e terminal. O binding posterior
+`CONVERTA_CONSUMED_CONTROL_PLANE_EXECUTION_V1` acrescenta runtime manifest e
+transaction root antes do primeiro preflight. O driver consumido autentica essa
+cadeia sem depender do `.git` retirado; driver, commit/tree, custódia ou receipt
+divergente nega. Sem o binding, `_control_head()` mantém a verificação Git
+histórica integral. A regressão obrigatória atravessa `materialize → consume →
+git worktree remove → driver → runtime schema 6 → preflight`, não apenas os
+módulos isolados.
+
 O fechamento da materialização também autentica a representação física dos
 arquivos rastreados. O produtor executa `git worktree add` com umask `0022` e
 override efêmero `core.sharedRepository=false`, sem alterar a configuração do
@@ -1771,6 +1784,11 @@ usado antes de `consume`; predecessora confundida com rollback durável; e fixtu
 que inicia no rollback quando produção ainda seleciona a predecessora. A matriz
 não exige bytes futuros: registra seu produtor e bloqueia somente quando chega o
 primeiro consumidor legítimo. CI verde isolada não substitui essa prova.
+
+Também é negativa obrigatória a fronteira `consume remove .git → driver exige
+Git`: nenhuma custódia pode ser classificada como pronta enquanto o produtor
+terminal não publicar a autoridade consumível pelo `_control_head()` e o teste
+integrado não executar o driver a partir dessa própria custódia.
 
 Para CB → A+B, o pacote, manifesto, índice, módulos e receipt de instalação da
 candidata permanecem imutáveis. Um control plane sucessor é compatível sem
