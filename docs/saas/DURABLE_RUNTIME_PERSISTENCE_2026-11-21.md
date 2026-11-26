@@ -172,15 +172,29 @@ deploy:
 
 ### Papéis temporais do primeiro cutover
 
-No deploy histórico, predecessora e rollback imediato eram a mesma release. No
-primeiro cutover durável isso não é verdade: CB3721D4 é a predecessora ativa,
-A+B é a candidata inerte e #444 é o rollback que já consome a raiz externa. O
-runtime manifest sucessor usa `predecessorReleases` exclusivamente para
-autenticar seleção/processo anteriores ao quiesce e mantém `rollbackReleases`
-como retorno durável. O operational state protege ambos: o predecessor aparece
-em `immediateRollbackReleases` e predecessor/rollback permanecem no conjunto
-`rollbackReleases`. Schemas históricos sem o novo campo conservam a semântica
-anterior byte por byte.
+As quatro autoridades abaixo não são intercambiáveis nem podem antecipar o
+resultado umas das outras:
+
+**A. Grafo operacional histórico vigente.** CB3721D4 permanece selecionada em
+API/frontend, ED74 permanece selecionado no worker e 41D permanece o rollback
+imediato da última ativação concluída. Portanto,
+`immediateRollbackReleases=41D`; `rollbackReleases` continua protegendo 41D e a
+semântica histórica é preservada byte por byte.
+
+**B. Plano da transição futura.** O runtime manifest schema 6 declara
+`predecessorReleases=CB3721D4`, `candidate=A+B` e
+`runtimeManifest.rollbackReleases=#444`. Esses papéis autenticam a transação
+futura e não reescrevem o grafo histórico antes de qualquer efeito.
+
+**C. Journal da operação em curso.** Somente o journal registra os efeitos
+efetivamente observados de quiesce, fotografia final, aggregate, promoção,
+rollback e compromisso durável. Um plano ou preflight não pode publicar esses
+efeitos como concluídos.
+
+**D. Grafo operacional sucessor.** Somente depois dos efeitos comprovados e da
+publicação pela autoridade canônica posterior o grafo sucessor passa a registrar
+os novos papéis operacionais. A transação futura nunca é requisito retroativo do
+produtor do grafo histórico.
 
 O journal registra separadamente `previous.releases` e
 `previous.durableRollbackReleases`. Antes do aggregate verificado, uma negativa

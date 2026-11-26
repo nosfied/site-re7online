@@ -1777,3 +1777,11 @@ candidata permanecem imutáveis. Um control plane sucessor é compatível sem
 rebuild quando autentica separadamente target/release, Gate V5, autoridade
 compilada e driver sucessor; o runtime manifest vincula esse control plane e usa
 o novo papel temporal sem editar o pacote instalado.
+
+No primeiro cutover, a matriz separa quatro autoridades temporais: (A) o grafo
+histórico vigente, no qual CB/ED74 estão selecionados e 41D é o rollback imediato
+da última ativação concluída; (B) o plano futuro, no qual CB é predecessora, A+B
+é candidata e #444 é o retorno durável; (C) o journal, que registra somente
+efeitos realmente observados; e (D) o grafo sucessor, publicado apenas depois dos
+efeitos comprovados pela autoridade canônica. Nenhum consumidor pode projetar B,
+C ou D sobre A para satisfazer preflight.
