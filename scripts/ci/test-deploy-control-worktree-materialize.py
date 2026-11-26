@@ -1,3 +1,4 @@
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -39,6 +40,8 @@ class DeployControlWorktreeTests(unittest.TestCase):
         (self.repo / "scripts").mkdir()
         for name in CONTROL_NAMES:
             shutil.copyfile(SCRIPTS / name, self.repo / "scripts" / name)
+        shutil.copyfile(SCRIPTS / "converta-deploy.py",
+                        self.repo / "scripts/converta-deploy.py")
         for relative, mode in INSTALLER_SOURCES.items():
             target = self.repo / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -148,6 +151,75 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.write_private(request, value)
         return output, request
 
+    def driver_consume_request(self, materialized):
+        output = self.base / "driver-custody"; output.mkdir(mode=0o700)
+        request = self.base / "driver-consume-request.private.json"
+        source = "scripts/converta-deploy.py"
+        value = {
+            "schemaVersion": 3,
+            "kind": "DEPLOY_CONTROL_MATERIALIZE_CONTROLS",
+            "operationId": self.value["generationId"],
+            "controlPath": str(self.destination),
+            "controlCommit": self.commit,
+            "materializationReceiptSha256": materialized["materializationReceiptSha256"],
+            "outputRoot": str(output),
+            "controls": [{"source": source, "destination": source,
+                          "sha256": self.sha(self.repo / source)}],
+            "derivedCopies": [],
+            "driverExecution": {
+                "source": source, "destination": source,
+                "authorityDestination": "consumed-control-plane-authority.private.json",
+            },
+        }
+        self.write_private(request, value)
+        return output, request
+
+    def bind_driver_execution(self, output, runtime_manifest, transaction):
+        authority = output / "consumed-control-plane-authority.private.json"
+        execution = output / "consumed-control-plane-execution.private.json"
+        result = self.run_tool(
+            "bind-driver-execution",
+            "--consumed-authority", authority,
+            "--consumed-authority-sha256", self.sha(authority),
+            "--runtime-manifest", runtime_manifest,
+            "--runtime-manifest-sha256", self.sha(runtime_manifest),
+            "--transaction-root", transaction,
+            "--output", execution,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return execution, json.loads(result.stdout)
+
+    def consumed_driver_fixture(self):
+        materialized = self.materialize()
+        output, request = self.driver_consume_request(materialized)
+        consumed = self.consume(materialized, request)
+        self.assertEqual(consumed.returncode, 0, consumed.stderr)
+        self.assertFalse(self.destination.exists())
+        consumed_value = json.loads(consumed.stdout)
+        self.assertIsNotNone(consumed_value["driverAuthority"])
+        runtime = self.base / "runtime-manifest.private.json"
+        self.write_private(runtime, {
+            "schemaVersion": 6, "controlPlaneSha": self.commit,
+            "mode": "fixed-current-existing-pm2"})
+        transaction = self.base / "future-transaction"
+        execution, _ = self.bind_driver_execution(output, runtime, transaction)
+        driver_path = output / "scripts/converta-deploy.py"
+        spec = importlib.util.spec_from_file_location(
+            "consumed_converta_deploy_" + self.commit[:12], driver_path)
+        self.assertIsNotNone(spec); self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        inputs = module.Inputs(
+            release="candidate", target="a" * 40, control_plane=self.commit,
+            components=("api", "frontend"), runtime_manifest=runtime,
+            transaction_root=transaction, runtime_manifest_sha256=self.sha(runtime),
+            consumed_control_plane_execution=
+                module.ConsumedControlPlaneExecutionBinding(execution, self.sha(execution)),
+            control_plane_tree=self.tree,
+        )
+        return module, module.Driver(inputs), output, execution
+
     def consume(self, materialized, request):
         lifecycle_path = Path(materialized["lifecyclePath"])
         materialization = lifecycle_path.parent / "materialization-receipt.private.json"
@@ -216,6 +288,73 @@ class DeployControlWorktreeTests(unittest.TestCase):
         self.assertEqual(json.loads(lifecycle_path.read_text())["state"], "SANITIZED")
         self.assertEqual(lifecycle.validate_existing_lifecycles(self.controls, self.value)
                          ["reservedBytes"], 0)
+
+    def test_consumed_driver_authenticates_after_real_consume_removed_git_worktree(self):
+        _, driver, output, execution = self.consumed_driver_fixture()
+        driver._control_head()
+        self.assertTrue((output / "consumed-control-plane-authority.private.json").is_file())
+        self.assertTrue(execution.is_file())
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.check_output(["git", "-C", str(output), "rev-parse", "HEAD"],
+                                    stderr=subprocess.DEVNULL)
+
+    def test_consumed_driver_rejects_executable_replaced_after_authentication(self):
+        module, driver, output, _ = self.consumed_driver_fixture()
+        consumed = output / "scripts/converta-deploy.py"
+        consumed.write_bytes(consumed.read_bytes() + b"\n# replaced\n")
+        consumed.chmod(0o600)
+        with self.assertRaisesRegex(module.Denied, "consumed_control_plane_driver"):
+            driver._control_head()
+
+    def test_consumed_driver_rejects_commit_tree_and_receipt_divergence(self):
+        module, driver, output, execution = self.consumed_driver_fixture()
+        original = json.loads(execution.read_text())
+        for field, value, predicate in (
+            ("controlCommit", "f" * 40, "consumed_control_plane_execution"),
+            ("controlTree", "e" * 40, "consumed_control_plane_execution"),
+        ):
+            changed = dict(original); changed[field] = value
+            self.write_private(execution, changed)
+            driver.inputs = dataclasses.replace(
+                driver.inputs,
+                consumed_control_plane_execution=
+                    module.ConsumedControlPlaneExecutionBinding(execution, self.sha(execution)))
+            with self.assertRaisesRegex(module.Denied, predicate):
+                driver._control_head()
+        self.write_private(execution, original)
+        driver.inputs = dataclasses.replace(
+            driver.inputs,
+            consumed_control_plane_execution=
+                module.ConsumedControlPlaneExecutionBinding(execution, self.sha(execution)))
+        terminal = output / "deploy-control-terminal-receipt.private.json"
+        terminal.unlink()
+        with self.assertRaisesRegex(module.Denied,
+                                    "stable_file_open:deploy-control-terminal-receipt"):
+            driver._control_head()
+
+    def test_consumed_driver_rejects_adulterated_consume_receipt(self):
+        module, driver, output, _ = self.consumed_driver_fixture()
+        operation = output / "deploy-control-operation-receipt.private.json"
+        value = json.loads(operation.read_text())
+        value["controlCommit"] = "f" * 40
+        self.write_private(operation, value)
+        with self.assertRaisesRegex(module.Denied,
+                                    "consumed_control_plane:operation_receipt:sha256"):
+            driver._control_head()
+
+    def test_schema_three_resume_after_git_disposition_publishes_driver_authority(self):
+        materialized = self.materialize()
+        output, request = self.driver_consume_request(materialized)
+        self.stage_operation_receipt(materialized, output, request)
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove",
+                        str(self.destination)], check=True)
+        resumed = self.consume(materialized, request)
+        self.assertEqual(resumed.returncode, 0, resumed.stderr)
+        result = json.loads(resumed.stdout)
+        authority = output / "consumed-control-plane-authority.private.json"
+        self.assertEqual(result["state"], "SANITIZED")
+        self.assertEqual(result["driverAuthority"]["path"], str(authority))
+        self.assertEqual(result["driverAuthority"]["sha256"], self.sha(authority))
 
     def test_shared_repository_umask_is_closed_and_real_installer_sources_pass(self):
         subprocess.run(["git", "-C", str(self.repo), "config", "core.sharedRepository", "true"],

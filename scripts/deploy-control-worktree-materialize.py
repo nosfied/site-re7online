@@ -30,8 +30,19 @@ CONSUME_KEYS_V1 = {"schemaVersion", "kind", "operationId", "controlPath",
                    "controlCommit", "materializationReceiptSha256", "outputRoot",
                    "controls"}
 CONSUME_KEYS_V2 = CONSUME_KEYS_V1 | {"derivedCopies"}
+CONSUME_KEYS_V3 = CONSUME_KEYS_V2 | {"driverExecution"}
 CONTROL_KEYS = {"source", "destination", "sha256"}
 DERIVED_COPY_KEYS = {"path", "sha256", "authoritySource"}
+DRIVER_EXECUTION_KEYS = {"source", "destination", "authorityDestination"}
+CONSUMED_DRIVER_AUTHORITY_KEYS = {
+    "schemaVersion", "kind", "operationId", "controlCommit", "controlTree",
+    "physicalTreeSha256", "custody", "driver", "materializationReceipt",
+    "consumeRequest", "operationReceipt", "terminalReceipt",
+}
+CONSUMED_DRIVER_EXECUTION_KEYS = {
+    "schemaVersion", "kind", "controlCommit", "controlTree", "driver",
+    "controlPlaneSuccession", "runtimeManifest", "transactionRoot",
+}
 HEX = set("0123456789abcdef")
 
 
@@ -306,10 +317,12 @@ def relative_path(value: Any, predicate: str) -> Path:
 
 def consume_request(value: dict[str, Any], materialization: dict[str, Any], materialization_sha: str,
                     lifecycle_value: dict[str, Any]) -> tuple[
-                        Path, Path, list[dict[str, Any]], list[dict[str, Any]]]:
+                        Path, Path, list[dict[str, Any]], list[dict[str, Any]],
+                        dict[str, str] | None]:
     schema = value.get("schemaVersion")
     require((schema == 1 and set(value) == CONSUME_KEYS_V1) or
-            (schema == 2 and set(value) == CONSUME_KEYS_V2),
+            (schema == 2 and set(value) == CONSUME_KEYS_V2) or
+            (schema == 3 and set(value) == CONSUME_KEYS_V3),
             "deploy_control_consume_schema")
     require(
             value.get("kind") == "DEPLOY_CONTROL_MATERIALIZE_CONTROLS" and
@@ -360,7 +373,35 @@ def consume_request(value: dict[str, Any], materialization: dict[str, Any], mate
         copy_paths.add(str(path))
         normalized_copies.append({"path": str(path), "sha256": item["sha256"],
                                   "authoritySource": str(authority)})
-    return control, output, normalized, normalized_copies
+    driver_execution = value.get("driverExecution")
+    normalized_driver = None
+    if schema == 3:
+        require(isinstance(driver_execution, dict) and
+                set(driver_execution) == DRIVER_EXECUTION_KEYS,
+                "deploy_control_driver_execution_schema")
+        driver_source = relative_path(
+            driver_execution["source"], "deploy_control_driver_execution_source")
+        driver_destination = relative_path(
+            driver_execution["destination"], "deploy_control_driver_execution_destination")
+        authority_destination = relative_path(
+            driver_execution["authorityDestination"],
+            "deploy_control_driver_execution_authority")
+        matching = [item for item in normalized
+                    if item["source"] == str(driver_source) and
+                    item["destination"] == str(driver_destination)]
+        require(len(matching) == 1 and
+                driver_source == Path("scripts/converta-deploy.py") and
+                authority_destination not in {Path(item) for item in destinations} and
+                str(authority_destination) not in copy_paths,
+                "deploy_control_driver_execution_binding")
+        normalized_driver = {
+            "source": str(driver_source), "destination": str(driver_destination),
+            "authorityDestination": str(authority_destination),
+            "sha256": matching[0]["sha256"],
+        }
+    else:
+        require(driver_execution is None, "deploy_control_driver_execution_unversioned")
+    return control, output, normalized, normalized_copies, normalized_driver
 
 
 def worktree_registered(repo: Path, control: Path) -> bool:
@@ -563,6 +604,193 @@ def validate_materialized_controls(operation_receipt: Path, operation_raw: bytes
         stable_source(destination, item["sha256"], "deploy_control_output")
 
 
+def consumed_driver_authority_value(
+        output: Path, driver: dict[str, str], materialization: dict[str, Any],
+        materialization_path: Path, materialization_raw: bytes,
+        request_path: Path, request_raw: bytes, operation_receipt: Path,
+        operation_raw: bytes, terminal_receipt: Path, terminal_raw: bytes,
+        operation_id: str) -> dict[str, Any]:
+    info = output.lstat()
+    driver_path = output / driver["destination"]
+    stable_source(driver_path, driver["sha256"], "deploy_control_consumed_driver")
+    return {
+        "schemaVersion": 1,
+        "kind": "CONVERTA_CONSUMED_CONTROL_PLANE_AUTHORITY_V1",
+        "operationId": operation_id,
+        "controlCommit": materialization["controlCommit"],
+        "controlTree": materialization["controlTree"],
+        "physicalTreeSha256": materialization["physicalTreeSha256"],
+        "custody": {
+            "path": str(output), "device": info.st_dev, "inode": info.st_ino,
+            "uid": info.st_uid, "gid": info.st_gid, "mode": "0700",
+        },
+        "driver": {"path": str(driver_path), "sha256": driver["sha256"]},
+        "materializationReceipt": {
+            "path": str(materialization_path), "sha256": digest(materialization_raw)},
+        "consumeRequest": {"path": str(request_path), "sha256": digest(request_raw)},
+        "operationReceipt": {
+            "path": str(operation_receipt), "sha256": digest(operation_raw)},
+        "terminalReceipt": {
+            "path": str(terminal_receipt), "sha256": digest(terminal_raw)},
+    }
+
+
+def publish_consumed_driver_authority(
+        output: Path, driver: dict[str, str] | None, materialization: dict[str, Any],
+        materialization_path: Path, materialization_raw: bytes,
+        request_path: Path, request_raw: bytes, operation_receipt: Path,
+        operation_raw: bytes, terminal_receipt: Path, terminal_raw: bytes,
+        operation_id: str) -> dict[str, str] | None:
+    if driver is None:
+        return None
+    require(materialization.get("schemaVersion") == 2,
+            "deploy_control_driver_materialization_schema")
+    value = consumed_driver_authority_value(
+        output, driver, materialization, materialization_path, materialization_raw,
+        request_path, request_raw, operation_receipt, operation_raw,
+        terminal_receipt, terminal_raw, operation_id)
+    raw = lifecycle.canonical(value)
+    path = output / driver["authorityDestination"]
+    if path.exists() or path.is_symlink():
+        observed, observed_raw = stable_private(
+            path, digest(raw), "deploy_control_consumed_driver_authority")
+        require(observed == value and observed_raw == raw,
+                "deploy_control_consumed_driver_authority")
+    else:
+        exclusive_bytes(output, path, raw)
+    return {"path": str(path), "sha256": digest(raw)}
+
+
+def consumed_driver_authority(path: Path, expected: str) -> tuple[dict[str, Any], bytes]:
+    value, raw = stable_private(path, expected, "consumed_control_plane_authority")
+    require(set(value) == CONSUMED_DRIVER_AUTHORITY_KEYS and
+            value.get("schemaVersion") == 1 and
+            value.get("kind") == "CONVERTA_CONSUMED_CONTROL_PLANE_AUTHORITY_V1" and
+            all(isinstance(value.get(key), str) and len(value[key]) == 40 and
+                set(value[key]) <= HEX for key in ("controlCommit", "controlTree")) and
+            isinstance(value.get("physicalTreeSha256"), str) and
+            len(value["physicalTreeSha256"]) == 64 and
+            set(value["physicalTreeSha256"]) <= HEX,
+            "consumed_control_plane_authority_schema")
+    custody = value.get("custody")
+    require(isinstance(custody, dict) and set(custody) == {
+        "path", "device", "inode", "uid", "gid", "mode"},
+        "consumed_control_plane_authority_custody")
+    root = Path(str(custody.get("path", "")))
+    info = root.lstat()
+    require(root.is_absolute() and not root.is_symlink() and stat.S_ISDIR(info.st_mode) and
+            (info.st_dev, info.st_ino, info.st_uid, info.st_gid,
+             format(stat.S_IMODE(info.st_mode), "04o")) ==
+            (custody.get("device"), custody.get("inode"), custody.get("uid"),
+             custody.get("gid"), custody.get("mode")),
+            "consumed_control_plane_authority_custody")
+    bound_values: dict[str, dict[str, Any] | bytes] = {}
+    for label in ("driver", "materializationReceipt", "consumeRequest",
+                  "operationReceipt", "terminalReceipt"):
+        binding = value.get(label)
+        require(isinstance(binding, dict) and set(binding) == {"path", "sha256"} and
+                isinstance(binding.get("sha256"), str) and
+                len(binding["sha256"]) == 64 and set(binding["sha256"]) <= HEX,
+                f"consumed_control_plane_authority_{label}")
+        bound_path = Path(str(binding["path"]))
+        require(bound_path.is_absolute() and
+                (label not in {"driver", "operationReceipt", "terminalReceipt"} or
+                 bound_path.is_relative_to(root)),
+                f"consumed_control_plane_authority_{label}_root")
+        if label == "driver":
+            bound_values[label] = stable_source(
+                bound_path, binding["sha256"],
+                "consumed_control_plane_authority_driver")
+        else:
+            bound_values[label], _ = stable_private(
+                bound_path, binding["sha256"],
+                f"consumed_control_plane_authority_{label}")
+    materialization = bound_values["materializationReceipt"]
+    request = bound_values["consumeRequest"]
+    operation = bound_values["operationReceipt"]
+    terminal = bound_values["terminalReceipt"]
+    require(isinstance(materialization, dict) and
+            materialization.get("schemaVersion") == 2 and
+            materialization.get("kind") == "DEPLOY_CONTROL_WORKTREE_MATERIALIZED" and
+            materialization.get("operationId") == value.get("operationId") and
+            materialization.get("controlCommit") == value.get("controlCommit") and
+            materialization.get("controlTree") == value.get("controlTree") and
+            materialization.get("physicalTreeSha256") == value.get("physicalTreeSha256"),
+            "consumed_control_plane_authority_materialization")
+    require(isinstance(request, dict) and request.get("schemaVersion") == 3 and
+            request.get("kind") == "DEPLOY_CONTROL_MATERIALIZE_CONTROLS" and
+            request.get("operationId") == value.get("operationId") and
+            request.get("controlCommit") == value.get("controlCommit") and
+            request.get("materializationReceiptSha256") ==
+            value["materializationReceipt"]["sha256"] and
+            request.get("outputRoot") == str(root),
+            "consumed_control_plane_authority_request")
+    driver_execution = request.get("driverExecution")
+    driver_path = Path(value["driver"]["path"])
+    authority_path = path
+    require(driver_execution == {
+        "source": "scripts/converta-deploy.py",
+        "destination": str(driver_path.relative_to(root)),
+        "authorityDestination": str(authority_path.relative_to(root))},
+        "consumed_control_plane_authority_driver_binding")
+    require(isinstance(operation, dict) and operation.get("schemaVersion") == 1 and
+            operation.get("kind") == "DEPLOY_CONTROL_CONTROLS_MATERIALIZED" and
+            operation.get("operationId") == value.get("operationId") and
+            operation.get("controlCommit") == value.get("controlCommit") and
+            operation.get("materializationReceiptSha256") ==
+            value["materializationReceipt"]["sha256"] and
+            operation.get("requestSha256") == value["consumeRequest"]["sha256"] and
+            operation.get("controls") == request.get("controls"),
+            "consumed_control_plane_authority_operation")
+    require(isinstance(terminal, dict) and terminal.get("schemaVersion") == 1 and
+            terminal.get("kind") == "DEPLOY_CONTROL_OPERATION_TERMINAL_RECEIPT" and
+            terminal.get("operationId") == value.get("operationId") and
+            terminal.get("controlCommit") == value.get("controlCommit") and
+            terminal.get("materializationReceiptSha256") ==
+            value["materializationReceipt"]["sha256"] and
+            terminal.get("outcome") == "TERMINAL_SUCCESS",
+            "consumed_control_plane_authority_terminal")
+    return value, raw
+
+
+def bind_driver_execution(args: argparse.Namespace) -> dict[str, Any]:
+    authority, authority_raw = consumed_driver_authority(
+        args.consumed_authority, args.consumed_authority_sha256)
+    runtime, runtime_raw = stable_private(
+        args.runtime_manifest, args.runtime_manifest_sha256,
+        "consumed_driver_runtime_manifest")
+    require(runtime.get("controlPlaneSha") == authority["controlCommit"],
+            "consumed_driver_runtime_binding")
+    transaction = args.transaction_root
+    require(transaction.is_absolute() and not transaction.exists() and
+            not transaction.is_symlink(), "consumed_driver_transaction_root")
+    custody = Path(authority["custody"]["path"])
+    require(args.output.parent == custody and not args.output.exists() and
+            not args.output.is_symlink(), "consumed_driver_execution_output")
+    value = {
+        "schemaVersion": 1,
+        "kind": "CONVERTA_CONSUMED_CONTROL_PLANE_EXECUTION_V1",
+        "controlCommit": authority["controlCommit"],
+        "controlTree": authority["controlTree"],
+        "driver": authority["driver"],
+        "controlPlaneSuccession": {
+            "path": str(args.consumed_authority), "sha256": digest(authority_raw)},
+        "runtimeManifest": {
+            "path": str(args.runtime_manifest), "sha256": digest(runtime_raw)},
+        "transactionRoot": str(transaction),
+    }
+    raw = lifecycle.canonical(value)
+    exclusive_bytes(custody, args.output, raw)
+    observed, observed_raw = stable_private(
+        args.output, digest(raw), "consumed_driver_execution_authority")
+    require(observed == value and observed_raw == raw,
+            "consumed_driver_execution_authority")
+    return {"state": "CONSUMED_CONTROL_PLANE_EXECUTION_BOUND",
+            "authorityPath": str(args.output), "authoritySha256": digest(raw),
+            "controlCommit": authority["controlCommit"],
+            "controlTree": authority["controlTree"]}
+
+
 def validate_completed_copy_receipts(control: Path, output: Path,
                                      operation_id: str, commit: str,
                                      request_sha: str,
@@ -621,7 +849,7 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
                               if materialization_schema == 2 else None)
     request, request_raw = stable_private(args.request, args.request_sha256,
                                           "deploy_control_consume_request")
-    control, output, controls, derived_copies = consume_request(
+    control, output, controls, derived_copies, driver_execution = consume_request(
         request, materialization, digest(materialization_raw), current)
     repo = Path(current["preparationArtifacts"][0]["authority"]["path"])
     require(output != repo and repo not in output.parents and output not in repo.parents,
@@ -663,13 +891,19 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
                 digest(request_raw), derived_copies)
             if not terminal_exists:
                 exclusive_bytes(output, terminal_receipt, terminal_raw)
+            driver_authority = publish_consumed_driver_authority(
+                output, driver_execution, materialization,
+                args.materialization_receipt, materialization_raw,
+                args.request, request_raw, operation_receipt, operation_raw,
+                terminal_receipt, terminal_raw, current["generationId"])
             result = lifecycle.close_lifecycle(
                 args.lifecycle, args.lifecycle_sha256, "SANITIZED",
                 digest(terminal_raw), args.owner, args.reason)
             return {"state": result["state"], "controlPath": str(control),
                     "operationReceiptSha256": digest(operation_raw),
                     "terminalReceiptSha256": digest(terminal_raw), "controls": controls,
-                    "derivedCopyReceipts": disposition_receipts}
+                    "derivedCopyReceipts": disposition_receipts,
+                    "driverAuthority": driver_authority}
         require(registered, "deploy_control_consume_registration")
         require(not terminal_exists, "deploy_control_terminal_before_disposition")
         if not operation_exists:
@@ -699,12 +933,18 @@ def consume(args: argparse.Namespace) -> dict[str, Any]:
         require(not control.exists() and not control.is_symlink() and
                 not worktree_registered(repo, control), "deploy_control_disposition_incomplete")
         exclusive_bytes(output, terminal_receipt, terminal_raw)
+        driver_authority = publish_consumed_driver_authority(
+            output, driver_execution, materialization,
+            args.materialization_receipt, materialization_raw,
+            args.request, request_raw, operation_receipt, operation_raw,
+            terminal_receipt, terminal_raw, current["generationId"])
         result = lifecycle.close_lifecycle(args.lifecycle, args.lifecycle_sha256, "SANITIZED",
                                            digest(terminal_raw), args.owner, args.reason)
         return {"state": result["state"], "controlPath": str(control),
                 "operationReceiptSha256": digest(operation_raw),
                 "terminalReceiptSha256": digest(terminal_raw), "controls": controls,
-                "derivedCopyReceipts": disposition_receipts}
+                "derivedCopyReceipts": disposition_receipts,
+                "driverAuthority": driver_authority}
     except BaseException as error:
         if bound and (control.exists() or control.is_symlink()) and not terminal_receipt.exists():
             failure = {**terminal_value, "outcome": "TERMINAL_FAILURE"}
@@ -849,6 +1089,13 @@ def parser() -> argparse.ArgumentParser:
     consume_parser.add_argument("--request-sha256", required=True)
     consume_parser.add_argument("--owner", required=True)
     consume_parser.add_argument("--reason", required=True)
+    execution = sub.add_parser("bind-driver-execution")
+    execution.add_argument("--consumed-authority", type=Path, required=True)
+    execution.add_argument("--consumed-authority-sha256", required=True)
+    execution.add_argument("--runtime-manifest", type=Path, required=True)
+    execution.add_argument("--runtime-manifest-sha256", required=True)
+    execution.add_argument("--transaction-root", type=Path, required=True)
+    execution.add_argument("--output", type=Path, required=True)
     retire = sub.add_parser("retire-failed-materialization")
     retire.add_argument("--contract", type=Path, required=True)
     retire.add_argument("--contract-sha256", required=True)
@@ -864,6 +1111,7 @@ def main() -> int:
     try:
         value = (materialize(args) if args.command == "materialize" else
                  consume(args) if args.command == "consume" else
+                 bind_driver_execution(args) if args.command == "bind-driver-execution" else
                  retire_failed_materialization(args) if args.command == "retire-failed-materialization" else
                  close(args))
         print(lifecycle.canonical(value).decode(), end="")

@@ -288,6 +288,29 @@ for marker in (
     "CI verde isolada não substitui essa prova",
 ):
     require(marker in lifecycle, f"P00-D interface matrix marker {marker}")
+for marker in (
+    "consume remove .git → driver exige",
+    "CONVERTA_CONSUMED_CONTROL_PLANE_AUTHORITY_V1",
+    "materialize → consume →",
+    "runtime schema 6 → preflight",
+):
+    require(marker in lifecycle, f"consume-to-driver P00-D marker {marker}")
+materializer_source = (
+    ROOT / "scripts/deploy-control-worktree-materialize.py"
+).read_text()
+driver_source = (ROOT / "scripts/converta-deploy.py").read_text()
+for marker in (
+    "CONVERTA_CONSUMED_CONTROL_PLANE_AUTHORITY_V1",
+    "CONVERTA_CONSUMED_CONTROL_PLANE_EXECUTION_V1",
+    "bind-driver-execution",
+):
+    require(marker in materializer_source, f"consume authority producer {marker}")
+for marker in (
+    "ConsumedControlPlaneExecutionBinding",
+    "_consumed_control_plane_head",
+    "consumed_control_plane_driver",
+):
+    require(marker in driver_source, f"consumed driver authority consumer {marker}")
 
 durable_persistence = (
     ROOT / "docs/saas/DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md"

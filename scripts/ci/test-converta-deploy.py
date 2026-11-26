@@ -508,6 +508,136 @@ class DeployFixture(unittest.TestCase):
         driver.failpoints = set()
         return driver
 
+    def _consumed_driver(self) -> Any:
+        source_repo = self.base / "control-source"
+        source_repo.mkdir()
+        subprocess.run(["git", "-C", str(source_repo), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(source_repo), "config", "user.email",
+                        "fixture@example.test"], check=True)
+        subprocess.run(["git", "-C", str(source_repo), "config", "user.name",
+                        "Fixture"], check=True)
+        scripts = source_repo / "scripts"; scripts.mkdir()
+        control_names = (
+            "converta-deploy.py", "durable_persistence_enforcement.py",
+            "durable-runtime-persistence-gate.py",
+            "pm2-definition-control.py", "pm2-definition-env-allowlist.v1.json",
+        )
+        for name in control_names:
+            shutil.copy2(ROOT / "scripts" / name, scripts / name)
+        subprocess.run(["git", "-C", str(source_repo), "add", "scripts"], check=True)
+        subprocess.run(["git", "-C", str(source_repo), "commit", "-qm", "control"],
+                       check=True)
+        commit = subprocess.check_output(
+            ["git", "-C", str(source_repo), "rev-parse", "HEAD"], text=True).strip()
+        tree = subprocess.check_output(
+            ["git", "-C", str(source_repo), "rev-parse", "HEAD^{tree}"],
+            text=True).strip()
+        self.control_plane = commit
+        self.host.control_plane = commit
+        manifest = json.loads(self.runtime_manifest.read_text())
+        manifest["controlPlaneSha"] = commit
+        put(self.runtime_manifest, manifest)
+        self.inputs = dataclasses.replace(
+            self.inputs, control_plane=commit,
+            runtime_manifest_sha256=sha(self.runtime_manifest))
+
+        controls_root = self.base / "deploy-control"; controls_root.mkdir()
+        worktree = controls_root / commit[:12]
+        contract = self.base / "control-contract.private.json"
+        authority = hashlib.sha256((commit + "\n").encode()).hexdigest()
+        equivalence = hashlib.sha256((json.dumps({
+            "commit": commit, "repository": str(source_repo), "tree": tree},
+            sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()
+        put(contract, {"schemaVersion": 1, "generationId": "control-" + commit[:12],
+            "reservationRoot": str(controls_root), "preparationArtifacts": [{
+                "path": str(worktree), "scope": "deploy-control:" + commit,
+                "owner": "fixture", "budgetBytes": 16 * 1024 * 1024,
+                "budgetInodes": 1000, "protection": "DERIVED_WITH_AUTHORITY",
+                "authority": {"path": str(source_repo), "sha256": authority},
+                "terminalDisposition": "SANITIZE_AFTER_USE",
+                "equivalenceSha256": equivalence,
+                "operation": {"name": "materialize-deploy-control-worktree",
+                              "kind": "git-worktree", "artifactIndex": 0,
+                              "predictedBytes": 16 * 1024 * 1024,
+                              "predictedInodes": 1000}}]})
+        tool = ROOT / "scripts/deploy-control-worktree-materialize.py"
+        environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+        materialized_run = subprocess.run([
+            sys.executable, "-B", str(tool), "materialize",
+            "--repository", str(source_repo), "--destination", str(worktree),
+            "--commit", commit, "--contract", str(contract),
+            "--contract-sha256", sha(contract)], check=True, capture_output=True,
+            text=True, env=environment)
+        materialized = json.loads(materialized_run.stdout)
+        lifecycle_path = Path(materialized["lifecyclePath"])
+        materialization = lifecycle_path.parent / "materialization-receipt.private.json"
+        custody = self.base / "consumed-control"; custody.mkdir(mode=0o700)
+        consume_request = self.base / "consume-request.private.json"
+        control_entries = [{"source": "scripts/" + name,
+                            "destination": "scripts/" + name,
+                            "sha256": sha(source_repo / "scripts" / name)}
+                           for name in control_names]
+        put(consume_request, {
+            "schemaVersion": 3, "kind": "DEPLOY_CONTROL_MATERIALIZE_CONTROLS",
+            "operationId": "control-" + commit[:12], "controlPath": str(worktree),
+            "controlCommit": commit,
+            "materializationReceiptSha256": sha(materialization),
+            "outputRoot": str(custody), "controls": control_entries,
+            "derivedCopies": [], "driverExecution": {
+                "source": "scripts/converta-deploy.py",
+                "destination": "scripts/converta-deploy.py",
+                "authorityDestination": "consumed-control-plane-authority.private.json"}})
+        consumed = subprocess.run([
+            sys.executable, "-B", str(tool), "consume",
+            "--lifecycle", str(lifecycle_path), "--lifecycle-sha256", sha(lifecycle_path),
+            "--materialization-receipt", str(materialization),
+            "--materialization-receipt-sha256", sha(materialization),
+            "--request", str(consume_request), "--request-sha256", sha(consume_request),
+            "--owner", "fixture", "--reason", "preflight fixture"],
+            check=True, capture_output=True, text=True, env=environment)
+        self.assertEqual(json.loads(consumed.stdout)["state"], "SANITIZED")
+        self.assertFalse(worktree.exists())
+        consumed_authority = custody / "consumed-control-plane-authority.private.json"
+        execution = custody / "consumed-control-plane-execution.private.json"
+        subprocess.run([
+            sys.executable, "-B", str(tool), "bind-driver-execution",
+            "--consumed-authority", str(consumed_authority),
+            "--consumed-authority-sha256", sha(consumed_authority),
+            "--runtime-manifest", str(self.runtime_manifest),
+            "--runtime-manifest-sha256", sha(self.runtime_manifest),
+            "--transaction-root", str(self.transaction), "--output", str(execution)],
+            check=True, capture_output=True, text=True, env=environment)
+
+        driver_path = custody / "scripts/converta-deploy.py"
+        spec = importlib.util.spec_from_file_location(
+            "consumed_preflight_driver_" + commit[:12], driver_path)
+        assert spec and spec.loader
+        consumed_module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = consumed_module
+        spec.loader.exec_module(consumed_module)
+        consumed_inputs = consumed_module.Inputs(
+            release=self.inputs.release, target=self.inputs.target,
+            control_plane=commit, components=self.inputs.components,
+            runtime_manifest=self.runtime_manifest, transaction_root=self.transaction,
+            runtime_manifest_sha256=sha(self.runtime_manifest), retirement=self.retirement,
+            consumed_control_plane_execution=
+                consumed_module.ConsumedControlPlaneExecutionBinding(execution, sha(execution)),
+            control_plane_tree=tree)
+        class ConsumedFixtureDriver(consumed_module.Driver):
+            failpoints: set[str]
+            def _ticks(inner_self, pid: int) -> int:
+                return pid * 100
+            def _failpoint(inner_self, name: str) -> None:
+                if name in inner_self.failpoints:
+                    inner_self.failpoints.remove(name)
+                    raise consumed_module.Denied(f"injected:{name}")
+        result = ConsumedFixtureDriver(
+            consumed_inputs, host=self.host, releases=self.releases,
+            stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2,
+            clock=lambda: 1234567890.0)
+        result.failpoints = set()
+        return result
+
     def enable_durable_persistence(self, *, root_present: bool = True,
                                    dependencies: list[str] | None = None,
                                    invalid_receipt: bool = False) -> Path:
@@ -4089,6 +4219,20 @@ if config_path:
         self.assertIn(self.driver._journal_read()["state"],
                       {"DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
         self.assertEqual(1, self.host.save_calls)
+
+    def test_first_cutover_preflight_runs_from_consumed_control_without_git(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        consumed = self._consumed_driver()
+        consumed.preflight()
+        journal = consumed._journal_read()
+        self.assertEqual(journal["state"], "PREFLIGHT_PASS")
+        self.assertEqual(predecessor,
+                         journal["preflight"]["selections"]["api"]["releaseId"])
+        self.assertEqual(predecessor,
+                         journal["preflight"]["selections"]["frontend"]["releaseId"])
+        self.assertEqual(0, self.host.rows[deploy.PROCESS_NAMES["worker"]]
+                         ["pm2_env"]["restart_time"])
 
     def test_first_cutover_denies_historical_rollback_missing_from_authenticated_graph(self):
         predecessor = self.configure_first_cutover_topology()
