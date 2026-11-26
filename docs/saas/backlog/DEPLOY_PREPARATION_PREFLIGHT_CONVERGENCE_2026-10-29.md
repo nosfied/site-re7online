@@ -722,6 +722,17 @@ real, as patinações observadas de LF canônico, bytes compilados prematuros,
 manifesto/instalador incompatíveis, Git/Gate ausentes no host, control plane não
 consumido e fixture com topologia artificial.
 
+O preflight deve distinguir quatro fotografias sem projetar uma sobre a outra:
+o estado operacional vigente autentica apenas ativações concluídas; o plano de
+transição futura declara predecessora, candidata e rollback durável; o journal
+registra os efeitos observados da operação em curso; e somente o fechamento
+canônico posterior publica o novo estado operacional. É regressão P00-D exigir
+que o produtor do grafo histórico antecipe papéis ainda não materializados por
+uma ativação. A fixture de referência preserva 41D como rollback imediato
+histórico de CB, autentica CB fisicamente como predecessora, A+B como candidata
+inerte e #444 por sua compatibilidade durável, atravessando preflight, aggregate,
+commit, rollback e retomada sem reescrever o grafo antes do efeito.
+
 ## Correção dirigida de modos físicos — 24/11/2026
 
 A materialização do control plane `37232a67e5c9` reproduziu uma fronteira P00-D

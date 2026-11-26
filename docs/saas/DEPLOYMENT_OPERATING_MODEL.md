@@ -140,6 +140,15 @@ refaz inventário global nem comparação entre todas as releases. Package,
 manifest, index, evidências, releases no grafo active/rollback/transitive-return e
 qualquer `PRIVATE_DATA_NEVER_RETIRE` são invariavelmente preservados.
 
+No primeiro cutover durável, a fotografia operacional de entrada continua sendo
+histórica: `activeReleases` e `immediateRollbackReleases` provam a última ativação
+concluída. O plano temporal do runtime schema 6 prova separadamente a predecessora
+selecionada, a candidata instalada e o rollback durável compatível. O preflight
+não pode exigir que esses papéis futuros já constem do grafo; ele autentica a
+coerência interna do grafo histórico, a seleção física corrente e as autoridades
+do plano. Journal e estado operacional sucessor só passam a provar novos papéis
+depois dos respectivos efeitos canônicos.
+
 1. Produzir e validar um único pacote imutável no builder autorizado com
    `converta-release.py build|verify`. Na alternativa externa, transferir uma cópia
    do mesmo pacote, reconferir os hashes na VPS e verificar antes de instalar.
