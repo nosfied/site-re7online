@@ -2149,19 +2149,24 @@ class Driver:
         payload_components = self._payload_components()
         predecessor = manifest.get("predecessorReleases")
         if predecessor is not None:
-            expected_immediate = {
+            # The operational graph records completed activations. A first
+            # cutover's predecessor and durable rollback are future transaction
+            # roles and must not be projected back into that historical graph.
+            expected_predecessors = {
                 component: predecessor[component]["releaseId"]
                 for component in payload_components
             }
-            durable = {
-                manifest["rollbackReleases"][component]["releaseId"]
-                for component in payload_components
-            }
             rollbacks = value.get("rollbackReleases")
-            if (immediate != expected_immediate or not isinstance(rollbacks, list) or
-                    not set(expected_immediate.values()).issubset(set(rollbacks)) or
-                    not durable.issubset(set(rollbacks))):
-                deny("rollback_role_temporal_reconciliation_required")
+            active = value.get("activeReleases")
+            if (not isinstance(immediate, dict) or
+                    set(immediate) != set(payload_components) or
+                    any(not isinstance(item, str) or not item for item in immediate.values()) or
+                    not isinstance(rollbacks, list) or
+                    not set(immediate.values()).issubset(set(rollbacks))):
+                deny("rollback_role_historical_graph")
+            if (not isinstance(active, list) or
+                    not set(expected_predecessors.values()).issubset(set(active))):
+                deny("predecessor_role_operational_state")
             return
         if immediate is None:
             if set(self.inputs.components) != set(payload_components):

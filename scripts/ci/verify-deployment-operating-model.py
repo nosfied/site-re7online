@@ -2,6 +2,7 @@
 """Validate the canonical immutable-release operating model."""
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -11,6 +12,128 @@ MAX_DEPLOY_RUNBOOK_LINES = 340
 def require(value, reason):
     if not value:
         raise SystemExit(f"DEPLOYMENT_OPERATING_MODEL_INVALID: {reason}")
+
+
+def markdown_section(document, heading):
+    """Return one exact Markdown section instead of searching the whole file."""
+    match = re.search(
+        rf"(?ms)^{re.escape(heading)}\n(?P<body>.*?)(?=^#{{2,3}}\s|\Z)",
+        document,
+    )
+    if match is None:
+        raise ValueError(f"missing section: {heading}")
+    return match.group("body")
+
+
+def validate_first_cutover_temporal_roles(section):
+    """Validate authority ownership and time, not merely marker presence."""
+    blocks = re.findall(
+        r"(?ms)^\*\*([A-D])\.\s+([^*]+)\*\*\s*(.*?)"
+        r"(?=^\*\*[A-D]\.\s|\Z)",
+        section,
+    )
+    if [label for label, _title, _body in blocks] != list("ABCD"):
+        raise ValueError("temporal authority blocks must be ordered A through D")
+    roles = {label: (title.strip(), body.strip()) for label, title, body in blocks}
+    historical = " ".join(roles["A"])
+    future = " ".join(roles["B"])
+    journal = " ".join(roles["C"])
+    successor = " ".join(roles["D"])
+    if not all(value in historical for value in (
+        "CB3721D4", "ED74", "41D", "`immediateRollbackReleases=41D`",
+        "`rollbackReleases` continua protegendo 41D",
+    )):
+        raise ValueError("historical graph does not preserve CB/ED74/41D roles")
+    if "#444" in historical or "candidate=A+B" in historical:
+        raise ValueError("future roles leaked into the historical graph")
+    if not all(value in future for value in (
+        "schema 6", "`predecessorReleases=CB3721D4`", "`candidate=A+B`",
+        "`runtimeManifest.rollbackReleases=#444`", "não reescrevem o grafo histórico",
+    )):
+        raise ValueError("future transition roles are incomplete or misbound")
+    if not all(value in journal for value in (
+        "quiesce", "fotografia final", "aggregate", "promoção", "rollback",
+        "compromisso durável",
+    )):
+        raise ValueError("operation journal does not own every transition effect")
+    if not all(value in successor for value in (
+        "depois dos efeitos comprovados", "autoridade canônica",
+        "nunca é requisito retroativo",
+    )):
+        raise ValueError("successor graph publication boundary is incomplete")
+
+
+def validate_first_cutover_document_set(documents):
+    """Cross-check the same temporal boundary at each canonical consumer."""
+    durable = markdown_section(
+        documents["durable"], "### Papéis temporais do primeiro cutover"
+    )
+    validate_first_cutover_temporal_roles(durable)
+
+    runbook = markdown_section(documents["runbook"], "## Preflight (`preflight`)")
+    if not (runbook.index("última ativação concluída") <
+            runbook.index("não substituir antecipadamente") <
+            runbook.index("runtime schema 6") <
+            runbook.index("efeitos concluídos")):
+        raise ValueError("runbook does not preserve historical → plan → successor order")
+
+    model_start = documents["model"].index(
+        "No primeiro cutover durável, a fotografia operacional de entrada"
+    )
+    model_end = documents["model"].index("\n\n1. Produzir", model_start)
+    model = documents["model"][model_start:model_end]
+    if not all(value in model for value in (
+        "`activeReleases` e `immediateRollbackReleases`",
+        "runtime schema 6", "não pode exigir", "efeitos canônicos",
+    )):
+        raise ValueError("operating model temporal boundary is incomplete")
+
+    lifecycle = markdown_section(
+        documents["lifecycle"],
+        "## Matriz obrigatória produtor → consumidor → fase → host",
+    )
+    authority_positions = [lifecycle.index(f"({label})") for label in "ABCD"]
+    if authority_positions != sorted(authority_positions):
+        raise ValueError("artifact lifecycle authority order is inconsistent")
+    if not all(value in lifecycle for value in (
+        "41D é o rollback imediato", "CB é predecessora", "A+B",
+        "#444", "efeitos realmente observados", "efeitos comprovados",
+    )):
+        raise ValueError("artifact lifecycle omits a temporal authority binding")
+
+    backlog_start = documents["backlog"].index(
+        "O preflight deve distinguir quatro fotografias"
+    )
+    backlog_end = documents["backlog"].index("\n\n## ", backlog_start)
+    backlog = documents["backlog"][backlog_start:backlog_end]
+    ordered = (
+        "estado operacional vigente", "plano de\ntransição futura",
+        "journal\nregistra", "fechamento\ncanônico posterior",
+    )
+    positions = [backlog.index(value) for value in ordered]
+    if positions != sorted(positions) or "É regressão P00-D exigir" not in backlog:
+        raise ValueError("P00-D backlog does not preserve the four photographs")
+
+
+def validate_first_cutover_rollback_windows(documents):
+    """Reject release-local recovery after aggregate, including outside A-D."""
+    contract = (
+        "Contrato temporal de recuperação: antes de `AGGREGATE_VERIFIED`, CB "
+        "somente quando segura; de `AGGREGATE_VERIFIED` até "
+        "`CANDIDATE_API_HEALTHY`, #444 sem retorno release-local; depois de "
+        "`CANDIDATE_API_HEALTHY`, somente rollback durável. "
+        "`AGGREGATE_VERIFIED` não é o compromisso irrevogável."
+    )
+    contradiction = re.compile(
+        r"(?is)antes\s+(?:dela|do\s+compromisso|de\s+`?CANDIDATE_API_HEALTHY`?)"
+        r".{0,160}?(?:retoma|retorna|recupera).{0,40}?\bCB\b"
+    )
+    for name, document in documents.items():
+        normalized = " ".join(document.split())
+        if contract not in normalized:
+            raise ValueError(f"rollback_window_contract_missing:{name}")
+        if contradiction.search(document):
+            raise ValueError(f"rollback_window_release_local_after_aggregate:{name}")
 
 
 model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text()
@@ -165,6 +288,49 @@ for marker in (
     "CI verde isolada não substitui essa prova",
 ):
     require(marker in lifecycle, f"P00-D interface matrix marker {marker}")
+
+durable_persistence = (
+    ROOT / "docs/saas/DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md"
+).read_text()
+p00d_backlog = (
+    ROOT / "docs/saas/backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md"
+).read_text()
+first_cutover_documents = {
+    "runbook": runbook,
+    "model": model,
+    "durable": durable_persistence,
+    "lifecycle": lifecycle,
+    "backlog": p00d_backlog,
+}
+try:
+    validate_first_cutover_document_set(first_cutover_documents)
+    validate_first_cutover_rollback_windows(first_cutover_documents)
+except (ValueError, KeyError) as error:
+    require(False, f"first cutover documentary semantics: {error}")
+
+negative_fixture = (
+    ROOT / "scripts/ci/fixtures/first-cutover-temporal-role-contradiction.md"
+).read_text()
+try:
+    validate_first_cutover_temporal_roles(markdown_section(
+        negative_fixture, "### Papéis temporais do primeiro cutover"
+    ))
+except ValueError:
+    pass
+else:
+    require(False, "contradictory first-cutover documentary fixture was accepted")
+
+rollback_window_fixture = (
+    ROOT / "scripts/ci/fixtures/first-cutover-rollback-window-contradiction.md"
+).read_text()
+try:
+    validate_first_cutover_rollback_windows({"fixture": rollback_window_fixture})
+except ValueError as error:
+    require(str(error) == "rollback_window_release_local_after_aggregate:fixture",
+            f"unexpected rollback-window negative predicate: {error}")
+else:
+    require(False, "release-local recovery after aggregate was accepted")
+
 require(state["canonicalTopology"] == {
     "build": "BUILD_ONCE_ISOLATED_NODE_20_20_0_NPM_10_8_2",
     "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",

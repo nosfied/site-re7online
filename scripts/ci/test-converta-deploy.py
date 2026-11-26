@@ -559,7 +559,10 @@ class DeployFixture(unittest.TestCase):
 
     def configure_first_cutover_topology(self) -> str:
         predecessor = "immutable-cb-predecessor"
+        historical_rollback = "immutable-41d-historical"
+        preserved_worker = "immutable-ed74-worker"
         self._release(predecessor, "cb-build", "d" * 40)
+        self._release(historical_rollback, "41d-build", "e" * 40)
         for component in deploy.COMPONENTS:
             self.stable[component].unlink()
             runtime = self.releases / predecessor / deploy.RUNTIME_DIR[component]
@@ -571,11 +574,16 @@ class DeployFixture(unittest.TestCase):
             {"path": str(path), "target": str(path.resolve())}
             for path in self.stable.values()
         ]
-        operational["activeReleases"] = [predecessor]
-        operational["rollbackReleases"] = sorted({predecessor, self.rollback})
+        operational["activeReleases"] = [predecessor, preserved_worker]
+        operational["rollbackReleases"] = [historical_rollback]
         operational["immediateRollbackReleases"] = {
-            component: predecessor for component in deploy.COMPONENTS
+            component: historical_rollback for component in deploy.COMPONENTS
         }
+        operational["installedVerifiedReleases"] = sorted(set(
+            operational.get("installedVerifiedReleases", []) +
+            [historical_rollback, predecessor, preserved_worker]
+        ))
+        operational["transitiveReturnReleases"] = [preserved_worker]
         put(self.retirement.operational_state, operational)
         self.retirement = dataclasses.replace(
             self.retirement,
@@ -4055,7 +4063,12 @@ if config_path:
     def test_first_cutover_real_topology_reaches_finalize_with_distinct_release_roles(self):
         predecessor = self.configure_first_cutover_topology()
         self.enable_read_state_cutover(predecessor_release=predecessor)
+        historical = deploy.read_json(self.retirement.operational_state)
         self.driver.preflight()
+        self.assertEqual(historical, deploy.read_json(self.retirement.operational_state))
+        self.assertEqual({"api": "immutable-41d-historical",
+                          "frontend": "immutable-41d-historical"},
+                         historical["immediateRollbackReleases"])
         preflight = self.driver._journal_read()["preflight"]
         self.assertEqual(predecessor, preflight["selections"]["api"]["releaseId"])
         self.assertEqual(predecessor, preflight["selections"]["frontend"]["releaseId"])
@@ -4076,6 +4089,36 @@ if config_path:
         self.assertIn(self.driver._journal_read()["state"],
                       {"DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"})
         self.assertEqual(1, self.host.save_calls)
+
+    def test_first_cutover_denies_historical_rollback_missing_from_authenticated_graph(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        operational = deploy.read_json(self.retirement.operational_state)
+        operational["rollbackReleases"] = []
+        put(self.retirement.operational_state, operational)
+        self.retirement = dataclasses.replace(
+            self.retirement,
+            operational_state_sha256=sha(self.retirement.operational_state),
+        )
+        self.inputs = dataclasses.replace(self.inputs, retirement=self.retirement)
+        with self.assertRaisesRegex(deploy.Denied, "rollback_role_historical_graph"):
+            self._driver().preflight()
+        self.assertFalse(self.transaction.exists())
+
+    def test_first_cutover_denies_predecessor_absent_from_operational_state(self):
+        predecessor = self.configure_first_cutover_topology()
+        self.enable_read_state_cutover(predecessor_release=predecessor)
+        operational = deploy.read_json(self.retirement.operational_state)
+        operational["activeReleases"] = ["immutable-41d-historical"]
+        put(self.retirement.operational_state, operational)
+        self.retirement = dataclasses.replace(
+            self.retirement,
+            operational_state_sha256=sha(self.retirement.operational_state),
+        )
+        self.inputs = dataclasses.replace(self.inputs, retirement=self.retirement)
+        with self.assertRaisesRegex(deploy.Denied, "predecessor_role_operational_state"):
+            self._driver().preflight()
+        self.assertFalse(self.transaction.exists())
 
     def test_first_cutover_commit_uses_authenticated_process_identity_when_readiness_omits_restart(self):
         predecessor = self.configure_first_cutover_topology()
@@ -4295,6 +4338,13 @@ if config_path:
         put(candidate_manifest_path, candidate_manifest, 0o444)
         with self.assertRaisesRegex(deploy.Denied,
                                     "durable_persistence_compiled_artifact:runner"):
+            self._driver()._read_state_cutover(runtime_manifest)
+
+        candidate_manifest.pop("durablePersistence")
+        candidate_manifest_path.chmod(0o644)
+        put(candidate_manifest_path, candidate_manifest, 0o444)
+        with self.assertRaisesRegex(deploy.Denied,
+                                    "durable_persistence_compiled_authority"):
             self._driver()._read_state_cutover(runtime_manifest)
 
     def test_read_state_cutover_seals_legitimate_final_cb_write_after_quiesce(self):
