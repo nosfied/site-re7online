@@ -437,6 +437,282 @@ class ReleaseProducerTest(unittest.TestCase):
             "reason": "temporal authority fixture closed", "evidenceSha256": "a" * 64,
         }) + "\n", 0o600)
 
+    def test_external_handoff_v5_successor_reaches_zero_action_retirement_prepare(self) -> None:
+        retirement = ROOT / "scripts/generation-retirement.py"
+        bind = lambda path: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        with tempfile.TemporaryDirectory(prefix="external-handoff-v5-") as directory:
+            receiver = Path(directory)
+            roots = {}
+            for name in ("repository", "worktrees", "outputs", "releases", "staging", "evidence"):
+                roots[name] = receiver / name
+                roots[name].mkdir(mode=0o700)
+            def entry(path):
+                info = path.lstat()
+                return {"path": str(path), "ownerUid": info.st_uid,
+                        "groupGid": info.st_gid, "allowedModes": ["0700"]}
+            receiver_policy = receiver / "evidence/receiver-policy.private.json"
+            write(receiver_policy, json.dumps({"schemaVersion": 1, "canonicalRoots": {
+                "repository": entry(roots["repository"]),
+                "worktrees": entry(roots["worktrees"]),
+                "outputs": entry(roots["outputs"]), "releases": entry(roots["releases"]),
+                "staging": entry(roots["staging"]), "evidence": [entry(roots["evidence"])],
+            }}, sort_keys=True) + "\n", 0o600)
+            release_id = f"{self.release_id}-handoff-v5"
+            installed = roots["releases"] / release_id
+            gate_value = {
+                "schemaVersion": 5, "kind": MODULE.PENDING_GATE_KIND,
+                "requiredPhases": ["qualification", "admission", "preflight", "activation",
+                                   "acceptance", "finalize", "retirement"],
+                "surface": "INBOX_READ_STATE_V1",
+                "persistentRoot": {"path": str(receiver / "runtime-data/inbox-read-state"),
+                                   "ownerUid": os.getuid(), "groupGid": os.getgid(), "mode": "0700"},
+                "releaseRoots": [{"role": "candidate", "path": str(installed)},
+                                 {"role": "rollback", "path": str(roots["releases"] / "rollback")}],
+                "reconciliation": {"required": True, "state": "PENDING",
+                                   "receipt": str(roots["evidence"] / "aggregate"),
+                                   "operationId": "handoff-v5", "manifest": str(roots["evidence"] / "manifest"),
+                                   "authorization": str(roots["evidence"] / "authorization"),
+                                   "authorizationSha256": "1" * 64,
+                                   "sealReceipt": str(roots["evidence"] / "seal"), "destinationCount": 1},
+                "unreconciledReleaseDependencies": [],
+                "externalAdmissionAuthority": {"path": str(roots["evidence"] / "external"),
+                    "sha256": "2" * 64, "operationId": "provision",
+                    "provisionReceiptSha256": "3" * 64, "ownerAuthorizationSha256": "4" * 64,
+                    "materializationRequestSha256": "5" * 64, "materializerSha256": "6" * 64},
+                "candidateIdentity": {"generationId": release_id, "targetCommit": self.target},
+                "cutover": {"mode": "FIRST_RELEASE_LOCAL_TO_DURABLE_V1",
+                    "runner": {"path": str(installed / MODULE.COMPILED_RELATIVE_PATHS["runner"]),
+                               "relativePath": MODULE.COMPILED_RELATIVE_PATHS["runner"],
+                               "state": MODULE.PENDING_COMPILED_STATE},
+                    "candidateStorage": {
+                        "path": str(installed / MODULE.COMPILED_RELATIVE_PATHS["candidateStorage"]),
+                        "relativePath": MODULE.COMPILED_RELATIVE_PATHS["candidateStorage"],
+                        "state": MODULE.PENDING_COMPILED_STATE},
+                    "pm2": {"candidate": {}, "rollback": {}},
+                    "rollbackCompatibility": {"path": str(roots["evidence"] / "rollback"),
+                                               "sha256": "7" * 64}},
+            }
+            gate = roots["evidence"] / "gate-v5.private.json"
+            write(gate, json.dumps(gate_value, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+            gate_sha = bind(gate)["sha256"]
+            output = self.outputs / "output-handoff-v5"
+            capacity = capacity_contract(self.base / "capacity-handoff-v5.private.json",
+                                         self.base, self.target, release_id)
+            arguments = ["build", "--repo", str(self.repo), "--target", self.target,
+                "--release-id", release_id, "--components", COMPONENTS, "--output", str(output),
+                "--installed-releases-root", str(self.releases), "--source-date-epoch", EPOCH,
+                "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha, "--npm-cache-root", str(self.npm_cache),
+                "--temporary-root", str(self.temporary_root), "--durable-persistence-request", str(gate),
+                "--durable-persistence-request-sha256", gate_sha]
+            parsed = MODULE.parser().parse_args(arguments)
+            with patch.dict(os.environ, self.env, clear=True):
+                parsed.handler(parsed)
+            producer_lifecycle = output / "generation-lifecycle.private.json"
+            write(output / "generation-review.private.json", json.dumps({
+                "schemaVersion": 1, "generationId": release_id,
+                "lifecycleSha256": hashlib.sha256(producer_lifecycle.read_bytes()).hexdigest(),
+                "decision": "SANITIZED", "reviewer": "synthetic-test",
+                "reason": "external handoff V5 fixture closed",
+                "evidenceSha256": "a" * 64,
+            }) + "\n", 0o600)
+            produced_package = output / f"{release_id}.tar.xz"
+            package = roots["evidence"] / produced_package.name
+            shutil.copyfile(produced_package, package); package.chmod(0o600)
+            installed_result = invoke("install", "--package", str(package), "--target", self.target,
+                "--release-id", release_id, "--components", COMPONENTS,
+                "--installed-releases-root", str(roots["releases"]),
+                "--root-policy", str(receiver_policy),
+                "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                "--durable-persistence-request", str(gate),
+                "--durable-persistence-request-sha256", gate_sha)
+            self.assertEqual(installed_result.returncode, 0, installed_result.stderr)
+            installation = roots["evidence"] / "installation.private.json"
+            write(installation, installed_result.stdout, 0o600)
+            builder_policy = roots["evidence"] / "builder-policy.private.json"
+            shutil.copyfile(self.root_policy, builder_policy); builder_policy.chmod(0o600)
+            producer_contract = output / "generation-artifacts.private.json"
+            disposable_root = receiver / "builder-root"; disposable_root.mkdir(mode=0o700)
+            custody = receiver / "builder-custody"; custody.mkdir(mode=0o700)
+            info = disposable_root.lstat()
+            root_identity = {"path": str(disposable_root), "device": info.st_dev, "inode": info.st_ino,
+                "ownerUid": info.st_uid, "groupGid": info.st_gid, "mode": "0700"}
+            disposable_contract = roots["evidence"] / "disposable-contract.private.json"
+            write(disposable_contract, json.dumps({"schemaVersion": 1, "generationId": release_id,
+                "targetCommit": self.target, "repository": str(self.repo),
+                "disposableRoot": str(disposable_root), "custodyRoot": str(custody),
+                "ownerUid": os.getuid(), "groupGid": os.getgid(), "rootMode": "0700",
+                "budget": {}, "roots": {}, "worktreePath": str(disposable_root / "worktrees/source"),
+                "locks": {"lifecycle": str(custody / "lifecycle.lock"),
+                          "writer": str(custody / "writer.lock")}, "protectedPaths": []}), 0o600)
+            copied_contract = roots["evidence"] / "generation-artifacts.private.json"
+            copied_lifecycle = roots["evidence"] / "generation-lifecycle.private.json"
+            shutil.copyfile(producer_contract, copied_contract); copied_contract.chmod(0o600)
+            shutil.copyfile(producer_lifecycle, copied_lifecycle); copied_lifecycle.chmod(0o600)
+            export_receipt = roots["evidence"] / "export-receipt.private.json"
+            exported = {"package": bind(package)["sha256"],
+                "manifest": bind(output / release_id / "manifest.json")["sha256"],
+                "index": bind(output / release_id / "index.sha256")["sha256"],
+                "generation-contract": bind(copied_contract)["sha256"],
+                "generation-lifecycle": bind(copied_lifecycle)["sha256"]}
+            write(export_receipt, json.dumps({"schemaVersion": 1, "kind": "DISPOSABLE_BUILDER_EXPORT",
+                "generationId": release_id, "contractSha256": bind(disposable_contract)["sha256"],
+                "requestSha256": "8" * 64, "outcome": "SUCCESS",
+                "artifacts": [{"name": name, "path": str(custody / name), "sha256": sha}
+                              for name, sha in exported.items()]}), 0o600)
+            disposable_lifecycle = roots["evidence"] / "disposable-lifecycle.private.json"
+            write(disposable_lifecycle, json.dumps({"schemaVersion": 1, "generationId": release_id,
+                "targetCommit": self.target, "contractSha256": bind(disposable_contract)["sha256"],
+                "state": "EXPORTED", "event": "AUTHORITY_EXPORTED", "rootIdentity": root_identity,
+                "rootIdentities": {}, "exportReceiptSha256": bind(export_receipt)["sha256"]}), 0o600)
+            base_handoff = roots["evidence"] / "handoff-schema3.private.json"
+            base_value = {"schemaVersion": 3, "builderPolicy": bind(builder_policy),
+                "contract": bind(copied_contract), "lifecycle": bind(copied_lifecycle),
+                "disposableContract": bind(disposable_contract),
+                "disposableLifecycle": bind(disposable_lifecycle), "exportReceipt": bind(export_receipt),
+                "retentionDebt": {"state": "PENDING_RETENTION_DEBT", "generationId": release_id,
+                    "targetCommit": self.target, "disposableRoot": str(disposable_root),
+                    "rootIdentity": root_identity, "custodyRoot": str(custody), "retainedBytes": 0,
+                    "retainedInodes": 1, "preservedPaths": [str(disposable_root)]},
+                "installation": bind(installation), "packagePath": str(package),
+                "canonicalVerifierSha256": bind(PRODUCER)["sha256"]}
+            write(base_handoff, json.dumps(base_value, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+
+            def retirement_run(command, *extra):
+                return subprocess.run([sys.executable, str(retirement), command, *map(str, extra)],
+                                      text=True, capture_output=True)
+            original = retirement_run("verify-external-handoff", "--handoff", base_handoff,
+                "--handoff-sha256", bind(base_handoff)["sha256"], "--root-policy", receiver_policy,
+                "--root-policy-sha256", bind(receiver_policy)["sha256"])
+            self.assertEqual(original.returncode, 2, original.stderr)
+            self.assertIn("release_manifest_durable_persistence_binding", original.stderr)
+            wrong_sha = retirement_run("materialize-external-handoff-v5", "--handoff", base_handoff,
+                "--handoff-sha256", bind(base_handoff)["sha256"],
+                "--durable-persistence-request", gate, "--durable-persistence-request-sha256", "0" * 64,
+                "--root-policy", receiver_policy, "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                "--output", roots["evidence"] / "wrong-sha.private.json")
+            self.assertEqual(wrong_sha.returncode, 2, wrong_sha.stderr)
+            self.assertIn("private_hash", wrong_sha.stderr)
+            for label, mutation in (
+                ("generation", lambda value: value["candidateIdentity"].update(generationId="other")),
+                ("target", lambda value: value["candidateIdentity"].update(targetCommit="f" * 40)),
+            ):
+                altered = json.loads(json.dumps(gate_value)); mutation(altered)
+                altered_gate = roots["evidence"] / f"{label}-gate.private.json"
+                write(altered_gate, json.dumps(altered, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+                denied = retirement_run("materialize-external-handoff-v5", "--handoff", base_handoff,
+                    "--handoff-sha256", bind(base_handoff)["sha256"],
+                    "--durable-persistence-request", altered_gate,
+                    "--durable-persistence-request-sha256", bind(altered_gate)["sha256"],
+                    "--root-policy", receiver_policy,
+                    "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                    "--output", roots["evidence"] / f"{label}-successor.private.json")
+                self.assertEqual(denied.returncode, 2, denied.stderr)
+                self.assertIn("external_handoff_durable_identity", denied.stderr)
+            divergent = json.loads(json.dumps(gate_value))
+            divergent["externalAdmissionAuthority"]["materializerSha256"] = "9" * 64
+            divergent_gate = roots["evidence"] / "divergent-compiled-gate.private.json"
+            write(divergent_gate, json.dumps(divergent, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+            incompatible = retirement_run("materialize-external-handoff-v5", "--handoff", base_handoff,
+                "--handoff-sha256", bind(base_handoff)["sha256"],
+                "--durable-persistence-request", divergent_gate,
+                "--durable-persistence-request-sha256", bind(divergent_gate)["sha256"],
+                "--root-policy", receiver_policy, "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                "--output", roots["evidence"] / "divergent-successor.private.json")
+            self.assertEqual(incompatible.returncode, 2, incompatible.stderr)
+            self.assertIn("external_handoff_durable_compiled_authority", incompatible.stderr)
+            bad_base_value = json.loads(json.dumps(base_value))
+            bad_base_value["canonicalVerifierSha256"] = "0" * 64
+            bad_base = roots["evidence"] / "bad-verifier-handoff.private.json"
+            write(bad_base, json.dumps(bad_base_value, sort_keys=True, separators=(",", ":")) + "\n", 0o600)
+            bad_verifier = retirement_run("materialize-external-handoff-v5", "--handoff", bad_base,
+                "--handoff-sha256", bind(bad_base)["sha256"],
+                "--durable-persistence-request", gate, "--durable-persistence-request-sha256", gate_sha,
+                "--root-policy", receiver_policy, "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                "--output", roots["evidence"] / "bad-verifier-successor.private.json")
+            self.assertEqual(bad_verifier.returncode, 2, bad_verifier.stderr)
+            self.assertIn("legacy_verifier_identity", bad_verifier.stderr)
+            successor = roots["evidence"] / "handoff-v5.private.json"
+            produced = retirement_run("materialize-external-handoff-v5", "--handoff", base_handoff,
+                "--handoff-sha256", bind(base_handoff)["sha256"],
+                "--durable-persistence-request", gate, "--durable-persistence-request-sha256", gate_sha,
+                "--root-policy", receiver_policy, "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                "--output", successor)
+            self.assertEqual(produced.returncode, 0, produced.stderr)
+            verified = retirement_run("verify-external-handoff", "--handoff", successor,
+                "--handoff-sha256", bind(successor)["sha256"], "--root-policy", receiver_policy,
+                "--root-policy-sha256", bind(receiver_policy)["sha256"])
+            self.assertEqual(verified.returncode, 0, verified.stderr)
+            manifest_path = installed / "manifest.json"
+            manifest_raw = manifest_path.read_bytes()
+            manifest_mode = stat.S_IMODE(manifest_path.stat().st_mode)
+            manifest_path.chmod(0o644); manifest_path.write_bytes(manifest_raw + b"\n")
+            tampered = retirement_run("verify-external-handoff", "--handoff", successor,
+                "--handoff-sha256", bind(successor)["sha256"], "--root-policy", receiver_policy,
+                "--root-policy-sha256", bind(receiver_policy)["sha256"])
+            self.assertEqual(tampered.returncode, 2, tampered.stderr)
+            self.assertIn("external_handoff_manifest", tampered.stderr)
+            manifest_path.write_bytes(manifest_raw); manifest_path.chmod(manifest_mode)
+            wrong_scope = invoke("verify", "--release-root", str(installed), "--target", self.target,
+                "--release-id", release_id, "--components", "api",
+                "--durable-persistence-request", str(gate),
+                "--durable-persistence-request-sha256", gate_sha)
+            self.assertEqual(wrong_scope.returncode, 2, wrong_scope.stderr)
+            self.assertIn("RELEASE_DENY:components", wrong_scope.stderr)
+            repeated = retirement_run("materialize-external-handoff-v5", "--handoff", base_handoff,
+                "--handoff-sha256", bind(base_handoff)["sha256"],
+                "--durable-persistence-request", gate, "--durable-persistence-request-sha256", gate_sha,
+                "--root-policy", receiver_policy, "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                "--output", successor)
+            self.assertEqual(repeated.returncode, 2, repeated.stderr)
+            self.assertIn("evidence_destination_exists", repeated.stderr)
+
+            writer_lock = roots["outputs"] / ".generation-build.lock"
+            write(writer_lock, "", 0o600)
+            materialized = retirement_run("materialize-external-retirement", "--handoff", successor,
+                "--handoff-sha256", bind(successor)["sha256"], "--root-policy", receiver_policy,
+                "--root-policy-sha256", bind(receiver_policy)["sha256"])
+            self.assertEqual(materialized.returncode, 0, materialized.stderr)
+            projection = json.loads(materialized.stdout)
+            graph = roots["evidence"] / "graph.private.json"
+            previous = roots["releases"] / "previous"; previous.mkdir()
+            graph_value = {"activeReleases": [previous.name], "rollbackReleases": [previous.name],
+                "transitiveReturnReleases": [], "candidateReleases": [release_id],
+                "installedVerifiedReleases": [release_id], "supersededCandidates": []}
+            write(graph, json.dumps(graph_value), 0o600)
+            pm2 = roots["evidence"] / "pm2"; write(pm2, "#!/bin/sh\nprintf '[]\\n'\n", 0o700)
+            dump = roots["evidence"] / "dump.pm2"; write(dump, "[]\n", 0o600)
+            current = receiver / "current-api"; current.symlink_to(previous)
+            control = roots["evidence"] / "control.py"; write(control, "# fixture\n", 0o600)
+            parsed_policy = json.loads(receiver_policy.read_text())["canonicalRoots"]
+            root_paths = {key: ([item["path"] for item in value] if key == "evidence" else value["path"])
+                          for key, value in parsed_policy.items()}
+            operational = roots["evidence"] / "operational.private.json"
+            write(operational, json.dumps({"schemaVersion": 2, "generationId": release_id,
+                "releaseId": release_id, "targetCommit": self.target,
+                "gitRepository": root_paths["repository"], "canonicalRoots": root_paths,
+                "currentPaths": [str(previous)], "pm2LivePaths": [], "pm2DumpPaths": [],
+                "dependencies": [], "controlPlaneArtifacts": [{**bind(control), "copied": True}],
+                **graph_value, "deploymentState": {"state": "PENDING"},
+                "observations": {"currentLinks": [{"path": str(current), "target": str(previous)}],
+                    "pm2": {**bind(pm2), "fingerprintSha256": MODULE.sha256_bytes(b"[]\n")},
+                    "dump": bind(dump), "releaseGraph": bind(graph)}}), 0o600)
+            deployment_lock = receiver / ".deployment-window.lock"; write(deployment_lock, "", 0o600)
+            intent = roots["evidence"] / "intent.private.json"
+            commands = roots["evidence"] / "commands.private.txt"
+            contract = Path(projection["contract"]); lifecycle = Path(projection["lifecycle"])
+            prepared = retirement_run("prepare", "--contract", contract, "--contract-sha256", bind(contract)["sha256"],
+                "--lifecycle", lifecycle, "--lifecycle-sha256", bind(lifecycle)["sha256"],
+                "--operational-state", operational, "--operational-state-sha256", bind(operational)["sha256"],
+                "--root-policy", receiver_policy, "--root-policy-sha256", bind(receiver_policy)["sha256"],
+                "--deployment-lock", deployment_lock, "--intent-output", intent,
+                "--commands-output", commands, "--review-output", contract.parent / "generation-review.private.json",
+                "--reviewer", "fixture", "--reason", "durable handoff zero-action")
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            self.assertEqual(json.loads(prepared.stdout)["commandCount"], 0)
+            self.assertEqual(commands.read_bytes(), b"")
+            self.assertEqual(json.loads(intent.read_text())["commands"], [])
+
     def test_pending_cutover_becomes_compiled_authority_for_verify_install_and_preflight(self) -> None:
         with tempfile.TemporaryDirectory(prefix="durable-temporal-authority-") as directory:
             base = Path(directory)
