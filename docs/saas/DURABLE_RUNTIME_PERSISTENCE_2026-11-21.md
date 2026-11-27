@@ -172,6 +172,15 @@ seladas; a separação não cria lifecycle alternativo nem autoriza efeitos.
 | aggregate → cutover/rollback | SHA da autorização V3 e receipts derivados | mesmo destino autenticado; nenhuma volta ao caminho do builder |
 | acceptance/finalize/retirement | binding `durablePersistence` do runtime | gate revalida relocation e raiz física em cada fase |
 
+Para o primeiro cutover A+B, a autorização V3 foi materializada originalmente
+na VPS e seu receipt histórico
+`CONVERTA_PRIVATE_AUTHORITY_TRANSFER_READBACK_V1` registra `source` na VPS e
+`destination` no ThinkPad. A relocation não prova nem simula uma transferência
+ThinkPad → VPS: ela autentica a cópia VPS original pelo mesmo SHA e por readback
+físico completo. Inverter `source` e `destination`, fabricar receipt de retorno
+ou aceitar apenas coerência interna dos hashes é negativa
+`authorization_relocation_receipt`.
+
 Os demais paths absolutos do Gate V5 (raízes da release, raiz persistente,
 manifest/receipt/seal e artefatos compilados) já pertencem ao host consumidor ou
 são derivados por produtores explicitamente autenticados. Não existe remapeador

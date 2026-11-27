@@ -317,6 +317,20 @@ class PersistenceGateTest(unittest.TestCase):
         receipt_sha = put(receipt_path, receipt)
         relocation["transferReceipt"]["sha256"] = receipt_sha
 
+        # The historical authority was materialized on the VPS and copied to
+        # the ThinkPad for admission/build.  Reversing that physical transfer
+        # is not equivalent evidence for reopening the original VPS bytes.
+        inverted_receipt = json.loads(json.dumps(receipt))
+        inverted_receipt["source"], inverted_receipt["destination"] = (
+            inverted_receipt["destination"], inverted_receipt["source"])
+        changed = json.loads(json.dumps(relocation))
+        changed["transferReceipt"]["sha256"] = put(receipt_path, inverted_receipt)
+        publish(changed)
+        with self.assertRaisesRegex(GATE.Denied, "authorization_relocation_receipt"):
+            GATE.resolve_cutover_authorization(request)
+        receipt_sha = put(receipt_path, receipt)
+        relocation["transferReceipt"]["sha256"] = receipt_sha
+
         other = self.base / "other.private.json"; shutil.copyfile(destination, other)
         destination.unlink(); destination.symlink_to(other)
         publish(relocation)

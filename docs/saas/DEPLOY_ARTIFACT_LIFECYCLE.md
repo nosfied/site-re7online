@@ -1794,6 +1794,10 @@ Também é negativa obrigatória `Gate V5 sela path do ThinkPad → driver VPS a
 o mesmo path`. A única continuidade aceita é uma relocation versionada e
 fechada do campo `reconciliation.authorization`, com SHA byte-exato, receipt de
 transporte, candidato/operação/transação e identidade física da cópia VPS. O
+receipt histórico desse primeiro cutover registra a transferência que levou a
+autoridade original da VPS ao ThinkPad (`source=VPS`, `destination=ThinkPad`);
+a relocation reabre a autoridade VPS original e não autoriza inverter esses
+campos como se tivesse ocorrido uma transferência de retorno. O
 teste integrado deve remover o path de origem e atravessar Gate V3, runtime V6,
 preflight, snapshot seal, aggregate e recuperação; remapeamento informal ou
 relocation reutilizada entre transações é regressão P00-D.
