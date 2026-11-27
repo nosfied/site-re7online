@@ -84,6 +84,8 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery.py
       - name: Validate read-state cutover administrative authorities
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-read-state-cutover-authority.py
+      - name: Validate durable persistence gate and cross-host authorization relocation
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v scripts/ci/test-durable-runtime-persistence-gate.py
       - name: Validate canonical capacity recovery supervisor
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/ci/test-capacity-recovery-supervisor.py
       - name: Validate privileged capacity process observer protocol

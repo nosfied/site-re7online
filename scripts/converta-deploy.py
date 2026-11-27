@@ -3473,6 +3473,9 @@ class Driver:
         expected["schemaVersion"] = 3
         expected["kind"] = "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V3"
         expected["cutover"] = dict(expected["cutover"])
+        if "authorizationRelocation" in runtime_request:
+            self._effective_cutover_authorization(runtime_request, admission)
+            expected["authorizationRelocation"] = runtime_request["authorizationRelocation"]
         # PM2 identities are produced only after the immutable manifest exists.
         # They remain fully authenticated by the runtime request and PM2 control.
         expected["cutover"]["pm2"] = runtime_request.get("cutover", {}).get("pm2")
@@ -3509,6 +3512,21 @@ class Driver:
             expected["cutover"][label] = runtime_binding
         if runtime_request != expected:
             deny("durable_persistence_temporal_derivation")
+
+    def _effective_cutover_authorization(
+        self, request: dict[str, Any], admission: dict[str, Any] | None = None,
+    ) -> tuple[Path, str]:
+        helper_path = Path(__file__).resolve().with_name("durable_persistence_enforcement.py")
+        spec = importlib.util.spec_from_file_location(
+            "durable_persistence_authorization_resolver", helper_path)
+        if spec is None or spec.loader is None:
+            deny("authorization_relocation_helper")
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        return helper.resolve_cutover_authorization(
+            request, admission,
+            {"generationId": self.inputs.release, "targetCommit": self.inputs.target},
+            self.inputs.transaction_root, deny, base=helper_path.parent)
 
     def _read_state_cutover(self, manifest: dict[str, Any]) -> dict[str, Any] | None:
         if "durablePersistence" not in manifest:
@@ -3661,9 +3679,9 @@ class Driver:
 
     def _read_state_snapshot_authorization(self, request: dict[str, Any]) -> dict[str, Any]:
         reconciliation = request["reconciliation"]
-        authorization_path = Path(reconciliation["authorization"])
+        authorization_path, authorization_sha = self._effective_cutover_authorization(request)
         authorization_raw, _ = stable_regular_bytes(authorization_path, required_mode=0o600)
-        if hashlib.sha256(authorization_raw).hexdigest() != reconciliation["authorizationSha256"]:
+        if hashlib.sha256(authorization_raw).hexdigest() != authorization_sha:
             deny("read_state_cutover_authorization_sha256")
         authorization = json_object(authorization_raw, authorization_path.name)
         entries = authorization.get("entries")
@@ -3686,10 +3704,11 @@ class Driver:
 
     def _seal_read_state_snapshot(self, request: dict[str, Any], previous: dict[str, Any]) -> dict[str, Any]:
         reconciliation = request["reconciliation"]
+        authorization_path, authorization_sha = self._effective_cutover_authorization(request)
         runner = request["cutover"]["runner"]["path"]
         result = self.host.run([
             previous["interpreterPhysical"], runner, "seal",
-            reconciliation["authorization"], reconciliation["authorizationSha256"],
+            str(authorization_path), authorization_sha,
         ], timeout=300)
         if result.returncode:
             deny("read_state_cutover_snapshot_seal_failed")

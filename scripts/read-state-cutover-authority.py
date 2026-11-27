@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import fcntl
@@ -634,14 +635,102 @@ def materialize(request_path: Path, request_sha256: str,
             "authorizationSha256": authorization_sha, "entryCount": len(entries)}
 
 
+def materialize_authorization_relocation(request_path: Path, request_sha256: str) -> dict:
+    request = private_json(request_path, request_sha256)
+    keys = {"schemaVersion", "kind", "operationId", "field", "candidateIdentity",
+            "transactionRoot", "source", "destinationPath", "transferReceipt",
+            "admissionGate", "outputPath"}
+    if (set(request) != keys or request.get("schemaVersion") != 1 or
+            request.get("kind") !=
+            "CONVERTA_CUTOVER_AUTHORIZATION_RELOCATION_REQUEST_V1" or
+            request.get("field") != "reconciliation.authorization"):
+        raise RuntimeError("authorization_relocation_request_schema")
+    source = request.get("source")
+    if (not isinstance(source, dict) or set(source) != {"path", "sha256"} or
+            not Path(str(source.get("path", ""))).is_absolute() or
+            not isinstance(source.get("sha256"), str) or len(source["sha256"]) != 64):
+        raise RuntimeError("authorization_relocation_source")
+    destination_path = Path(str(request.get("destinationPath", "")))
+    transaction_root = Path(str(request.get("transactionRoot", "")))
+    output_path = Path(str(request.get("outputPath", "")))
+    if (not destination_path.is_absolute() or not transaction_root.is_absolute() or
+            not output_path.is_absolute() or not output_path.parent.is_dir()):
+        raise RuntimeError("authorization_relocation_path")
+    parent_info = output_path.parent.lstat()
+    if (output_path.parent.is_symlink() or stat.S_IMODE(parent_info.st_mode) != 0o700 or
+            parent_info.st_uid != os.geteuid() or parent_info.st_gid != os.getegid()):
+        raise RuntimeError("authorization_relocation_custody")
+    private_json(destination_path, source["sha256"])
+    destination_info = destination_path.lstat()
+    transfer = request.get("transferReceipt")
+    admission = request.get("admissionGate")
+    if (not isinstance(transfer, dict) or set(transfer) != {"path", "sha256"} or
+            not isinstance(admission, dict) or set(admission) != {"path", "sha256"}):
+        raise RuntimeError("authorization_relocation_binding")
+    identity = request.get("candidateIdentity")
+    if (not isinstance(identity, dict) or set(identity) != {"generationId", "targetCommit"}):
+        raise RuntimeError("authorization_relocation_candidate")
+    gate_path = Path(__file__).with_name("durable-runtime-persistence-gate.py")
+    spec = importlib.util.spec_from_file_location("read_state_relocation_gate", gate_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("authorization_relocation_gate_load")
+    gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
+    relocation = {
+        "schemaVersion": 1, "kind": gate.AUTHORIZATION_RELOCATION_KIND,
+        "operationId": request["operationId"], "field": request["field"],
+        "candidateIdentity": identity, "transactionRoot": str(transaction_root),
+        "source": source,
+        "destination": {"path": str(destination_path), "sha256": source["sha256"],
+                        "device": destination_info.st_dev, "inode": destination_info.st_ino,
+                        "ownerUid": destination_info.st_uid,
+                        "groupGid": destination_info.st_gid, "mode": "0600",
+                        "nlink": destination_info.st_nlink},
+        "transferReceipt": transfer, "admissionGate": admission,
+        "consumers": gate.AUTHORIZATION_RELOCATION_CONSUMERS,
+        "phases": list(gate.PHASES),
+    }
+    relocation_raw = canonical(relocation)
+    relocation_sha = digest(relocation_raw)
+    validating_path = output_path.with_name(f".{output_path.name}.{os.getpid()}.validating")
+    validating_fd = os.open(validating_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                            os.O_NOFOLLOW, 0o600)
+    try:
+        os.write(validating_fd, relocation_raw); os.fsync(validating_fd)
+    finally:
+        os.close(validating_fd)
+    synthetic = {
+        "reconciliation": {"operationId": request["operationId"],
+                           "authorization": source["path"],
+                           "authorizationSha256": source["sha256"]},
+        "authorizationRelocation": {"path": str(validating_path),
+                                    "sha256": relocation_sha},
+    }
+    admission_value = private_json(Path(admission["path"]), admission["sha256"])
+    try:
+        gate.resolve_cutover_authorization(
+            synthetic, admission=admission_value, candidate_identity=identity,
+            transaction_root=transaction_root)
+    finally:
+        validating_path.unlink(missing_ok=True)
+    relocation_sha = publish(output_path, relocation)
+    synthetic["authorizationRelocation"]["path"] = str(output_path)
+    gate.resolve_cutover_authorization(
+        synthetic, admission=admission_value, candidate_identity=identity,
+        transaction_root=transaction_root)
+    return {"state": "CUTOVER_AUTHORIZATION_RELOCATION_MATERIALIZED",
+            "relocationSha256": relocation_sha, "destinationSha256": source["sha256"]}
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(); parser.add_argument("action", choices=("prepare-provision", "provision", "prepare", "materialize", "materialize-external-admission-authority")); parser.add_argument("path"); parser.add_argument("sha256")
+    parser = argparse.ArgumentParser(); parser.add_argument("action", choices=("prepare-provision", "provision", "prepare", "materialize", "materialize-external-admission-authority", "materialize-authorization-relocation")); parser.add_argument("path"); parser.add_argument("sha256")
     parser.add_argument("--owner-authorization"); parser.add_argument("--owner-authorization-sha256")
     args = parser.parse_args()
     if args.action == "prepare-provision": result = prepare_provision(Path(args.path), args.sha256)
     elif args.action == "prepare": result = prepare(Path(args.path), args.sha256)
     elif args.action == "materialize-external-admission-authority":
         result = materialize_external_admission_authority(Path(args.path), args.sha256)
+    elif args.action == "materialize-authorization-relocation":
+        result = materialize_authorization_relocation(Path(args.path), args.sha256)
     else:
         if not args.owner_authorization or not args.owner_authorization_sha256: raise RuntimeError("owner_authorization_required")
         if args.action == "provision":

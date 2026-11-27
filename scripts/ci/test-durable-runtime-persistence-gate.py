@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -192,6 +193,150 @@ class PersistenceGateTest(unittest.TestCase):
             GATE.validate(divergent_request, "preflight")
         with self.assertRaises(FileNotFoundError):
             GATE.validate(request, "activation")
+
+    def test_cross_host_authorization_relocation_is_closed_and_physical(self):
+        operation = "first-cutover"
+        generation = "immutable-ab"
+        target = "a" * 40
+        source = self.base / "thinkpad/cutover-authorization-v3.private.json"
+        destination = self.base / "vps/cutover-authorization-v3.private.json"
+        authorization = {"schemaVersion": 3,
+                         "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V3",
+                         "operationId": operation, "entries": []}
+        source.parent.mkdir(); source_sha = put(source, authorization)
+        destination.parent.mkdir(); shutil.copyfile(source, destination); destination.chmod(0o600)
+        source.unlink()
+        request = {"reconciliation": {"operationId": operation,
+                                      "authorization": str(source),
+                                      "authorizationSha256": source_sha}}
+        admission = {"schemaVersion": 5, "kind": GATE.KIND_V5,
+                     "candidateIdentity": {"generationId": generation,
+                                           "targetCommit": target},
+                     "reconciliation": request["reconciliation"]}
+        admission_path = self.base / "gate-v5.private.json"
+        admission_sha = put(admission_path, admission)
+        receipt = {"schemaVersion": 1,
+                   "kind": "CONVERTA_PRIVATE_AUTHORITY_TRANSFER_READBACK_V1",
+                   "state": "VERIFIED", "automaticRetry": False,
+                   "bytes": destination.stat().st_size,
+                   "capturedAtUtc": "2026-11-25T21:16:34Z",
+                   "source": {"path": str(destination), "sha256": source_sha},
+                   "destination": {"path": str(source), "sha256": source_sha}}
+        receipt_path = self.base / "transfer-receipt.private.json"
+        receipt_sha = put(receipt_path, receipt)
+        info = destination.stat()
+        relocation = {
+            "schemaVersion": 1, "kind": GATE.AUTHORIZATION_RELOCATION_KIND,
+            "operationId": operation, "field": GATE.AUTHORIZATION_RELOCATION_FIELD,
+            "candidateIdentity": admission["candidateIdentity"],
+            "transactionRoot": str(self.base / "transaction-a"),
+            "source": {"path": str(source), "sha256": source_sha},
+            "destination": {"path": str(destination), "sha256": source_sha,
+                            "device": info.st_dev, "inode": info.st_ino,
+                            "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                            "mode": "0600", "nlink": 1},
+            "transferReceipt": {"path": str(receipt_path), "sha256": receipt_sha},
+            "admissionGate": {"path": str(admission_path), "sha256": admission_sha},
+            "consumers": GATE.AUTHORIZATION_RELOCATION_CONSUMERS,
+            "phases": list(GATE.PHASES),
+        }
+        relocation_path = self.base / "relocation.private.json"
+
+        def publish(value):
+            request["authorizationRelocation"] = {
+                "path": str(relocation_path), "sha256": put(relocation_path, value)}
+
+        publish(relocation)
+        resolved, resolved_sha, _ = GATE.resolve_cutover_authorization(
+            request, admission=admission, candidate_identity=admission["candidateIdentity"],
+            transaction_root=self.base / "transaction-a")
+        self.assertEqual((resolved, resolved_sha), (destination, source_sha))
+        self.assertFalse(source.exists())
+
+        cases = (
+            ("operationId", "other", "authorization_relocation_semantics"),
+            ("field", "reconciliation.manifest", "authorization_relocation_semantics"),
+            ("transactionRoot", str(self.base / "transaction-b"),
+             "authorization_relocation_transaction"),
+        )
+        for key, value, predicate in cases:
+            changed = json.loads(json.dumps(relocation)); changed[key] = value; publish(changed)
+            with self.assertRaisesRegex(GATE.Denied, predicate):
+                GATE.resolve_cutover_authorization(
+                    request, admission=admission,
+                    candidate_identity=admission["candidateIdentity"],
+                    transaction_root=self.base / "transaction-a")
+
+        changed = json.loads(json.dumps(relocation))
+        changed["source"]["path"] = str(self.base / "other-host/authority.json")
+        publish(changed)
+        with self.assertRaisesRegex(GATE.Denied, "authorization_relocation_source"):
+            GATE.resolve_cutover_authorization(request)
+
+        changed = json.loads(json.dumps(relocation))
+        changed["candidateIdentity"]["generationId"] = "immutable-other"
+        publish(changed)
+        with self.assertRaisesRegex(GATE.Denied, "authorization_relocation_candidate"):
+            GATE.resolve_cutover_authorization(
+                request, candidate_identity=admission["candidateIdentity"])
+
+        changed = json.loads(json.dumps(relocation))
+        changed["destination"]["path"] = str(self.base / "absent/authority.json")
+        publish(changed)
+        with self.assertRaisesRegex(GATE.Denied,
+                                    "authorization_relocation_destination_readback"):
+            GATE.resolve_cutover_authorization(request)
+
+        for key in ("sha256", "inode", "ownerUid", "mode"):
+            changed = json.loads(json.dumps(relocation))
+            changed["destination"][key] = ("0" * 64 if key == "sha256" else
+                                             "0640" if key == "mode" else
+                                             changed["destination"][key] + 1)
+            publish(changed)
+            with self.assertRaisesRegex(GATE.Denied, "authorization_relocation_destination"):
+                GATE.resolve_cutover_authorization(request)
+
+        changed = json.loads(json.dumps(relocation))
+        changed["transferReceipt"]["sha256"] = "0" * 64; publish(changed)
+        with self.assertRaisesRegex(GATE.Denied, "request_sha256"):
+            GATE.resolve_cutover_authorization(request)
+
+        destination.write_bytes(GATE.canonical({"tampered": True})); destination.chmod(0o600)
+        publish(relocation)
+        with self.assertRaisesRegex(GATE.Denied,
+                                    "authorization_relocation_destination_readback"):
+            GATE.resolve_cutover_authorization(request)
+        destination.write_bytes(GATE.canonical(authorization)); destination.chmod(0o600)
+
+        bad_receipt = json.loads(json.dumps(receipt)); bad_receipt["automaticRetry"] = True
+        changed = json.loads(json.dumps(relocation))
+        changed["transferReceipt"]["sha256"] = put(receipt_path, bad_receipt)
+        publish(changed)
+        with self.assertRaisesRegex(GATE.Denied, "authorization_relocation_receipt"):
+            GATE.resolve_cutover_authorization(request)
+        receipt_sha = put(receipt_path, receipt)
+        relocation["transferReceipt"]["sha256"] = receipt_sha
+
+        # The historical authority was materialized on the VPS and copied to
+        # the ThinkPad for admission/build.  Reversing that physical transfer
+        # is not equivalent evidence for reopening the original VPS bytes.
+        inverted_receipt = json.loads(json.dumps(receipt))
+        inverted_receipt["source"], inverted_receipt["destination"] = (
+            inverted_receipt["destination"], inverted_receipt["source"])
+        changed = json.loads(json.dumps(relocation))
+        changed["transferReceipt"]["sha256"] = put(receipt_path, inverted_receipt)
+        publish(changed)
+        with self.assertRaisesRegex(GATE.Denied, "authorization_relocation_receipt"):
+            GATE.resolve_cutover_authorization(request)
+        receipt_sha = put(receipt_path, receipt)
+        relocation["transferReceipt"]["sha256"] = receipt_sha
+
+        other = self.base / "other.private.json"; shutil.copyfile(destination, other)
+        destination.unlink(); destination.symlink_to(other)
+        publish(relocation)
+        with self.assertRaisesRegex(GATE.Denied,
+                                    "authorization_relocation_destination_readback"):
+            GATE.resolve_cutover_authorization(request)
 
     def test_real_retirement_consumer_invokes_gate_before_disposition(self):
         request = self.request(dependencies=["candidate/.data/app-read-state"])
