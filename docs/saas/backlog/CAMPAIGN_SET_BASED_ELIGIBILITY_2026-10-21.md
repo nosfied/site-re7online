@@ -1,6 +1,6 @@
 # Campaign recipient eligibility: set-based performance backlog
 
-Status: `DRAFT PR #364 / ELIGIBILITY PARITY VALIDATION`
+Status: `INTEGRATED / API DEPLOY ADMISSION PENDING`
 
 At the production reference `b8d284b6`, dynamic campaign materialization calls
 `campaignRecipientEligibility` once for every selected Lead. Each call performs
@@ -82,6 +82,36 @@ expanded aliases for supported identities and raw digits for unsupported inputs.
 The PostgreSQL regression covers the modern recipient alone, with the legacy
 alias in the same group, and across the 500-recipient boundary. The earlier
 timings and CI describe the tested revision and fixtures.
+
+## Integration and rollout decision
+
+[PR #364](https://github.com/nosfied/site-re7online/pull/364) was integrated into
+`review/campaign-recovery-20260926` at
+[`a838bd33ea00ea49be52d61e025a36320a4154c1`](https://github.com/nosfied/site-re7online/commit/a838bd33ea00ea49be52d61e025a36320a4154c1).
+The final candidate passed all four jobs in
+[CI 42550253314](https://github.com/nosfied/site-re7online/actions/runs/42550253314).
+PostgreSQL 16 covered legacy anonymization aliases, opt-out revocation, contact
+exclusion and the 3,001-Lead materialization, with no provider calls. The six
+changed files in the merge match the CI-tested candidate.
+
+The owner prioritized deploying the improvement independently of a real tenant
+campaign at this volume. A future live volume acceptance requires its own
+tenant, audience, and execution scope. The deployment acceptance uses the
+canonical technical checks without starting a campaign.
+
+The impact matrix for the recorded production baseline `b8d284b6` and target
+`a838bd33` indicates API-only activation with no migration. The immutable
+package remains API + frontend. Recompute impact against the observed runtime
+and authenticate the target, tree, CI, and control plane before allocation.
+The frontend, worker, and campaign guard are preservation gates.
+
+Start with read-only admission under the [deploy runbook](../DEPLOY_RUNBOOK.md).
+On PASS, reuse an authenticated package if available or prepare one build,
+verify and install it inertly, seal the generation retirement intent, and run
+preflight. Activation requires the window authorization bound to that
+preflight. Close the generation through technical acceptance, finalization,
+and authorized retention. Record production status only after verified
+activation and finalization.
 
 ## Separate future work
 
