@@ -1,5 +1,30 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## P0 — A+B instalada/inativa; duas correções locais aguardam revisão e instalação
+
+**`LOCAL_VALIDATED / PRODUCTION_PRESERVED / NOT_DEPLOYED`.** O pacote A+B e o
+rollback #444 permanecem reutilizáveis, sem rebuild. A correção integrada desta
+rodada: (1) migra exclusivamente o contrato read-state P1 V2 autenticado de
+`root:root 0600` para `root:deploy 0640`, sem ampliar conteúdo ou sudoers; (2)
+corrige o preflight para não transformar a allowlist PM2 em lista obrigatória
+nem fabricar valores opcionais, preservando raiz externa e paridade de ambiente
+entre candidata/rollback. Instalar a correção P1 exige autorização própria;
+depois, validar um job real sob o mesmo usuário/entrypoint do cron e restore
+isolado antes do cutover. Gate V3/runtime V6/preflight produtivos continuam não
+executados.
+
+**Risco B3 — `PREEXISTING_MITIGATED`:** comparação direta CB3721D4 → A+B e
+regressão dirigida nos consumidores reais confirmam que retries de claim e
+transfer após commit/perda da resposta recebem novo `requestId` e ainda criam
+um segundo `ConversationAssignment`, evento e `assignedAt`. Na A+B, ambos os
+retries mantêm tenant, RBAC e destino operacional, e runtime, projeção SQL,
+assignment e evento passaram a uma transação serializável com CAS; isso elimina
+a parcialidade possível na CB, mas não torna a operação idempotente. Unread é
+convergente, o protocolo não é recriado para o ciclo já ativo, realtime apenas
+repete a notificação e não foi encontrada cadeia causal para billing. Tratar a
+idempotência em frente posterior, sem bloquear estas correções de infraestrutura
+nem exigir rebuild da A+B. Não alterar schema ou contrato HTTP por inferência.
+
 ## P0 — Frentes A+B efetivamente integradas; implantação bloqueada por gates de persistência
 
 **`MERGED / EFFECTIVE_TREE_VERIFIED / NOT_DEPLOYED`.** Baseline vigente após #446: HEAD `6a5839e7078fde0926829e542da69852118c1ca6`, árvore composta `38baff99c1208497b956c742c593b0c8c44b2561`, CI composta `45185051795` 4/4 PASS. O incidente anterior de integração #437 foi reconciliado por #438 e permanece como precedente; não reabrir implementações ou repetir merges/testes concluídos. [Relatório](reviews/CONVERTA_AB_EFFECTIVE_TREE_RECONCILIATION_2026-11-22.md).

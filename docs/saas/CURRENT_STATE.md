@@ -1,5 +1,31 @@
 # Estado canônico do Converta
 
+## A+B instalada e inativa; bloqueios de backup e preflight corrigidos localmente — 27/11/2026
+
+**`A_B_BLOCKERS_LOCAL_CORRECTION_VALIDATED / NOT_INSTALLED / NOT_DEPLOYED`.** A
+produção continua em CB3721D4 para API/frontend, ED74 no worker e 41D como
+rollback histórico. A candidata A+B
+`immutable-5c67aee4-external-20261125T211634Z` e o rollback durável #444
+`immutable-c2829640-rollback-external-20261125T124933Z` estão instalados e
+inativos; a raiz `/opt/re7online/runtime-data/inbox-read-state` está
+provisionada e vazia, sem aggregate produtivo. O retirement zero-action está
+autorizado e `EXTERNAL_RETIREMENT_READY`, com `approvedPaths=[]` e zero comandos.
+
+A extensão P1 V2 foi instalada, mas as execuções agendadas de 25, 26 e
+27/11 falharam no preflight: o cron executa como `deploy` e o contrato não
+sensível `/etc/re7online/backup-read-state.v2.json` foi publicado `root:root
+0600`. A correção local sela o mesmo payload `root:deploy 0640` e admite como
+predecessor somente os bytes V2 exatos em `root:root 0600`; ela ainda não foi
+instalada. O snapshot protegido `20260812T011558Z` permanece `RETAIN_REQUIRED`.
+
+O preflight A+B também não foi executado. O driver tratava a allowlist PM2 como
+lista obrigatória completa e a fixture ocultava a incompatibilidade fabricando
+valores para nove chaves ausentes. A correção local usa apenas o conjunto efetivo
+autenticado, exige `INBOX_READ_STATE_ROOT` e igualdade das chaves de candidata e
+rollback. Gate V3, runtime V6 e binding produtivos ainda não foram publicados.
+Os checkpoints históricos abaixo permanecem evidência de suas datas, mas não
+substituem este estado físico mais recente.
+
 ## Contrato mínimo de provisionamento read-state — 23/11/2026
 
 **`PROVISION_CONTRACT_LOCAL_VALIDATED / PR_REVIEW_REQUIRED / NOT_DEPLOYED`.**

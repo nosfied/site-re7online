@@ -942,9 +942,11 @@ class DeployFixture(unittest.TestCase):
         old_env = self.host.rows[deploy.PROCESS_NAMES["api"]]["pm2_env"]
         for role, scope, release_id in (("candidate", "candidate", self.candidate),
                                         ("rollback", "rollbackCompatibility", self.rollback)):
-            environment_keys = sorted(set(allowlist["components"]["api"]["common"] +
-                                          allowlist["components"]["api"][scope]))
-            environment = {key: str(old_env.get(key, "fixture")) for key in environment_keys}
+            allowed = set(allowlist["components"]["api"]["common"] +
+                          allowlist["components"]["api"][scope])
+            environment_keys = sorted((set(old_env) & allowed) | {"INBOX_READ_STATE_ROOT"})
+            environment = {key: str(old_env[key]) for key in environment_keys
+                           if key != "INBOX_READ_STATE_ROOT"}
             environment["INBOX_READ_STATE_ROOT"] = str(persistent)
             request_path_pm2 = custody / f"read-state-cutover-api-{role}-request.private.json"
             source_path_pm2 = custody / f"read-state-cutover-api-{role}-source.private.json"
@@ -4234,6 +4236,121 @@ if config_path:
                          journal["preflight"]["selections"]["frontend"]["releaseId"])
         self.assertEqual(0, self.host.rows[deploy.PROCESS_NAMES["worker"]]
                          ["pm2_env"]["restart_time"])
+
+    def test_first_cutover_pm2_uses_effective_environment_not_full_allowlist(self):
+        predecessor = self.configure_first_cutover_topology()
+        gate_path = self.enable_read_state_cutover(predecessor_release=predecessor)
+        gate = json.loads(gate_path.read_text())
+        optional_absent = {
+            "APP_BASE_URL", "META_APP_ID", "META_APP_ID_FALLBACK_MODE",
+            "META_GRAPH_API_VERSION", "PUBLIC_APP_BASE_URL", "SMTP_PASSWORD",
+            "SMTP_SECURE", "TZ", "WHATSAPP_WABA_ID",
+        }
+        for role in ("candidate", "rollback"):
+            request = json.loads(Path(gate["cutover"]["pm2"][role]["request"]).read_text())
+            self.assertTrue(optional_absent.isdisjoint(request["environmentKeys"]))
+            self.assertIn("INBOX_READ_STATE_ROOT", request["environmentKeys"])
+        self.driver.preflight()
+        self.assertEqual("PREFLIGHT_PASS", self.driver._journal_read()["state"])
+
+    def test_first_cutover_pm2_denies_request_without_external_root(self):
+        predecessor = self.configure_first_cutover_topology()
+        gate_path = self.enable_read_state_cutover(predecessor_release=predecessor)
+        gate = json.loads(gate_path.read_text())
+        candidate = gate["cutover"]["pm2"]["candidate"]
+        request_path = Path(candidate["request"])
+        request = json.loads(request_path.read_text())
+        request["environmentKeys"].remove("INBOX_READ_STATE_ROOT")
+        put(request_path, request)
+        with self.assertRaisesRegex(deploy.Denied,
+                                    "read_state_cutover_pm2:candidate:environment"):
+            self.driver._validate_read_state_cutover_pm2(
+                gate["cutover"]["pm2"], gate["persistentRoot"]["path"])
+
+    def test_first_cutover_pm2_denies_candidate_rollback_environment_drift(self):
+        predecessor = self.configure_first_cutover_topology()
+        gate_path = self.enable_read_state_cutover(predecessor_release=predecessor)
+        gate = json.loads(gate_path.read_text())
+        binding = gate["cutover"]["pm2"]["rollback"]
+        request_path = Path(binding["request"])
+        source_path = Path(binding["sourceArtifact"])
+        definition_path = Path(binding["definition"])
+        request = json.loads(request_path.read_text())
+        removable = next(key for key in request["environmentKeys"]
+                         if key != "INBOX_READ_STATE_ROOT")
+        request["environmentKeys"].remove(removable)
+        source = json.loads(source_path.read_text())
+        del source["definition"]["apps"][0]["env"][removable]
+        definition = json.loads(definition_path.read_text())
+        del definition["apps"][0]["env"][removable]
+        put(request_path, request); put(source_path, source); put(definition_path, definition)
+        binding["sourceSha256"] = sha(source_path)
+        with self.assertRaisesRegex(deploy.Denied,
+                                    "read_state_cutover_pm2_pair_environment"):
+            self.driver._validate_read_state_cutover_pm2(
+                gate["cutover"]["pm2"], gate["persistentRoot"]["path"])
+
+    def test_first_cutover_pm2_denies_candidate_rollback_value_drift(self):
+        predecessor = self.configure_first_cutover_topology()
+        gate_path = self.enable_read_state_cutover(predecessor_release=predecessor)
+        gate = json.loads(gate_path.read_text())
+        binding = gate["cutover"]["pm2"]["rollback"]
+        source_path = Path(binding["sourceArtifact"])
+        definition_path = Path(binding["definition"])
+        source = json.loads(source_path.read_text())
+        source["definition"]["apps"][0]["env"]["NODE_ENV"] = "staging"
+        definition = json.loads(definition_path.read_text())
+        definition["apps"][0]["env"]["NODE_ENV"] = "staging"
+        put(source_path, source); put(definition_path, definition)
+        binding["sourceSha256"] = sha(source_path)
+        with self.assertRaisesRegex(deploy.Denied,
+                                    "read_state_cutover_pm2_pair_environment_values"):
+            self.driver._validate_read_state_cutover_pm2(
+                gate["cutover"]["pm2"], gate["persistentRoot"]["path"])
+
+    def test_first_cutover_pm2_denies_shared_removal_of_productive_variable(self):
+        predecessor = self.configure_first_cutover_topology()
+        gate_path = self.enable_read_state_cutover(predecessor_release=predecessor)
+        gate = json.loads(gate_path.read_text())
+        for role in ("candidate", "rollback"):
+            binding = gate["cutover"]["pm2"][role]
+            request_path = Path(binding["request"])
+            source_path = Path(binding["sourceArtifact"])
+            definition_path = Path(binding["definition"])
+            request = json.loads(request_path.read_text())
+            request["environmentKeys"].remove("NODE_ENV")
+            source = json.loads(source_path.read_text())
+            del source["definition"]["apps"][0]["env"]["NODE_ENV"]
+            definition = json.loads(definition_path.read_text())
+            del definition["apps"][0]["env"]["NODE_ENV"]
+            put(request_path, request); put(source_path, source); put(definition_path, definition)
+            binding["sourceSha256"] = sha(source_path)
+        with self.assertRaisesRegex(deploy.Denied,
+                                    "read_state_cutover_pm2_productive_environment"):
+            self.driver._validate_read_state_cutover_pm2(
+                gate["cutover"]["pm2"], gate["persistentRoot"]["path"])
+
+    def test_first_cutover_pm2_denies_shared_unauthorized_optional_value(self):
+        predecessor = self.configure_first_cutover_topology()
+        gate_path = self.enable_read_state_cutover(predecessor_release=predecessor)
+        gate = json.loads(gate_path.read_text())
+        for role in ("candidate", "rollback"):
+            binding = gate["cutover"]["pm2"][role]
+            request_path = Path(binding["request"])
+            source_path = Path(binding["sourceArtifact"])
+            definition_path = Path(binding["definition"])
+            request = json.loads(request_path.read_text())
+            request["environmentKeys"] = sorted(request["environmentKeys"] + ["TZ"])
+            source = json.loads(source_path.read_text())
+            source["definition"]["apps"][0]["env"]["TZ"] = "UTC"
+            definition = json.loads(definition_path.read_text())
+            definition["apps"][0]["env"]["TZ"] = "UTC"
+            put(request_path, request); put(source_path, source); put(definition_path, definition)
+            binding["sourceSha256"] = sha(source_path)
+        with self.assertRaisesRegex(deploy.Denied,
+                                    "read_state_cutover_pm2_productive_environment"):
+            self.driver._validate_read_state_cutover_pm2(
+                gate["cutover"]["pm2"], gate["persistentRoot"]["path"])
 
     def test_first_cutover_denies_historical_rollback_missing_from_authenticated_graph(self):
         predecessor = self.configure_first_cutover_topology()
