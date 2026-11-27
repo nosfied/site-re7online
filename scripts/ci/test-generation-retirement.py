@@ -4326,5 +4326,215 @@ class GenerationRetirementTest(unittest.TestCase):
 
 
 
+class ED74RetirementSuccessorClosureTests(unittest.TestCase):
+    """Directed, nonproductive regression for the append-only successor route."""
+
+    @classmethod
+    def setUpClass(cls):
+        path = ROOT / "scripts/ed74-retirement-successor-closure.py"
+        spec = importlib.util.spec_from_file_location("ed74_retirement_successor", path)
+        assert spec and spec.loader
+        cls.successor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.successor)
+
+    def test_precheck_rejects_unbound_request_before_any_execution(self):
+        successor = self.successor
+        with patch.object(successor.subprocess, "run") as process:
+            with self.assertRaisesRegex(successor.Denied, "request_schema"):
+                successor.qualify({"schemaVersion": 1, "action": "execute"})
+            process.assert_not_called()
+
+    def test_independent_owner_grant_is_bound_to_exact_successor_request(self):
+        successor = self.successor
+        with tempfile.TemporaryDirectory(prefix="ed74-owner-grant-") as directory:
+            path = Path(directory) / "owner-authorization.private.json"
+            request_sha = "f" * 64
+            value = {
+                "schemaVersion": 1,
+                "kind": "ED74_RETIREMENT_SUCCESSOR_OWNER_AUTHORIZATION_V1",
+                "decision": "AUTHORIZE_ONCE",
+                "owner": "fixture-owner",
+                "requestSha256": request_sha,
+                "historicalJournalSha256": successor.JOURNAL_SHA,
+                "approvedPaths": [],
+                "maxExecutions": 1,
+            }
+            private_json(path, value)
+            successor.authorize_successor(path, sha(path), request_sha)
+            for key, altered in (
+                ("requestSha256", "0" * 64),
+                ("historicalJournalSha256", "1" * 64),
+                ("approvedPaths", ["/opt/re7online/releases/protected"]),
+                ("maxExecutions", 2),
+                ("decision", "AUTHORIZE_REPEATED"),
+            ):
+                with self.subTest(field=key):
+                    changed = dict(value)
+                    changed[key] = altered
+                    private_json(path, changed)
+                    with self.assertRaisesRegex(
+                        successor.Denied, "successor_owner_authorization"):
+                        successor.authorize_successor(path, sha(path), request_sha)
+            # The legacy Owner authorization cannot be used as a successor grant.
+            private_json(path, {"schemaVersion": 1, "decision": "AUTHORIZE_ONCE",
+                                "approvedPaths": []})
+            with self.assertRaisesRegex(successor.Denied, "successor_owner_authorization"):
+                successor.authorize_successor(path, sha(path), request_sha)
+
+    def test_successor_request_producer_uses_only_sealed_ed74_authorities(self):
+        successor = self.successor
+        transaction = Path(
+            "/opt/re7online/backups/converta-persistent/preparations/"
+            "immutable-ed74c483-external-20261115T162015Z-"
+            "api-frontend-worker-preflight-4e55c9d9-v2/transaction")
+        original = {"binding": {"generationRetirement": {
+            "intentSha256": "1" * 64, "authorizationSha256": "2" * 64,
+            "rootPolicySha256": "3" * 64,
+            "receiptRoot": "/opt/re7online/backups/converta-persistent/receipt-isolated",
+        }}}
+        saved = []
+        def fake_private(path, sha):
+            if path.name == "transaction.v1.private.json":
+                self.assertEqual(sha, successor.JOURNAL_SHA)
+                return successor.canonical(original)
+            self.assertEqual(path.name, "generation-operational.final.private.json")
+            return b"final-operational-isolated"
+        def fake_exclusive(path, raw):
+            saved.append((path, json.loads(raw)))
+        with patch.object(successor, "private", side_effect=fake_private), \
+             patch.object(Path, "read_bytes", return_value=b"final-operational-isolated"), \
+             patch.object(successor, "qualify") as qualifier, \
+             patch.object(successor, "exclusive", side_effect=fake_exclusive):
+            report = successor.prepare()
+        self.assertEqual(report["result"], "ED74_RETIREMENT_SUCCESSOR_REQUEST_MATERIALIZED")
+        self.assertFalse(report["executionAuthorized"])
+        qualifier.assert_called_once()
+        self.assertEqual(len(saved), 1)
+        request = saved[0][1]
+        self.assertEqual(request["journalSha256"], successor.JOURNAL_SHA)
+        self.assertEqual(request["originalConsumerSha256"], successor.OLD_CONSUMER_SHA)
+        self.assertEqual(request["successorConsumerSha256"], successor.NEW_CONSUMER_SHA)
+        self.assertEqual(request["intentSha256"], "1" * 64)
+        self.assertEqual(request["authorizationSha256"], "2" * 64)
+        self.assertEqual(request["successorCheckout"],
+                         "/opt/re7online/deploy-control/c2beccb2d6d9")
+        self.assertEqual(saved[0][0], transaction /
+                         "generation-retirement-successor-request.private.json")
+        self.assertEqual(report["requestSha256"], successor.digest(successor.canonical(request)))
+        self.assertNotIn("argv", request)
+        self.assertNotIn("commands", request)
+
+    def test_zero_command_closure_is_append_only_and_invokes_consumer_once(self):
+        successor = self.successor
+        with tempfile.TemporaryDirectory(prefix="ed74-retirement-successor-") as raw:
+            root = Path(raw)
+            transaction = root / "transaction"; transaction.mkdir(mode=0o700)
+            journal_path = transaction / "transaction.v1.private.json"
+            journal_path.write_bytes(b"historical journal bytes"); journal_path.chmod(0o600)
+            saved_journal = journal_path.read_bytes()
+            receipt_root = root / "retirement-receipt"
+            consumer = root / "generation-retirement.py"; consumer.write_text("# fixture")
+            operational = transaction / "generation-operational.final.private.json"
+            request = {
+                "receiptRoot": str(receipt_root),
+                "operationalStateSha256": "a" * 64,
+                "dumpPath": str(root / "dump.pm2"),
+                "closureOutput": str(transaction / "generation-retirement-successor-closure.private.json"),
+            }
+            request_sha = successor.digest(successor.canonical(request))
+            owner_path = root / "successor-owner.private.json"
+            private_json(owner_path, {
+                "schemaVersion": 1,
+                "kind": "ED74_RETIREMENT_SUCCESSOR_OWNER_AUTHORIZATION_V1",
+                "decision": "AUTHORIZE_ONCE", "owner": "fixture-owner",
+                "requestSha256": request_sha,
+                "historicalJournalSha256": successor.JOURNAL_SHA,
+                "approvedPaths": [], "maxExecutions": 1,
+            })
+            owner_sha = sha(owner_path)
+            retirement = {
+                "intent": str(root / "intent.private.json"), "intentSha256": "1" * 64,
+                "authorization": str(root / "authorization.private.json"),
+                "authorizationSha256": "2" * 64,
+                "rootPolicy": str(root / "root-policy.private.json"),
+                "rootPolicySha256": "3" * 64,
+                "deploymentLock": str(root / "deployment.lock"),
+                "receiptRoot": str(receipt_root),
+                "reviewOutput": str(root / "review.private.json"),
+            }
+            context = {"transaction": transaction, "retirement": retirement,
+                       "consumer": consumer, "operational": operational}
+            receipt = {
+                "schemaVersion": 1, "state": "DEPLOYED_SANITIZED",
+                "failurePredicate": None, "automaticRetry": False,
+                "attemptedCommands": 0, "completedCommands": 0,
+                "removedPaths": [], "remainingDerivedPaths": [],
+                "commandLogSha256": successor.digest(b""),
+                "lock": {"canonicalHeldThroughReceiptFsync": True,
+                         "writerHeldThroughReceiptFsync": True},
+                "intentSha256": "1" * 64,
+            }
+            receipt_raw = successor.canonical(receipt)
+            calls = []
+
+            def fake_consumer(argv, **kwargs):
+                calls.append(list(argv))
+                self.assertEqual(argv[1:4], ["-B", str(consumer), "execute"])
+                self.assertNotIn("finalize", argv)
+                self.assertNotIn("pm2", argv)
+                receipt_root.mkdir(mode=0o700)
+                saved = receipt_root / "execution-receipt.private.json"
+                saved.write_bytes(receipt_raw); saved.chmod(0o600)
+                command_journal = receipt_root / "command-results.private.jsonl"
+                command_journal.write_bytes(b""); command_journal.chmod(0o600)
+                output = successor.canonical({
+                    "result": "DEPLOYED_SANITIZED", "removedPaths": 0,
+                    "receiptSha256": successor.digest(receipt_raw),
+                })
+                return subprocess.CompletedProcess(argv, 0, output, b"")
+
+            original_private = successor.private
+            def bound_read(path, expected):
+                if path == journal_path:
+                    self.assertEqual(expected, successor.JOURNAL_SHA)
+                    return saved_journal
+                if path == Path(request["dumpPath"]):
+                    self.assertEqual(expected, successor.DUMP_SHA)
+                    return b"dump is verified by prior immutable authority"
+                if path == Path("/opt/re7online/releases") / successor.RELEASE / "DEPLOYED":
+                    self.assertEqual(expected, successor.MARKER_SHA)
+                    return b"marker is verified by prior immutable authority"
+                return original_private(path, expected)
+
+            with patch.object(successor, "qualify", return_value=context), \
+                 patch.object(successor.subprocess, "run", side_effect=fake_consumer), \
+                 patch.object(successor, "private", side_effect=bound_read):
+                report = successor.execute(request, owner_path, owner_sha, request_sha)
+            self.assertEqual(report["result"], "ED74_RETIREMENT_CLOSED_BY_SUCCESSOR")
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(journal_path.read_bytes(), saved_journal)
+            closure = json.loads(Path(request["closureOutput"]).read_text())
+            self.assertEqual(closure["historicalJournal"]["sha256"], successor.JOURNAL_SHA)
+            self.assertEqual(closure["retirement"]["attemptedCommands"], 0)
+            self.assertEqual(closure["retirement"]["completedCommands"], 0)
+            self.assertEqual(closure["retirement"]["removedPaths"], [])
+            self.assertEqual(closure["retirement"]["receipt"]["sha256"],
+                             successor.digest(receipt_raw))
+            self.assertEqual(closure["successorAuthorization"]["sha256"], owner_sha)
+            self.assertEqual(closure["successorAuthorization"]["requestSha256"], request_sha)
+            claim_path = transaction / "retirement-successor-01.execution-claim.private.json"
+            self.assertTrue(claim_path.is_file())
+            self.assertEqual(closure["executionClaim"]["sha256"], sha(claim_path))
+            self.assertEqual(json.loads(claim_path.read_text())["state"],
+                             "ATTEMPT_CLAIMED_BEFORE_CONSUMER")
+            for kind in ("stdout", "stderr", "exit"):
+                self.assertTrue((transaction / f"retirement-successor-01.{kind}.private.txt").is_file())
+            with patch.object(successor, "qualify", return_value=context), \
+                 patch.object(successor.subprocess, "run") as retry:
+                with self.assertRaisesRegex(successor.Denied, "output_already_exists"):
+                    successor.execute(request, owner_path, owner_sha, request_sha)
+                retry.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
