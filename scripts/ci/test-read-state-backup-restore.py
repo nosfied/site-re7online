@@ -23,7 +23,7 @@ class RestoreTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(); self.root = Path(self.temp.name)
         self.snapshot = self.root / "snapshot"; self.source = self.snapshot / "runtime-data/inbox-read-state"
         self.state = self.source / "tenant-a/shared.json"; self.state.parent.mkdir(parents=True, mode=0o700); self.source.chmod(0o700); self.state.parent.chmod(0o700)
-        self.state.write_bytes(raw({"lastReadAtByConversationKey": {"safe": "2026-11-23T00:00:00.000Z"}, "manuallyUnreadByConversationKey": {}})); self.state.chmod(0o600)
+        self.state.write_bytes(raw({"lastReadAtByConversationKey": {"safe": "2026-11-23T00:00:00.000Z", "safe-alias": "2026-11-23T00:00:00.000Z"}, "manuallyUnreadByConversationKey": {"safe-alias": True}})); self.state.chmod(0o600)
         self.manifest = self.snapshot / "manifest.json"; self.manifest.write_bytes(raw({"snapshotId": "fixture", "runtimeData": {"inboxReadState": {"files": 1}}}))
         lines = [f"{sha(item.read_bytes())}  ./{item.relative_to(self.snapshot)}\n" for item in (self.manifest, self.state)]
         self.checksums = self.snapshot / "SHA256SUMS"; self.checksums.write_text("".join(lines))

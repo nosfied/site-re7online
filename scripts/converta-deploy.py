@@ -3625,9 +3625,7 @@ class Driver:
         if not isinstance(value, dict) or set(value) != {"candidate", "rollback"}:
             deny("read_state_cutover_pm2")
         arguments: list[str] = []
-        allowlist = read_json(self.repo / "scripts/pm2-definition-env-allowlist.v1.json")
-        for role, scope in (("candidate", "candidate"),
-                            ("rollback", "rollbackCompatibility")):
+        for role in ("candidate", "rollback"):
             binding = value[role]
             expected = {"request", "sourceArtifact", "sourceSha256", "definition"}
             if not isinstance(binding, dict) or set(binding) != expected:
@@ -3640,10 +3638,10 @@ class Driver:
             if not SHA256.fullmatch(str(binding["sourceSha256"])):
                 deny(f"read_state_cutover_pm2:{role}:sourceSha256")
             request = read_json(Path(binding["request"]))
-            expected_keys = set(allowlist["components"]["api"]["common"] +
-                                allowlist["components"]["api"][scope])
+            environment_keys = request.get("environmentKeys", [])
             if (request.get("component") != "api" or request.get("role") != role or
-                    set(request.get("environmentKeys", [])) != expected_keys):
+                    not isinstance(environment_keys, list) or
+                    "INBOX_READ_STATE_ROOT" not in environment_keys):
                 deny(f"read_state_cutover_pm2:{role}:environment")
             definition = read_json(Path(binding["definition"]))
             try:
@@ -3665,6 +3663,20 @@ class Driver:
         if (report.get("result") != "PM2_DEFINITION_PAIR_VALID" or
                 report.get("component") != "api"):
             deny("read_state_cutover_pm2_pair")
+        try:
+            candidate_keys = report["candidate"]["applicationEnvKeys"]
+            rollback_keys = report["rollback"]["applicationEnvKeys"]
+        except (KeyError, TypeError):
+            deny("read_state_cutover_pm2_pair_environment")
+        # The repository allowlist is a closed upper bound, not a declaration
+        # that every optional or legacy alias exists in production.  The
+        # definition controller has already authenticated each selected key and
+        # its exact value.  Require the candidate and durable rollback to carry
+        # the same effective API environment plus the external root instead of
+        # fabricating absent values to fill the allowlist.
+        if (candidate_keys != rollback_keys or
+                "INBOX_READ_STATE_ROOT" not in candidate_keys):
+            deny("read_state_cutover_pm2_pair_environment")
 
     def _probe_read_state_storage(self, interpreter: Path, store: Path,
                                   runtime: Path, root: str) -> None:

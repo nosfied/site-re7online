@@ -167,6 +167,59 @@ class ProtectedRetentionObserverTests(unittest.TestCase):
         self.assertEqual(value["snapshot"]["checksumsSha256"],
                          "5f9d1e7157e764500f0a5a30f006285114c6485a7915bfe460048796d18da20e")
 
+    def test_installer_migrates_exact_read_state_contract_to_executor_group_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "backup-read-state.v2.json"
+            payload = INSTALLER.READ_STATE_CONTRACT_SOURCE.read_bytes()
+            target.write_bytes(payload)
+            target.chmod(0o600)
+            uid, gid = target.stat().st_uid, target.stat().st_gid
+            with mock.patch.object(INSTALLER, "authenticate_parent"):
+                result = INSTALLER.install_file(
+                    target, payload, 0o640, {INSTALLER.digest(payload)}, uid=uid, gid=gid,
+                    allowed_previous_modes={0o600}, allowed_previous_owners={(uid, gid)})
+            self.assertEqual(result["state"], "INSTALLED")
+            self.assertEqual(target.stat().st_mode & 0o777, 0o640)
+            self.assertEqual(INSTALLER.digest(target.read_bytes()), INSTALLER.digest(payload))
+
+    def test_installer_binds_read_state_contract_to_deploy_group_only(self):
+        installed = {"state": "INSTALLED"}
+        with mock.patch.object(INSTALLER.os, "geteuid", return_value=0), \
+                mock.patch.object(INSTALLER.os, "getegid", return_value=0), \
+                mock.patch.object(INSTALLER.subprocess, "run", return_value=mock.Mock(returncode=0)), \
+                mock.patch.object(INSTALLER, "install_file", return_value=installed) as publish:
+            result = INSTALLER.install()
+        self.assertEqual(result["readStateContract"], installed)
+        contract_call = next(call for call in publish.call_args_list
+                             if call.args[0] == INSTALLER.READ_STATE_CONTRACT_TARGET)
+        self.assertEqual(contract_call.args[2:4], (0o640,
+                         {INSTALLER.READ_STATE_CONTRACT_SOURCE_SHA256}))
+        self.assertEqual(contract_call.kwargs, {
+            "uid": 0, "gid": 1000,
+            "allowed_previous_modes": {0o600},
+            "allowed_previous_owners": {(0, 0)},
+        })
+
+    def test_installer_denies_unsealed_or_overpermissive_contract_predecessor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "backup-read-state.v2.json"
+            payload = INSTALLER.READ_STATE_CONTRACT_SOURCE.read_bytes()
+            target.write_bytes(payload + b" ")
+            target.chmod(0o600)
+            uid, gid = target.stat().st_uid, target.stat().st_gid
+            with mock.patch.object(INSTALLER, "authenticate_parent"), \
+                    self.assertRaisesRegex(RuntimeError, "PREDECESSOR_NOT_ALLOWED"):
+                INSTALLER.install_file(
+                    target, payload, 0o640, {INSTALLER.digest(payload)}, uid=uid, gid=gid,
+                    allowed_previous_modes={0o600}, allowed_previous_owners={(uid, gid)})
+            target.write_bytes(payload)
+            target.chmod(0o644)
+            with mock.patch.object(INSTALLER, "authenticate_parent"), \
+                    self.assertRaisesRegex(RuntimeError, "IDENTITY"):
+                INSTALLER.install_file(
+                    target, payload, 0o640, {INSTALLER.digest(payload)}, uid=uid, gid=gid,
+                    allowed_previous_modes={0o600}, allowed_previous_owners={(uid, gid)})
+
 
 if __name__ == "__main__":
     unittest.main()
