@@ -781,3 +781,19 @@ schema 6 → preflight`. Ela nega driver substituído, commit/tree divergentes,
 receipt ausente/adulterado e retoma a interrupção após a disposição sem repetir
 a cópia. A topologia integrada mantém CB como predecessora ativa, 41D como
 rollback histórico, A+B inativa, #444 como retorno durável e ED74 preservado.
+
+## Correção da portabilidade da autorização V3 — 26/11/2026
+
+O Gate V5 da geração A+B selou legitimamente a autorização V3 na custódia do
+ThinkPad. O driver consumido na VPS não podia abrir esse path e negou antes de
+runtime manifest ou preflight. A correção não altera o Gate V5 nem aceita uma
+cópia por semelhança: `CONVERTA_CUTOVER_AUTHORIZATION_RELOCATION_V1` fecha o
+único campo portável com o receipt de transporte já autenticado, SHA idêntico,
+candidato, operação, transaction root e identidade física completa do destino.
+
+Todos os consumidores usam o mesmo resolvedor autenticado. Gate V3, derivação
+V5→V3, leitura da autorização, snapshot seal e fases posteriores negam source,
+destination, inode, UID/GID, modo, receipt, operação ou transação divergentes.
+O caminho ThinkPad permanece evidência histórica e pode estar ausente na VPS;
+nenhum consumidor posterior tenta abri-lo. Schemas históricos sem relocation
+mantêm o comportamento literal anterior.

@@ -137,6 +137,60 @@ class CutoverAuthorityTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "authority_file_sha256"):
             AUTH.materialize(request, request_sha, owner, owner_sha)
 
+    def test_cross_host_relocation_materializer_closes_producer_and_consumers(self):
+        source = self.base / "thinkpad/cutover-authorization-v3.private.json"
+        destination = self.custody / "vps/cutover-authorization-v3.private.json"
+        authorization_sha = put(destination, {
+            "schemaVersion": 3,
+            "kind": "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V3",
+            "operationId": "cutover-1", "entries": [],
+        })
+        candidate = {"generationId": "immutable-ab", "targetCommit": "a" * 40}
+        admission_path = self.custody / "gate-v5.private.json"
+        admission_sha = put(admission_path, {
+            "schemaVersion": 5, "kind": "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V5",
+            "candidateIdentity": candidate,
+            "reconciliation": {"operationId": "cutover-1",
+                               "authorization": str(source),
+                               "authorizationSha256": authorization_sha},
+        })
+        receipt_path = self.custody / "transfer.private.json"
+        receipt_sha = put(receipt_path, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_PRIVATE_AUTHORITY_TRANSFER_READBACK_V1",
+            "state": "VERIFIED", "automaticRetry": False,
+            "bytes": destination.stat().st_size,
+            "capturedAtUtc": "2026-11-25T21:16:34Z",
+            "source": {"path": str(destination), "sha256": authorization_sha},
+            "destination": {"path": str(source), "sha256": authorization_sha},
+        })
+        output = self.custody / "relocation.private.json"
+        request_path = self.custody / "relocation-request.private.json"
+        request_sha = put(request_path, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_CUTOVER_AUTHORIZATION_RELOCATION_REQUEST_V1",
+            "operationId": "cutover-1", "field": "reconciliation.authorization",
+            "candidateIdentity": candidate,
+            "transactionRoot": str(self.base / "transaction-a"),
+            "source": {"path": str(source), "sha256": authorization_sha},
+            "destinationPath": str(destination),
+            "transferReceipt": {"path": str(receipt_path), "sha256": receipt_sha},
+            "admissionGate": {"path": str(admission_path), "sha256": admission_sha},
+            "outputPath": str(output),
+        })
+        result = AUTH.materialize_authorization_relocation(request_path, request_sha)
+        self.assertEqual(result["state"],
+                         "CUTOVER_AUTHORIZATION_RELOCATION_MATERIALIZED")
+        self.assertEqual(result["destinationSha256"], authorization_sha)
+        self.assertEqual(hashlib.sha256(output.read_bytes()).hexdigest(),
+                         result["relocationSha256"])
+        self.assertFalse(source.exists())
+        replacement = json.loads(output.read_text())
+        replacement["transactionRoot"] = str(self.base / "transaction-b")
+        output.unlink(); put(output, replacement)
+        with self.assertRaisesRegex(RuntimeError, "authority_file_sha256"):
+            AUTH.materialize_authorization_relocation(request_path, request_sha)
+
     def test_materialize_denies_owner_scope_expansion(self):
         _, request, request_sha, owner, _ = self.prepare()
         self.persistent.mkdir(parents=True, mode=0o700); self.persistent.chmod(0o700)

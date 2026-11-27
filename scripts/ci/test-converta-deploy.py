@@ -162,7 +162,8 @@ class FakeHost(deploy.Host):
                 return subprocess.CompletedProcess(command, 2, "", "injected reconciliation failure\n")
             if action == "seal":
                 if self.cutover_sealer is not None:
-                    self.cutover_seal_result, self.cutover_publications = self.cutover_sealer()
+                    self.cutover_seal_result, self.cutover_publications = self.cutover_sealer(
+                        Path(command[3]))
                     self.cutover_result = {
                         "state": "VERIFIED",
                         "receiptSha256": hashlib.sha256(
@@ -780,7 +781,7 @@ class DeployFixture(unittest.TestCase):
                                b'    "conversation-a": "2026-11-22T00:00:00.000Z"\n'
                                b'  },\n  "manuallyUnreadByConversationKey": {}\n}\n')
 
-        def build_snapshot():
+        def build_snapshot(authorization_path: Path = snapshot_authorization):
             source_sha = sha(source)
             reconciliation_request = {
                 "schemaVersion": 2, "kind": "CONVERTA_INBOX_READ_STATE_RECONCILIATION_V2",
@@ -825,7 +826,7 @@ class DeployFixture(unittest.TestCase):
             seal_value = {"schemaVersion": 1,
                           "kind": "CONVERTA_INBOX_READ_STATE_FINAL_SNAPSHOT_SEAL_V1",
                           "state": "SEALED", "operationId": "cutover-aggregate",
-                          "authorizationSha256": sha(snapshot_authorization),
+                          "authorizationSha256": sha(authorization_path),
                           "inventoryPath": str(inventory),
                           "inventorySha256": hashlib.sha256(inventory_raw).hexdigest(),
                           "manifestPath": str(manifest), "manifestSha256": manifest_sha,
@@ -4430,6 +4431,56 @@ if config_path:
         admission_path = self.base / "durable-persistence-admission-v5.private.json"
         put(admission_path, admission_request)
 
+        original_authorization = Path(runtime_request["reconciliation"]["authorization"])
+        relocated_authorization = self.base / "vps-authority/cutover-authorization-v3.private.json"
+        relocated_authorization.parent.mkdir(mode=0o700)
+        shutil.copyfile(original_authorization, relocated_authorization)
+        relocated_authorization.chmod(0o600)
+        original_authorization.unlink()
+        transfer_receipt = self.base / "vps-authority/transfer-readback.private.json"
+        put(transfer_receipt, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_PRIVATE_AUTHORITY_TRANSFER_READBACK_V1",
+            "state": "VERIFIED", "automaticRetry": False,
+            "bytes": relocated_authorization.stat().st_size,
+            "capturedAtUtc": "2026-11-25T21:16:34Z",
+            "source": {"path": str(relocated_authorization),
+                       "sha256": runtime_request["reconciliation"]["authorizationSha256"]},
+            "destination": {"path": str(original_authorization),
+                            "sha256": runtime_request["reconciliation"]["authorizationSha256"]},
+        })
+        relocated_info = relocated_authorization.stat()
+        relocation_path = self.base / "vps-authority/authorization-relocation.private.json"
+        put(relocation_path, {
+            "schemaVersion": 1,
+            "kind": "CONVERTA_CUTOVER_AUTHORIZATION_RELOCATION_V1",
+            "operationId": runtime_request["reconciliation"]["operationId"],
+            "field": "reconciliation.authorization",
+            "candidateIdentity": admission_request["candidateIdentity"],
+            "transactionRoot": str(self.inputs.transaction_root),
+            "source": {"path": str(original_authorization),
+                       "sha256": runtime_request["reconciliation"]["authorizationSha256"]},
+            "destination": {"path": str(relocated_authorization),
+                            "sha256": runtime_request["reconciliation"]["authorizationSha256"],
+                            "device": relocated_info.st_dev, "inode": relocated_info.st_ino,
+                            "ownerUid": relocated_info.st_uid,
+                            "groupGid": relocated_info.st_gid,
+                            "mode": "0600", "nlink": 1},
+            "transferReceipt": {"path": str(transfer_receipt),
+                                "sha256": sha(transfer_receipt)},
+            "admissionGate": {"path": str(admission_path), "sha256": sha(admission_path)},
+            "consumers": [
+                "durable-runtime-persistence-gate.py",
+                "converta-deploy.py::_validate_temporal_persistence_authority",
+                "converta-deploy.py::_read_state_snapshot_authorization",
+                "converta-deploy.py::_seal_read_state_snapshot",
+            ],
+            "phases": ["qualification", "admission", "preflight", "activation",
+                       "acceptance", "finalize", "retirement"],
+        })
+        runtime_request["authorizationRelocation"] = {
+            "path": str(relocation_path), "sha256": sha(relocation_path)}
+
         candidate_manifest_path = candidate_root / "manifest.json"
         candidate_manifest = json.loads(candidate_manifest_path.read_text())
         candidate_manifest["schemaVersion"] = 2
@@ -4444,6 +4495,7 @@ if config_path:
                 for label, relative in relative_paths.items()
             },
         }
+        verified_candidate_manifest = json.loads(json.dumps(candidate_manifest))
         candidate_manifest_path.chmod(0o644)
         put(candidate_manifest_path, candidate_manifest, 0o444)
 
@@ -4474,6 +4526,10 @@ if config_path:
         self.driver = self._driver()
         self.driver.preflight()
         self.assertEqual(self.driver._journal_read()["state"], "PREFLIGHT_PASS")
+        self.assertEqual(
+            self.driver._read_state_snapshot_authorization(runtime_request)["operationId"],
+            runtime_request["reconciliation"]["operationId"])
+        self.assertFalse(original_authorization.exists())
 
         compiled = json.loads(candidate_manifest_path.read_text())["durablePersistence"]
         compiled["artifacts"]["runner"]["sha256"] = "0" * 64
@@ -4490,6 +4546,15 @@ if config_path:
         with self.assertRaisesRegex(deploy.Denied,
                                     "durable_persistence_compiled_authority"):
             self._driver()._read_state_cutover(runtime_manifest)
+
+        candidate_manifest_path.chmod(0o644)
+        put(candidate_manifest_path, verified_candidate_manifest, 0o444)
+        self.host.wait_fail = "frontend"
+        with self.assertRaises(deploy.Denied):
+            self.driver.activate()
+        journal = self.driver._journal_read()
+        self.assertEqual(journal["state"], "ROLLED_BACK")
+        self.assertEqual(journal["rollback"]["releaseRole"], "durableRollback")
 
     def test_read_state_cutover_seals_legitimate_final_cb_write_after_quiesce(self):
         gate = self.enable_read_state_cutover()

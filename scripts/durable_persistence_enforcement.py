@@ -39,3 +39,24 @@ def enforce(binding: Any, phase: str, deny: Callable[[str], None], *, base: Path
     report["gateSha256"] = hashlib.sha256(gate_raw).hexdigest()
     report["requestSha256"] = binding["requestSha256"]
     return report
+
+
+def resolve_cutover_authorization(
+    request: dict[str, Any], admission: dict[str, Any] | None,
+    candidate_identity: dict[str, str], transaction_root: Path,
+    deny: Callable[[str], None], *, base: Path,
+) -> tuple[Path, str]:
+    gate_path = base / "durable-runtime-persistence-gate.py"
+    spec = importlib.util.spec_from_file_location(
+        "converta_durable_runtime_persistence_gate_resolver", gate_path)
+    if spec is None or spec.loader is None:
+        deny("authorization_relocation_gate_load")
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    try:
+        path, sha256, _ = gate.resolve_cutover_authorization(
+            request, admission=admission, candidate_identity=candidate_identity,
+            transaction_root=transaction_root)
+    except (gate.Denied, OSError, ValueError) as error:
+        deny(f"durable_persistence:{error}")
+    return path, sha256

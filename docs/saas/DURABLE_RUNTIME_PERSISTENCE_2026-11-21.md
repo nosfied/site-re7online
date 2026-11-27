@@ -107,6 +107,17 @@ A rota V3 `frontend` continua válida sem autoridade de read-state.
   derivado para preflight. O driver aceita a derivação somente quando target,
   geração, raiz, cutover, autorização, rollback e hashes compilados concordam.
   Preflight e fases posteriores nunca aceitam `PENDING_BUILD_VERIFY`.
+- **Portabilidade fechada da autorização V3:** o Gate V5 preserva o caminho
+  ThinkPad originalmente autenticado; nenhum consumidor o substitui por
+  convenção. O request V3 pode acrescentar somente
+  `authorizationRelocation`, vinculado a
+  `CONVERTA_CUTOVER_AUTHORIZATION_RELOCATION_V1`. Essa autoridade privada
+  autentica o campo único `reconciliation.authorization`, candidato, target,
+  operação, transaction root, Gate V5, receipt de transporte e a identidade
+  física completa da cópia VPS (`device`, `inode`, UID/GID, `0600`, `nlink=1` e
+  SHA). Gate, derivação temporal, snapshot seal e readback reabrem a mesma
+  autoridade; troca de arquivo, transação ou candidato nega. Sem relocation, os
+  schemas históricos continuam usando literalmente o caminho selado.
 - **Preflight:** autentica device/inode, uid/gid, `0700`, ancestrais e raízes
   candidatas/rollback; receipt de reconciliação é validado semanticamente por
   operação, tenant, scope e destino quando declarado.
@@ -150,6 +161,21 @@ O fluxo V1 do #446 permanece disponível exclusivamente para autoridades já
 seladas; a separação não cria lifecycle alternativo nem autoriza efeitos.
 
 ## Contrato de cutover no driver canônico
+
+### Inventário transversal de caminhos entre hosts
+
+| Fronteira | Caminho de origem | Consumo permitido na VPS |
+| --- | --- | --- |
+| Gate V5 → Gate V3 | `reconciliation.authorization` do builder | somente como `source` imutável da relocation; nunca aberto na VPS |
+| Gate V3 → runtime manifest V6 | binding `authorizationRelocation` | autoridade privada por path/SHA, vinculada à transação |
+| preflight → snapshot seal | `destination` da relocation | reabertura física `0600`, SHA e inode antes de ler e antes de selar |
+| aggregate → cutover/rollback | SHA da autorização V3 e receipts derivados | mesmo destino autenticado; nenhuma volta ao caminho do builder |
+| acceptance/finalize/retirement | binding `durablePersistence` do runtime | gate revalida relocation e raiz física em cada fase |
+
+Os demais paths absolutos do Gate V5 (raízes da release, raiz persistente,
+manifest/receipt/seal e artefatos compilados) já pertencem ao host consumidor ou
+são derivados por produtores explicitamente autenticados. Não existe remapeador
+genérico: qualquer outro campo apontando para o ThinkPad é negativa P00-D.
 
 O gate isolado não elimina a janela entre a última escrita da CB3721D4 e a
 reconciliação. A CB é histórica, grava no próprio CWD e não disputa o lock da

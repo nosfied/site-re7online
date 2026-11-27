@@ -280,6 +280,9 @@ require(fixture["observedDelaySeconds"] >= 4 and not fixture["containsEnvironmen
         "sanitized readiness evidence")
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
 lifecycle = (ROOT / "docs/saas/DEPLOY_ARTIFACT_LIFECYCLE.md").read_text()
+p00d_backlog = (
+    ROOT / "docs/saas/backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md"
+).read_text()
 for marker in (
     "Matriz obrigatória produtor → consumidor → fase → host",
     "JSON com LF fora da serialização canônica",
@@ -295,6 +298,13 @@ for marker in (
     "runtime schema 6 → preflight",
 ):
     require(marker in lifecycle, f"consume-to-driver P00-D marker {marker}")
+for marker in (
+    "Gate V5 sela path do ThinkPad → driver VPS abre",
+    "CONVERTA_CUTOVER_AUTHORIZATION_RELOCATION_V1",
+    "reutilizada entre transações",
+):
+    require(marker in lifecycle or marker in p00d_backlog,
+            f"cross-host authorization P00-D marker {marker}")
 materializer_source = (
     ROOT / "scripts/deploy-control-worktree-materialize.py"
 ).read_text()
@@ -311,12 +321,21 @@ for marker in (
     "consumed_control_plane_driver",
 ):
     require(marker in driver_source, f"consumed driver authority consumer {marker}")
+gate_source = (ROOT / "scripts/durable-runtime-persistence-gate.py").read_text()
+for marker in (
+    "AUTHORIZATION_RELOCATION_KIND",
+    "resolve_cutover_authorization",
+    "authorization_relocation_destination_readback",
+):
+    require(marker in gate_source, f"cross-host authorization gate {marker}")
+for marker in (
+    "_effective_cutover_authorization(runtime_request, admission)",
+    "authorization_path, authorization_sha = self._effective_cutover_authorization(request)",
+):
+    require(marker in driver_source, f"cross-host authorization consumer {marker}")
 
 durable_persistence = (
     ROOT / "docs/saas/DURABLE_RUNTIME_PERSISTENCE_2026-11-21.md"
-).read_text()
-p00d_backlog = (
-    ROOT / "docs/saas/backlog/DEPLOY_PREPARATION_PREFLIGHT_CONVERGENCE_2026-10-29.md"
 ).read_text()
 first_cutover_documents = {
     "runbook": runbook,

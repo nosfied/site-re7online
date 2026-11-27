@@ -27,6 +27,14 @@ COMPILED_RELATIVE_PATHS = {
 PHASES = ("qualification", "admission", "preflight", "activation", "acceptance",
           "finalize", "retirement")
 ENFORCEMENT_STATE = "CANONICALLY_ENFORCED"
+AUTHORIZATION_RELOCATION_KIND = "CONVERTA_CUTOVER_AUTHORIZATION_RELOCATION_V1"
+AUTHORIZATION_RELOCATION_FIELD = "reconciliation.authorization"
+AUTHORIZATION_RELOCATION_CONSUMERS = [
+    "durable-runtime-persistence-gate.py",
+    "converta-deploy.py::_validate_temporal_persistence_authority",
+    "converta-deploy.py::_read_state_snapshot_authorization",
+    "converta-deploy.py::_seal_read_state_snapshot",
+]
 
 
 class Denied(RuntimeError):
@@ -57,6 +65,118 @@ def private_json(path: Path, expected_sha256: str) -> dict[str, Any]:
     if not isinstance(value, dict) or raw != canonical(value):
         deny("request_canonical")
     return value
+
+
+def resolve_cutover_authorization(
+    request: dict[str, Any], *, admission: dict[str, Any] | None = None,
+    candidate_identity: dict[str, str] | None = None,
+    transaction_root: Path | None = None,
+) -> tuple[Path, str, dict[str, Any] | None]:
+    """Resolve the sole portable cutover field without weakening private readback."""
+    reconciliation = request.get("reconciliation")
+    if not isinstance(reconciliation, dict):
+        deny("authorization_relocation_reconciliation")
+    source_path = Path(str(reconciliation.get("authorization", "")))
+    source_sha = str(reconciliation.get("authorizationSha256", ""))
+    binding = request.get("authorizationRelocation")
+    if binding is None:
+        return source_path, source_sha, None
+    if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+        deny("authorization_relocation_binding")
+    relocation = private_json(Path(str(binding.get("path", ""))),
+                              str(binding.get("sha256", "")))
+    keys = {"schemaVersion", "kind", "operationId", "field", "candidateIdentity",
+            "transactionRoot", "source", "destination", "transferReceipt",
+            "admissionGate", "consumers", "phases"}
+    if (set(relocation) != keys or relocation.get("schemaVersion") != 1 or
+            relocation.get("kind") != AUTHORIZATION_RELOCATION_KIND or
+            relocation.get("operationId") != reconciliation.get("operationId") or
+            relocation.get("field") != AUTHORIZATION_RELOCATION_FIELD or
+            relocation.get("consumers") != AUTHORIZATION_RELOCATION_CONSUMERS or
+            relocation.get("phases") != list(PHASES)):
+        deny("authorization_relocation_semantics")
+    identity = relocation.get("candidateIdentity")
+    if (not isinstance(identity, dict) or
+            set(identity) != {"generationId", "targetCommit"} or
+            not isinstance(identity.get("generationId"), str) or
+            not re.fullmatch(r"[0-9a-f]{40}", str(identity.get("targetCommit", ""))) or
+            (candidate_identity is not None and identity != candidate_identity)):
+        deny("authorization_relocation_candidate")
+    declared_transaction = Path(str(relocation.get("transactionRoot", "")))
+    if (not declared_transaction.is_absolute() or
+            (transaction_root is not None and declared_transaction != transaction_root)):
+        deny("authorization_relocation_transaction")
+    source = relocation.get("source")
+    if (not isinstance(source, dict) or set(source) != {"path", "sha256"} or
+            source.get("path") != str(source_path) or source.get("sha256") != source_sha or
+            not source_path.is_absolute() or not SHA256.fullmatch(source_sha)):
+        deny("authorization_relocation_source")
+    destination = relocation.get("destination")
+    destination_keys = {"path", "sha256", "device", "inode", "ownerUid", "groupGid",
+                        "mode", "nlink"}
+    if (not isinstance(destination, dict) or set(destination) != destination_keys or
+            destination.get("sha256") != source_sha or destination.get("mode") != "0600" or
+            destination.get("nlink") != 1 or
+            any(not isinstance(destination.get(key), int)
+                for key in ("device", "inode", "ownerUid", "groupGid", "nlink"))):
+        deny("authorization_relocation_destination")
+    destination_path = Path(str(destination.get("path", "")))
+    descriptor = -1
+    try:
+        descriptor = os.open(destination_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        before = os.fstat(descriptor)
+        chunks: list[bytes] = []
+        while chunk := os.read(descriptor, 1024 * 1024):
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+        raw = b"".join(chunks)
+    except OSError:
+        deny("authorization_relocation_destination_readback")
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if (not destination_path.is_absolute() or
+            (before.st_dev, before.st_ino, before.st_uid, before.st_gid, before.st_mode,
+             before.st_size, before.st_mtime_ns, before.st_ctime_ns) !=
+            (after.st_dev, after.st_ino, after.st_uid, after.st_gid, after.st_mode,
+             after.st_size, after.st_mtime_ns, after.st_ctime_ns) or
+            not stat.S_ISREG(before.st_mode) or stat.S_IMODE(before.st_mode) != 0o600 or
+            before.st_nlink != 1 or hashlib.sha256(raw).hexdigest() != source_sha or
+            (before.st_dev, before.st_ino, before.st_uid, before.st_gid) !=
+            (destination["device"], destination["inode"],
+             destination["ownerUid"], destination["groupGid"])):
+        deny("authorization_relocation_destination_readback")
+    try:
+        authorization = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        deny("authorization_relocation_destination_json")
+    if not isinstance(authorization, dict) or raw != canonical(authorization):
+        deny("authorization_relocation_destination_canonical")
+    gate_binding = relocation.get("admissionGate")
+    if not isinstance(gate_binding, dict) or set(gate_binding) != {"path", "sha256"}:
+        deny("authorization_relocation_admission_binding")
+    gate = private_json(Path(str(gate_binding.get("path", ""))),
+                        str(gate_binding.get("sha256", "")))
+    if (gate.get("schemaVersion") != 5 or gate.get("kind") != KIND_V5 or
+            gate.get("candidateIdentity") != identity or
+            gate.get("reconciliation", {}).get("authorization") != source["path"] or
+            gate.get("reconciliation", {}).get("authorizationSha256") != source_sha or
+            (admission is not None and gate != admission)):
+        deny("authorization_relocation_admission")
+    receipt_binding = relocation.get("transferReceipt")
+    if not isinstance(receipt_binding, dict) or set(receipt_binding) != {"path", "sha256"}:
+        deny("authorization_relocation_receipt_binding")
+    receipt = private_json(Path(str(receipt_binding.get("path", ""))),
+                           str(receipt_binding.get("sha256", "")))
+    receipt_keys = {"automaticRetry", "bytes", "capturedAtUtc", "destination", "kind",
+                    "schemaVersion", "source", "state"}
+    if (set(receipt) != receipt_keys or receipt.get("schemaVersion") != 1 or
+            receipt.get("kind") != "CONVERTA_PRIVATE_AUTHORITY_TRANSFER_READBACK_V1" or
+            receipt.get("state") != "VERIFIED" or receipt.get("automaticRetry") is not False or
+            receipt.get("source") != {"path": str(destination_path), "sha256": source_sha} or
+            receipt.get("destination") != source or receipt.get("bytes") != len(raw)):
+        deny("authorization_relocation_receipt")
+    return destination_path, source_sha, relocation
 
 
 def confined_outside(root: Path, release_roots: list[Path]) -> None:
@@ -214,8 +334,9 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
     cutover = (request.get("schemaVersion") == 3 or
                (external and "cutover" in request))
     pending_compiled = request.get("schemaVersion") == 5
-    required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set()) | ({"externalAdmissionAuthority"} if external else set()) | ({"candidateIdentity"} if pending_compiled else set())
-    if (set(request) != required or
+    relocation = request.get("authorizationRelocation") is not None
+    required = common | ({"phase"} if legacy else {"requiredPhases"}) | ({"cutover"} if cutover else set()) | ({"externalAdmissionAuthority"} if external else set()) | ({"candidateIdentity"} if pending_compiled else set()) | ({"authorizationRelocation"} if relocation else set())
+    if (set(request) != required or (relocation and request.get("schemaVersion") != 3) or
             (legacy and request.get("kind") != KIND) or
             (not legacy and not cutover and not external and
              (request.get("schemaVersion") != 2 or request.get("kind") != KIND_V2)) or
@@ -283,8 +404,13 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
         else:
             manifest_sha = str(reconciliation.get("manifestSha256", ""))
             if cutover:
-                authorization = private_json(Path(str(reconciliation.get("authorization", ""))),
-                                             str(reconciliation.get("authorizationSha256", "")))
+                authorization_path, authorization_sha, relocation_value = \
+                    resolve_cutover_authorization(request)
+                if (relocation_value is not None and
+                        relocation_value["candidateIdentity"]["generationId"] !=
+                        _candidate_root(request).name):
+                    deny("authorization_relocation_candidate")
+                authorization = private_json(authorization_path, authorization_sha)
                 authorization_version = (authorization.get("schemaVersion"), authorization.get("kind"))
                 if (authorization_version not in {
                         (1, "CONVERTA_INBOX_READ_STATE_CUTOVER_AUTHORIZATION_V1"),
@@ -396,6 +522,8 @@ def validate(request: dict[str, Any], invoked_phase: str | None = None) -> dict[
     if pending_compiled:
         report["candidateIdentity"] = request["candidateIdentity"]
         report["compiledArtifactState"] = PENDING_COMPILED_STATE
+    if relocation:
+        report["authorizationRelocation"] = "VERIFIED"
     if external:
         report["observationSource"] = (
             "AUTHENTICATED_REMOTE_PROVISION_RECEIPT" if phase == "admission" else
