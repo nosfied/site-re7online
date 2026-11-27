@@ -2637,8 +2637,22 @@ def authenticate_disposable_builder_debt(bindings: dict[str, Any], producer_cont
 
 def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: bool) -> dict[str, Any]:
     """Verify an inert installation plus completed retirement or explicit external debt."""
-    raw, _ = stable_private(args.handoff, args.handoff_sha256)
-    handoff = object_json(raw, "external-handoff")
+    submitted_raw, _ = stable_private(args.handoff, args.handoff_sha256)
+    submitted = object_json(submitted_raw, "external-handoff")
+    durable_binding = None
+    if submitted.get("schemaVersion") == 4:
+        successor_fields = {"schemaVersion", "kind", "predecessorHandoff",
+                            "durablePersistenceAdmission", "candidateIdentity"}
+        if (set(submitted) != successor_fields or submitted.get("kind") !=
+                "CONVERTA_EXTERNAL_HANDOFF_DURABLE_PERSISTENCE_V1"):
+            deny("external_handoff_durable_successor_schema")
+        _, _, raw = _closed_file_binding(
+            submitted.get("predecessorHandoff"), "external_handoff:predecessor")
+        handoff = object_json(raw, "external-handoff-predecessor")
+        durable_binding = submitted.get("durablePersistenceAdmission")
+    else:
+        raw = submitted_raw
+        handoff = submitted
     fields = {"schemaVersion", "builderPolicy", "contract", "lifecycle",
               "intent", "authorization", "receipt", "journal", "installation",
               "packagePath", "canonicalVerifierSha256"}
@@ -2654,6 +2668,9 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
     policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
     local_policy = validate_root_policy(policy_raw, args.root_policy_sha256)
     evidence_input(args.handoff, local_policy)
+    if submitted.get("schemaVersion") == 4:
+        predecessor = Path(str(submitted["predecessorHandoff"].get("path", "")))
+        evidence_input(predecessor, local_policy)
     names = (["builderPolicy", "contract", "lifecycle", "disposableContract",
               "disposableLifecycle", "exportReceipt", "installation"] if schema == 3 else
              ["builderPolicy", "contract", "lifecycle", "intent", "authorization",
@@ -2780,6 +2797,42 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
                 deny("external_handoff_journal_order")
     local_releases = authenticate_policy_root(local_policy, "releases")[0]
     installed = local_releases / release
+    durable_request = None
+    if durable_binding is not None:
+        if (not isinstance(durable_binding, dict) or
+                set(durable_binding) != {"path", "sha256"}):
+            deny("external_handoff_durable_binding")
+        durable_path = Path(str(durable_binding.get("path", "")))
+        durable_sha = str(durable_binding.get("sha256", ""))
+        durable_raw, _ = stable_private(durable_path, durable_sha)
+        evidence_input(durable_path, local_policy)
+        durable_request = object_json(durable_raw, "external-handoff-durable-persistence")
+        if durable_raw != canonical(durable_request):
+            deny("external_handoff_durable_canonical")
+        candidate = {"generationId": release, "targetCommit": target}
+        if (submitted.get("candidateIdentity") != candidate or
+                durable_request.get("schemaVersion") != 5 or
+                durable_request.get("kind") !=
+                "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V5" or
+                durable_request.get("candidateIdentity") != candidate):
+            deny("external_handoff_durable_identity")
+        candidate_roots = [item for item in durable_request.get("releaseRoots", [])
+                           if isinstance(item, dict) and item.get("role") == "candidate"]
+        if (len(candidate_roots) != 1 or
+                Path(str(candidate_roots[0].get("path", ""))) != installed):
+            deny("external_handoff_durable_release_root")
+        manifest_raw, _ = stable_regular_hash(
+            installed / "manifest.json", hashes["manifestSha256"],
+            "external_handoff_manifest")
+        installed_manifest = object_json(manifest_raw, "external-handoff-installed-manifest")
+        compiled = installed_manifest.get("durablePersistence")
+        if (installed_manifest.get("schemaVersion") != 2 or
+                not isinstance(compiled, dict) or
+                compiled.get("schemaVersion") != 1 or
+                compiled.get("kind") !=
+                "CONVERTA_DURABLE_READ_STATE_COMPILED_AUTHORITY_V1" or
+                compiled.get("sourceAdmissionRequestSha256") != durable_sha):
+            deny("external_handoff_durable_compiled_authority")
     physical_keys = ROOT_KEYS - {"evidence"}
     source_roots = [Path(builder[key]) for key in physical_keys]
     destination_roots = [Path(local_policy["canonicalRoots"][key]) for key in physical_keys]
@@ -2807,7 +2860,10 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
              "canonicalVerifierSha256": handoff["canonicalVerifierSha256"],
              "manifest": {"sha256": hashes["manifestSha256"]}, "index": {"sha256": hashes["indexSha256"]}},
             ["--release-root", str(installed)], "external_handoff_installation_verification",
-            components=components)
+            components=components,
+            durable_persistence=(Path(str(durable_binding["path"])),
+                                 str(durable_binding["sha256"]))
+            if durable_binding is not None else None)
         verification_keys = ["apiEntrySha256", "buildId", "indexEntries"]
         if components == ("api", "frontend", "worker"):
             verification_keys.append("workerEntrySha256")
@@ -2827,6 +2883,72 @@ def authenticate_external_handoff(args: argparse.Namespace, *, verify_payload: b
 def verify_external_handoff(args: argparse.Namespace) -> None:
     evidence = authenticate_external_handoff(args, verify_payload=True)
     print(canonical({"result": "EXTERNAL_HANDOFF_EVIDENCE_VERIFIED", **evidence}).decode().strip())
+
+
+def materialize_external_handoff_v5(args: argparse.Namespace) -> None:
+    evidence = authenticate_external_handoff(argparse.Namespace(
+        handoff=args.handoff, handoff_sha256=args.handoff_sha256,
+        root_policy=args.root_policy, root_policy_sha256=args.root_policy_sha256),
+        verify_payload=False)
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    evidence_destination(args.output, {"canonicalRoots": policy["canonicalRoots"]})
+    request_raw, _ = stable_private(args.durable_persistence_request,
+                                    args.durable_persistence_request_sha256)
+    evidence_input(args.durable_persistence_request, policy)
+    request = object_json(request_raw, "external-handoff-durable-persistence")
+    if request_raw != canonical(request):
+        deny("external_handoff_durable_canonical")
+    candidate = {"generationId": evidence["releaseId"],
+                 "targetCommit": evidence["targetCommit"]}
+    if (request.get("schemaVersion") != 5 or request.get("kind") !=
+            "CONVERTA_DURABLE_RUNTIME_PERSISTENCE_GATE_V5" or
+            request.get("candidateIdentity") != candidate):
+        deny("external_handoff_durable_identity")
+    successor = {
+        "schemaVersion": 4,
+        "kind": "CONVERTA_EXTERNAL_HANDOFF_DURABLE_PERSISTENCE_V1",
+        "predecessorHandoff": {"path": str(args.handoff),
+                                "sha256": args.handoff_sha256},
+        "durablePersistenceAdmission": {
+            "path": str(args.durable_persistence_request),
+            "sha256": args.durable_persistence_request_sha256,
+        },
+        "candidateIdentity": candidate,
+    }
+    # Authenticate the complete producer/consumer chain before publication.
+    manifest = object_json(
+        stable_regular_hash(Path(evidence["installedPath"]) / "manifest.json",
+                            evidence["manifestSha256"],
+                            "external_handoff_manifest")[0],
+        "external-handoff-installed-manifest")
+    compiled = manifest.get("durablePersistence")
+    candidate_roots = [item for item in request.get("releaseRoots", [])
+                       if isinstance(item, dict) and item.get("role") == "candidate"]
+    if (len(candidate_roots) != 1 or
+            Path(str(candidate_roots[0].get("path", ""))) != Path(evidence["installedPath"]) or
+            manifest.get("schemaVersion") != 2 or not isinstance(compiled, dict) or
+            compiled.get("sourceAdmissionRequestSha256") !=
+            args.durable_persistence_request_sha256):
+        deny("external_handoff_durable_compiled_authority")
+    predecessor = object_json(stable_private(args.handoff, args.handoff_sha256)[0],
+                              "external-handoff-predecessor")
+    components = tuple(manifest.get("components", []))
+    _run_legacy_verifier(
+        {"targetCommit": evidence["targetCommit"], "releaseId": evidence["releaseId"],
+         "canonicalVerifierSha256": predecessor["canonicalVerifierSha256"],
+         "manifest": {"sha256": evidence["manifestSha256"]},
+         "index": {"sha256": evidence["indexSha256"]}},
+        ["--release-root", evidence["installedPath"]],
+        "external_handoff_installation_verification", components=components,
+        durable_persistence=(args.durable_persistence_request,
+                             args.durable_persistence_request_sha256))
+    raw = canonical(successor)
+    write_exclusive(args.output, raw)
+    print(canonical({"result": "EXTERNAL_HANDOFF_V5_AUTHORITY_MATERIALIZED",
+                     "output": str(args.output), "sha256": digest_bytes(raw),
+                     "releaseId": evidence["releaseId"],
+                     "targetCommit": evidence["targetCommit"]}).decode().strip())
 
 
 def materialize_external_retirement(args: argparse.Namespace) -> None:
@@ -3872,8 +3994,11 @@ def _run_legacy_installed_verifier(descriptor: dict[str, Any]) -> dict[str, Any]
     )
 
 
-def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicate: str, *,
-                         components: tuple[str, ...] = ("api", "frontend")) -> dict[str, Any]:
+def _run_legacy_verifier(
+        descriptor: dict[str, Any], source: list[str], predicate: str, *,
+        components: tuple[str, ...] = ("api", "frontend"),
+        durable_persistence: tuple[Path, str] | None = None,
+) -> dict[str, Any]:
     if components not in (("api", "frontend"), ("api", "frontend", "worker")):
         deny(f"{predicate}:components")
     verifier = canonical_release_verifier()
@@ -3901,6 +4026,10 @@ def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicat
                "--target", descriptor["targetCommit"],
                "--release-id", descriptor["releaseId"],
                "--components", ",".join(components)]
+    if durable_persistence is not None:
+        request, request_sha256 = durable_persistence
+        command.extend(["--durable-persistence-request", str(request),
+                        "--durable-persistence-request-sha256", request_sha256])
     try:
         try:
             result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
@@ -6555,6 +6684,12 @@ def parser() -> argparse.ArgumentParser:
         handoff_parser.add_argument(f"--{name}", type=Path, required=True)
         handoff_parser.add_argument(f"--{name}-sha256", required=True)
     handoff_parser.set_defaults(handler=verify_external_handoff)
+    durable_handoff_parser = commands.add_parser("materialize-external-handoff-v5")
+    for name in ("handoff", "durable-persistence-request", "root-policy"):
+        durable_handoff_parser.add_argument(f"--{name}", type=Path, required=True)
+        durable_handoff_parser.add_argument(f"--{name}-sha256", required=True)
+    durable_handoff_parser.add_argument("--output", type=Path, required=True)
+    durable_handoff_parser.set_defaults(handler=materialize_external_handoff_v5)
     materialize_parser = commands.add_parser("materialize-external-retirement")
     check_parser = commands.add_parser("check-external-retirement")
     for operation_parser, input_name in ((materialize_parser, "handoff"), (check_parser, "intent")):

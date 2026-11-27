@@ -797,3 +797,32 @@ destination, inode, UID/GID, modo, receipt, operação ou transação divergente
 O caminho ThinkPad permanece evidência histórica e pode estar ausente na VPS;
 nenhum consumidor posterior tenta abri-lo. Schemas históricos sem relocation
 mantêm o comportamento literal anterior.
+
+## Correção do handoff externo schema 2 → verificador V5 — 27/11/2026
+
+A instalação inerte A+B produziu legitimamente manifesto schema 2 com a
+autoridade compilada do Gate V5, mas o handoff externo histórico invocava o
+verificador sem o request durável que autenticava esses bytes. A fronteira era
+incompatível: o pacote e o manifesto eram válidos, porém o consumidor final
+negava `release_manifest_durable_persistence_binding`. Não é permitido remover
+a autoridade do manifesto, reduzir o schema ou declarar a release verificada
+por inspeção parcial.
+
+O produtor sucessor publica
+`CONVERTA_EXTERNAL_HANDOFF_DURABLE_PERSISTENCE_V1` e preserva o handoff original
+imutável. A nova autoridade fecha o handoff predecessor, o request Gate V5
+canônico e a identidade da candidata. O consumidor recaptura paths, SHA-256,
+geração, target, release root e o binding compilado antes de chamar o mesmo
+verificador canônico com `--durable-persistence-request`; não existe modo de
+bypass. Handoffs históricos continuam no percurso anterior sem argumentos
+adicionais.
+
+A regressão P00-D obrigatória atravessa os produtores e consumidores reais na
+ordem `handoff externo original → Gate V5 autenticado → handoff sucessor →
+verificador schema 2 → RELEASE VERIFIED → external-import → retirement
+zero-action`. Ela deve provar a negativa original e negar Gate ausente,
+SHA/request divergente, outra geração ou target, verificador divergente,
+manifesto ou autoridade compilada adulterados, componente fora do escopo e
+replay de publicação. O resultado terminal de retirement precisa conter zero
+comandos e zero caminhos; passar isoladamente no materializador ou no
+verificador não fecha essa interface.
