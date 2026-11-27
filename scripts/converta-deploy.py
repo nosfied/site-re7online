@@ -3625,6 +3625,7 @@ class Driver:
         if not isinstance(value, dict) or set(value) != {"candidate", "rollback"}:
             deny("read_state_cutover_pm2")
         arguments: list[str] = []
+        environments: dict[str, dict[str, str]] = {}
         for role in ("candidate", "rollback"):
             binding = value[role]
             expected = {"request", "sourceArtifact", "sourceSha256", "definition"}
@@ -3650,6 +3651,7 @@ class Driver:
                 deny(f"read_state_cutover_pm2:{role}:definition")
             if environment.get("INBOX_READ_STATE_ROOT") != root:
                 deny(f"read_state_cutover_pm2:{role}:root")
+            environments[role] = environment
             arguments.extend((f"--{role}-request", str(binding["request"]),
                               f"--{role}-source-artifact", str(binding["sourceArtifact"]),
                               f"--{role}-source-sha256", binding["sourceSha256"],
@@ -3677,6 +3679,25 @@ class Driver:
         if (candidate_keys != rollback_keys or
                 "INBOX_READ_STATE_ROOT" not in candidate_keys):
             deny("read_state_cutover_pm2_pair_environment")
+        if environments["candidate"] != environments["rollback"]:
+            deny("read_state_cutover_pm2_pair_environment_values")
+
+        api_rows = [row for row in self.host.pm2_rows(self._resolve_pm2())
+                    if row.get("name") == PROCESS_NAMES["api"]]
+        if len(api_rows) != 1:
+            deny("read_state_cutover_pm2_productive_environment")
+        live_environment = api_rows[0].get("pm2_env")
+        if not isinstance(live_environment, dict):
+            deny("read_state_cutover_pm2_productive_environment")
+        allowed = set(self._environment_keys("api"))
+        productive_keys = sorted(set(live_environment) & allowed)
+        expected_keys = sorted(set(productive_keys) | {"INBOX_READ_STATE_ROOT"})
+        if candidate_keys != expected_keys or rollback_keys != expected_keys:
+            deny("read_state_cutover_pm2_productive_environment")
+        for role in ("candidate", "rollback"):
+            if any(environments[role].get(key) != str(live_environment[key])
+                   for key in productive_keys):
+                deny("read_state_cutover_pm2_productive_environment")
 
     def _probe_read_state_storage(self, interpreter: Path, store: Path,
                                   runtime: Path, root: str) -> None:

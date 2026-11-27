@@ -100,13 +100,15 @@ def authenticate_parent(path: Path) -> None:
 
 def install_file(target: Path, raw: bytes, mode: int, allowed_previous: set[str],
                  *, uid: int = 0, gid: int = 0,
-                 allowed_previous_modes: set[int] | None = None,
-                 allowed_previous_owners: set[tuple[int, int]] | None = None) -> dict[str, object]:
+                 allowed_previous_identities: set[tuple[str, int, int, int]] | None = None
+                 ) -> dict[str, object]:
     target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     authenticate_parent(target.parent)
     if target.exists() or target.is_symlink():
-        previous_modes = {mode} | (allowed_previous_modes or set())
-        previous_owners = {(uid, gid)} | (allowed_previous_owners or set())
+        previous_identities = (allowed_previous_identities if
+                               allowed_previous_identities is not None else
+                               {(item, uid, gid, mode) for item in allowed_previous})
+        previous_modes = {mode} | {item[3] for item in previous_identities}
         current_raw, current = read_regular(target, None, previous_modes)
         current_sha = digest(current_raw)
         if (current_sha == digest(raw) and
@@ -114,7 +116,9 @@ def install_file(target: Path, raw: bytes, mode: int, allowed_previous: set[str]
                 stat.S_IMODE(current.st_mode) == mode):
             return {"state": "ALREADY_INSTALLED", "path": str(target), "sha256": current_sha,
                     "device": current.st_dev, "inode": current.st_ino, "mode": f"0{mode:03o}"}
-        if current_sha not in allowed_previous or (current.st_uid, current.st_gid) not in previous_owners:
+        current_identity = (current_sha, current.st_uid, current.st_gid,
+                            stat.S_IMODE(current.st_mode))
+        if current_identity not in previous_identities:
             raise RuntimeError("PREDECESSOR_NOT_ALLOWED:" + str(target))
     temporary = target.parent / ("." + target.name + ".installing")
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
@@ -164,7 +168,8 @@ def install() -> dict[str, object]:
     read_state_contract = install_file(
         READ_STATE_CONTRACT_TARGET, read_state_contract_raw, 0o640,
         {READ_STATE_CONTRACT_SOURCE_SHA256}, uid=0, gid=1000,
-        allowed_previous_modes={0o600}, allowed_previous_owners={(0, 0)})
+        allowed_previous_identities={
+            (READ_STATE_CONTRACT_SOURCE_SHA256, 0, 0, 0o600)})
     read_state_restore = install_file(READ_STATE_RESTORE_TARGET, read_state_restore_raw, 0o500, set())
     backup = install_file(BACKUP_TARGET, backup_raw, 0o750,
                           {PREDECESSOR_BACKUP_SHA256}, uid=0, gid=1000)
