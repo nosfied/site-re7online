@@ -22,7 +22,15 @@ from typing import Any
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 ROLES = {"candidate", "rollback"}
-COMPONENTS = {"frontend", "worker"}
+COMPONENTS = {"api", "frontend", "worker"}
+API_PROCESS = "re7-whatsapp-agent"
+API_ENTRY = PurePosixPath("dist/index.js")
+API_ORIGIN_KIND = "CONVERTA_PM2_API_SOURCE_ORIGIN_V1"
+API_ORIGIN_KEYS = {
+    "schemaVersion", "kind", "processName", "canonicalConfig", "rotation",
+    "functionalOverlay", "persistentRoot",
+}
+FILE_BINDING_KEYS = {"path", "sha256"}
 WORKER_PROCESS = "re7-whatsapp-web-worker"
 WORKER_STABLE_ROOT = Path("/opt/re7online/current/worker")
 WORKER_LEGACY_APP_KEYS = {
@@ -109,6 +117,233 @@ def run_json(command: list[str], label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         deny(f"{label}_invalid_output")
     return value
+
+
+def exact_object(value: Any, keys: set[str], label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != keys:
+        deny(f"{label}_shape")
+    return value
+
+
+def file_binding(value: Any, label: str, *, private: bool) -> tuple[Path, bytes, dict[str, Any]]:
+    binding = exact_object(value, FILE_BINDING_KEYS, label)
+    path = Path(str(binding.get("path", "")))
+    if not path.is_absolute():
+        deny(f"{label}_path")
+    raw = stable_regular(path, private=private)
+    if digest(raw) != expected_digest(str(binding.get("sha256", "")), f"{label}_sha256"):
+        deny(f"{label}_sha256_mismatch")
+    return path, raw, json_object(raw, label)
+
+
+def load_cjs_configuration(node: Path, path: Path) -> dict[str, Any]:
+    if not node.is_absolute():
+        deny("api_node_not_absolute")
+    program = (
+        "const value=require(process.argv[1]);"
+        "if(!value||typeof value!=='object'||Array.isArray(value))process.exit(41);"
+        "process.stdout.write(JSON.stringify(value));"
+    )
+    completed = subprocess.run(
+        [str(node), "-e", program, str(path)], text=True, capture_output=True, timeout=30,
+        env={**os.environ, "NODE_OPTIONS": "--no-deprecation"},
+    )
+    if completed.returncode != 0:
+        deny(f"api_configuration_load_failed:{completed.returncode}")
+    try:
+        value = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        deny("api_configuration_load_invalid")
+    if not isinstance(value, dict):
+        deny("api_configuration_load_invalid")
+    return value
+
+
+def pm2_row(pm2: Path, pm2_home: Path | None, process_name: str) -> dict[str, Any]:
+    if not pm2.is_absolute():
+        deny("api_pm2_not_absolute")
+    environment = dict(os.environ)
+    if pm2_home is not None:
+        if not pm2_home.is_absolute():
+            deny("api_pm2_home_not_absolute")
+        environment["PM2_HOME"] = str(pm2_home)
+    version = subprocess.run(
+        [str(pm2), "--version"], text=True, capture_output=True, timeout=30, env=environment)
+    if version.returncode != 0 or version.stdout.strip() != "6.0.14":
+        deny("api_pm2_version")
+    observed = subprocess.run(
+        [str(pm2), "jlist"], text=True, capture_output=True, timeout=30, env=environment)
+    if observed.returncode != 0:
+        deny(f"api_pm2_jlist_failed:{observed.returncode}")
+    try:
+        rows = json.loads(observed.stdout)
+    except json.JSONDecodeError:
+        deny("api_pm2_jlist_invalid")
+    matches = [row for row in rows if isinstance(row, dict) and row.get("name") == process_name]
+    if len(matches) != 1 or not isinstance(matches[0].get("pm2_env"), dict):
+        deny("api_pm2_process_identity")
+    return matches[0]
+
+
+def project_api_source(args: argparse.Namespace) -> tuple[bytes, dict[str, Any], dict[str, Any]]:
+    origin_raw = stable_regular(args.api_origin, private=True)
+    if digest(origin_raw) != expected_digest(args.api_origin_sha256, "api_origin_sha256"):
+        deny("api_origin_sha256_mismatch")
+    origin = exact_object(json_object(origin_raw, "api_origin"), API_ORIGIN_KEYS, "api_origin")
+    if (origin.get("schemaVersion") != 1 or origin.get("kind") != API_ORIGIN_KIND or
+            origin.get("processName") != API_PROCESS or
+            origin.get("persistentRoot") != str(args.persistent_root)):
+        deny("api_origin_identity")
+    if not args.persistent_root.is_absolute():
+        deny("api_persistent_root")
+
+    config_binding = exact_object(
+        origin["canonicalConfig"], FILE_BINDING_KEYS, "api_canonical_config")
+    config_path = Path(str(config_binding.get("path", "")))
+    if not config_path.is_absolute():
+        deny("api_canonical_config_path")
+    config_raw = stable_regular(config_path, private=True)
+    if digest(config_raw) != expected_digest(
+            str(config_binding.get("sha256", "")), "api_canonical_config_sha256"):
+        deny("api_canonical_config_sha256_mismatch")
+    rotation = exact_object(origin["rotation"], {"preparation", "execution", "closure"},
+                            "api_rotation")
+    preparation_path, _, preparation = file_binding(
+        rotation["preparation"], "api_rotation_preparation", private=True)
+    execution_path, _, execution = file_binding(
+        rotation["execution"], "api_rotation_execution", private=True)
+    closure_path, _, closure = file_binding(
+        rotation["closure"], "api_rotation_closure", private=True)
+    if (preparation.get("result") != "OBS2_PRIVATE_DEFINITIONS_READY" or
+            preparation.get("files", {}).get("candidate") != str(config_path) or
+            preparation.get("onlyObs2Differs") is not True or
+            preparation.get("obs1Unchanged") is not True or
+            preparation.get("productionChanged") is not False):
+        deny("api_rotation_preparation_authority")
+    final_checks = execution.get("finalChecks")
+    if (execution.get("result") != "OBS2_PREVIOUS_VALUE_DESTROYED" or
+            execution.get("state") != "API_STABLE" or not isinstance(final_checks, dict) or
+            not final_checks or not all(value is True for value in final_checks.values())):
+        deny("api_rotation_execution_authority")
+    removed = {
+        item.get("path") for item in closure.get("inventory", []) if isinstance(item, dict) and
+        item.get("finalDisposition") == "REMOVED"
+    }
+    if (closure.get("result") != "OBS2_PREVIOUS_VALUE_DESTROYED" or
+            closure.get("activeDefinitionsReferenceCurrentObs2") is not True or
+            str(config_path) in removed):
+        deny("api_rotation_closure_authority")
+
+    overlay = exact_object(origin["functionalOverlay"],
+                           {"deploymentRecord", "environment"}, "api_functional_overlay")
+    record_path, _, record = file_binding(
+        overlay["deploymentRecord"], "api_overlay_deployment_record", private=False)
+    overlay_environment = exact_object(
+        overlay["environment"], {"TEMPLATE_MEDIA_ROOT"}, "api_overlay_environment")
+    media_root = overlay_environment["TEMPLATE_MEDIA_ROOT"]
+    if (record.get("schemaVersion") != 5 or record.get("status") != "DEPLOYED_VERIFIED" or
+            record.get("persistentStorage", {}).get("templateMediaRoot") != media_root or
+            media_root != "/opt/re7online/content/template-campaign-media"):
+        deny("api_overlay_authority")
+
+    configuration = load_cjs_configuration(args.node, config_path)
+    apps = configuration.get("apps")
+    if not isinstance(apps, list):
+        deny("api_configuration_apps")
+    matches = [app for app in apps if isinstance(app, dict) and app.get("name") == API_PROCESS]
+    if len(matches) != 1:
+        deny("api_configuration_process_identity")
+    original = matches[0]
+    environment = original.get("env")
+    if not isinstance(environment, dict) or not all(isinstance(k, str) and isinstance(v, str)
+                                                    for k, v in environment.items()):
+        deny("api_configuration_environment")
+    if "INBOX_READ_STATE_ROOT" in environment or "TEMPLATE_MEDIA_ROOT" in environment:
+        deny("api_configuration_unexpected_overlay")
+    try:
+        source_entry = Path(str(original.get("script", ""))).relative_to(
+            Path(str(original.get("cwd", ""))))
+    except ValueError:
+        deny("api_configuration_entry_outside_cwd")
+    if PurePosixPath(source_entry.as_posix()) != API_ENTRY:
+        deny("api_configuration_entry")
+    stable_root = Path(str(original.get("cwd", "")))
+    interpreter = Path(str(original.get("interpreter", "")))
+    if (not stable_root.is_absolute() or not interpreter.is_absolute() or
+            original.get("exec_mode") not in {"fork", "fork_mode"} or
+            original.get("instances") != 1 or original.get("autorestart") is not True or
+            original.get("args") != [] or original.get("node_args") != [] or
+            original.get("watch") is not False):
+        deny("api_configuration_structure")
+
+    allowlist_path = args.control.with_name("pm2-definition-env-allowlist.v1.json")
+    allowlist = json_object(stable_regular(allowlist_path, private=False), "api_allowlist")
+    api_roles = allowlist.get("components", {}).get("api", {})
+    allowed = set(api_roles.get("common", [])) | set(api_roles.get("candidate", [])) | set(
+        api_roles.get("rollbackCompatibility", []))
+    if not allowed or "INBOX_READ_STATE_ROOT" not in allowed or "TEMPLATE_MEDIA_ROOT" not in allowed:
+        deny("api_allowlist_identity")
+    if set(environment) - allowed:
+        deny("api_configuration_environment_allowlist")
+    if not isinstance(original.get("out_file"), str) or not isinstance(
+            original.get("error_file"), str):
+        deny("api_configuration_log_paths")
+    selected_environment = {key: environment[key] for key in sorted(set(environment) & allowed)}
+    selected_environment["TEMPLATE_MEDIA_ROOT"] = media_root
+    selected_environment["INBOX_READ_STATE_ROOT"] = str(args.persistent_root)
+
+    row = pm2_row(args.pm2, args.pm2_home, API_PROCESS)
+    loaded = row["pm2_env"]
+    live_environment = loaded.get("env")
+    if not isinstance(live_environment, dict):
+        deny("api_pm2_environment")
+    expected_live = {key: value for key, value in selected_environment.items()
+                     if key != "INBOX_READ_STATE_ROOT"}
+    observed_live = {key: str(value) for key, value in live_environment.items() if key in allowed}
+    if expected_live != observed_live or "INBOX_READ_STATE_ROOT" in live_environment:
+        deny("api_pm2_functional_environment_drift")
+    if (loaded.get("pm_cwd") != str(original.get("cwd")) or
+            loaded.get("pm_exec_path") != str(original.get("script")) or
+            loaded.get("exec_interpreter") != original.get("interpreter") or
+            loaded.get("exec_mode") != "fork_mode" or
+            int(loaded.get("instances") or 1) != 1 or loaded.get("namespace") != "default" or
+            loaded.get("autorestart") is not True or int(loaded.get("kill_timeout")) != 1600 or
+            int(loaded.get("listen_timeout")) != 3000 or
+            bool(loaded.get("wait_ready", False)) is not False or
+            bool(loaded.get("merge_logs", False)) is not True):
+        deny("api_pm2_structure_drift")
+
+    definition = {"apps": [{
+        "name": API_PROCESS, "script": str(stable_root / API_ENTRY), "args": [],
+        "cwd": str(stable_root), "interpreter": str(interpreter),
+        "exec_mode": "fork_mode", "instances": 1, "namespace": "default",
+        "autorestart": True, "restart_delay": 0, "kill_timeout": 1600,
+        "listen_timeout": 3000, "wait_ready": False, "node_args": [],
+        "out_file": original.get("out_file"), "error_file": original.get("error_file"),
+        "merge_logs": True, "watch": False, "env": selected_environment,
+    }]}
+    request = {
+        "schemaVersion": 2, "scope": args.scope, "role": args.role, "component": "api",
+        "sourceKind": ("canonical-private-config" if args.role == "candidate" else
+                       "authenticated-proven-definition"),
+        "environmentKeys": sorted(selected_environment),
+    }
+    evidence = {
+        "originSha256": digest(origin_raw),
+        "canonicalConfigSha256": digest(config_raw),
+        "canonicalConfigIdentity": physical_identity(config_path),
+        "rotationAuthorities": {
+            "preparation": {"path": str(preparation_path), "sha256": rotation["preparation"]["sha256"]},
+            "execution": {"path": str(execution_path), "sha256": rotation["execution"]["sha256"]},
+            "closure": {"path": str(closure_path), "sha256": rotation["closure"]["sha256"]},
+        },
+        "functionalOverlayAuthority": {"path": str(record_path),
+                                         "sha256": overlay["deploymentRecord"]["sha256"]},
+        "pm2Version": "6.0.14", "pm2ComparisonOnly": True,
+        "observedFunctionalEnvironmentKeys": sorted(observed_live),
+        "absentOptionalEnvironmentKeys": sorted((allowed - set(selected_environment))),
+    }
+    return canonical(request), definition, evidence
 
 
 def component_identity(release_root: Path, release_id: str, target: str,
@@ -302,9 +537,16 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
             deny("deployed_marker_sha256_mismatch")
     if (marker.exists() or marker.is_symlink()) and args.deployed_marker_sha256 is None:
         deny("deployed_marker_sha256_required")
-    for label, path in (("release_root", args.release_root), ("producer", args.producer),
-                        ("control", args.control), ("template_request", args.template_request),
-                        ("template_source", args.template_source), ("output", args.output)):
+    path_inputs = [("release_root", args.release_root), ("producer", args.producer),
+                   ("control", args.control), ("output", args.output)]
+    if component == "api":
+        path_inputs.append(("api_origin", getattr(args, "api_origin", None)))
+    else:
+        path_inputs.extend((("template_request", args.template_request),
+                            ("template_source", args.template_source)))
+    for label, path in path_inputs:
+        if not isinstance(path, Path):
+            deny(f"{label}_required")
         if not path.is_absolute():
             deny(f"{label}_not_absolute")
     output_parent = args.output.parent
@@ -318,38 +560,50 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
         deny("producer_sha256_mismatch")
     if digest(control_raw) != expected_digest(args.control_sha256, "control_sha256"):
         deny("control_sha256_mismatch")
-    request_raw = stable_regular(args.template_request, private=True)
-    source_raw = stable_regular(args.template_source, private=True)
-    if digest(request_raw) != expected_digest(args.template_request_sha256, "template_request_sha256"):
-        deny("template_request_sha256_mismatch")
-    if digest(source_raw) != expected_digest(args.template_source_sha256, "template_source_sha256"):
-        deny("template_source_sha256_mismatch")
-    source_identity = physical_identity(args.template_source)
-    if component == "worker":
-        if (not isinstance(args.template_source_identity, str) or
-                args.template_source_identity != physical_identity_literal(source_identity)):
-            deny("template_source_physical_identity")
-    elif args.template_source_identity is not None:
-        deny("template_source_identity_unexpected")
-    request = json_object(request_raw, "template_request")
-    source = json_object(source_raw, "template_source")
+    api_evidence: dict[str, Any] | None = None
+    if component == "api":
+        if any(getattr(args, name, None) is None for name in
+               ("api_origin_sha256", "persistent_root", "node", "pm2")):
+            deny("api_arguments_required")
+        request_raw, definition, api_evidence = project_api_source(args)
+        request = json_object(request_raw, "api_request")
+        source: dict[str, Any] = {}
+        source_identity = api_evidence["canonicalConfigIdentity"]
+        legacy_worker = False
+    else:
+        request_raw = stable_regular(args.template_request, private=True)
+        source_raw = stable_regular(args.template_source, private=True)
+        if digest(request_raw) != expected_digest(args.template_request_sha256, "template_request_sha256"):
+            deny("template_request_sha256_mismatch")
+        if digest(source_raw) != expected_digest(args.template_source_sha256, "template_source_sha256"):
+            deny("template_source_sha256_mismatch")
+        source_identity = physical_identity(args.template_source)
+        if component == "worker":
+            if (not isinstance(args.template_source_identity, str) or
+                    args.template_source_identity != physical_identity_literal(source_identity)):
+                deny("template_source_physical_identity")
+        elif args.template_source_identity is not None:
+            deny("template_source_identity_unexpected")
+        request = json_object(request_raw, "template_request")
+        source = json_object(source_raw, "template_source")
+        legacy_worker = component == "worker" and set(source) == {"apps"}
+        if not legacy_worker:
+            if source.get("role") != args.role or source.get("component") != component:
+                deny("template_source_identity")
+            with tempfile.TemporaryDirectory(prefix="pm2-binding-validate-") as temporary:
+                probe = Path(temporary) / "definition.json"
+                run_json([sys.executable, str(args.control), "build", "--request", str(args.template_request),
+                          "--source-artifact", str(args.template_source), "--source-sha256", args.template_source_sha256,
+                          "--output", str(probe)], "template_binding_validation")
     if request.get("role") != args.role or request.get("component") != component:
         deny("template_request_identity")
-
-    legacy_worker = component == "worker" and set(source) == {"apps"}
-    if not legacy_worker:
-        if source.get("role") != args.role or source.get("component") != component:
-            deny("template_source_identity")
-        with tempfile.TemporaryDirectory(prefix="pm2-binding-validate-") as temporary:
-            probe = Path(temporary) / "definition.json"
-            run_json([sys.executable, str(args.control), "build", "--request", str(args.template_request),
-                      "--source-artifact", str(args.template_source), "--source-sha256", args.template_source_sha256,
-                      "--output", str(probe)], "template_binding_validation")
 
     release_evidence, release = component_identity(
         args.release_root.resolve(strict=True), args.release_id, args.target,
         args.producer, component, args.deployed_marker_sha256)
-    if legacy_worker:
+    if component == "api":
+        relative_entry = Path(API_ENTRY.as_posix())
+    elif legacy_worker:
         definition, relative_entry = project_legacy_worker(source, request, release["runtime"])
     else:
         definition = source.get("definition")
@@ -377,22 +631,36 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
             "frontendBuildId": release_evidence["frontendBuildId"],
             "frontendEntrySha256": digest(entry_raw),
         })
+    elif component == "api":
+        release_identity["apiEntrySha256"] = digest(entry_raw)
     else:
         release_identity["workerEntrySha256"] = digest(entry_raw)
-    provenance = {
+    provenance: dict[str, Any] = {
         **release_evidence,
         "role": args.role,
-        "templateRequestSha256": digest(request_raw),
-        "templateSourceSha256": digest(source_raw),
         "producerSha256": digest(producer_raw),
         "controlSha256": digest(control_raw),
         "releaseIdentity": release_identity,
         "definitionSha256": digest(canonical(definition)),
-        "derivation": ("authenticated-legacy-worker-projection-rebound-to-verified-release"
-                       if legacy_worker else "authenticated-definition-rebound-to-verified-release"),
         "templateSourceIdentity": source_identity,
-        "pm2IntrospectionUsed": False,
     }
+    if component == "api":
+        assert api_evidence is not None
+        provenance.update(api_evidence)
+        provenance.update({
+            "apiOriginSha256": digest(stable_regular(args.api_origin, private=True)),
+            "derivation": "authenticated-api-config-projected-and-compared-to-pm2-6.0.14",
+            "pm2IntrospectionUsed": True,
+            "pm2IntrospectionPurpose": "comparison-only",
+        })
+    else:
+        provenance.update({
+            "templateRequestSha256": digest(request_raw),
+            "templateSourceSha256": digest(source_raw),
+            "derivation": ("authenticated-legacy-worker-projection-rebound-to-verified-release"
+                           if legacy_worker else "authenticated-definition-rebound-to-verified-release"),
+            "pm2IntrospectionUsed": False,
+        })
     evidence_raw = canonical(provenance)
     rebound = {
         "schemaVersion": 1,
@@ -455,12 +723,19 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--producer-sha256", required=True)
     value.add_argument("--control", type=Path, required=True)
     value.add_argument("--control-sha256", required=True)
-    value.add_argument("--template-request", type=Path, required=True)
-    value.add_argument("--template-request-sha256", required=True)
-    value.add_argument("--template-source", type=Path, required=True)
-    value.add_argument("--template-source-sha256", required=True)
+    value.add_argument("--template-request", type=Path)
+    value.add_argument("--template-request-sha256")
+    value.add_argument("--template-source", type=Path)
+    value.add_argument("--template-source-sha256")
     value.add_argument("--template-source-identity",
                        help="closed worker source identity: device:inode:uid:gid:mode")
+    value.add_argument("--api-origin", type=Path)
+    value.add_argument("--api-origin-sha256")
+    value.add_argument("--persistent-root", type=Path)
+    value.add_argument("--scope", choices=("production", "isolated-test"), default="production")
+    value.add_argument("--node", type=Path, default=Path("/usr/bin/node"))
+    value.add_argument("--pm2", type=Path)
+    value.add_argument("--pm2-home", type=Path)
     value.add_argument("--output", type=Path, required=True)
     return value
 

@@ -22,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTROL = ROOT / "scripts/pm2-definition-control.py"
+MATERIALIZER = ROOT / "scripts/pm2-binding-materialize.py"
 SPEC = importlib.util.spec_from_file_location("pm2_definition_control", CONTROL)
 assert SPEC and SPEC.loader
 CONTROL_MODULE = importlib.util.module_from_spec(SPEC)
@@ -544,13 +545,13 @@ def prepare_real_driver_fixture(case, node):
         runtime_manifest_sha256=sha(case.runtime_manifest))
 
 
-def prepare_real_api_frontend_fixture(case, node):
+def prepare_real_api_frontend_fixture(case, node, extra_releases=()):
     case.node = node
     case.host.node = node
     for row in case.host.rows.values():
         row["pm2_env"]["exec_interpreter"] = str(node)
     (case.worker / "index.js").write_text(WORKER_SERVER)
-    for release in (case.rollback, case.candidate):
+    for release in (case.rollback, case.candidate, *extra_releases):
         root = case.releases / release
         (root / "api-runtime/dist/index.js").write_text(API_SERVER)
         (root / "frontend-runtime/node_modules/next/dist/bin/next").write_text(FRONTEND_SERVER)
@@ -582,7 +583,8 @@ def prepare_real_api_frontend_fixture(case, node):
         runtime_manifest_sha256=sha(case.runtime_manifest))
 
 
-def start_initial_processes(case, host, pm2, worker_definition=None):
+def start_initial_processes(case, host, pm2, worker_definition=None, *,
+                            api_namespace="converta", api_environment=None):
     if "worker" in case.stable:
         case.stable["worker"].symlink_to(case.releases / case.rollback / "worker-runtime")
     apps = []
@@ -590,13 +592,20 @@ def start_initial_processes(case, host, pm2, worker_definition=None):
         stable = case.stable[component]
         script = stable / ("dist/index.js" if component == "api" else
                            "node_modules/next/dist/bin/next")
+        environment = {"NODE_ENV": "production"}
+        if component == "api" and api_environment:
+            environment.update(api_environment)
         apps.append({"name": DEPLOY.PROCESS_NAMES[component], "script": str(script),
                      "cwd": str(stable), "interpreter": str(case.node),
                      "args": [] if component == "api" else ["start", "-p", "3000"],
-                     "exec_mode": "fork_mode", "instances": 1, "namespace": "converta",
+                     "exec_mode": "fork_mode", "instances": 1,
+                     "namespace": api_namespace if component == "api" else "converta",
+                     "autorestart": True, "restart_delay": 0,
+                     "kill_timeout": 1600, "listen_timeout": 3000,
+                     "wait_ready": False, "node_args": [],
                      "out_file": str(case.base / f"{component}.out.log"),
                      "error_file": str(case.base / f"{component}.err.log"),
-                     "merge_logs": True, "env": {"NODE_ENV": "production"}})
+                     "merge_logs": True, "env": environment})
     ecosystem = case.base / "initial-api-frontend.pm2.json"
     write_private(ecosystem, {"apps": apps})
     pm2_cli(pm2, host.environment, "start", str(ecosystem))
@@ -744,7 +753,103 @@ def run_real_three_component_driver(pm2, node):
     print("THREE_COMPONENT_REAL_PM2_INTEGRATION_PASS")
 
 
-def run_real_read_state_cutover(pm2, node):
+def materialize_authenticated_api_pair(case, gate_path, pm2, pm2_home, node):
+    """Replace the legacy synthetic API pair with outputs from the real producer."""
+    custody = case.base / "authenticated-api-pm2-authority"
+    custody.mkdir(mode=0o700)
+    media_root = "/opt/re7online/content/template-campaign-media"
+    persistent = Path(json.loads(gate_path.read_text())["persistentRoot"]["path"])
+    stable = case.stable["api"]
+    config = custody / "api-candidate.config.cjs"
+    config.write_text("module.exports=" + json.dumps({"apps": [{
+        "name": DEPLOY.PROCESS_NAMES["api"], "script": str(stable / "dist/index.js"),
+        "args": [], "cwd": str(stable), "interpreter": str(node), "exec_mode": "fork",
+        "instances": 1, "autorestart": True, "node_args": [],
+        "out_file": str(case.base / "api.out.log"),
+        "error_file": str(case.base / "api.err.log"), "stop_exit_codes": [78],
+        "watch": False, "env": {"NODE_ENV": "production"},
+    }]}, sort_keys=True, separators=(",", ":")) + ";\n")
+    config.chmod(0o600)
+    records = {}
+    values = {
+        "preparation": {"result": "OBS2_PRIVATE_DEFINITIONS_READY",
+            "files": {"candidate": str(config)}, "onlyObs2Differs": True,
+            "obs1Unchanged": True, "productionChanged": False},
+        "execution": {"result": "OBS2_PREVIOUS_VALUE_DESTROYED", "state": "API_STABLE",
+            "finalChecks": {"apiOnline": True, "apiCwdPreserved": True}},
+        "closure": {"result": "OBS2_PREVIOUS_VALUE_DESTROYED",
+            "activeDefinitionsReferenceCurrentObs2": True, "inventory": []},
+    }
+    for name, value in values.items():
+        records[name] = custody / f"rotation-{name}.private.json"
+        write_private(records[name], value)
+    deployment = custody / "template-media-deployment.json"
+    write_private(deployment, {"schemaVersion": 5, "status": "DEPLOYED_VERIFIED",
+        "persistentStorage": {"templateMediaRoot": media_root}})
+    origin = custody / "api-source-origin.private.json"
+    write_private(origin, {"schemaVersion": 1,
+        "kind": "CONVERTA_PM2_API_SOURCE_ORIGIN_V1",
+        "processName": DEPLOY.PROCESS_NAMES["api"],
+        "canonicalConfig": {"path": str(config), "sha256": sha(config)},
+        "rotation": {name: {"path": str(path), "sha256": sha(path)}
+                     for name, path in records.items()},
+        "functionalOverlay": {"deploymentRecord": {
+            "path": str(deployment), "sha256": sha(deployment)},
+            "environment": {"TEMPLATE_MEDIA_ROOT": media_root}},
+        "persistentRoot": str(persistent)})
+    producer = custody / "fixture-release-producer.py"
+    producer.write_text("#!/usr/bin/env python3\nimport json,sys\na=sys.argv\n"
+        "print(json.dumps({'result':'RELEASE VERIFIED','releaseId':"
+        "a[a.index('--release-id')+1],'targetCommit':a[a.index('--target')+1]}))\n")
+    producer.chmod(0o700)
+
+    bindings = {}
+    for role, release_id, target in (("candidate", case.candidate, case.target),
+                                     ("rollback", case.rollback, "c" * 40)):
+        release_root = case.releases / release_id
+        output = custody / role
+        completed = subprocess.run([sys.executable, str(MATERIALIZER), "--role", role,
+            "--component", "api", "--target", target, "--release-id", release_id,
+            "--release-root", str(release_root), "--producer", str(producer),
+            "--producer-sha256", sha(producer), "--control", str(CONTROL),
+            "--control-sha256", sha(CONTROL), "--api-origin", str(origin),
+            "--api-origin-sha256", sha(origin), "--persistent-root", str(persistent),
+            "--scope", "isolated-test", "--node", str(node), "--pm2", str(pm2),
+            "--pm2-home", str(pm2_home), "--output", str(output)],
+            check=False, text=True, capture_output=True)
+        if completed.returncode:
+            raise AssertionError(f"api_materializer_failed:{role}:{completed.stderr.strip()}")
+        assert json.loads(completed.stdout)["result"] == "PM2_BINDING_MATERIALIZED"
+        bindings[role] = {"request": str(output / "request.private.json"),
+            "sourceArtifact": str(output / "source.private.json"),
+            "sourceSha256": sha(output / "source.private.json"),
+            "definition": str(output / "definition.private.json")}
+    pair = subprocess.run([sys.executable, str(CONTROL), "validate-pair",
+        *binding_args("candidate", Path(bindings["candidate"]["request"]),
+                      Path(bindings["candidate"]["sourceArtifact"]),
+                      Path(bindings["candidate"]["definition"])),
+        *binding_args("rollback", Path(bindings["rollback"]["request"]),
+                      Path(bindings["rollback"]["sourceArtifact"]),
+                      Path(bindings["rollback"]["definition"]))],
+        check=True, text=True, capture_output=True)
+    assert json.loads(pair.stdout)["result"] == "PM2_DEFINITION_PAIR_VALID"
+    gate = json.loads(gate_path.read_text()); gate["cutover"]["pm2"] = bindings
+    DEPLOY_TEST.put(gate_path, gate)
+    runtime = json.loads(case.runtime_manifest.read_text())
+    runtime["durablePersistence"]["requestSha256"] = sha(gate_path)
+    DEPLOY_TEST.put(case.runtime_manifest, runtime)
+    contract = json.loads(case.generation_contract.read_text())
+    contract["durablePersistence"] = runtime["durablePersistence"]
+    DEPLOY_TEST.put(case.generation_contract, contract)
+    DEPLOY_TEST.put(case.retirement.intent, {"contractSha256": sha(case.generation_contract)})
+    case.retirement = dataclasses.replace(
+        case.retirement, intent_sha256=sha(case.retirement.intent))
+    case.inputs = dataclasses.replace(case.inputs,
+        runtime_manifest_sha256=sha(case.runtime_manifest), retirement=case.retirement)
+
+
+def run_real_read_state_cutover(pm2, node, *, outcome="rollback"):
+    assert outcome in {"preaggregate", "rollback", "finalize"}
     fixture = DEPLOY_TEST.DeployFixture(methodName="runTest")
     fixture.setUp()
     pm2_home = fixture.base / "read-state-cutover-pm2-home"
@@ -753,8 +858,18 @@ def run_real_read_state_cutover(pm2, node):
                        PATH=str(node.parent) + os.pathsep + os.environ.get("PATH", ""))
     host = RealPm2Host(environment)
     try:
-        prepare_real_api_frontend_fixture(fixture, node)
-        gate_path = fixture.enable_read_state_cutover()
+        predecessor = (fixture.configure_first_cutover_topology()
+                       if outcome == "preaggregate" else None)
+        prepare_real_api_frontend_fixture(
+            fixture, node, (predecessor,) if predecessor is not None else ())
+        for release_id, target in ((fixture.candidate, fixture.target),
+                                   (fixture.rollback, "c" * 40)):
+            manifest_path = fixture.releases / release_id / "manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest.update(releaseId=release_id, targetCommit=target)
+            manifest_path.chmod(0o644)
+            DEPLOY_TEST.put(manifest_path, manifest, 0o444)
+        gate_path = fixture.enable_read_state_cutover(predecessor_release=predecessor)
         synthetic_host = fixture.host
         host.cutover_sealer = synthetic_host.cutover_sealer
         host.cutover_publications = synthetic_host.cutover_publications
@@ -762,14 +877,38 @@ def run_real_read_state_cutover(pm2, node):
         host.cutover_result = synthetic_host.cutover_result
         fixture.host = host
         fixture.pm2 = pm2
-        start_initial_processes(fixture, host, pm2)
-        driver = make_real_driver(fixture, host, pm2)
+        start_initial_processes(
+            fixture, host, pm2, api_namespace="default",
+            api_environment={
+                "TEMPLATE_MEDIA_ROOT": "/opt/re7online/content/template-campaign-media"})
+        materialize_authenticated_api_pair(fixture, gate_path, pm2, pm2_home, node)
+        driver = make_real_driver(
+            fixture, host, pm2,
+            ("read_state_cutover_after_quiesce",) if outcome == "preaggregate" else ())
         driver.preflight()
         rows = host.pm2_rows(pm2)
         legacy = next(row for row in rows if row.get("name") == DEPLOY.PROCESS_NAMES["api"])
         assert "INBOX_READ_STATE_ROOT" not in legacy["pm2_env"], "legacy_cb_external_root"
         worker_pid = int(next(row for row in rows if row.get("name") ==
                               DEPLOY.PROCESS_NAMES["worker"])["pid"])
+        if outcome == "preaggregate":
+            try:
+                driver.activate()
+            except DEPLOY.Denied as error:
+                assert "injected:read_state_cutover_after_quiesce" in str(error)
+            else:
+                raise AssertionError("preaggregate_failpoint_not_consumed")
+            terminal = driver._journal_read()
+            assert terminal["state"] == "ROLLED_BACK", terminal["state"]
+            assert driver._selection_snapshot("api")["releaseId"] == predecessor
+            assert driver._selection_snapshot("frontend")["releaseId"] == predecessor
+            restored_api = next(row for row in host.pm2_rows(pm2) if row.get("name") ==
+                                DEPLOY.PROCESS_NAMES["api"])
+            assert "INBOX_READ_STATE_ROOT" not in restored_api["pm2_env"]
+            assert int(next(row for row in host.pm2_rows(pm2) if row.get("name") ==
+                            DEPLOY.PROCESS_NAMES["worker"])["pid"]) == worker_pid
+            print("READ_STATE_CUTOVER_REAL_PM2_PREAGGREGATE_PASS")
+            return
         gate = json.loads(gate_path.read_text())
         authorization = json.loads(Path(gate["reconciliation"]["authorization"]).read_text())
         source = Path(authorization["entries"][0]["sources"][0]["path"])
@@ -790,18 +929,27 @@ def run_real_read_state_cutover(pm2, node):
                         DEPLOY.PROCESS_NAMES["worker"])["pid"]) == worker_pid
         assert driver._selection_snapshot("frontend")["releaseId"] == fixture.candidate
         assert driver._journal_read()["saveCount"] == 0
-        driver.rollback()
-        terminal = driver._journal_read()
-        assert terminal["state"] == "ROLLED_BACK", terminal["state"]
-        rollback_api = next(row for row in host.pm2_rows(pm2) if row.get("name") ==
-                            DEPLOY.PROCESS_NAMES["api"])
-        assert rollback_api["pm2_env"].get("INBOX_READ_STATE_ROOT") == expected_root
-        assert driver._selection_snapshot("api")["releaseId"] == fixture.rollback
-        assert driver._selection_snapshot("frontend")["releaseId"] == fixture.rollback
+        if outcome == "rollback":
+            driver.rollback()
+            terminal = driver._journal_read()
+            assert terminal["state"] == "ROLLED_BACK", terminal["state"]
+            rollback_api = next(row for row in host.pm2_rows(pm2) if row.get("name") ==
+                                DEPLOY.PROCESS_NAMES["api"])
+            assert rollback_api["pm2_env"].get("INBOX_READ_STATE_ROOT") == expected_root
+            assert driver._selection_snapshot("api")["releaseId"] == fixture.rollback
+            assert driver._selection_snapshot("frontend")["releaseId"] == fixture.rollback
+            assert terminal["saveCount"] == 0 and host.mutations.count(("save",)) == 0
+        else:
+            fixture.acceptance()
+            driver.finalize()
+            terminal = driver._journal_read()
+            assert terminal["state"] == "DEPLOYED_RETENTION_INCOMPLETE", terminal["state"]
+            assert driver._selection_snapshot("api")["releaseId"] == fixture.candidate
+            assert driver._selection_snapshot("frontend")["releaseId"] == fixture.candidate
+            assert terminal["saveCount"] == 1 and host.mutations.count(("save",)) == 1
         assert int(next(row for row in host.pm2_rows(pm2) if row.get("name") ==
                         DEPLOY.PROCESS_NAMES["worker"])["pid"]) == worker_pid
-        assert terminal["saveCount"] == 0 and host.mutations.count(("save",)) == 0
-        print("READ_STATE_CUTOVER_REAL_PM2_INTEGRATION_PASS")
+        print(f"READ_STATE_CUTOVER_REAL_PM2_{outcome.upper()}_PASS")
     finally:
         daemon = isolated_daemon_pid(pm2_home)
         pm2_cli(pm2, environment, "delete", "all", check=False)
@@ -912,6 +1060,8 @@ def main():
                 pm2, env, sources["rollback"], rollback_id, stable_runtime,
                 rollback_runtime, releases, rollback_link,
             )
+
+
             run([pm2, "delete", "re7-isolated-frontend"], env)
             select_runtime(stable_runtime, candidate_runtime)
             candidate_link = capture_symlink_identity(stable_runtime, candidate_runtime, releases)
@@ -975,7 +1125,9 @@ def main():
             handle.settimeout(0.2)
             assert handle.connect_ex(("127.0.0.1", port)) != 0, "isolated_port_not_released"
     run_real_three_component_driver(pm2_path, node)
-    run_real_read_state_cutover(pm2_path, node)
+    run_real_read_state_cutover(pm2_path, node, outcome="preaggregate")
+    run_real_read_state_cutover(pm2_path, node, outcome="rollback")
+    run_real_read_state_cutover(pm2_path, node, outcome="finalize")
 
 
 if __name__ == "__main__":
