@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -177,6 +178,114 @@ class WorkerFixture(Fixture):
         return value
 
 
+class ApiFixture(Fixture):
+    def __init__(self, role="candidate"):
+        super().__init__(role)
+        runtime = self.release / "api-runtime"
+        entry = runtime / "dist/index.js"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("api-entry\n")
+        index = json.loads((self.release / "index.sha256").read_text())
+        index["entries"].extend([
+            {"path": "api-runtime", "type": "directory", "mode": 493},
+            {"path": "api-runtime/dist", "type": "directory", "mode": 493},
+            {"path": "api-runtime/dist/index.js", "type": "file", "mode": 420,
+             "size": entry.stat().st_size, "sha256": sha(entry)},
+        ])
+        (self.release / "index.sha256").write_bytes(MODULE.canonical(index))
+        manifest = json.loads((self.release / "manifest.json").read_text())
+        manifest["indexSha256"] = sha(self.release / "index.sha256")
+        (self.release / "manifest.json").write_bytes(MODULE.canonical(manifest))
+        self.control = REAL_CONTROL
+        self.node = Path(shutil.which("node") or "/usr/bin/node").resolve()
+        self.pm2 = self.root / "pm2"
+        self.pm2.write_text("#!/bin/sh\nexit 99\n")
+        self.pm2.chmod(0o700)
+        self.historical_cwd = "/opt/re7online/current/api"
+        self.historical_script = self.historical_cwd + "/dist/index.js"
+        self.base_environment = {
+            "APP_AUTH_SECRET": "fixture-private-secret",
+            "NODE_ENV": "production",
+        }
+        self.config = self.root / "api-candidate.config.cjs"
+        self.config.write_text(
+            "module.exports=" + json.dumps({"apps": [{
+                "name": MODULE.API_PROCESS, "script": self.historical_script,
+                "args": [], "cwd": self.historical_cwd, "interpreter": "/usr/bin/node",
+                "exec_mode": "fork", "instances": 1, "autorestart": True,
+                "node_args": [], "out_file": str(self.root / "api-out.log"),
+                "error_file": str(self.root / "api-error.log"),
+                "stop_exit_codes": [78], "watch": False, "env": self.base_environment,
+            }]}, sort_keys=True, separators=(",", ":")) + ";\n"
+        )
+        self.config.chmod(0o600)
+        self.preparation = self.root / "rotation-preparation.private.json"
+        private_json(self.preparation, {
+            "result": "OBS2_PRIVATE_DEFINITIONS_READY",
+            "files": {"candidate": str(self.config)},
+            "onlyObs2Differs": True, "obs1Unchanged": True, "productionChanged": False,
+        })
+        self.execution = self.root / "rotation-execution.private.json"
+        private_json(self.execution, {
+            "result": "OBS2_PREVIOUS_VALUE_DESTROYED", "state": "API_STABLE",
+            "finalChecks": {"apiOnline": True, "apiCwdPreserved": True},
+        })
+        self.closure = self.root / "rotation-closure.private.json"
+        private_json(self.closure, {
+            "result": "OBS2_PREVIOUS_VALUE_DESTROYED",
+            "activeDefinitionsReferenceCurrentObs2": True, "inventory": [],
+        })
+        self.deployment_record = self.root / "template-media-deployment.json"
+        self.deployment_record.write_bytes(MODULE.canonical({
+            "schemaVersion": 5, "status": "DEPLOYED_VERIFIED",
+            "persistentStorage": {
+                "templateMediaRoot": "/opt/re7online/content/template-campaign-media"},
+        }))
+        self.origin = self.root / "api-origin.private.json"
+        private_json(self.origin, {
+            "schemaVersion": 1, "kind": MODULE.API_ORIGIN_KIND,
+            "processName": MODULE.API_PROCESS,
+            "canonicalConfig": {"path": str(self.config), "sha256": sha(self.config)},
+            "rotation": {
+                "preparation": {"path": str(self.preparation), "sha256": sha(self.preparation)},
+                "execution": {"path": str(self.execution), "sha256": sha(self.execution)},
+                "closure": {"path": str(self.closure), "sha256": sha(self.closure)},
+            },
+            "functionalOverlay": {
+                "deploymentRecord": {"path": str(self.deployment_record),
+                                     "sha256": sha(self.deployment_record)},
+                "environment": {
+                    "TEMPLATE_MEDIA_ROOT": "/opt/re7online/content/template-campaign-media"},
+            },
+            "persistentRoot": "/opt/re7online/runtime-data/inbox-read-state",
+        })
+
+    def pm2_row(self):
+        return {"name": MODULE.API_PROCESS, "pm2_env": {
+            "pm_cwd": self.historical_cwd, "pm_exec_path": self.historical_script,
+            "exec_interpreter": "/usr/bin/node", "exec_mode": "fork_mode",
+            "instances": 1, "namespace": "default", "autorestart": True,
+            "kill_timeout": 1600, "listen_timeout": 3000, "merge_logs": True,
+            "env": {**self.base_environment,
+                    "TEMPLATE_MEDIA_ROOT": "/opt/re7online/content/template-campaign-media"},
+        }}
+
+    def args(self):
+        value = super().args()
+        value.component = "api"
+        value.template_request = value.template_request_sha256 = None
+        value.template_source = value.template_source_sha256 = None
+        value.template_source_identity = None
+        value.api_origin = self.origin
+        value.api_origin_sha256 = sha(self.origin)
+        value.persistent_root = Path("/opt/re7online/runtime-data/inbox-read-state")
+        value.scope = "isolated-test"
+        value.node = self.node
+        value.pm2 = self.pm2
+        value.pm2_home = self.root / "pm2-home"
+        return value
+
+
 def fake_run_json(command, label):
     if label.startswith("release_verify"):
         release = command[command.index("--release-id") + 1]
@@ -191,6 +300,88 @@ def fake_run_json(command, label):
 
 
 class MaterializeTests(unittest.TestCase):
+    def test_api_origin_produces_candidate_and_rollback_pair_without_copying_pm2(self):
+        candidate, rollback = ApiFixture("candidate"), ApiFixture("rollback")
+        try:
+            for fixture in (candidate, rollback):
+                with mock.patch.object(MODULE, "pm2_row", return_value=fixture.pm2_row()):
+                    result = MODULE.materialize(fixture.args())
+                self.assertEqual("PM2_DEFINITION_BUILT", result["controlResult"])
+                source = json.loads((fixture.output / "source.private.json").read_text())
+                app = source["definition"]["apps"][0]
+                self.assertEqual("/opt/re7online/current/api", app["cwd"])
+                self.assertEqual("/opt/re7online/current/api/dist/index.js", app["script"])
+                self.assertEqual("/opt/re7online/runtime-data/inbox-read-state",
+                                 app["env"]["INBOX_READ_STATE_ROOT"])
+                self.assertEqual("/opt/re7online/content/template-campaign-media",
+                                 app["env"]["TEMPLATE_MEDIA_ROOT"])
+                for optional in ("APP_BASE_URL", "META_APP_ID", "META_APP_ID_FALLBACK_MODE",
+                                 "META_GRAPH_API_VERSION", "PUBLIC_APP_BASE_URL",
+                                 "SMTP_PASSWORD", "SMTP_SECURE", "TZ", "WHATSAPP_WABA_ID"):
+                    self.assertNotIn(optional, app["env"])
+                evidence = json.loads((fixture.output / "binding-evidence.private.json").read_text())
+                self.assertTrue(evidence["pm2IntrospectionUsed"])
+                self.assertEqual("comparison-only", evidence["pm2IntrospectionPurpose"])
+            result = MODULE.run_json([
+                "python3", str(REAL_CONTROL), "validate-pair",
+                "--candidate-request", str(candidate.output / "request.private.json"),
+                "--candidate-source-artifact", str(candidate.output / "source.private.json"),
+                "--candidate-source-sha256", sha(candidate.output / "source.private.json"),
+                "--candidate-definition", str(candidate.output / "definition.private.json"),
+                "--rollback-request", str(rollback.output / "request.private.json"),
+                "--rollback-source-artifact", str(rollback.output / "source.private.json"),
+                "--rollback-source-sha256", sha(rollback.output / "source.private.json"),
+                "--rollback-definition", str(rollback.output / "definition.private.json"),
+            ], "api_pair")
+            self.assertEqual("PM2_DEFINITION_PAIR_VALID", result["result"])
+            self.assertEqual("api", result["component"])
+        finally:
+            candidate.close(); rollback.close()
+
+    def test_api_origin_rejects_live_drift_tampering_and_removed_source(self):
+        fixture = ApiFixture()
+        try:
+            drifted = fixture.pm2_row()
+            drifted["pm2_env"]["env"]["APP_AUTH_SECRET"] = "divergent"
+            with mock.patch.object(MODULE, "pm2_row", return_value=drifted):
+                with self.assertRaisesRegex(MODULE.Denied, "api_pm2_functional_environment_drift"):
+                    MODULE.materialize(fixture.args())
+            args = fixture.args(); args.api_origin_sha256 = "0" * 64
+            with self.assertRaisesRegex(MODULE.Denied, "api_origin_sha256_mismatch"):
+                MODULE.materialize(args)
+            closure = json.loads(fixture.closure.read_text())
+            closure["inventory"] = [{"path": str(fixture.config),
+                                      "finalDisposition": "REMOVED"}]
+            private_json(fixture.closure, closure)
+            origin = json.loads(fixture.origin.read_text())
+            origin["rotation"]["closure"]["sha256"] = sha(fixture.closure)
+            private_json(fixture.origin, origin)
+            with self.assertRaisesRegex(MODULE.Denied, "api_rotation_closure_authority"):
+                MODULE.materialize(fixture.args())
+        finally:
+            fixture.close()
+
+    def test_api_origin_rejects_authorized_but_non_allowlisted_environment(self):
+        fixture = ApiFixture()
+        try:
+            raw = fixture.config.read_text().strip()
+            configuration = json.loads(raw.removeprefix("module.exports=").removesuffix(";"))
+            configuration["apps"][0]["env"]["UNAUTHORIZED_VALUE"] = "denied"
+            fixture.config.write_text(
+                "module.exports=" + json.dumps(
+                    configuration, sort_keys=True, separators=(",", ":")) + ";\n")
+            origin = json.loads(fixture.origin.read_text())
+            origin["canonicalConfig"]["sha256"] = sha(fixture.config)
+            private_json(fixture.origin, origin)
+            live = fixture.pm2_row()
+            live["pm2_env"]["env"]["UNAUTHORIZED_VALUE"] = "denied"
+            with mock.patch.object(MODULE, "pm2_row", return_value=live):
+                with self.assertRaisesRegex(
+                        MODULE.Denied, "api_configuration_environment_allowlist"):
+                    MODULE.materialize(fixture.args())
+        finally:
+            fixture.close()
+
     def test_rebinds_exact_definition_to_verified_release_without_pm2(self):
         fixture = Fixture()
         try:
